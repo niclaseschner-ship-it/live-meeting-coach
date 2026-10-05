@@ -283,3 +283,18 @@ def test_ausdrueckliche_ueberleitung_wird_erkannt():
     assert ankuendigung("Unter dem Tagesordnungspunkt 6 haben wir die Beschlussvorlage 0341.")
     assert ankuendigung("Ähm, nächstes Thema.")
     assert not ankuendigung("Das kommt gleich noch, lass uns beim Budget bleiben.")
+
+
+def test_angekuendigter_punkt_wechselt_direkt():
+    from coach.analyse import angekuendigter_punkt
+
+    titel = ["Termin und Messestand", "Budget", "Aufgaben verteilen"]
+    assert angekuendigter_punkt("Dann gehen wir weiter zu Punkt drei, Aufgaben verteilen.", titel, 1) == 2
+    assert angekuendigter_punkt("Nun gehen wir weiter zu Punkt 2.", titel, 0) == 1
+    assert angekuendigter_punkt("Gut, dann kommen wir zum dritten Punkt.", titel, 0) == 2
+    assert angekuendigter_punkt("Dann kommen wir jetzt zum nächsten Punkt.", titel, 0) == 1
+    assert angekuendigter_punkt("Dann kommen wir zum Budget.", titel, 0) == 1
+    # ohne Überleitungsformel, schon dort oder außerhalb der Agenda: kein Wechsel
+    assert angekuendigter_punkt("Punkt drei war gut vorbereitet.", titel, 0) is None
+    assert angekuendigter_punkt("Gehen wir weiter zu Punkt zwei.", titel, 1) is None
+    assert angekuendigter_punkt("Kommen wir zu Punkt neun.", titel, 0) is None

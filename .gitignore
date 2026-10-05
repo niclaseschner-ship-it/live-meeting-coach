@@ -18,3 +18,5 @@ testbibliothek/*
 !testbibliothek/README.md
 # lokale Vorschau-Konfiguration
 .claude/
+# Demo-Satz liegt im Repo (synthetisch, frei verwendbar)
+!demo/*.wav

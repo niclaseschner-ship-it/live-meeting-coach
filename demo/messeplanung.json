@@ -1,0 +1,32 @@
+{
+ "titel": "Messeplanung 2027",
+ "ziel": "Stand, Budget und Aufgaben für die Fachmesse im April festlegen",
+ "agenda": [
+  {
+   "titel": "Termin und Messestand",
+   "ziel": "Standgröße und Lage entscheiden",
+   "minuten": 1
+  },
+  {
+   "titel": "Budget",
+   "ziel": "Obergrenze beschließen",
+   "minuten": 1
+  },
+  {
+   "titel": "Aufgaben verteilen",
+   "ziel": "Wer macht was bis wann",
+   "minuten": 1
+  }
+ ],
+ "regeln": [],
+ "regel_ids": [
+  "ausreden",
+  "thema",
+  "zeit",
+  "kurz",
+  "ton",
+  "ergebnisse"
+ ],
+ "teilnehmende": [],
+ "assistent": true
+}

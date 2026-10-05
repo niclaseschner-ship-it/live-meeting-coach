@@ -487,7 +487,7 @@ class Coach:
     async def _ergebnis_pruefen(self, i: int) -> None:
         m = self.meeting
         saetze = m.punkt_transkript(i)
-        if self._client is None or not 0 <= i < len(m.agenda) or sum(s.dauer for s in saetze) < 30:
+        if self._client is None or not 0 <= i < len(m.agenda) or sum(s.dauer for s in saetze) < 20:
             return  # zu wenig Gesprochenes für eine sinnvolle Prüfung
         p = m.agenda[i]
         text = "\n".join(f"{s.sprecher}: {s.text}" for s in saetze)
@@ -551,8 +551,12 @@ class Coach:
             await self._abschnitt_auswerten()
         self.meeting.teiltext = ""
         self.meeting.beenden()
-        if self.onepager_am_ende and not self._onepager_laeuft:
-            self.onepager_starten()  # Abschlussbild (FR-13), läuft im Hintergrund weiter
+        if self.assistent.gespraech:
+            await self.assistent.gespraech.schliessen()
+        if "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda:
+            hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
+        if self.onepager_am_ende:
+            self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
         await self.melden()
 
     async def teiltext(self, text: str) -> None:
@@ -584,7 +588,16 @@ class Coach:
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
         self._abschnitt.append(seg)
-        if analyse.ankuendigung(seg.text) or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_sekunden:
+        ziel = analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt) if m.laeuft else None
+        if ziel is not None:
+            # Ausdrückliche Ansage mit Ziel: sofort wechseln, ohne auf die Themen-Zuordnung zu warten
+            self.protokoll.append({"zeit": seg.ende, "art": "wechsel", "von": m.aktiver_punkt, "nach": ziel,
+                                   "durch": "ansage"})
+            self.punkt_wechseln(ziel)
+            m.vorschlag = None
+            # Was davor gesagt wurde, gehört zum alten Punkt – nicht gegen den neuen prüfen (sonst „zurück zu …“)
+            self._abschnitt = [seg]
+        elif analyse.ankuendigung(seg.text) or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_sekunden:
             hintergrund(self._abschnitt_auswerten())
         await self.melden()
         await self.assistent.satz(seg.text, seg.ende)

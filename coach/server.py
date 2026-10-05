@@ -220,15 +220,28 @@ async def ws_audio(ws: WebSocket):
         pass
 
 
+DEMO = WURZEL / "demo"
+
+
+def _aufnahmen() -> dict[str, Path]:
+    """Name -> WAV: die Demo aus dem Repo zuerst, dann die lokale Testbibliothek."""
+    gefunden: dict[str, Path] = {}
+    for ordner in (DEMO, AUFNAHMEN):
+        if ordner.is_dir():
+            for p in sorted(ordner.glob("*.wav")):
+                gefunden.setdefault(p.stem, p.resolve())
+    return gefunden
+
+
 @app.get("/api/aufnahmen")
 async def aufnahmen():
-    return sorted(p.stem for p in AUFNAHMEN.glob("*.wav")) if AUFNAHMEN.is_dir() else []
+    return list(_aufnahmen())
 
 
 @app.post("/api/abspielen")
 async def abspielen(daten: dict):
-    pfad = (AUFNAHMEN / f"{daten.get('name', '')}.wav").resolve()
-    if not pfad.is_file() or pfad.parent != AUFNAHMEN.resolve():
+    pfad = _aufnahmen().get(str(daten.get("name", "")))
+    if pfad is None:
         raise HTTPException(404, "Aufnahme nicht gefunden.")
     if coach.hoerstrom:
         raise HTTPException(409, "Es läuft bereits ein Meeting.")

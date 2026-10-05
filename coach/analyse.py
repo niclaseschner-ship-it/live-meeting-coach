@@ -137,6 +137,37 @@ def ankuendigung(text: str) -> bool:
     return bool(ANKUENDIGUNG.search(text))
 
 
+ZAHLWORTE = {"eins": 1, "zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "fuenf": 5, "sechs": 6, "sieben": 7, "acht": 8,
+             "neun": 9, "zehn": 10, "elf": 11, "zwölf": 12, "zwoelf": 12}
+ORDNUNG = {"erst": 1, "zweit": 2, "dritt": 3, "viert": 4, "fünft": 5, "fuenft": 5, "sechst": 6, "siebt": 7,
+           "acht": 8, "neunt": 9, "zehnt": 10}
+_PUNKT_NR = re.compile(r"\b(?:punkt|top|tagesordnungspunkt|agendapunkt)\s*(?:nummer\s*|nr\.?\s*)?(\d{1,2}|"
+                       + "|".join(ZAHLWORTE) + r")\b", re.IGNORECASE)
+_PUNKT_ORD = re.compile(r"\b(" + "|".join(ORDNUNG) + r")(?:e|en|er|es)\s+(?:punkt|tagesordnungspunkt|agendapunkt|top)\b",
+                        re.IGNORECASE)
+_NAECHSTER = re.compile(r"n(?:ä|ae)chste[nrs]?\s+(?:punkt|thema|tagesordnungspunkt|agendapunkt|top)\b", re.IGNORECASE)
+
+
+def angekuendigter_punkt(text: str, titel: list[str], aktiv: int) -> int | None:
+    """Ausdrückliche Überleitung mit Ziel („weiter zu Punkt drei“, „zum nächsten Punkt“, „…zum Budget“):
+    Index des Agendapunkts, sonst None. Ohne Überleitungsformel nie – „Punkt drei war gut“ wechselt nicht."""
+    if not ankuendigung(text):
+        return None
+    ziel = None
+    if t := _PUNKT_NR.search(text):
+        wort = t.group(1).lower()
+        ziel = (int(wort) if wort.isdigit() else ZAHLWORTE[wort]) - 1
+    elif t := _PUNKT_ORD.search(text):
+        ziel = ORDNUNG[t.group(1).lower()] - 1
+    elif _NAECHSTER.search(text):
+        ziel = aktiv + 1
+    else:
+        klein = text.lower()
+        treffer = [(len(x), i) for i, x in enumerate(titel) if len(x) >= 4 and x.lower() in klein]
+        ziel = max(treffer)[1] if treffer else None
+    return ziel if ziel is not None and 0 <= ziel < len(titel) and ziel != aktiv else None
+
+
 def fokus_status(verlauf: list[dict], karenz_bloecke: int) -> tuple[str, dict | None]:
     """Gelb, wenn die letzten `karenz_bloecke` zuordenbaren Abschnitte klar nicht zum aktiven Punkt passen.
 

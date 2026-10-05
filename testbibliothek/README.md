@@ -5,6 +5,9 @@ wer spricht, Agenda-Abgleich, Fokus und künftig die Gesprächsregeln
 ([docs/gespraechsregeln.md](../docs/gespraechsregeln.md)). Neue Verfahren und Schwellen werden hier
 gemessen, nicht nach Gefühl eingestellt.
 
+**Intern:** Nur diese Beschreibung liegt im Repo. Proben, Texte und Audio bleiben auf den Rechnern des Teams,
+weil sie aus öffentlichen Aufnahmen Dritter stammen. Die freie Demo liegt unter [demo/](../demo/README.md).
+
 ## Aufbau
 
 ```

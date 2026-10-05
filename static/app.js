@@ -336,7 +336,7 @@ function rendern() {
   }
   // Untertitel: was Nestor gerade gesagt hat – nur kurz, damit nicht zu viel zu lesen ist
   const l = a?.letzte;
-  const frisch = l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
+  const frisch = aktiv && l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
   $("untertitel").hidden = !frisch;
   if (frisch) $("untertitel").replaceChildren(el("span", { class: "wer" }, a.name), l.antwort,
     ...((l.quellen ?? []).length ? [el("span", { class: "quellen" }, "Quellen: ",
