@@ -285,10 +285,32 @@ function bildRendern(z) {
     $("btn-bild-analyse").hidden = false;
   }
   $("bild-arbeitet").hidden = !z.onepager_laeuft;
+  if (!bildVersion) platzhalterRendern(z);
   $("btn-bild").disabled = !!z.onepager_laeuft || !z.segmente.length;
   let status = z.onepager_stand != null ? `· Stand ${mmss(z.onepager_stand)}` : "";
   if (z.onepager_fokus) status += ` · Fokus: ${z.onepager_fokus}`;
   $("bild-status").textContent = z.onepager_fehler ? `· ${z.onepager_fehler}` : status;
+}
+
+// Platzhalter vor dem ersten Bild: einladend statt leer – zeigt, dass das Bild kommt
+const SPRUECHE = [
+  "Legt los – Nestor hört zu und zeichnet mit.",
+  "Ihr redet, Nestor skizziert.",
+  "Jeder Gedanke zählt – hier entsteht euer Meeting-Bild.",
+  "Gute Gespräche ergeben gute Bilder. Eures entsteht gerade.",
+];
+function platzhalterRendern(z) {
+  const spruch = !z.segmente.length ? SPRUECHE[0] : SPRUECHE[Math.floor(z.zeit / 60) % SPRUECHE.length];
+  $("bild-spruch").textContent = z.onepager_laeuft ? "Nestor zeichnet euer erstes Bild …" : spruch;
+  const takt = (z.onepager_minuten ?? 0) * 60;
+  const weg = takt ? Math.min(1, z.zeit / takt) : 0;
+  $("bild-weg").style.width = `${z.onepager_laeuft ? 100 : Math.round(weg * 100)}%`;
+  $("bild-weg").parentElement.hidden = !takt;
+  const rest = Math.ceil((takt - z.zeit) / 60);
+  $("bild-wann").textContent = z.onepager_laeuft ? "gleich da – ca. 1 Minute"
+    : !takt ? "Das Bild entsteht, sobald ihr es euch wünscht."
+    : !z.segmente.length ? `Das erste Bild kommt nach ${Math.round(takt / 60)} Minuten Gespräch.`
+    : rest > 1 ? `Das erste Bild kommt in ca. ${rest} Minuten.` : "Das erste Bild kommt gleich.";
 }
 
 // ---------- Darstellung ----------
@@ -463,7 +485,7 @@ function verbinden() {
   iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-einstellungen", "einstellungen");
   iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
   iconSetzen("kosten-icon", "muenze");
-  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("bild-leer-icon", "bild");
+  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu");
   $("f-titel").value = "Testmeeting";
   punktZeile({ titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 });
   punktZeile({ titel: "Hauptthema", ziel: "Optionen sammeln und bewerten", minuten: 5 });
