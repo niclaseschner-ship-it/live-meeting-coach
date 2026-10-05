@@ -35,6 +35,7 @@ const PFADE = {
   datei: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   zu: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   muenze: '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+  folie: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h6"/><path d="M7 12h10"/>',
   suche: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   achtung: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   // Regeln
@@ -203,6 +204,9 @@ $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("e
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
 $("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
 $("btn-bild").onclick = () => api("/api/onepager");
+$("btn-folie").onclick = () => api("/api/folie");
+$("tab-bild").onclick = () => { ansicht = "bild"; if (zustand) bildRendern(zustand); };
+$("tab-folie").onclick = () => { ansicht = "folie"; if (zustand) bildRendern(zustand); };
 $("btn-bild-png").onclick = () => bildAlsPng();
 document.addEventListener("click", (e) => {
   if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
@@ -268,6 +272,23 @@ function kostenRendern(z) {
 
 // ---------- Live-Bild ----------
 let bildVersion = 0;
+let ansicht = "bild"; // Live-Bild oder Recherche-Folie
+let folieVersion = 0;
+function folieBauen(f) {
+  const quellen = f.quellen.length ? el("ol", {}, ...f.quellen.map((q) => el("li", {},
+    el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel), el("small", {}, q.seite))))
+    : el("p", {}, "Keine Quellen gemeldet.");
+  $("folie").replaceChildren(
+    el("div", { class: "folie-kopf" }, el("span", { class: "marke-klein" }, el("i", {}, "N"), "Recherche · Nestor"), el("span", {}, f.datum)),
+    el("h3", {}, f.titel),
+    el("p", { class: "kern" }, f.kernaussage),
+    el("div", { class: "folie-inhalt" },
+      el("div", {}, el("ul", { class: "folie-punkte" }, ...f.punkte.map((p) => el("li", {}, p))),
+        ...(f.offen ? [el("div", { class: "folie-offen" }, "Offen: ", f.offen)] : [])),
+      el("div", { class: "folie-quellen" }, el("h4", {}, "Quellen"), quellen)),
+    el("div", { class: "folie-fuss" }, `Frage: „${f.frage}“ · Websuche, Stand ${f.datum} – Angaben ohne Gewähr, Quellen prüfen.`),
+  );
+}
 function bildAlsPng() {
   const img = $("live-bild");
   if (!img.naturalWidth) return;
@@ -279,12 +300,24 @@ function bildAlsPng() {
 }
 function bildRendern(z) {
   if (z.onepager_version && z.onepager_version !== bildVersion) {
-    bildVersion = z.onepager_version;
+    bildVersion = z.onepager_version; ansicht = "bild"; // neues Live-Bild wird gezeigt
     const img = $("live-bild");
     img.onload = () => { img.hidden = false; $("bild-leer").hidden = true; $("btn-bild-png").disabled = false; };
     img.src = `${z.onepager_format === "png" ? "/api/onepager.png" : "/api/onepager.svg"}?v=${bildVersion}`;
     $("btn-bild-analyse").hidden = false;
   }
+  // Recherche-Folie: neue Folie wird sofort gezeigt; Umschalter, sobald es eine gibt
+  if (z.folie && z.folie_version !== folieVersion) { folieVersion = z.folie_version; folieBauen(z.folie); ansicht = "folie"; }
+  const folieZeigen = ansicht === "folie" && !!z.folie;
+  $("ansicht-wahl").hidden = !z.folie;
+  $("bild-titel").hidden = !!z.folie;
+  $("tab-bild").classList.toggle("aktiv", !folieZeigen); $("tab-folie").classList.toggle("aktiv", folieZeigen);
+  $("folie").hidden = !folieZeigen;
+  $("live-bild").style.visibility = folieZeigen ? "hidden" : "";
+  $("bild-leer").style.visibility = folieZeigen ? "hidden" : "";
+  $("btn-folie").hidden = !z.recherche_da;
+  $("btn-folie").disabled = !!z.folie_laeuft;
+  $("folie-arbeitet").hidden = !z.folie_laeuft;
   $("bild-arbeitet").hidden = !z.onepager_laeuft;
   if (!bildVersion) platzhalterRendern(z);
   $("btn-bild").disabled = !!z.onepager_laeuft || !z.segmente.length;
@@ -485,7 +518,7 @@ function verbinden() {
   iconSetzen("btn-fragen", "frage"); iconSetzen("btn-still", "stopp"); iconSetzen("btn-fortsetzen", "weiter");
   iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-einstellungen", "einstellungen");
   iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
-  iconSetzen("kosten-icon", "muenze");
+  iconSetzen("kosten-icon", "muenze"); iconSetzen("btn-folie", "folie");
   document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
   iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu");
   $("f-titel").value = "Testmeeting";

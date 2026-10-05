@@ -14,6 +14,8 @@ synthetisch (OpenAI-Sprachausgabe), die Aufnahme ist also frei verwendbar. Erzeu
 | `dashboard_gruen_bild.png` | **Nachgestellt**: wie oben, mit dem Zusammenfassungsbild im Live-Bild |
 | `dashboard_monolog.png` | **Nachgestellt**, nicht aus einem Lauf: Monolog-Hinweis, wenn eine Person länger als 1 min am Stück spricht (Texte und Darstellung wie im echten Dashboard) |
 | `dashboard_monolog_bild.png` | **Nachgestellt**: Monolog-Hinweis, mit dem Zusammenfassungsbild im Live-Bild |
+| `dashboard_folie.png` | **Nachgestellt** mit echter Recherche: Nestor hat auf Zuruf recherchiert und die Recherche-Folie mit Quellen gebaut |
+| `dashboard_ueberzug.png` | **Nachgestellt**: Agendapunkt „Budget“ 2:36 min über dem Zeitfenster |
 | `zusammenfassung.png` | Meeting-Zusammenfassung (Live-Bild, Stand 3:11) |
 | `protokoll.md` | Ergebnisse je Punkt, Hinweise an die Runde, Transkript |
 
@@ -26,7 +28,8 @@ Nestor wird mit seinem Namen angesprochen und antwortet gesprochen und als Unter
 - „Nestor, was steht noch an?“ und „Wo fehlen noch Entscheidungen?“
 - „Nestor, zeig uns die Übersicht.“ – zeichnet das Live-Bild, auch mit Fokus („nur das Budget“)
 - „Nestor, weiter zum nächsten Punkt.“ – wechselt die Agenda
-- „Nestor, gib uns einen Überblick zu …“ – kurze Websuche, Quellen erscheinen im Dashboard
+- „Nestor, gib uns einen Überblick zu …“ – kurze Websuche; danach bietet er an, das Ergebnis mit Quellen
+  auf einer Folie zusammenzustellen („Ja, mach eine Folie“)
 - „Nestor, hör kurz nicht zu.“ – pausiert, bis jemand im Dashboard auf Weiter drückt
 
 Rückfragen gehen ohne erneuten Namen, solange das Gespräch läuft, und Nestor lässt sich unterbrechen.

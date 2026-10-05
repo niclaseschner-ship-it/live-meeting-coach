@@ -40,6 +40,11 @@ WERKZEUGE = [
                     "5–15 Sekunden – sag vorher kurz, dass du nachschaust. Formuliere die Frage ohne Namen und "
                     "ohne Interna aus dem Meeting.",
      "parameters": {"type": "object", "properties": {"frage": {"type": "string"}}, "required": ["frage"]}},
+    {"type": "function", "name": "folie_erstellen",
+     "description": "Das letzte Rechercheergebnis mit Quellen als Folie im Dashboard zusammenstellen. Nur nach "
+                    "einer Recherche und wenn die Gruppe das möchte (z. B. „ja, mach eine Folie“). Dauert wenige "
+                    "Sekunden; das Dashboard meldet, wenn sie fertig ist.",
+     "parameters": {"type": "object", "properties": {}}},
     {"type": "function", "name": "status_abfragen",
      "description": "Aktuellen Stand abfragen: Laufzeit, aktueller Agendapunkt und Restzeit, ob das Live-Bild noch "
                     "gezeichnet wird oder fertig ist, Ergebnisse, letzte Hinweise. Immer nutzen, bevor du etwas "
@@ -244,7 +249,8 @@ class Gespraech:
             return
         aktion = {"bild_zeichnen": {"typ": "bild", "fokus": str(arg.get("fokus") or "gesamt")},
                   "agendapunkt_wechseln": {"typ": "weiter", "ziel": str(arg.get("nummer", ""))},
-                  "zuhoeren_pausieren": {"typ": "pause"}}.get(name)
+                  "zuhoeren_pausieren": {"typ": "pause"},
+                  "folie_erstellen": {"typ": "folie"}}.get(name)
         if aktion:
             await self.coach.assistent_aktion(aktion)
             self.a.letzte_aktion = aktion
@@ -282,6 +288,7 @@ class Gespraech:
             erg = await recherchieren(c._client, frage, c.meeting.titel)
             ausgabe = {"zusammenfassung": erg["text"], "quellen": [q["titel"] for q in erg["quellen"]]}
             self.a.letzte_quellen = erg["quellen"]
+            c.recherche_merken(frage, erg)
             from .pipeline import nutzung_loggen
             nutzung_loggen({"art": "recherche", "modell": EINST.recherche_modell, "tokens_rein": erg["tokens_rein"],
                             "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"]})
@@ -294,7 +301,8 @@ class Gespraech:
             "type": "function_call_output", "call_id": call_id, "output": json.dumps(ausgabe, ensure_ascii=False)}})
         await self._senden({"type": "response.create", "response": {
             "instructions": "Fasse das Rechercheergebnis für die Runde gesprochen zusammen: 3 bis 5 Sätze, das "
-                            "Wichtigste zuerst, keine Links. Sag am Ende kurz, dass die Quellen im Dashboard stehen."}})
+                            "Wichtigste zuerst, keine Links. Biete am Ende kurz an, das Ergebnis mit den Quellen "
+                            "auf einer Folie zusammenzustellen. Sagt die Gruppe ja, nutze folie_erstellen."}})
         self._recherche_laeuft = False
         self.a.zustand = "denkt"
         await c.melden()

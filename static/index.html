@@ -195,8 +195,15 @@
     <!-- Mitte: Live-Bild -->
     <section class="karte bildkarte">
       <div class="bildkopf">
-        <h2>Live-Bild <span id="bild-status" class="leise-text"></span></h2>
+        <div class="ansicht-kopf">
+          <h2 id="bild-titel">Live-Bild <span id="bild-status" class="leise-text"></span></h2>
+          <div id="ansicht-wahl" class="ansicht-wahl" hidden>
+            <button id="tab-bild" class="aktiv">Live-Bild</button>
+            <button id="tab-folie">Recherche-Folie</button>
+          </div>
+        </div>
         <div class="werkzeuge">
+          <button id="btn-folie" class="icon" data-tip="Letzte Recherche mit Quellen als Folie zusammenstellen" hidden></button>
           <button id="btn-bild" class="icon" data-tip="Bild jetzt neu zeichnen (ca. 1–2 min)"></button>
           <button id="btn-bild-png" class="icon" data-tip="Als PNG speichern" disabled></button>
           <a id="btn-bild-analyse" class="icon" href="/api/onepager.md" target="_blank" data-tip="Strukturanalyse hinter dem Bild" hidden></a>
@@ -204,6 +211,8 @@
       </div>
       <div class="bildflaeche">
         <img id="live-bild" alt="Live-Bild des Meetings" hidden>
+        <article id="folie" class="folie" hidden></article>
+        <div id="folie-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor baut die Folie …</div>
         <div id="bild-leer" class="bild-leer">
           <div class="bl-logo" aria-hidden="true">
             <svg viewBox="0 0 40 40" width="104" height="104">

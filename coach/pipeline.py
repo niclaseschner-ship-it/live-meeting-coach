@@ -81,6 +81,11 @@ class Coach:
         # Live-Bild (One-Pager, FR-10): gezeichnet von Claude über das Abo
         self.onepager_svg: str | None = None
         self.onepager_png: bytes | None = None  # Live-Bild von OpenAI (Rasterbild)
+        # Recherche als Folie: letztes Rechercheergebnis und die daraus gebaute Folie
+        self.letzte_recherche: dict | None = None
+        self.folie: dict | None = None
+        self.folie_version = 0
+        self._folie_laeuft = False
         self.onepager_analyse: str | None = None
         self.onepager_version = 0
         self.onepager_stand: float | None = None
@@ -135,6 +140,8 @@ class Coach:
         self.aeusserungen = []
         self._unterbrechungen_gemeldet = set()
         self._onepager_letzter_start = None
+        self.letzte_recherche = self.folie = None
+        self.folie_version = 0
 
     def client_neu(self) -> None:
         """OpenAI-Client mit dem aktuellen Schlüssel (im Dashboard eingetragen oder aus der Umgebung)."""
@@ -186,6 +193,10 @@ class Coach:
                 "onepager_minuten": EINST.onepager_minuten,
                 "onepager_fokus": self.onepager_fokus,
                 "onepager_format": "png" if self.onepager_png else "svg",
+                "folie": self.folie,
+                "folie_version": self.folie_version,
+                "folie_laeuft": self._folie_laeuft,
+                "recherche_da": self.letzte_recherche is not None,
                 "assistent": self.assistent.schnappschuss(),
             }
         )
@@ -258,6 +269,9 @@ class Coach:
             "live_bild": bild,
             "ergebnisse": {f"{i + 1}": e.get("ergebnis") for i, e in m.ergebnisse.items()},
             "letzte_hinweise": [h.text for h in m.hinweise[-3:]],
+            "folie": ("wird gerade erstellt" if self._folie_laeuft else
+                      f"fertig: {self.folie['titel']}" if self.folie else "keine"),
+            "letzte_recherche": self.letzte_recherche["frage"] if self.letzte_recherche else None,
         }
 
     def einstellungen(self) -> dict:
@@ -642,6 +656,8 @@ class Coach:
                 self.protokoll.append({"zeit": m.jetzt(), "art": "wechsel", "von": m.aktiver_punkt, "nach": i,
                                        "durch": "assistent"})
                 self.punkt_wechseln(i)
+        elif aktion["typ"] == "folie":
+            self.folie_starten()
         elif aktion["typ"] == "pause":
             self.assistent.zustand = "pausiert"
         elif aktion["typ"] == "recherche" and aktion.get("frage"):
@@ -688,6 +704,35 @@ class Coach:
 
     def live_text_kosten(self, sekunden: float) -> None:
         nutzung_loggen({"art": "live-text", "modell": EINST.live_modell, "sekunden_audio": round(sekunden, 1)})
+
+    def recherche_merken(self, frage: str, erg: dict) -> None:
+        """Grundlage für die Folie – nur Frage, vorlesbarer Text und Quellen."""
+        self.letzte_recherche = {"frage": frage, "text": erg["text"], "quellen": erg["quellen"],
+                                 "zeit": self.meeting.jetzt()}
+
+    def folie_starten(self) -> bool:
+        """Letzte Recherche mit Quellen als Folie zusammenstellen (Zuruf an Nestor oder Knopf)."""
+        if self.letzte_recherche is None or self._client is None or self._folie_laeuft:
+            return False
+        self._folie_laeuft = True
+        hintergrund(self._folie_bauen())
+        return True
+
+    async def _folie_bauen(self) -> None:
+        from . import folie
+
+        await self.melden()
+        try:
+            self.folie, nutzung = await folie.erstellen(self._client, self.letzte_recherche)
+            self.folie_version += 1
+            nutzung_loggen({"art": "folie", "modell": EINST.assistent_modell, **nutzung})
+            self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "folie", "titel": self.folie["titel"]})
+            self.assistent.ansagen("Die Folie mit den Quellen ist fertig, ihr seht sie im Dashboard.")
+        except Exception as e:  # noqa: BLE001
+            log.warning("Folie fehlgeschlagen: %s", fehlertext(e))
+        finally:
+            self._folie_laeuft = False
+            await self.melden()
 
     def onepager_starten(self, fokus: str | None = None) -> bool:
         """Live-Bild neu zeichnen lassen (Knopf, alle N Minuten, Meetingende, Zuruf mit Fokus).

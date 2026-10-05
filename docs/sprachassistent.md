@@ -24,7 +24,8 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 | „Nestor, wo stehen wir?“, „Fass den aktuellen Punkt zusammen“, „Was kommt als Nächstes?“ | Antwort aus Agenda, Ergebnissen und Transkript |
 | „Wir kommen jetzt zum nächsten Punkt“ | Agendapunkt wechseln, danach greift Regel 10 (Ergebnis des abgeschlossenen Punkts) |
 | „Erstell uns die visuelle Übersicht“, „Visualisier nur den letzten Punkt“, „Zeig, was noch ansteht“, „Wo fehlen Entscheidungen?“ | Live-Bild mit diesem Fokus (Claude, ~1–2 min), danach „Das Bild ist fertig“ |
-| „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | Recherche im Web: „Ich schau kurz nach“, dann gesprochene Zusammenfassung; Quellen als Links in der Assistenten-Leiste |
+| „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | Recherche im Web: „Ich schau kurz nach“, dann gesprochene Zusammenfassung; danach bietet Nestor an, das Ergebnis mit Quellen auf einer Folie zusammenzustellen |
+| „Ja, mach eine Folie“ (nach einer Recherche) | Recherche-Folie im Dashboard: Titel, Kernaussage, Stichpunkte, Offenes, Quellen als Links (~3 s) |
 | „Nestor, hör bitte nicht mehr zu“ | Pause (wieder an per Knopf) |
 
 ## Architektur
@@ -42,7 +43,7 @@ Mikrofon ───────────────────────�
 Live-Text: Name oder Rückfrage „…?“ kurz nach der Antwort ──► Coach löst die nächste Antwort aus
 Jemand redet hinein ──► Modell bricht ab, Dashboard verstummt sofort
 20 s Ruhe oder „danke, das war's“ ──► Sitzung zu, Nestor hört wieder nur auf seinen Namen
-Werkzeuge: bild_zeichnen(fokus), agendapunkt_wechseln(nummer), recherchieren(frage), zuhoeren_pausieren,
+Werkzeuge: bild_zeichnen(fokus), agendapunkt_wechseln(nummer), recherchieren(frage), folie_erstellen, zuhoeren_pausieren,
            gespraech_beenden
 Ton: PCM-Stücke ─► WebSocket ─► Dashboard (nur Moderationsansicht) spielt nahtlos ab
 ```
@@ -65,6 +66,11 @@ Coach nutzt diesen Weg automatisch, wenn keine Realtime-Sitzung zustande kommt.
 `web_search`). In die Suche geht nur das vom Modell formulierte Thema und der Meetingtitel, kein
 Transkript. Eingebettete Quellenverweise werden vor dem Vorlesen entfernt. Gemessen 05.10.: Suche 5–8 s,
 gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche.
+
+**Recherche-Folie** (`coach/folie.py`): auf Zuruf oder per Knopf im Live-Bild-Bereich. GPT-5.4-mini macht aus
+dem Rechercheergebnis Titel, Kernaussage, 3–5 Stichpunkte und Offenes – ohne neue Suche, ohne Transkript. Die
+Folie ist eine Dashboard-Ansicht (umschaltbar mit dem Live-Bild), damit Text scharf und Quellen anklickbar
+bleiben. Gemessen 05.10.: 2,8 s, unter 1 Cent.
 
 **Gemeinsam:**
 - **Kein eigenes Wake-Word-Modell.** Der Name wird im Live-Text gesucht, der ohnehin mitläuft; das kostet

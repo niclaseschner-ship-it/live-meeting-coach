@@ -37,7 +37,7 @@ BILD_VORLAGE = 0.01  # Eingabebild bei der Fortschreibung
 BEREICHE = {
     "live-text": ("Live-Text", ("live-text", "text", "sprecherspur")),
     "nestor": ("Nestor spricht", ("gespraech", "stimme", "assistent")),
-    "recherche": ("Recherche", ("recherche",)),
+    "recherche": ("Recherche", ("recherche", "folie")),
     "analyse": ("Agenda, Ton, Ergebnisse", ("themen", "ergebnisse")),
     "bild": ("Live-Bild", ("onepager",)),
 }
@@ -56,7 +56,7 @@ def dollar(e: dict) -> float:
     art, modell = e.get("art"), e.get("modell", "")
     if art in ("live-text", "text", "sprecherspur", "stimme"):
         return (e.get("sekunden_audio") or 0) / 60 * MINUTENPREISE.get(modell, 0.0)
-    if art in ("themen", "ergebnisse", "assistent"):
+    if art in ("themen", "ergebnisse", "assistent", "folie"):
         return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus"))
     if art == "recherche":
         return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus")) + WEBSUCHE

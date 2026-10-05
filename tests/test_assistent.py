@@ -154,3 +154,29 @@ def test_recherche_text_ohne_eingebettete_quellen():
     roh = "Der Mindestlohn liegt bei 13,90 Euro. ([bmas.de](https://www.bmas.de/x?utm=a))  Mehr [hier](https://y)."
     assert vorlesbar(roh) == "Der Mindestlohn liegt bei 13,90 Euro. Mehr hier."
     assert a.aktion_lesen("AKTION: recherche Mindestlohn aktuell") == {"typ": "recherche", "frage": "Mindestlohn aktuell"}
+
+
+def test_folie_nach_recherche():
+    import asyncio
+    from types import SimpleNamespace
+
+    from coach import folie, kosten
+    from coach.assistent import aktion_lesen
+
+    assert aktion_lesen("AKTION: folie") == {"typ": "folie"}
+    assert kosten.dollar({"art": "folie", "modell": "gpt-5.4-mini", "tokens_rein": 1e6, "tokens_raus": 0}) == 0.75
+
+    class Attrappe:  # liefert eine feste JSON-Antwort statt OpenAI
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        async def create(self, **_):
+            inhalt = '{"titel": "Mindestlohn 2026", "kernaussage": "13,90 Euro je Stunde.", "punkte": ["a", "b"], "offen": ""}'
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=inhalt))],
+                                   usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5))
+
+    f, n = asyncio.run(folie.erstellen(Attrappe(), {"frage": "Mindestlohn?", "text": "…", "zeit": 5,
+                                                    "quellen": [{"titel": "", "url": "https://www.bmas.de/x"}]}))
+    assert f["titel"] == "Mindestlohn 2026" and f["punkte"] == ["a", "b"]
+    assert f["quellen"] == [{"titel": "bmas.de", "url": "https://www.bmas.de/x", "seite": "bmas.de"}]
+    assert n["tokens_rein"] == 10

@@ -61,6 +61,8 @@ AKTION: weiter <nummer>   – zum Agendapunkt mit dieser Nummer wechseln (oder �
 AKTION: recherche <frage> – im Internet recherchieren („gib uns einen Überblick zu …“, aktuelle Fakten).
                             Sag dazu nur kurz, dass du nachschaust; das Ergebnis liest du danach vor.
                             Frage ohne Namen und ohne Interna aus dem Meeting formulieren.
+AKTION: folie             – das letzte Rechercheergebnis mit Quellen als Folie ins Dashboard stellen,
+                            wenn die Gruppe das möchte („ja, mach eine Folie“). Sag, dass sie gleich erscheint.
 AKTION: pause             – die Gruppe möchte, dass du nicht mehr zuhörst. Sag, dass man dich über den
                             Knopf im Dashboard wieder einschaltet.
 
@@ -100,6 +102,8 @@ def aktion_lesen(zeile: str) -> dict | None:
         return {"typ": "pause"}
     if typ == "recherche":
         return {"typ": "recherche", "frage": rest}
+    if typ == "folie":
+        return {"typ": "folie"}
     return None
 
 
@@ -301,10 +305,12 @@ class Assistent:
                         "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"]})
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "recherche", "frage": frage, "quellen": erg["quellen"],
                             "sekunden": erg["sekunden"]})
+        c.recherche_merken(frage, erg)
         self.letzte = {"frage": frage, "antwort": erg["text"], "zeit": c.meeting.jetzt(), "aktion": None,
                        "quellen": erg["quellen"]}
         saetze, rest = saetze_teilen(erg["text"] + " ")
-        await self._sprechen_texte(saetze + ([rest] if rest.strip() else []) + ["Die Quellen stehen im Dashboard."])
+        await self._sprechen_texte(saetze + ([rest] if rest.strip() else [])
+                                   + ["Soll ich das mit den Quellen auf einer Folie zusammenstellen?"])
 
     async def audio(self, pcm24k: bytes) -> None:
         if self.gespraech and self.gespraech.offen:

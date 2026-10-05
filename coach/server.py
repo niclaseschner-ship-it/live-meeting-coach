@@ -255,6 +255,12 @@ async def onepager_neu():
     return {"ok": coach.onepager_starten()}
 
 
+@app.post("/api/folie")
+async def folie_neu():
+    """Letzte Recherche mit Quellen als Folie (Knopf im Dashboard; per Zuruf macht es Nestor)."""
+    return {"ok": coach.folie_starten()}
+
+
 @app.get("/api/onepager.svg")
 async def onepager_svg():
     if not coach.onepager_svg:
