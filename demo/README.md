@@ -16,6 +16,9 @@ synthetisch (OpenAI-Sprachausgabe), die Aufnahme ist also frei verwendbar. Erzeu
 | `dashboard_monolog_bild.png` | **Nachgestellt**: Monolog-Hinweis, mit dem Zusammenfassungsbild im Live-Bild |
 | `dashboard_folie.png` | **Nachgestellt** mit echter Recherche: Nestor hat auf Zuruf recherchiert und die Recherche-Folie mit Quellen gebaut |
 | `dashboard_ueberzug.png` | **Nachgestellt**: Agendapunkt „Budget“ 2:36 min über dem Zeitfenster |
+| `dashboard_karte_antwort.png` | **Nachgestellt**: Nestor beantwortet „Wo stehen wir?“, dazu die Karte mit Stichpunkten |
+| `dashboard_karte_recherche.png` | **Nachgestellt** mit echter Recherche: Recherche-Karte mit Quellen |
+| `dashboard_verlauf.png` | **Nachgestellt**: Verlauf, Reiter „Nestor“ – alle Karten bleiben abrufbar |
 | `zusammenfassung.png` | Meeting-Zusammenfassung (Live-Bild, Stand 3:11) |
 | `protokoll.md` | Ergebnisse je Punkt, Hinweise an die Runde, Transkript |
 

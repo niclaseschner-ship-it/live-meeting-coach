@@ -306,6 +306,7 @@ class Assistent:
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "recherche", "frage": frage, "quellen": erg["quellen"],
                             "sekunden": erg["sekunden"]})
         c.recherche_merken(frage, erg)
+        c.antwort_karte(frage, erg["text"], None, erg["quellen"])
         self.letzte = {"frage": frage, "antwort": erg["text"], "zeit": c.meeting.jetzt(), "aktion": None,
                        "quellen": erg["quellen"]}
         saetze, rest = saetze_teilen(erg["text"] + " ")
@@ -400,6 +401,7 @@ class Assistent:
         antwort = " ".join(gesprochen)
         self.letzte = {"frage": frage, "antwort": antwort, "zeit": c.meeting.jetzt(), "aktion": aktion}
         self.verlauf.append((frage, antwort))
+        c.antwort_karte(frage, antwort, aktion, [])
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "frage": frage, "antwort": antwort,
                             "aktion": aktion, "sekunden": round(time.monotonic() - t0, 1)})
         await c.melden()

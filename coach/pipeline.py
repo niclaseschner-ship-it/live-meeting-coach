@@ -86,6 +86,7 @@ class Coach:
         self.folie: dict | None = None
         self.folie_version = 0
         self._folie_laeuft = False
+        self.karten: list[dict] = []  # Nestor-Karten (Pop-ups), bleiben im Verlauf abrufbar
         self.onepager_analyse: str | None = None
         self.onepager_version = 0
         self.onepager_stand: float | None = None
@@ -142,6 +143,7 @@ class Coach:
         self._onepager_letzter_start = None
         self.letzte_recherche = self.folie = None
         self.folie_version = 0
+        self.karten = []
 
     def client_neu(self) -> None:
         """OpenAI-Client mit dem aktuellen Schlüssel (im Dashboard eingetragen oder aus der Umgebung)."""
@@ -197,6 +199,7 @@ class Coach:
                 "folie_version": self.folie_version,
                 "folie_laeuft": self._folie_laeuft,
                 "recherche_da": self.letzte_recherche is not None,
+                "karten": self.karten[-50:],
                 "assistent": self.assistent.schnappschuss(),
             }
         )
@@ -705,6 +708,34 @@ class Coach:
     def live_text_kosten(self, sekunden: float) -> None:
         nutzung_loggen({"art": "live-text", "modell": EINST.live_modell, "sekunden_audio": round(sekunden, 1)})
 
+    def _karte_ablegen(self, karte: dict) -> None:
+        self.karten.append({"id": len(self.karten) + 1, "zeit": self.meeting.jetzt(), "quellen": [], **karte})
+
+    def antwort_karte(self, frage: str, antwort: str, aktion: dict | None, quellen: list[dict]) -> None:
+        """Nestors gesprochene Antwort zusätzlich als Karte: Recherche immer, sonst nur, wenn es etwas zu zeigen
+        gibt. Bei Aktionen (Bild, Wechsel, Pause, Folie) zeigt das Dashboard das Ergebnis selbst – keine Karte."""
+        if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie"):
+            return
+        hintergrund(self._karte_bauen(frage, antwort, quellen))
+
+    async def _karte_bauen(self, frage: str, antwort: str, quellen: list[dict]) -> None:
+        from . import karten
+        from .folie import quelle_kurz
+
+        recherche = bool(quellen)
+        if recherche and self.letzte_recherche:
+            frage = self.letzte_recherche["frage"]
+        karte, nutzung = await karten.verdichten(self._client, frage, antwort)
+        if nutzung:
+            nutzung_loggen({"art": "karte", "modell": EINST.assistent_modell, **nutzung})
+        if karte is None and recherche:
+            karte = {"titel": frage, "punkte": karten.saetze(antwort)}
+        if karte is None:
+            return
+        self._karte_ablegen({"art": "recherche" if recherche else "antwort", "frage": frage, **karte,
+                             "quellen": [quelle_kurz(q) for q in quellen][:5]})
+        await self.melden()
+
     def recherche_merken(self, frage: str, erg: dict) -> None:
         """Grundlage für die Folie – nur Frage, vorlesbarer Text und Quellen."""
         self.letzte_recherche = {"frage": frage, "text": erg["text"], "quellen": erg["quellen"],
@@ -727,6 +758,8 @@ class Coach:
             self.folie_version += 1
             nutzung_loggen({"art": "folie", "modell": EINST.assistent_modell, **nutzung})
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "folie", "titel": self.folie["titel"]})
+            self._karte_ablegen({"art": "folie", "titel": self.folie["titel"], "frage": self.folie["frage"],
+                                 "punkte": self.folie["punkte"], "quellen": self.folie["quellen"], "folie": self.folie})
             self.assistent.ansagen("Die Folie mit den Quellen ist fertig, ihr seht sie im Dashboard.")
         except Exception as e:  # noqa: BLE001
             log.warning("Folie fehlgeschlagen: %s", fehlertext(e))

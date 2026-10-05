@@ -327,6 +327,7 @@ class Gespraech:
         if text:
             self.a.letzte = {"frage": self._frage, "antwort": text, "zeit": c.meeting.jetzt(),
                              "aktion": getattr(self.a, "letzte_aktion", None), "quellen": self.a.letzte_quellen}
+            c.antwort_karte(self._frage, text, self.a.letzte["aktion"], self.a.letzte_quellen)
             self.a.letzte_quellen = []
             self.a.verlauf.append((self._frage, text))
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "modus": "gespraech",

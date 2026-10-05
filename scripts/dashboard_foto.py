@@ -55,7 +55,11 @@ async def foto(ziel: Path, url: str, breite: int, hoehe: int, warten: float, js:
             if js:  # z. B. einen Zustand nachstellen (Bild für Doku, kein echter Lauf)
                 await cdp("Runtime.evaluate", expression=js, awaitPromise=True)
                 await asyncio.sleep(1.0)
-            bild = await cdp("Page.captureScreenshot", format="png")
+            # Animationen aus: kopflos erwischt das Foto sonst Zwischenbilder (doppelt gezeichnete Seite)
+            await cdp("Runtime.evaluate", expression="const s = document.createElement('style'); s.textContent = "
+                      "'*{animation:none!important;transition:none!important}'; document.head.append(s);")
+            await asyncio.sleep(0.5)
+            bild = await cdp("Page.captureScreenshot", format="png", captureBeyondViewport=False)
         ziel.write_bytes(base64.b64decode(bild["data"]))
         print(f"{ziel}: {breite}×{hoehe}")
     finally:

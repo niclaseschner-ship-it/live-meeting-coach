@@ -67,6 +67,13 @@ Coach nutzt diesen Weg automatisch, wenn keine Realtime-Sitzung zustande kommt.
 Transkript. Eingebettete Quellenverweise werden vor dem Vorlesen entfernt. Gemessen 05.10.: Suche 5–8 s,
 gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche.
 
+**Nestor-Karten** (`coach/karten.py`): Was Nestor sagt, erscheint zusätzlich als Pop-up über dem Bildbereich –
+Titel, die Frage, 2–4 Stichpunkte, bei Recherchen die Quellen. GPT-5.4-mini verdichtet die gesprochene Antwort
+(gemessen 1,3–2,5 s, Frist 6 s, sonst die ersten Sätze) und lässt Bestätigungen, Rückfragen und Smalltalk weg.
+Bei Aktionen (Bild, Agenda-Wechsel, Pause, Folie) gibt es keine Karte, weil das Dashboard das Ergebnis selbst
+zeigt. Automatisch geöffnete Karten treten nach einer Minute zurück; alle bleiben im Verlauf (Reiter „Nestor“)
+und lassen sich dort wieder öffnen. Solange eine Karte offen ist, entfällt der Untertitel.
+
 **Recherche-Folie** (`coach/folie.py`): auf Zuruf oder per Knopf im Live-Bild-Bereich. GPT-5.4-mini macht aus
 dem Rechercheergebnis Titel, Kernaussage, 3–5 Stichpunkte und Offenes – ohne neue Suche, ohne Transkript. Die
 Folie ist eine Dashboard-Ansicht (umschaltbar mit dem Live-Bild), damit Text scharf und Quellen anklickbar

@@ -180,3 +180,15 @@ def test_folie_nach_recherche():
     assert f["titel"] == "Mindestlohn 2026" and f["punkte"] == ["a", "b"]
     assert f["quellen"] == [{"titel": "bmas.de", "url": "https://www.bmas.de/x", "seite": "bmas.de"}]
     assert n["tokens_rein"] == 10
+
+
+def test_karte_ohne_modell_und_kurze_antworten():
+    import asyncio
+
+    from coach import karten
+
+    assert asyncio.run(karten.verdichten(None, "danke", "Gern, bis gleich.")) == (None, {})
+    lang = "Ihr seid bei Punkt zwei. Das Budget liegt bei 25.000 Euro. Offen ist der Puffer für Getränke. Mehr nicht."
+    karte, _ = asyncio.run(karten.verdichten(None, "wo stehen wir?", lang))
+    assert karte == {"titel": "wo stehen wir?", "punkte": ["Ihr seid bei Punkt zwei.", "Das Budget liegt bei 25.000 Euro.",
+                                                           "Offen ist der Puffer für Getränke.", "Mehr nicht."]}

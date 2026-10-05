@@ -199,6 +199,8 @@ $("btn-transkript").onclick = () => { leisteOffen = !leisteOffen; rendern(); };
 $("leiste-zu").onclick = () => { leisteOffen = false; rendern(); };
 $("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
 $("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
+$("reiter-nestor").onclick = () => { reiter = "nestor"; rendern(); };
+$("karte-zu").onclick = () => karteSchliessen();
 $("btn-einstellungen").onclick = () => { $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = true; };
 $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
@@ -347,6 +349,43 @@ function platzhalterRendern(z) {
     : rest > 1 ? `Das erste Bild kommt in ca. ${rest} Minuten.` : "Das erste Bild kommt gleich.";
 }
 
+// ---------- Nestor-Karten (Pop-up) ----------
+const KARTEN_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie" };
+const KARTEN_ICON = { antwort: "frage", recherche: "suche", folie: "folie" };
+let karteOffen = null;      // id der gezeigten Karte
+let karteGesehen = null;    // höchste id, die schon automatisch gezeigt wurde
+let karteTimer = null;
+function karteZeigen(k, automatisch) {
+  karteOffen = k.id;
+  $("karte-art").textContent = KARTEN_ART[k.art] ?? "Nestor";
+  $("karte-zeit").textContent = mmss(k.zeit);
+  $("karte-titel").textContent = k.titel;
+  $("karte-frage").textContent = k.frage && k.frage !== k.titel ? `„${k.frage}“` : "";
+  $("karte-frage").hidden = !$("karte-frage").textContent;
+  $("karte-punkte").replaceChildren(...(k.punkte ?? []).map((p) => el("li", {}, p)));
+  const q = k.quellen ?? [];
+  $("karte-quellen").hidden = !q.length;
+  $("karte-quellen").replaceChildren(el("strong", {}, "Quellen"), ...q.map((x) => el("div", {},
+    el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.titel), " ", el("small", {}, x.seite))));
+  $("karte-folie").hidden = k.art !== "folie";
+  $("karte-folie").onclick = () => { folieBauen(k.folie); ansicht = "folie"; karteSchliessen(); if (zustand) bildRendern(zustand); };
+  $("karte").hidden = false;
+  clearTimeout(karteTimer);
+  // automatisch geöffnete Karten treten nach einer Minute zurück in den Verlauf; selbst geöffnete bleiben
+  if (automatisch) karteTimer = setTimeout(karteSchliessen, 60000);
+}
+function karteSchliessen() { $("karte").hidden = true; karteOffen = null; clearTimeout(karteTimer); }
+function kartenRendern(z) {
+  const karten = z.karten ?? [];
+  const neueste = karten.at(-1);
+  if (karteGesehen === null) { karteGesehen = neueste?.id ?? 0; return; } // beim Laden keine alten Karten aufpoppen
+  if (neueste && neueste.id > karteGesehen) {
+    karteGesehen = neueste.id;
+    if (neueste.art !== "folie") karteZeigen(neueste, true); // die Folie erscheint schon groß im Bildbereich
+  }
+  if (!karten.length && karteOffen !== null) karteSchliessen(); // neues Meeting
+}
+
 // ---------- Darstellung ----------
 const NESTOR_TEXT = {
   bereit: "hört zu", angesprochen: "hört dir zu …", denkt: "denkt nach …", spricht: "spricht",
@@ -393,7 +432,7 @@ function rendern() {
   // Untertitel: was Nestor gerade gesagt hat – nur kurz, damit nicht zu viel zu lesen ist
   const l = a?.letzte;
   const frisch = aktiv && l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
-  $("untertitel").hidden = !frisch;
+  $("untertitel").hidden = !frisch || karteOffen !== null; // die Karte zeigt es schon, nicht doppelt lesen
   if (frisch) $("untertitel").replaceChildren(el("span", { class: "wer" }, a.name), l.antwort,
     ...((l.quellen ?? []).length ? [el("span", { class: "quellen" }, "Quellen: ",
       ...l.quellen.flatMap((q, i) => [i ? " · " : "", el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel)]))] : []));
@@ -413,6 +452,7 @@ function rendern() {
   leisteRendern(z);
   kostenRendern(z);
   schluesselRendern(z);
+  kartenRendern(z);
 }
 
 function liveRendern(z) {
@@ -476,8 +516,15 @@ function leisteRendern(z) {
   if (!leisteOffen) return;
   $("reiter-transkript").classList.toggle("aktiv", reiter === "transkript");
   $("reiter-hinweise").classList.toggle("aktiv", reiter === "hinweise");
+  $("reiter-nestor").classList.toggle("aktiv", reiter === "nestor");
   $("transkript").hidden = reiter !== "transkript";
   $("hinweise").hidden = reiter !== "hinweise";
+  $("nestor-verlauf").hidden = reiter !== "nestor";
+  const karten = z.karten ?? [];
+  $("nestor-verlauf").replaceChildren(...(karten.length ? [...karten].reverse().map((k) =>
+    el("li", { onclick: () => karteZeigen(k, false), title: "Karte wieder öffnen" }, icon(KARTEN_ICON[k.art] ?? "frage"),
+      el("strong", {}, k.titel), el("span", {}, `${mmss(k.zeit)} · ${KARTEN_ART[k.art] ?? "Nestor"}`)))
+    : [el("li", { class: "leer" }, el("span", {}, "Noch keine Karten – sie entstehen, wenn Nestor etwas erklärt oder recherchiert."))]));
   const tr = $("transkript");
   const unten = tr.scrollTop + tr.clientHeight >= tr.scrollHeight - 20;
   const zeilen = z.segmente.map((s) => el("li", {},
@@ -520,7 +567,7 @@ function verbinden() {
   iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
   iconSetzen("kosten-icon", "muenze"); iconSetzen("btn-folie", "folie");
   document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
-  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu");
+  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("karte-zu", "zu");
   $("f-titel").value = "Testmeeting";
   punktZeile({ titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 });
   punktZeile({ titel: "Hauptthema", ziel: "Optionen sammeln und bewerten", minuten: 5 });

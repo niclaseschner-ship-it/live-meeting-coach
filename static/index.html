@@ -41,7 +41,7 @@
       <button id="btn-fragen" class="icon" data-tip="Nestor fragen (statt „Nestor, …“ zu sagen)" hidden></button>
       <button id="btn-still" class="icon" data-tip="Nestor unterbrechen" hidden></button>
       <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
-      <button id="btn-transkript" class="icon" data-tip="Transkript und Hinweisverlauf"></button>
+      <button id="btn-transkript" class="icon" data-tip="Verlauf: Transkript, Hinweise und Nestors Karten"></button>
       <button id="btn-einstellungen" class="icon" data-tip="Einstellungen"></button>
       <button id="btn-start" class="primaer">Meeting starten</button>
       <button id="btn-stopp" class="gefahr" hidden>Beenden</button>
@@ -116,6 +116,20 @@
 
   <!-- Nestor-Untertitel: was er gerade sagt -->
   <div id="untertitel" class="untertitel" hidden></div>
+
+  <!-- Nestor-Karte: was Nestor sagt, als Pop-up mit Stichpunkten; ältere Karten im Verlauf -->
+  <section id="karte" class="nestor-karte" hidden aria-live="polite">
+    <div class="nk-kopf">
+      <span class="nk-art"><i>N</i><span id="karte-art">Nestor</span></span>
+      <span id="karte-zeit" class="nk-zeit"></span>
+      <button id="karte-zu" class="icon klein" data-tip="Schließen – bleibt im Verlauf unter „Nestor“"></button>
+    </div>
+    <h3 id="karte-titel"></h3>
+    <p id="karte-frage" class="nk-frage"></p>
+    <ul id="karte-punkte" class="nk-punkte"></ul>
+    <div id="karte-quellen" class="nk-quellen" hidden></div>
+    <button id="karte-folie" class="leise klein" hidden>Als Folie im Bildbereich zeigen</button>
+  </section>
 
   <div id="fehler" class="fehler" hidden></div>
 
@@ -261,11 +275,13 @@
       <div class="reiter">
         <button id="reiter-transkript" class="aktiv">Transkript</button>
         <button id="reiter-hinweise">Hinweise</button>
+        <button id="reiter-nestor">Nestor</button>
       </div>
       <button id="leiste-zu" class="icon klein" data-tip="Schließen"></button>
     </div>
     <ol id="transkript" class="transkript"></ol>
     <ol id="hinweise" class="hinweis-liste" hidden></ol>
+    <ol id="nestor-verlauf" class="karten-liste" hidden></ol>
   </aside>
 
   <script src="/static/app.js"></script>
