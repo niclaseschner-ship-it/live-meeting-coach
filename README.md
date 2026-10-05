@@ -1,8 +1,29 @@
-# Live Meeting Coach
+# Nestor – Live Meeting Coach
 
-KI-gestützter Meeting-Assistent (Hackathon, isb Open Innovation). Ein sichtbarer Co-Pilot, der
-nicht das Meeting übernimmt, sondern der Gruppe hilft zu bemerken, wann sie Zeit, Fokus oder
-Gesprächsfluss verliert. Der Mensch entscheidet, die Anwendung zeigt nur Hinweise.
+Nestor begleitet eure Besprechung: Er hält Agenda, Zeit und Gesprächsfluss im Blick und unterstützt
+euch auf Ansprache in natürlicher Sprache. Er fasst Themen zusammen, recherchiert im Web und macht
+Entscheidungen, Aufgaben und offene Fragen sichtbar. Die Gruppe entscheidet.
+
+## Nestor in sechs Bildern
+
+<table>
+<tr>
+<td><a href="demo/produktbilder/01-fokus.png"><img src="demo/produktbilder/01-fokus.png" width="360" alt="1. Eure Runde. Ein gemeinsamer Fokus." /></a></td>
+<td><a href="demo/produktbilder/02-gespraech.png"><img src="demo/produktbilder/02-gespraech.png" width="360" alt="2. Zeit und Gespräch. Gemeinsam im Blick." /></a></td>
+</tr>
+<tr>
+<td><a href="demo/produktbilder/03-aktiv.png"><img src="demo/produktbilder/03-aktiv.png" width="360" alt="3. Frag Nestor. Komm weiter." /></a></td>
+<td><a href="demo/produktbilder/04-recherche.png"><img src="demo/produktbilder/04-recherche.png" width="360" alt="4. Fehlt Wissen? Nestor schaut nach." /></a></td>
+</tr>
+<tr>
+<td><a href="demo/produktbilder/05-ueberblick.png"><img src="demo/produktbilder/05-ueberblick.png" width="360" alt="5. Alle behalten den Überblick." /></a></td>
+<td><a href="demo/produktbilder/06-ergebnisse.png"><img src="demo/produktbilder/06-ergebnisse.png" width="360" alt="6. Klare Ergebnisse. Auch danach." /></a></td>
+</tr>
+</table>
+
+Die Bilder zeigen die Demo „Messeplanung 2027“ mit Originalansichten der App.
+[Produktbilder und Pitch](demo/produktbilder/README.md) · [Demo abspielen](demo/README.md) ·
+[So sprecht ihr mit Nestor](docs/sprachassistent.md)
 
 Grundlage: **Lastenheft „KI-gestützter Meeting-Assistent (MVP)“** (02.10.2026) und die
 Version-2-Spezifikation für echte Meetings in [docs/spezifikation.md](docs/spezifikation.md).
@@ -31,8 +52,6 @@ Dann <http://127.0.0.1:8000> in Edge oder Chrome öffnen.
 
 **Demo:** [demo/](demo/README.md) – ein dreiminütiges Meeting zum Abspielen im Dashboard, mit Screenshots und
 der Meeting-Zusammenfassung als Bild.
-
-![Meeting-Zusammenfassung der Demo](demo/zusammenfassung.png)
 
 - **Eigener OpenAI-Schlüssel:** Jede Person trägt ihren API-Schlüssel im Dashboard unter Einstellungen ein
   (wird bei OpenAI geprüft, liegt dann nur in `~/.live-meeting-coach/openai_schluessel`, nie im Browser oder Log).
