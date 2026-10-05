@@ -166,3 +166,14 @@ def test_fenster_einzelner_ausreisser_wird_geglaettet():
     r.fenster_zuordnen([a, a, a], 0.75)
     r.fenster_zuordnen([b, b, b], 0.75)
     assert r.fenster_zuordnen([a, a, b, a, a], 0.75) == [0, 0, 0, 0, 0]
+
+
+def test_prompt_echo_der_transkription_wird_erkannt():
+    from coach.hoeren import prompt_echo
+
+    prompt = ("Besprechung auf Deutsch. Der Moderationsassistent heißt Nestor. Thema: Kommunal-Wahl-Check Frankfurt. "
+              "Agenda: Stadtentwicklung und Gewerbeflächen (Positionen vergleichen).")
+    assert prompt_echo("Besprechung auf Deutsch. Der Moderationsassistent heißt. Thema", prompt)
+    assert prompt_echo("Der Moderationsassistent heißt Nestor. Thema: Kommunal-Wahl-Check Frankfurt.", prompt)
+    assert not prompt_echo("Nestor, wo stehen wir gerade?", prompt)
+    assert not prompt_echo("Wir brauchen mehr Gewerbeflächen in Frankfurt, das ist klar.", prompt)

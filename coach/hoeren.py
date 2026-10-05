@@ -37,6 +37,22 @@ def nach_16k(a24: np.ndarray) -> np.ndarray:
     return np.interp(ziel, np.arange(len(a24)), a24).astype(np.float32)
 
 
+def prompt_echo(text: str, prompt: str) -> bool:
+    """Bei leisen oder sehr kurzen Äußerungen liefert die Transkription manchmal den Kontext-Prompt zurück
+    („Besprechung auf Deutsch. Der Moderationsassistent heißt Nestor …“) – das darf Nestor nie auslösen
+    (Testlauf 05.10.2026, Frankfurt 24:34)."""
+    def norm(s: str) -> str:
+        return " ".join("".join(z.lower() if z.isalnum() else " " for z in s).split())
+
+    t, p = norm(text), norm(prompt)
+    if len(t) < 12 or not p:
+        return False
+    if t in p or t.startswith("besprechung auf deutsch"):
+        return True
+    worte = t.split()
+    return len(worte) >= 4 and " ".join(worte[:4]) in p and sum(w in p.split() for w in worte) >= 0.8 * len(worte)
+
+
 def person_name(index: int | None) -> str:
     return f"Person {index + 1}" if index is not None else "–"
 
@@ -151,11 +167,15 @@ class Hoerstrom:
                 w.setframerate(16000)
                 w.writeframes((np.clip(proben, -1, 1) * 32767).astype("<i2").tobytes())
             t0 = time.monotonic()
+            prompt = c.vokabel_prompt()[-800:]
             try:
                 antwort = await c._client.audio.transcriptions.create(
                     model=EINST.text_modell, file=("aeusserung.wav", buf.getvalue(), "audio/wav"),
-                    language=EINST.sprache, prompt=c.vokabel_prompt()[-800:] or None)
+                    language=EINST.sprache, prompt=prompt or None)
                 text = (getattr(antwort, "text", "") or "").strip()
+                if prompt_echo(text, prompt):
+                    log.info("Transkription gab den Kontext-Prompt zurück – verworfen")
+                    text = ""
             except Exception as e:  # noqa: BLE001
                 log.warning("Transkription je Äußerung fehlgeschlagen: %s", fehlertext(e))
             dauer = len(proben) / 16000

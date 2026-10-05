@@ -27,6 +27,7 @@ async def main() -> None:
     ap.add_argument("aufnahme")
     ap.add_argument("--tempo", type=float, default=1.0)
     ap.add_argument("--bis", type=float, default=None, help="nur die ersten N Sekunden abspielen")
+    ap.add_argument("--mit-bild", action="store_true", help="Abschlussbild zeichnen und Live-Bilder speichern")
     args = ap.parse_args()
     pfad = Path(args.aufnahme)
 
@@ -40,7 +41,9 @@ async def main() -> None:
         pfad = kurz
 
     coach = Coach()
-    coach.onepager_am_ende = False  # Bild separat mit scripts/onepager_bauen.py
+    coach.onepager_am_ende = args.mit_bild  # sonst Bild separat mit scripts/onepager_bauen.py
+    bilder_ordner = WURZEL / "logs" / "testlauf" / pfad.stem
+    gespeichert: set[int] = set()
     zeitreihe: list[dict] = []
     erste_saetze: dict[float, float] = {}
 
@@ -53,11 +56,22 @@ async def main() -> None:
                               "ampeln": {a["name"]: a["farbe"] for a in s["ampeln"]}})
         for seg in m.transkript:
             erste_saetze.setdefault(seg.start, time.monotonic())
+        if args.mit_bild and coach.onepager_png and coach.onepager_version not in gespeichert:
+            gespeichert.add(coach.onepager_version)
+            bilder_ordner.mkdir(parents=True, exist_ok=True)
+            (bilder_ordner / f"bild_{coach.onepager_version}_{int(m.jetzt())}s.png").write_bytes(coach.onepager_png)
 
     coach.beobachter.append(beobachten)
     t0 = time.monotonic()
     await coach.abspielen(pfad, tempo=args.tempo, auto_wechsel=True)
     dauer = time.monotonic() - t0
+    # Nachlauf: Abschlussbild, Ergebnisprüfung, letzte Karten
+    for _ in range(240):
+        if not (coach._onepager_laeuft or coach._folie_laeuft):
+            break
+        await asyncio.sleep(1)
+    await asyncio.sleep(5)
+    await beobachten()
     m = coach.meeting
 
     bericht = {
@@ -72,6 +86,13 @@ async def main() -> None:
         "mischungen": [round(t, 1) for t in m.mischungen],
         "zeitreihe": zeitreihe,
         "onepager_version": coach.onepager_version,
+        "karten": coach.karten,
+        "folie": coach.folie,
+        "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
+        "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)} for i, p in enumerate(m.agenda)],
+        "kosten": coach.kosten_stand(),
+        "tempo": args.tempo,
+        "einstellungen": coach.einstellungen(),
         "fehler": coach.fehler,
     }
     ziel = WURZEL / "logs" / f"bericht_{pfad.stem}.json"
