@@ -1,7 +1,7 @@
 r"""Synthetische Meetings mit eingebauten Ereignissen – Referenz exakt bekannt, nur für die Logik.
 
     .venv\Scripts\python scripts\synthetisch_meeting.py drehbuch teamweekly "Team-Weekly einer Agentur …"
-    .venv\Scripts\python scripts\synthetisch_meeting.py vertonen teamweekly
+    .venv\Scripts\python scripts\synthetisch_meeting.py vertonen teamweekly [--azure]
 
 Schritt 1 (drehbuch) schreibt Codex über das ChatGPT-Abo (keine API-Kosten): Agenda, Personen und Äußerungen,
 jede mit Ereignis-Marken (wechsel_ansage, wechsel_still, monolog, unterbrechung, abschweifung, kraftausdruck,
@@ -62,17 +62,50 @@ async def drehbuch(name: str, thema: str, minuten: int = 15, personen: int = 4) 
           f"Ereignisse: {sorted({e for a in d['aeusserungen'] for e in a.get('ereignisse', [])})}")
 
 
-def vertonen(name: str) -> None:
+def mp3_zu_pcm(daten: bytes) -> np.ndarray:
+    import io
+
+    import av
+
+    c = av.open(io.BytesIO(daten))
+    rs = av.AudioResampler(format="s16", layout="mono", rate=RATE)
+    teile = [f.to_ndarray().reshape(-1) for fr in c.decode(c.streams.audio[0]) for f in rs.resample(fr)]
+    c.close()
+    return np.concatenate(teile).astype("<i2")
+
+
+def azure_clips(name: str, d: dict) -> list[np.ndarray]:
+    """Über Teachbuddys Azure-Vertonung auf dem Pi (freies Kontingent); Zugangsdaten bleiben dort."""
+    import subprocess
+    import tempfile
+
+    fern = f"~/arbeit/lmc-vertonung/{name}"
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "pi", f"mkdir -p {fern}"], check=True)
+    subprocess.run(["scp", "-q", "-o", "BatchMode=yes", str(ZIEL / f"{name}.json"),
+                    str(WURZEL / "scripts" / "pi_vertonen.py"), f"pi:{fern}/"], check=True)
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "pi",
+                    f"cd ~/repos/teachbuddy && source bin-zugang.sh >/dev/null 2>&1 && TEACHBUDDY_SPRECHTEMPO=1.0 "
+                    f".venv/bin/python {fern}/pi_vertonen.py {fern}/{name}.json {fern}/mp3"], check=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["scp", "-q", "-r", "-o", "BatchMode=yes", f"pi:{fern}/mp3", tmp], check=True)
+        return [mp3_zu_pcm((Path(tmp) / "mp3" / f"{i:04d}.mp3").read_bytes()) for i in range(len(d["aeusserungen"]))]
+
+
+def openai_clips(d: dict) -> list[np.ndarray]:
     from openai import OpenAI
 
-    d = json.loads((ZIEL / f"{name}.json").read_text(encoding="utf-8"))
     client = OpenAI(api_key=openai_schluessel())
+    return [np.frombuffer(client.audio.speech.create(
+        model="gpt-4o-mini-tts", voice=STIMMEN[a["person"] % len(STIMMEN)], input=a["text"], response_format="pcm",
+        instructions="Sprich natürlich auf Deutsch, wie in einer Besprechung.").content, dtype="<i2")
+        for a in d["aeusserungen"]]
+
+
+def vertonen(name: str, azure: bool = False) -> None:
+    d = json.loads((ZIEL / f"{name}.json").read_text(encoding="utf-8"))
+    clips = azure_clips(name, d) if azure else openai_clips(d)
     teile, referenz, t = [np.zeros(int(20 * RATE), dtype="<i2")], [], 20.0  # 20 s für Nestors Begrüßung
-    for a in d["aeusserungen"]:
-        roh = client.audio.speech.create(model="gpt-4o-mini-tts", voice=STIMMEN[a["person"] % len(STIMMEN)],
-                                         input=a["text"], response_format="pcm",
-                                         instructions="Sprich natürlich auf Deutsch, wie in einer Besprechung.").content
-        x = np.frombuffer(roh, dtype="<i2")
+    for a, x in zip(d["aeusserungen"], clips):
         unterbricht = "unterbrechung" in a.get("ereignisse", [])
         luecke = 0.0 if unterbricht else 0.6
         if unterbricht and len(teile) > 1:  # in die letzten 0,8 s der vorigen Äußerung hineinsprechen
@@ -105,4 +138,4 @@ if __name__ == "__main__":
     if sys.argv[1] == "drehbuch":
         asyncio.run(drehbuch(sys.argv[2], sys.argv[3]))
     elif sys.argv[1] == "vertonen":
-        vertonen(sys.argv[2])
+        vertonen(sys.argv[2], azure="--azure" in sys.argv)
