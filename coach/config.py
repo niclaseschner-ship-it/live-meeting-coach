@@ -66,6 +66,13 @@ class Einstellungen:
     # Strom 4 Kontext: so viel Gesprochenes wird je Themen-Zuordnung gesammelt
     abschnitt_sekunden: float = _zahl("LMC_ABSCHNITT_SEKUNDEN", 15)
     # Live-Bild als One-Pager (FR-10), gezeichnet von Claude über das Abo (claude -p)
+    # Tests ohne API-Kosten: Text-KI über das ChatGPT-Abo (coach/ki_abo.py), Transkript aus dem Zwischenspeicher,
+    # keine Sprachausgabe. Im echten Meeting bleiben alle drei aus.
+    ki: str = os.getenv("LMC_KI", "openai")  # openai | codex
+    codex_befehl: str = os.getenv("LMC_CODEX_BEFEHL", "ssh -o BatchMode=yes -o ConnectTimeout=10 pi codex")
+    codex_aufwand: str = os.getenv("LMC_CODEX_AUFWAND", "low")
+    text_cache: str = os.getenv("LMC_TEXT_CACHE", "")  # Ordner; leer = aus
+    stimme_aus: bool = os.getenv("LMC_STIMME_AUS") == "1"
     claude_befehl: str = os.getenv("LMC_CLAUDE_BEFEHL", "ssh -o BatchMode=yes -o ConnectTimeout=10 buddyboard claude")
     # Live-Bild: „openai“ (GPT-5.4 + Bildgenerator, wie ChatGPT; Fortschreibung des letzten Bildes; ~8 ct/Bild)
     # oder „claude“ (SVG über das Claude-Abo per claude -p; kostenlos, Layout schwächer)

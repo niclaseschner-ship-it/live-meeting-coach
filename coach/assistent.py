@@ -434,6 +434,8 @@ class Assistent:
         c = self.coach
         if c._client is None or not text.strip():
             return 0.0
+        if EINST.stimme_aus:  # Tests: keine Sprachausgabe, Dauer grob geschätzt (~14 Zeichen je Sekunde)
+            return len(text) / 14
         if self.zustand not in ("begruessung", "pausiert"):
             self.zustand = "spricht"
             await c.melden()

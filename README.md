@@ -54,6 +54,12 @@ der Meeting-Zusammenfassung als Bild.
   die Münze in der Kopfleiste zeigt das laufende Meeting nach Funktion, pro Stunde, heute und insgesamt
   (Listenpreise in `coach/kosten.py`).
 - **Tests:** `.venv\Scripts\python -m pytest`
+- **Testläufe ohne API-Kosten** (nur für eigene Tests): `LMC_KI=codex` schickt alle Text-KI-Aufrufe über das
+  ChatGPT-Abo (Codex auf dem Pi, ~5 s je Aufruf), `LMC_TEXT_CACHE=logs/textcache` speichert Transkripte je
+  Äußerung (zweiter Lauf kostet nichts; `LMC_TEXT_VORLAGE=logs/bericht_<probe>.json` übernimmt sie aus einem
+  früheren Lauf), `LMC_STIMME_AUS=1` spart die Sprachausgabe. Live-Text dazu `LMC_LIVE_ART=sparsam`, Live-Bild
+  `LMC_ONEPAGER_MINUTEN=0` (nur auf Zuruf) oder `LMC_BILD_ANBIETER=claude` (Abo). Protokoll des ersten großen
+  Testlaufs: [docs/testlauf_2026-10-05.md](docs/testlauf_2026-10-05.md).
 
 ## Aufbau (Version 2: Ströme statt Blöcke)
 

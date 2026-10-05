@@ -152,6 +152,10 @@ class Coach:
             from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI(api_key=openai_schluessel())
+            if EINST.ki == "codex":
+                from .ki_abo import AboClient
+
+                self._client = AboClient(self._client)
 
     def kosten_stand(self) -> dict:
         m = self.meeting

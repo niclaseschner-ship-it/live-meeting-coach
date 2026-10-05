@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import logging
 import time
 import wave
@@ -53,6 +54,18 @@ def prompt_echo(text: str, prompt: str) -> bool:
     return len(worte) >= 4 and " ".join(worte[:4]) in p and sum(w in p.split() for w in worte) >= 0.8 * len(worte)
 
 
+def text_cache_datei(wav: bytes):
+    """Zwischenspeicher für Tests (LMC_TEXT_CACHE): Schlüssel ist der Inhalt der Äußerung, Abspielen ist
+    deterministisch – derselbe Lauf ergibt dieselben Äußerungen und kostet beim zweiten Mal nichts."""
+    if not EINST.text_cache:
+        return None
+    import hashlib
+    from pathlib import Path
+
+    h = hashlib.sha1(wav + EINST.text_modell.encode()).hexdigest()
+    return Path(EINST.text_cache) / h[:2] / f"{h}.txt"
+
+
 def person_name(index: int | None) -> str:
     return f"Person {index + 1}" if index is not None else "–"
 
@@ -70,6 +83,12 @@ class Hoerstrom:
         self._analysen: list[asyncio.Future] = []
         self.live = None
         self.sparsam = mit_text and EINST.live_art == "sparsam"  # Text je Äußerung statt Streaming
+        self._vorlage = None  # Tests: {(start, ende): text} aus einem früheren Bericht (LMC_TEXT_VORLAGE)
+        if self.sparsam and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
+            import json
+
+            bericht = json.loads(open(os.environ["LMC_TEXT_VORLAGE"], encoding="utf-8").read())
+            self._vorlage = {(round(s["start"], 1), round(s["ende"], 1)): s["text"] for s in bericht["transkript"]}
         self._letzter_text: asyncio.Future | None = None
         self.text_sekunden = 0.0
         if mit_text and not self.sparsam:
@@ -168,6 +187,18 @@ class Hoerstrom:
                 w.writeframes((np.clip(proben, -1, 1) * 32767).astype("<i2").tobytes())
             t0 = time.monotonic()
             prompt = c.vokabel_prompt()[-800:]
+            cache = text_cache_datei(buf.getvalue())
+            if cache is not None and not cache.exists() and self._vorlage is not None:
+                # Transkript eines früheren Laufs: gleiche Äußerungsgrenzen -> gleicher Text
+                o = self._offen.get(uid) or {}
+                treffer = self._vorlage.get((round(o.get("start", -1), 1), round(o.get("ende", -1), 1)))
+                if treffer:
+                    cache.parent.mkdir(parents=True, exist_ok=True)
+                    cache.write_text(treffer, encoding="utf-8")
+            if cache is not None and cache.exists():  # Tests: dieselbe Äußerung wurde schon einmal transkribiert
+                text = cache.read_text(encoding="utf-8")
+                await self._text_ausgeben(uid, text, vorher)
+                return
             try:
                 antwort = await c._client.audio.transcriptions.create(
                     model=EINST.text_modell, file=("aeusserung.wav", buf.getvalue(), "audio/wav"),
@@ -178,10 +209,16 @@ class Hoerstrom:
                     text = ""
             except Exception as e:  # noqa: BLE001
                 log.warning("Transkription je Äußerung fehlgeschlagen: %s", fehlertext(e))
+            if cache is not None and text:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(text, encoding="utf-8")
             dauer = len(proben) / 16000
             self.text_sekunden += dauer
             nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(dauer, 1),
                             "sekunden": round(time.monotonic() - t0, 2)})
+        await self._text_ausgeben(uid, text, vorher)
+
+    async def _text_ausgeben(self, uid: int, text: str, vorher) -> None:
         if vorher is not None:
             await asyncio.gather(vorher, return_exceptions=True)  # Reihenfolge wahren
         o = self._offen.get(uid)
