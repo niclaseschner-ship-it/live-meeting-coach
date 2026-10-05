@@ -357,15 +357,18 @@ class Coach:
     def vokabel_prompt(self) -> str:
         """Kontext für die Transkription: Fachwörter und Namen aus der Einrichtung, dazu der letzte Satz."""
         m = self.meeting
-        teile = ["Besprechung auf Deutsch."]
+        # Der Prompt muss in der Sprache des Meetings sein – sonst übersetzt die Transkription (AMI-Test 05.10.)
+        deutsch = EINST.sprache == "de"
+        teile = ["Besprechung auf Deutsch." if deutsch else "Meeting in English."]
         if self.assistent.aktiv:
-            teile.append(f"Der Moderationsassistent heißt {EINST.assistent_name}.")
+            teile.append(f"Der Moderationsassistent heißt {EINST.assistent_name}." if deutsch
+                         else f"The meeting assistant is called {EINST.assistent_name}.")
         if m.titel:
-            teile.append(f"Thema: {m.titel}.")
+            teile.append((f"Thema: {m.titel}." if deutsch else f"Topic: {m.titel}."))
         if m.agenda:
             teile.append("Agenda: " + "; ".join(p.titel + (f" ({p.ziel})" if p.ziel else "") for p in m.agenda) + ".")
         if m.teilnehmende:
-            teile.append("Teilnehmende: " + ", ".join(m.teilnehmende) + ".")
+            teile.append(("Teilnehmende: " if deutsch else "Participants: ") + ", ".join(m.teilnehmende) + ".")
         if m.transkript:
             teile.append(m.transkript[-1].text)
         return " ".join(teile)[-800:]

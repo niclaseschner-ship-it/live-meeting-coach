@@ -48,7 +48,7 @@ def prompt_echo(text: str, prompt: str) -> bool:
     t, p = norm(text), norm(prompt)
     if len(t) < 12 or not p:
         return False
-    if t in p or t.startswith("besprechung auf deutsch"):
+    if t in p or t.startswith(("besprechung auf deutsch", "meeting in english")):
         return True
     worte = t.split()
     return len(worte) >= 4 and " ".join(worte[:4]) in p and sum(w in p.split() for w in worte) >= 0.8 * len(worte)
@@ -62,7 +62,7 @@ def text_cache_datei(wav: bytes):
     import hashlib
     from pathlib import Path
 
-    h = hashlib.sha1(wav + EINST.text_modell.encode()).hexdigest()
+    h = hashlib.sha1(wav + f"{EINST.text_modell}|{EINST.sprache}|v2".encode()).hexdigest()  # Sprache gehört zum Prompt
     return Path(EINST.text_cache) / h[:2] / f"{h}.txt"
 
 
