@@ -35,6 +35,7 @@ const PFADE = {
   datei: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   zu: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   muenze: '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+  suche: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   achtung: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   // Regeln
   ausreden: '<path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
@@ -485,6 +486,7 @@ function verbinden() {
   iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-einstellungen", "einstellungen");
   iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
   iconSetzen("kosten-icon", "muenze");
+  document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
   iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu");
   $("f-titel").value = "Testmeeting";
   punktZeile({ titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 });

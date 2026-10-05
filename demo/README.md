@@ -10,10 +10,27 @@ synthetisch (OpenAI-Sprachausgabe), die Aufnahme ist also frei verwendbar. Erzeu
 | `messeplanung.json` | Einrichtung: Titel, Ziel, Agenda mit je 1 min, sechs Gesprächsregeln, Nestor an |
 | `dashboard_live.png` | Dashboard bei 2:09: Ton-Regel rot, Nestor beantwortet „Wo stehen wir gerade?“ |
 | `dashboard_ende.png` | Dashboard nach dem Meeting: Agenda mit Ergebnissen, Live-Bild, Redeanteile |
-| `dashboard_gruen.png` | **Nachgestellt**: früh im Meeting, alle Regeln grün, Platzhalter bis zum ersten Live-Bild |
+| `dashboard_gruen.png` | **Nachgestellt**: früh im Meeting, alle Regeln grün, Platzhalter bis zum ersten Live-Bild mit Beispielen, wie man Nestor anspricht |
+| `dashboard_gruen_bild.png` | **Nachgestellt**: wie oben, mit dem Zusammenfassungsbild im Live-Bild |
 | `dashboard_monolog.png` | **Nachgestellt**, nicht aus einem Lauf: Monolog-Hinweis, wenn eine Person länger als 1 min am Stück spricht (Texte und Darstellung wie im echten Dashboard) |
+| `dashboard_monolog_bild.png` | **Nachgestellt**: Monolog-Hinweis, mit dem Zusammenfassungsbild im Live-Bild |
 | `zusammenfassung.png` | Meeting-Zusammenfassung (Live-Bild, Stand 3:11) |
 | `protokoll.md` | Ergebnisse je Punkt, Hinweise an die Runde, Transkript |
+
+## Was Nestor kann
+
+Nestor wird mit seinem Namen angesprochen und antwortet gesprochen und als Untertitel:
+
+- „Nestor, wo stehen wir gerade?“ – Punkt, Restzeit, was schon festgehalten ist
+- „Nestor, fass den Punkt kurz zusammen.“ – auch nur den letzten Punkt
+- „Nestor, was steht noch an?“ und „Wo fehlen noch Entscheidungen?“
+- „Nestor, zeig uns die Übersicht.“ – zeichnet das Live-Bild, auch mit Fokus („nur das Budget“)
+- „Nestor, weiter zum nächsten Punkt.“ – wechselt die Agenda
+- „Nestor, gib uns einen Überblick zu …“ – kurze Websuche, Quellen erscheinen im Dashboard
+- „Nestor, hör kurz nicht zu.“ – pausiert, bis jemand im Dashboard auf Weiter drückt
+
+Rückfragen gehen ohne erneuten Namen, solange das Gespräch läuft, und Nestor lässt sich unterbrechen.
+Zu Beginn begrüßt er die Runde; wer dann „Nein“ sagt, schaltet ihn ab, und nichts wird behalten.
 
 ## Abspielen
 
