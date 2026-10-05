@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nestor · Meeting-Coach</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%23312E81'/%3E%3Cpath d='M14 27V13l12 14V13' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Kopfleiste: Nestor, Meeting, Steuerung -->
+  <header class="kopf">
+    <div class="marke">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="40" height="40">
+          <defs><linearGradient id="nlg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient></defs>
+          <rect width="40" height="40" rx="11" fill="url(#nlg)"/>
+          <path d="M9.5 28.5a13 13 0 0 1-1.6-13.8M30.5 28.5a13 13 0 0 0 1.6-13.8" stroke="#FBBF24" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M8 19.5l-2.4-1.2M8.6 24.2l-2.6.2M32 19.5l2.4-1.2M31.4 24.2l2.6.2" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
+          <path d="M14 27V13l12 14V13" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="marke-text"><strong>Nestor</strong><span>Meeting-Coach</span></div>
+    </div>
+
+    <div class="kopf-meeting">
+      <strong id="titel-anzeige">Neues Meeting</strong>
+      <span id="ziel-anzeige"></span>
+    </div>
+
+    <div id="nestor" class="nestor bereit" hidden>
+      <span class="welle" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span id="nestor-zustand">hört zu</span>
+    </div>
+
+    <div class="kopf-knoepfe">
+      <span id="status-pill" class="pill">Vorbereitung</span>
+      <button id="btn-kosten" class="kosten-knopf" data-tip="Geschätzte OpenAI-Kosten dieses Meetings – klicken für Details"><span id="kosten-icon"></span><span id="kosten-wert">0,00 $</span></button>
+      <button id="btn-mikro" class="icon" data-tip="Mikro stumm schalten – nichts wird gehört oder ausgewertet" hidden></button>
+      <button id="btn-fragen" class="icon" data-tip="Nestor fragen (statt „Nestor, …“ zu sagen)" hidden></button>
+      <button id="btn-still" class="icon" data-tip="Nestor unterbrechen" hidden></button>
+      <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
+      <button id="btn-transkript" class="icon" data-tip="Transkript und Hinweisverlauf"></button>
+      <button id="btn-einstellungen" class="icon" data-tip="Einstellungen"></button>
+      <button id="btn-start" class="primaer">Meeting starten</button>
+      <button id="btn-stopp" class="gefahr" hidden>Beenden</button>
+      <button id="btn-neu" hidden>Neues Meeting</button>
+    </div>
+  </header>
+
+  <!-- Kosten (Klapp-Fenster aus der Kopfleiste) -->
+  <div id="kosten" class="klappfenster" hidden>
+    <h3>OpenAI-Kosten <small>Schätzung nach Listenpreis</small></h3>
+    <div class="kosten-summe"><strong id="k-meeting">0,00 $</strong><span id="k-rate"></span></div>
+    <ul id="k-bereiche" class="kosten-bereiche"></ul>
+    <div class="kosten-fuss">
+      <span>Heute <strong id="k-heute">–</strong></span>
+      <span>Insgesamt <strong id="k-gesamt">–</strong></span>
+    </div>
+    <p class="leise-text">Gezählt werden nur Mengen, keine Inhalte. Was wirklich abgerechnet wird, steht unter
+      <a href="https://platform.openai.com/usage" target="_blank" rel="noopener">platform.openai.com/usage</a>.</p>
+  </div>
+
+  <!-- Einstellungen (Klapp-Fenster aus der Kopfleiste) -->
+  <div id="einstellungen" class="klappfenster" hidden>
+    <h3>Einstellungen</h3>
+    <div class="schluessel">
+      <span class="beschriftung">OpenAI-Schlüssel</span>
+      <p id="s-status" class="leise-text"></p>
+      <div class="schluessel-zeile">
+        <input id="s-eingabe" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+        <button id="s-speichern" class="primaer klein">Prüfen und speichern</button>
+      </div>
+      <p id="s-meldung" class="s-meldung" hidden></p>
+      <p class="leise-text">Bleibt nur auf diesem Rechner (Benutzerordner) und wird nie angezeigt.
+        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Schlüssel anlegen</a>
+        <button id="s-entfernen" class="textknopf" hidden>· Entfernen</button></p>
+    </div>
+    <label class="schalter"><input type="checkbox" id="e-assistent"> <span>Nestor spricht (Begrüßung, Antworten)</span></label>
+    <label>Gesprächsart
+      <select id="e-modus">
+        <option value="gespraech">Gespräch – wie ChatGPT, unterbrechbar</option>
+        <option value="text">Kurzantwort – günstiger</option>
+      </select></label>
+    <label>Stimme
+      <select id="e-stimme">
+        <option>cedar</option><option>marin</option><option>coral</option><option>sage</option><option>verse</option>
+        <option>alloy</option><option>ash</option><option>ballad</option><option>echo</option><option>shimmer</option>
+      </select></label>
+    <label>Live-Text
+      <select id="e-live-art">
+        <option value="schnell">Schnell – Text schon beim Sprechen, ~1,02 $/h</option>
+        <option value="sparsam">Sparsam – Text erst nach dem Satz, ~0,36 $/h</option>
+      </select></label>
+    <p id="e-live-hinweis" class="e-hinweis" hidden>Sparsam: Sätze erscheinen erst nach dem Ende der Äußerung
+      (meist ~1 s, bis ~4 s), Nestor antwortet entsprechend etwas später. Sprecher, Redeanteile, Monolog und
+      Unterbrechungen sind nicht betroffen. <strong>Gilt ab dem nächsten Meetingstart.</strong></p>
+    <label>Live-Bild zeichnet
+      <select id="e-bild-anbieter">
+        <option value="openai">OpenAI – wie ChatGPT, ~8 ct/Bild</option>
+        <option value="claude">Claude-Abo – kostenlos, einfacher</option>
+      </select></label>
+    <div class="zwei">
+      <label>Live-Bild alle <small>min, 0 = nur auf Wunsch</small><input id="e-bild" type="number" min="0" max="60"></label>
+      <label>Monolog ab <small>Sekunden</small><input id="e-monolog" type="number" min="20" max="300" step="5"></label>
+    </div>
+  </div>
+
+  <!-- Hinweis-Band: der neueste Hinweis, farbig und groß -->
+  <div id="hinweis-band" class="hinweis-band" hidden>
+    <span id="hinweis-icon" class="hb-icon"></span>
+    <span id="hinweis-text"></span>
+    <button id="hinweis-zu" class="icon klein" data-tip="Ausblenden"></button>
+  </div>
+
+  <!-- Nestor-Untertitel: was er gerade sagt -->
+  <div id="untertitel" class="untertitel" hidden></div>
+
+  <div id="fehler" class="fehler" hidden></div>
+
+  <!-- Vorbereitung -->
+  <section id="einrichtung" class="einrichtung">
+    <div class="karte">
+      <h2>Meeting vorbereiten</h2>
+      <div id="schluessel-fehlt" class="schluessel-fehlt" hidden>
+        <span>Ohne OpenAI-Schlüssel laufen nur die Demos. Jede Person nutzt ihren eigenen Schlüssel.</span>
+        <button id="btn-schluessel" class="primaer klein">Schlüssel eintragen</button>
+      </div>
+      <div class="zwei">
+        <label>Titel <input id="f-titel" placeholder="z. B. Messeplanung 2027"></label>
+        <label>Ziel <input id="f-ziel" placeholder="z. B. Entscheidung über den Messestand"></label>
+      </div>
+
+      <h3>Agenda <small>Titel · Frage oder Ziel · Minuten</small></h3>
+      <div id="f-agenda"></div>
+      <button id="btn-punkt-neu" class="leise klein">+ Agendapunkt</button>
+
+      <h3>Gesprächsregeln <small>Nestor achtet nur auf das, was ausgewählt ist</small></h3>
+      <div id="f-regelwahl" class="regelwahl"></div>
+
+      <div class="zwei">
+        <div>
+          <h3>Eigene Regeln <small>nur Erinnerung, wird nicht geprüft</small></h3>
+          <textarea id="f-regeln" rows="2" placeholder="Eine pro Zeile, z. B. Handys bleiben in der Tasche"></textarea>
+        </div>
+        <div>
+          <h3>Teilnehmende <small>optional</small></h3>
+          <div id="f-teilnehmende"></div>
+          <button id="btn-person-neu" class="leise klein">+ Person</button>
+        </div>
+      </div>
+
+      <label class="schalter nestor-wahl"><input type="checkbox" id="f-assistent" checked>
+        <span><strong>Nestor spricht mit</strong> – begrüßt die Runde, fragt nach Einverständnis und antwortet,
+        wenn ihr ihn mit „Nestor, …“ ansprecht.</span></label>
+
+      <details class="test">
+        <summary>Testen ohne Runde</summary>
+        <div class="fuss">
+          <div id="zeile-aufnahme" class="gruppe" hidden>
+            <span class="beschriftung">Aufnahme</span>
+            <select id="f-aufnahme"></select>
+            <label class="schalter"><input type="checkbox" id="f-auto"> Agenda automatisch</label>
+            <button id="btn-abspielen">Abspielen</button>
+          </div>
+          <div class="gruppe">
+            <span class="beschriftung">Demo</span>
+            <select id="f-szenario"></select>
+            <button id="btn-simulation" class="leise">Starten</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Live -->
+  <main id="live" class="arbeitsflaeche" hidden>
+    <!-- links: alles zur Zeit an einer Stelle -->
+    <aside class="spalte">
+      <section class="karte zeit">
+        <div class="zeit-kopf"><span class="etikett">Jetzt</span><span id="laufzeit" class="laufzeit" data-tip="Laufzeit des Meetings"></span></div>
+        <p id="punkt-titel" class="punkt-jetzt">–</p>
+        <div id="countdown" class="countdown"></div>
+        <div class="balken-zeit"><span id="zeit-fortschritt"></span></div>
+        <p id="prognose" class="prognose"></p>
+      </section>
+      <div id="vorschlag" class="vorschlag" hidden></div>
+      <section class="karte">
+        <h2>Agenda</h2>
+        <ol id="agenda" class="agenda"></ol>
+      </section>
+    </aside>
+
+    <!-- Mitte: Live-Bild -->
+    <section class="karte bildkarte">
+      <div class="bildkopf">
+        <h2>Live-Bild <span id="bild-status" class="leise-text"></span></h2>
+        <div class="werkzeuge">
+          <button id="btn-bild" class="icon" data-tip="Bild jetzt neu zeichnen (ca. 1–2 min)"></button>
+          <button id="btn-bild-png" class="icon" data-tip="Als PNG speichern" disabled></button>
+          <a id="btn-bild-analyse" class="icon" href="/api/onepager.md" target="_blank" data-tip="Strukturanalyse hinter dem Bild" hidden></a>
+        </div>
+      </div>
+      <div class="bildflaeche">
+        <img id="live-bild" alt="Live-Bild des Meetings" hidden>
+        <div id="bild-leer" class="bild-leer"><span id="bild-leer-icon"></span>
+          <p>Das Bild entsteht automatisch oder wenn ihr sagt:<br><strong>„Nestor, zeig uns die Übersicht.“</strong></p></div>
+        <div id="bild-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor zeichnet …</div>
+      </div>
+    </section>
+
+    <!-- rechts: Regeln als Ampeln, Redeanteile -->
+    <aside class="spalte">
+      <section class="karte">
+        <h2>Regeln</h2>
+        <div id="regel-ampeln" class="regel-ampeln"></div>
+        <div id="erinnerungen" class="erinnerungen"></div>
+      </section>
+      <section class="karte">
+        <h2>Redeanteile</h2>
+        <div id="redeanteile" class="redeanteile"></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- Transkript und Hinweisverlauf: für alle aufklappbar -->
+  <aside id="leiste" class="leiste" hidden>
+    <div class="leiste-kopf">
+      <div class="reiter">
+        <button id="reiter-transkript" class="aktiv">Transkript</button>
+        <button id="reiter-hinweise">Hinweise</button>
+      </div>
+      <button id="leiste-zu" class="icon klein" data-tip="Schließen"></button>
+    </div>
+    <ol id="transkript" class="transkript"></ol>
+    <ol id="hinweise" class="hinweis-liste" hidden></ol>
+  </aside>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

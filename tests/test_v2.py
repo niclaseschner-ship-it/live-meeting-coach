@@ -1,0 +1,168 @@
+"""Tests für die Bausteine von Version 2 – ohne Netzwerk und ohne Sprachmodelle."""
+
+import numpy as np
+
+from coach import analyse
+from coach.hoeren import nach_16k, person_name
+from coach.livetext import Zuordnung
+from coach.stimmen import Personenregister, normiert
+from coach.zustand import Agendapunkt, Meeting
+
+
+def vek(*werte):
+    return normiert(np.array(werte, dtype=float))
+
+
+# --- Personenregister ------------------------------------------------------
+
+def test_gleiche_stimme_bleibt_eine_person_andere_wird_neu():
+    r = Personenregister(schwelle=0.84)
+    a, a2, b = vek(1, 0, 0), vek(0.97, 0.2, 0), vek(0, 1, 0)
+    assert r.zuordnen(a, 5)[0] == 0
+    assert r.zuordnen(a2, 5)[0] == 0  # Ähnlichkeit ~0,98
+    assert r.zuordnen(b, 5)[0] == 1
+    assert r.sekunden == [10, 5]
+
+
+def test_mischung_zweier_bekannter_stimmen():
+    r = Personenregister(schwelle=0.84)
+    r.zuordnen(vek(1, 0, 0), 20)
+    r.zuordnen(vek(0, 1, 0), 20)
+    gemischt = vek(1, 1, 0)  # ~0,71 zu beiden
+    klar = vek(1, 0.05, 0)
+    assert r.mischung([klar, gemischt, gemischt], max_sicher=0.75, zweit_min=0.55) == [1, 2]
+
+
+def test_mischung_erst_ab_zwei_gut_bekannten_personen():
+    r = Personenregister(schwelle=0.84)
+    r.zuordnen(vek(1, 0, 0), 20)
+    r.zuordnen(vek(0, 1, 0), 3)  # zu wenig Material
+    assert r.mischung([vek(1, 1, 0)], 0.75, 0.55) == []
+
+
+# --- Live-Text: Zuordnung der API-Ereignisse zu Äußerungen -----------------
+
+def test_fertiger_text_vor_commit_bestaetigung():
+    z = Zuordnung()
+    z.commit_gesendet({"id": 1})
+    assert z.fertig("item_a", "Hallo") is None
+    assert z.commit_bestaetigt("item_a") == ({"id": 1}, "Hallo")
+
+
+def test_reihenfolge_mehrerer_commits():
+    z = Zuordnung()
+    z.commit_gesendet({"id": 1})
+    z.commit_gesendet({"id": 2})
+    assert z.commit_bestaetigt("x") is None
+    assert z.commit_bestaetigt("y") is None
+    assert z.fertig("y", "zwei") == ({"id": 2}, "zwei")
+    assert z.fertig("x", "eins") == ({"id": 1}, "eins")
+
+
+# --- Hörstrom-Hilfen -------------------------------------------------------
+
+def test_24k_nach_16k():
+    a = np.sin(np.linspace(0, 20, 2400)).astype(np.float32)
+    b = nach_16k(a)
+    assert len(b) == 1600 and b.dtype == np.float32
+    assert person_name(0) == "Person 1" and person_name(None) == "–"
+
+
+# --- Überlappung über Stimmen-Mischung -------------------------------------
+
+def test_ueberlappungsampel_durch_mischung_und_zurueck():
+    m = Meeting(agenda=[Agendapunkt("A")])
+    m.starten(virtuell=True)
+    m.mischungen = [10.0]
+    m.virtuelle_zeit = 20
+
+    def farbe():
+        return {a["name"]: a["farbe"] for a in analyse.prozess_ampeln(
+            m, monolog_sekunden=60, karenz_bloecke=1, zeit_rot_prozent=10,
+            ueberlappung_min=0.5, ueberlappung_halte=30, themen_aktiv=True)}["Sprecherüberlappung"]
+
+    assert farbe() == "gelb"
+    m.virtuelle_zeit = 45
+    assert farbe() == "gruen"
+
+
+# --- Live-Bild (One-Pager) -----------------------------------------------
+
+def test_svg_wird_entschaerft():
+    from coach.onepager import svg_herausloesen
+
+    roh = ('Hier ist es:\n<svg viewBox="0 0 10 10"><script>alert(1)</script>'
+           '<a href="https://x.y"><rect onclick="x()" width="5"/></a>'
+           '<foreignObject><div>x</div></foreignObject><use href="#icon"/></svg>\nFertig.')
+    svg = svg_herausloesen(roh)
+    assert svg.startswith("<svg") and svg.endswith("</svg>")
+    assert "script" not in svg and "onclick" not in svg and "foreignObject" not in svg
+    assert 'href="#"' in svg and 'href="#icon"' in svg
+
+
+def test_meeting_text_enthaelt_agenda_status_und_transkript():
+    from coach.onepager import meeting_text
+    from coach.zustand import Segment
+
+    m = Meeting(titel="T", agenda=[Agendapunkt("A"), Agendapunkt("B")])
+    m.starten(virtuell=True)
+    m.transkript = [Segment("Person 1", "Hallo Welt", 5, 7)]
+    m.virtuelle_zeit = 8
+    text = meeting_text(m)
+    assert "1. A [aktuell]" in text and "2. B [offen]" in text and "[0:05] Person 1: Hallo Welt" in text
+
+
+def test_bildwunsch_waehrend_des_zeichnens_wird_nachgeholt(monkeypatch):
+    import asyncio
+
+    from coach import onepager
+    from coach.pipeline import Coach
+    from coach.zustand import Segment
+
+    aufrufe = []
+
+    async def attrappe(meeting, vorher=None, fokus=None):
+        aufrufe.append(vorher)
+        await asyncio.sleep(0.05)
+        return {"analyse": "a", "svg": "<svg></svg>"}
+
+    monkeypatch.setattr(onepager, "erzeugen", attrappe)
+    from coach.config import EINST
+    vorher_anbieter = EINST.bild_anbieter
+    object.__setattr__(EINST, "bild_anbieter", "claude")  # dieser Test prüft die Warteschlange, nicht den Anbieter
+    monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda eintrag: None)  # Kostenprotokoll sauber halten
+
+    async def ablauf():
+        c = Coach()
+        c.meeting.starten(virtuell=True)
+        c.meeting.transkript = [Segment("Person 1", "Hallo", 0, 1)]
+        assert c.onepager_starten() is True
+        assert c.onepager_starten() is False  # läuft schon → wird vorgemerkt
+        while c._onepager_laeuft or len(aufrufe) < 2:
+            await asyncio.sleep(0.01)
+        return c
+
+    c = asyncio.run(ablauf())
+    object.__setattr__(EINST, "bild_anbieter", vorher_anbieter)
+    assert len(aufrufe) == 2 and c.onepager_version == 2 and c.onepager_svg == "<svg></svg>"
+    # das zweite Bild schreibt das erste fort
+    assert aufrufe[0] is None and aufrufe[1]["analyse"] == "a" and aufrufe[1]["svg"] == "<svg></svg>"
+
+
+# --- Fenster-Zuordnung (Sprecherwechsel ohne Pause) ------------------------
+
+def test_fenster_neue_person_erst_nach_mehreren_fenstern_und_rueckwirkend():
+    r = Personenregister(schwelle=0.5)
+    a, b = vek(1, 0, 0), vek(0, 1, 0)
+    assert r.fenster_zuordnen([a, a, a, a], 0.75) == [0, 0, 0, 0]
+    # Wechsel mitten in der Äußerung: B wird nach 3 Fenstern neue Person, rückwirkend für alle drei
+    assert r.fenster_zuordnen([a, a, b, b, b, b], 0.75) == [0, 0, 1, 1, 1, 1]
+    assert len(r.sekunden) == 2
+
+
+def test_fenster_einzelner_ausreisser_wird_geglaettet():
+    r = Personenregister(schwelle=0.5)
+    a, b = vek(1, 0, 0), vek(0, 1, 0)
+    r.fenster_zuordnen([a, a, a], 0.75)
+    r.fenster_zuordnen([b, b, b], 0.75)
+    assert r.fenster_zuordnen([a, a, b, a, a], 0.75) == [0, 0, 0, 0, 0]

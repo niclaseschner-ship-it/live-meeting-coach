@@ -1,0 +1,165 @@
+"""Zentrale Einstellungen und Schwellwerte (Lastenheft FR-09).
+
+Alle Werte lassen sich über Umgebungsvariablen bzw. .env überschreiben.
+Die Standardwerte sind die Demo-Startwerte aus dem Lastenheft.
+"""
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+WURZEL = Path(__file__).resolve().parent.parent
+load_dotenv(WURZEL / ".env")
+
+
+def _zahl(name: str, standard: float) -> float:
+    return float(os.getenv(name, str(standard)))
+
+
+@dataclass(frozen=True)
+class Einstellungen:
+    # Modelle
+    # Sprecherspur (wer spricht wann) und Text (was wird gesagt) kommen aus zwei Modellen, siehe transkription.py
+    transkriptions_modell: str = os.getenv("LMC_TRANSKRIPTION", "gpt-4o-transcribe-diarize")
+    text_modell: str = os.getenv("LMC_TEXT", "gpt-4o-transcribe")
+    analyse_modell: str = os.getenv("LMC_ANALYSE", "gpt-5.4-mini")  # 04.10.: genauer bei Agenda-Wechseln als gpt-5 minimal
+    # Ohne feste Sprache hat das Modell deutsche Rede ins Englische übersetzt (02.10.2026)
+    sprache: str = os.getenv("LMC_SPRACHE", "de")
+    # Denkaufwand des Analysemodells: "minimal" ist am schnellsten, leer = Standard des Modells
+    analyse_aufwand: str = os.getenv("LMC_ANALYSE_AUFWAND", "low")
+    # Audio-Blocklänge: kürzer = schnellere Signale, länger = stabilere Sprechererkennung
+    block_sekunden: int = int(_zahl("LMC_BLOCK_SEKUNDEN", 10))
+
+    # FR-03 Monolog: Gelb ab dieser zusammenhängenden Redezeit
+    monolog_sekunden: float = _zahl("LMC_MONOLOG_SEKUNDEN", 60)
+    # FR-04 Zeit: Gelb bei Ablauf; Rot ab dieser Überziehung in Prozent (0 = kein Rot)
+    zeit_rot_prozent: float = _zahl("LMC_ZEIT_ROT_PROZENT", 10)
+    # FR-05 Fokus-Karenzzeit: so lange klar themenfremd, bis Gelb
+    fokus_karenz_sekunden: float = _zahl("LMC_FOKUS_KARENZ_SEKUNDEN", 20)
+    # FR-06 Überlappung: Mindestdauer gleichzeitigen Sprechens, und wie lange Gelb stehen bleibt
+    ueberlappung_min_sekunden: float = _zahl("LMC_UEBERLAPPUNG_MIN_SEKUNDEN", 0.5)
+    ueberlappung_halte_sekunden: float = _zahl("LMC_UEBERLAPPUNG_HALTE_SEKUNDEN", 30)
+    # Die Diarisierung zerlegt Gleichzeitiges in schnelles Hin und Her: so viele Wechsel in so vielen Sekunden
+    zickzack_wechsel: int = int(_zahl("LMC_ZICKZACK_WECHSEL", 4))
+    zickzack_fenster_sekunden: float = _zahl("LMC_ZICKZACK_FENSTER_SEKUNDEN", 3)
+
+    # --- Version 2: Ströme statt Blöcke (docs/spezifikation.md, Abschnitt 5) ---
+    # Strom 1 Live-Text
+    # „schnell“: Streaming (gpt-live-transcribe, Teiltext beim Sprechen, Satz 0,7 s nach Ende, ~1,02 $/h)
+    # „sparsam“: je Äußerung per REST (text_modell, Satz im Mittel 1,1 s / max. ~4 s nach Ende, ~0,36 $/h)
+    live_art: str = os.getenv("LMC_LIVE_ART", "schnell")
+    live_modell: str = os.getenv("LMC_LIVE_MODELL", "gpt-live-transcribe")
+    live_delay: str = os.getenv("LMC_LIVE_DELAY", "low")  # minimal | low | medium | high | xhigh
+    # Pausenerkennung (lokal, Silero VAD): Äußerungsgrenzen
+    vad_modell: str = os.getenv("LMC_VAD_MODELL", "silero_vad.onnx")
+    vad_pause_sekunden: float = _zahl("LMC_VAD_PAUSE_SEKUNDEN", 0.5)
+    vad_max_sekunden: float = _zahl("LMC_VAD_MAX_SEKUNDEN", 10)  # kurz: Sprecher früher bekannt (Monolog-Benchmark 05.10.)
+    # Strom 2 Wer spricht (lokal, Stimm-Fingerabdruck je Fenster); Modell und Schwelle am Benchmark 05.10. ermittelt
+    stimm_modell: str = os.getenv(
+        "LMC_STIMM_MODELL", "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx")
+    stimm_schwelle: float = _zahl("LMC_STIMM_SCHWELLE", 0.50)
+    # Überlappung im Stimmstrom: Fenster passt zu keiner Person sicher, aber zu zweien mittelmäßig
+    mischung_max: float = _zahl("LMC_MISCHUNG_MAX", 0.45)
+    mischung_zweit_min: float = _zahl("LMC_MISCHUNG_ZWEIT_MIN", 0.25)
+    # Strom 4 Kontext: so viel Gesprochenes wird je Themen-Zuordnung gesammelt
+    abschnitt_sekunden: float = _zahl("LMC_ABSCHNITT_SEKUNDEN", 15)
+    # Live-Bild als One-Pager (FR-10), gezeichnet von Claude über das Abo (claude -p)
+    claude_befehl: str = os.getenv("LMC_CLAUDE_BEFEHL", "ssh -o BatchMode=yes -o ConnectTimeout=10 buddyboard claude")
+    # Live-Bild: „openai“ (GPT-5.4 + Bildgenerator, wie ChatGPT; Fortschreibung des letzten Bildes; ~8 ct/Bild)
+    # oder „claude“ (SVG über das Claude-Abo per claude -p; kostenlos, Layout schwächer)
+    bild_anbieter: str = os.getenv("LMC_BILD_ANBIETER", "openai")
+    bild_modell: str = os.getenv("LMC_BILD_MODELL", "gpt-image-2")
+    bild_text_modell: str = os.getenv("LMC_BILD_TEXT_MODELL", "gpt-5.4")
+    bild_qualitaet: str = os.getenv("LMC_BILD_QUALITAET", "medium")
+    onepager_analyse_modell: str = os.getenv("LMC_ONEPAGER_ANALYSE", "opus")
+    onepager_zeichen_modell: str = os.getenv("LMC_ONEPAGER_ZEICHNEN", "sonnet")
+    onepager_analyse_aufwand: str = os.getenv("LMC_ONEPAGER_ANALYSE_AUFWAND", "low")  # gemessen: halbiert die Zeit
+    onepager_zeichen_aufwand: str = os.getenv("LMC_ONEPAGER_ZEICHNEN_AUFWAND", "low")
+    onepager_minuten: float = _zahl("LMC_ONEPAGER_MINUTEN", 10)
+    # Aufnahmen für den Abspielmodus (WAV, 24 kHz mono, daneben <name>.json mit Einrichtung)
+    aufnahmen: str = os.getenv("LMC_AUFNAHMEN", str(WURZEL / "testbibliothek" / "audio"))
+
+    # Sprachassistent (docs/sprachassistent.md): Ansprache per Name, Antworten per Sprachausgabe
+    assistent_name: str = os.getenv("LMC_ASSISTENT_NAME", "Nestor")
+    # Schreibweisen, die die Texterkennung für den Namen liefern kann (Regex, ohne Wortgrenzen);
+    # Abspieltest 05.10.: am Satzanfang kam „Nestor“ 3 von 4 Mal als „Mestor“ an
+    assistent_muster: str = os.getenv("LMC_ASSISTENT_MUSTER", r"[nm][eä]st[oeu]h?r")
+    assistent_modell: str = os.getenv("LMC_ASSISTENT_MODELL", "gpt-5.4-mini")
+    assistent_aufwand: str = os.getenv("LMC_ASSISTENT_AUFWAND", "low")  # gemessen: erster Satz nach ~1,2 s
+    stimme_modell: str = os.getenv("LMC_STIMME_MODELL", "gpt-4o-mini-tts")
+    stimme: str = os.getenv("LMC_STIMME", "cedar")  # gemessen: erster Ton nach ~0,5 s
+    # „gespraech“ = Realtime-Sprachmodell wie der ChatGPT-Sprachmodus (natürlich, unterbrechbar, ~5–10 Cent je
+    # Gespräch); „text“ = Sprachmodell + Sprachausgabe (günstiger, ~1 Cent je Frage, nicht unterbrechbar)
+    assistent_modus: str = os.getenv("LMC_ASSISTENT_MODUS", "gespraech")
+    realtime_modell: str = os.getenv("LMC_REALTIME_MODELL", "gpt-realtime")
+    gespraech_ende_sekunden: float = _zahl("LMC_GESPRAECH_ENDE_SEKUNDEN", 20)  # so lange Ruhe → Sitzung zu
+    # Recherche auf Zuruf (Websuche über die Responses-API)
+    recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
+    recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
+    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich
+    einwand_sekunden: float = _zahl("LMC_EINWAND_SEKUNDEN", 7)  # so lange wartet die Begrüßung auf ein „Nein“
+
+    # Entscheider: gleicher Hinweis frühestens nach so vielen Sekunden erneut
+    cooldown_sekunden: float = _zahl("LMC_COOLDOWN_SEKUNDEN", 90)
+    # Regel „Alle kommen zu Wort“: ab wann stille Angemeldete gemeldet werden; Dominanz im gleitenden Fenster
+    alle_still_minuten: float = _zahl("LMC_ALLE_STILL_MINUTEN", 10)
+    dominanz_anteil: float = _zahl("LMC_DOMINANZ_ANTEIL", 0.5)
+    dominanz_fenster_minuten: float = _zahl("LMC_DOMINANZ_FENSTER_MINUTEN", 10)
+    port: int = int(_zahl("LMC_PORT", 8000))
+
+
+EINST = Einstellungen()
+
+
+# --- OpenAI-Schlüssel ----------------------------------------------------------
+# Jede Person trägt ihren eigenen Schlüssel im Dashboard ein. Er liegt dann nur auf diesem Rechner, außerhalb
+# des Repos, in einer Datei im Benutzerordner – nie im Browser, nie im Log, nie in einer Antwort des Servers.
+# Ohne Eintrag gilt OPENAI_API_KEY aus der Umgebung bzw. .env.
+SCHLUESSEL_DATEI = Path(os.getenv("LMC_SCHLUESSEL_DATEI", str(Path.home() / ".live-meeting-coach" / "openai_schluessel")))
+_gespeichert: str | None = None
+_gelesen = False
+
+
+def _datei_schluessel() -> str | None:
+    global _gespeichert, _gelesen
+    if not _gelesen:
+        _gelesen = True
+        try:
+            _gespeichert = SCHLUESSEL_DATEI.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            _gespeichert = None
+    return _gespeichert
+
+
+def openai_schluessel() -> str | None:
+    return _datei_schluessel() or os.getenv("OPENAI_API_KEY") or None
+
+
+def schluessel_info() -> dict:
+    """Für das Dashboard: woher der Schlüssel kommt und seine letzten vier Zeichen – nie der Schlüssel selbst."""
+    s = openai_schluessel()
+    quelle = "dashboard" if _datei_schluessel() else ("umgebung" if s else None)
+    return {"vorhanden": bool(s), "quelle": quelle, "ende": s[-4:] if s and len(s) > 12 else None,
+            "offline": os.getenv("LMC_OFFLINE") == "1"}
+
+
+def schluessel_speichern(schluessel: str | None) -> None:
+    """None entfernt den im Dashboard eingetragenen Schlüssel (dann gilt wieder die Umgebung)."""
+    global _gespeichert, _gelesen
+    if schluessel:
+        SCHLUESSEL_DATEI.parent.mkdir(parents=True, exist_ok=True)
+        SCHLUESSEL_DATEI.write_text(schluessel, encoding="utf-8")
+        try:
+            os.chmod(SCHLUESSEL_DATEI, 0o600)
+        except OSError:
+            pass
+    else:
+        SCHLUESSEL_DATEI.unlink(missing_ok=True)
+    _gespeichert, _gelesen = (schluessel or None), True
+
+
+def hat_openai_schluessel() -> bool:
+    """LMC_OFFLINE=1 schaltet alle KI-Aufrufe ab (Demo ohne Kosten)."""
+    return bool(openai_schluessel()) and os.getenv("LMC_OFFLINE") != "1"

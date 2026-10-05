@@ -1,0 +1,479 @@
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+let zustand = null;
+let ws = null;
+
+// ---------- Hilfen ----------
+const mmss = (s) => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const el = (tag, attrs = {}, ...kinder) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kinder) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+};
+async function api(pfad, daten) {
+  const r = await fetch(pfad, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(daten ?? {}) });
+  if (!r.ok) { const t = await r.text(); alert(`Fehler: ${t}`); throw new Error(t); }
+  return r.json();
+}
+
+// ---------- Icons (Linien-Icons im Stil von Lucide, 24×24) ----------
+const PFADE = {
+  mikro: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+  mikroAus: '<path d="M2 2l20 20"/><path d="M18.89 13.23A7 7 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/>',
+  frage: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  stopp: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+  weiter: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  transkript: '<path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>',
+  einstellungen: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  bild: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
+  neu: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  speichern: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><path d="M12 15V3"/>',
+  datei: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  zu: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  muenze: '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+  achtung: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  // Regeln
+  ausreden: '<path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  thema: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  zeit: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  kurz: '<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/>',
+  alle: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  ton: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  ergebnisse: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  seitengespraeche: '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+  sachlich: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  eingehen: '<path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>',
+};
+const icon = (name) => {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor");
+  s.setAttribute("stroke-width", "2"); s.setAttribute("stroke-linecap", "round"); s.setAttribute("stroke-linejoin", "round");
+  s.innerHTML = PFADE[name] ?? ""; return s;
+};
+const iconSetzen = (id, name) => $(id).replaceChildren(icon(name));
+// Hinweisart → Icon und Farbe des Hinweis-Bands
+const HINWEIS_ICON = { ton: "ton", ausreden: "ausreden", ueberlappung: "ausreden", fokus: "thema", zeit: "zeit",
+  monolog: "kurz", alle: "alle", ergebnisse: "ergebnisse" };
+
+// ---------- Ton: Nestors Stimme ----------
+// Nur der Tab, der das Meeting gestartet oder die Aufnahme abgespielt hat, spielt ab (sonst doppelt, Test 05.10.).
+const RATE = 24000;
+const stimme = {
+  ctx: null, naechste: 0, quellen: [],
+  bereit() { // aus einem Klick heraus (Autoplay-Regeln); meldet diesen Tab als Lautsprecher
+    this.ctx ??= new AudioContext({ sampleRate: RATE });
+    this.ctx.resume();
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ lautsprecher: true }));
+    lautsprecher = true;
+  },
+  abspielen(b64) {
+    if (!this.ctx) return;
+    const roh = atob(b64), n = roh.length >> 1;
+    const puffer = this.ctx.createBuffer(1, n, RATE), d = puffer.getChannelData(0);
+    for (let i = 0; i < n; i++) {
+      let v = roh.charCodeAt(2 * i) | (roh.charCodeAt(2 * i + 1) << 8);
+      if (v >= 32768) v -= 65536;
+      d[i] = v / 32768;
+    }
+    const q = this.ctx.createBufferSource();
+    q.buffer = puffer; q.connect(this.ctx.destination);
+    const t = Math.max(this.ctx.currentTime + 0.05, this.naechste);
+    q.start(t); this.naechste = t + puffer.duration;
+    this.quellen.push(q);
+    q.onended = () => { this.quellen = this.quellen.filter((x) => x !== q); };
+  },
+  stopp() { this.quellen.forEach((q) => { try { q.stop(); } catch { /* schon zu Ende */ } }); this.quellen = []; this.naechste = 0; },
+};
+let lautsprecher = false;
+
+// ---------- Mikrofon: durchgehender Strom, PCM 16 bit, 24 kHz, mono ----------
+const WORKLET = `class Sammler extends AudioWorkletProcessor {
+  process(inputs) { const k = inputs[0] && inputs[0][0]; if (k) this.port.postMessage(k.slice(0)); return true; }
+} registerProcessor("sammler", Sammler);`;
+const PAKET = 2400; // 100 ms
+const mikro = {
+  ctx: null, stream: null, ws: null, puffer: new Int16Array(PAKET), n: 0,
+  async starten(echo) {
+    this.ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/audio`);
+    this.ws.binaryType = "arraybuffer";
+    await new Promise((ok, fehler) => { this.ws.onopen = ok; this.ws.onerror = fehler; });
+    // Raum statt Nahbesprechung: Filter aus – mit Nestor aber Echo-Unterdrückung an, damit er sich nicht selbst hört
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: echo, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+    });
+    this.ctx = new AudioContext({ sampleRate: RATE });
+    await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+    const quelle = this.ctx.createMediaStreamSource(this.stream);
+    const knoten = new AudioWorkletNode(this.ctx, "sammler");
+    const leise = this.ctx.createGain(); leise.gain.value = 0;
+    quelle.connect(knoten); knoten.connect(leise); leise.connect(this.ctx.destination);
+    knoten.port.onmessage = (e) => this.daten(e.data);
+  },
+  daten(f) {
+    for (const x of f) {
+      const v = Math.max(-1, Math.min(1, x));
+      this.puffer[this.n++] = v < 0 ? v * 0x8000 : v * 0x7fff;
+      if (this.n === PAKET) {
+        if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.puffer.slice().buffer);
+        this.n = 0;
+      }
+    }
+  },
+  async stoppen() {
+    this.stream?.getTracks().forEach((t) => t.stop());
+    await this.ctx?.close();
+    this.ws?.close();
+    this.ctx = this.stream = this.ws = null; this.n = 0;
+  },
+};
+
+// ---------- Vorbereitung ----------
+let regelkatalog = [];
+function punktZeile(p = {}) {
+  const z = el("div", { class: "f-punkt" },
+    el("input", { placeholder: "Titel", value: p.titel ?? "" }),
+    el("input", { placeholder: "Frage / Ziel des Punkts", value: p.ziel ?? "" }),
+    el("input", { type: "number", min: "1", value: p.minuten ?? 10, title: "Minuten" }),
+    el("button", { class: "icon klein", "data-tip": "Punkt entfernen", onclick: () => z.remove() }, icon("zu")));
+  $("f-agenda").append(z);
+}
+function personZeile(name = "") {
+  const z = el("div", { class: "f-person" }, el("input", { placeholder: "Name", value: name }),
+    el("button", { class: "icon klein", "data-tip": "Person entfernen", onclick: () => z.remove() }, icon("zu")));
+  $("f-teilnehmende").append(z);
+}
+function regelwahl(standard) {
+  $("f-regelwahl").replaceChildren(...regelkatalog.map((r) => el("label",
+    { class: `regel${r.umgesetzt ? "" : " folgt"}`, "data-tip": r.umgesetzt ? r.beobachtet : "folgt in einer späteren Ausbaustufe" },
+    el("input", { type: "checkbox", value: r.id, ...(standard.includes(r.id) && r.umgesetzt ? { checked: "" } : {}),
+      ...(r.umgesetzt ? {} : { disabled: "" }) }),
+    el("span", { class: "r-icon" }, icon(r.id)),
+    el("span", {}, r.titel.split(" – ")[0]),
+    el("span", { class: "r-stufe" }, r.umgesetzt ? r.stufe_text : "folgt"))));
+}
+function formularDaten() {
+  return {
+    titel: $("f-titel").value,
+    ziel: $("f-ziel").value,
+    agenda: [...$("f-agenda").children].map((z) => {
+      const [t, g, m] = z.querySelectorAll("input");
+      return { titel: t.value, ziel: g.value, minuten: Number(m.value) || 10 };
+    }),
+    regeln: $("f-regeln").value.split("\n"),
+    regel_ids: [...$("f-regelwahl").querySelectorAll("input:checked")].map((i) => i.value),
+    assistent: $("f-assistent").checked,
+    teilnehmende: [...$("f-teilnehmende").querySelectorAll("input")].map((i) => i.value),
+  };
+}
+const einrichten = () => api("/api/einrichten", formularDaten());
+
+// ---------- Knöpfe ----------
+let einrichtungOffen = false;
+let leisteOffen = false;
+let reiter = "transkript";
+let hinweisWeg = 0; // id des zuletzt weggeklickten Hinweises
+
+$("btn-punkt-neu").onclick = () => punktZeile();
+$("btn-person-neu").onclick = () => personZeile();
+$("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
+$("btn-abspielen").onclick = () => { stimme.bereit(); api("/api/abspielen", { name: $("f-aufnahme").value, tempo: 1, auto_wechsel: $("f-auto").checked }); };
+$("btn-start").onclick = async () => {
+  stimme.bereit();
+  await einrichten();
+  await api("/api/start");
+  try { await mikro.starten($("f-assistent").checked); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); await api("/api/stopp"); }
+};
+$("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); };
+$("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
+$("btn-mikro").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
+$("btn-fragen").onclick = () => { stimme.bereit(); api("/api/assistent/fragen"); };
+$("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
+$("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
+$("btn-transkript").onclick = () => { leisteOffen = !leisteOffen; rendern(); };
+$("leiste-zu").onclick = () => { leisteOffen = false; rendern(); };
+$("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
+$("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
+$("btn-einstellungen").onclick = () => { $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = true; };
+$("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = true; if (zustand) kostenRendern(zustand); };
+$("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
+$("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
+$("btn-bild").onclick = () => api("/api/onepager");
+$("btn-bild-png").onclick = () => bildAlsPng();
+document.addEventListener("click", (e) => {
+  if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
+  if (!$("kosten").hidden && !$("kosten").contains(e.target) && !$("btn-kosten").contains(e.target)) $("kosten").hidden = true;
+});
+// Einstellungen: jede Änderung sofort an den Server
+const einstellen = (feld, wert) => api("/api/einstellungen", { [feld]: wert });
+$("e-assistent").onchange = (e) => einstellen("assistent", e.target.checked);
+$("e-modus").onchange = (e) => einstellen("modus", e.target.value);
+$("e-stimme").onchange = (e) => einstellen("stimme", e.target.value);
+$("e-bild").onchange = (e) => einstellen("bild_minuten", Number(e.target.value));
+$("e-monolog").onchange = (e) => einstellen("monolog_sekunden", Number(e.target.value));
+$("e-bild-anbieter").onchange = (e) => einstellen("bild_anbieter", e.target.value);
+$("e-live-art").onchange = (e) => { $("e-live-hinweis").hidden = e.target.value !== "sparsam"; einstellen("live_art", e.target.value); };
+
+// OpenAI-Schlüssel: geht nur an den eigenen Server (läuft auf diesem Rechner) und kommt nie zurück
+async function schluesselSenden(wert) {
+  const m = $("s-meldung");
+  m.hidden = false; m.className = "s-meldung"; m.textContent = wert ? "Prüfe bei OpenAI …" : "Entferne …";
+  $("s-speichern").disabled = true;
+  try {
+    const r = await fetch("/api/schluessel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ schluessel: wert }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { m.textContent = d.detail ?? `Fehler ${r.status}`; return; }
+    $("s-eingabe").value = "";
+    m.className = "s-meldung ok"; m.textContent = wert ? "Schlüssel funktioniert und ist gespeichert." : "Entfernt.";
+  } finally { $("s-speichern").disabled = false; }
+}
+$("s-speichern").onclick = () => { const v = $("s-eingabe").value.trim(); if (v) schluesselSenden(v); };
+$("s-eingabe").onkeydown = (e) => { if (e.key === "Enter") $("s-speichern").click(); };
+$("s-entfernen").onclick = () => schluesselSenden("");
+
+function schluesselRendern(z) {
+  const s = z.schluessel ?? {};
+  $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline;
+  $("s-status").textContent = s.offline ? "Offline-Modus (LMC_OFFLINE=1): keine KI-Aufrufe."
+    : !s.vorhanden ? "Noch kein Schlüssel – nur Demos möglich."
+    : s.quelle === "dashboard" ? `Eingetragen (…${s.ende ?? ""}), gilt für alle Funktionen.`
+    : `Aus der Datei .env (…${s.ende ?? ""}). Ein hier eingetragener Schlüssel hat Vorrang.`;
+  $("s-entfernen").hidden = s.quelle !== "dashboard";
+}
+
+// ---------- Kosten ----------
+const dollar = (v, stellen = 2) => `${(v ?? 0).toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen })} $`;
+function kostenRendern(z) {
+  const k = z.kosten; if (!k) return;
+  $("kosten-wert").textContent = dollar(k.meeting);
+  if ($("kosten").hidden) return;
+  $("k-meeting").textContent = dollar(k.meeting);
+  const teile = [];
+  if (k.pro_stunde != null) teile.push(`≈ ${dollar(k.pro_stunde)} pro Stunde`);
+  if (k.hochrechnung != null) teile.push(`ganzes Meeting ≈ ${dollar(k.hochrechnung)}`);
+  $("k-rate").textContent = teile.join(" · ") || "dieses Meeting";
+  const max = Math.max(...k.bereiche.map((b) => b.usd), 0.0001);
+  $("k-bereiche").replaceChildren(...k.bereiche.map((b) => {
+    const balken = el("span", { class: "balken" }, el("span"));
+    balken.firstChild.style.width = `${(100 * b.usd / max).toFixed(1)}%`;
+    return el("li", { class: b.usd ? "" : "null" }, el("span", {}, b.name), el("span", { class: "wert" }, dollar(b.usd, 3)), balken);
+  }));
+  $("k-heute").textContent = dollar(k.heute);
+  $("k-gesamt").textContent = dollar(k.gesamt);
+}
+
+// ---------- Live-Bild ----------
+let bildVersion = 0;
+function bildAlsPng() {
+  const img = $("live-bild");
+  if (!img.naturalWidth) return;
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth * 1.5; c.height = img.naturalHeight * 1.5;
+  const g = c.getContext("2d"); g.fillStyle = "#F8FAFC"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(img, 0, 0, c.width, c.height);
+  c.toBlob((blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `live-bild-${bildVersion}.png`; a.click(); });
+}
+function bildRendern(z) {
+  if (z.onepager_version && z.onepager_version !== bildVersion) {
+    bildVersion = z.onepager_version;
+    const img = $("live-bild");
+    img.onload = () => { img.hidden = false; $("bild-leer").hidden = true; $("btn-bild-png").disabled = false; };
+    img.src = `${z.onepager_format === "png" ? "/api/onepager.png" : "/api/onepager.svg"}?v=${bildVersion}`;
+    $("btn-bild-analyse").hidden = false;
+  }
+  $("bild-arbeitet").hidden = !z.onepager_laeuft;
+  $("btn-bild").disabled = !!z.onepager_laeuft || !z.segmente.length;
+  let status = z.onepager_stand != null ? `· Stand ${mmss(z.onepager_stand)}` : "";
+  if (z.onepager_fokus) status += ` · Fokus: ${z.onepager_fokus}`;
+  $("bild-status").textContent = z.onepager_fehler ? `· ${z.onepager_fehler}` : status;
+}
+
+// ---------- Darstellung ----------
+const NESTOR_TEXT = {
+  bereit: "hört zu", angesprochen: "hört dir zu …", denkt: "denkt nach …", spricht: "spricht",
+  begruessung: "begrüßt die Runde", einwand: "wartet auf ein Nein …", pausiert: "hört nicht mit",
+  recherchiert: "recherchiert …", gespraech: "im Gespräch",
+};
+
+function rendern() {
+  const z = zustand; if (!z) return;
+  const aktiv = z.laeuft || z.simulation || z.hoeren;
+  const beendet = !aktiv && z.segmente.length > 0;
+  if (aktiv) einrichtungOffen = false;
+  const vorbereitung = !aktiv && (!beendet || einrichtungOffen);
+  $("einrichtung").hidden = !vorbereitung;
+  $("live").hidden = vorbereitung;
+
+  // Kopfleiste
+  $("titel-anzeige").textContent = z.titel || "Neues Meeting";
+  $("ziel-anzeige").textContent = z.ziel || "";
+  $("btn-start").hidden = !vorbereitung;
+  $("btn-neu").hidden = !(beendet && !einrichtungOffen);
+  $("btn-stopp").hidden = !z.hoeren || z.simulation;
+  const pill = $("status-pill");
+  pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
+  pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
+    : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
+  $("btn-mikro").hidden = !z.hoeren;
+  $("btn-mikro").classList.toggle("an", !!z.stumm);
+  $("btn-mikro").replaceChildren(icon(z.stumm ? "mikroAus" : "mikro"));
+  $("btn-mikro").dataset.tip = z.stumm ? "Mikro ist stumm – klicken, damit Nestor wieder zuhört" : "Mikro stumm schalten – nichts wird gehört oder ausgewertet";
+  $("fehler").hidden = !z.fehler; $("fehler").textContent = z.fehler ?? "";
+
+  // Nestor
+  const a = z.assistent;
+  const nestorDa = a?.aktiv && z.hoeren;
+  $("nestor").hidden = !nestorDa;
+  $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert";
+  $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
+  $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";
+  if (nestorDa) {
+    $("nestor").className = `nestor ${a.zustand}`;
+    $("nestor-zustand").textContent = `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}`;
+  }
+  // Untertitel: was Nestor gerade gesagt hat – nur kurz, damit nicht zu viel zu lesen ist
+  const l = a?.letzte;
+  const frisch = l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
+  $("untertitel").hidden = !frisch;
+  if (frisch) $("untertitel").replaceChildren(el("span", { class: "wer" }, a.name), l.antwort,
+    ...((l.quellen ?? []).length ? [el("span", { class: "quellen" }, "Quellen: ",
+      ...l.quellen.flatMap((q, i) => [i ? " · " : "", el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel)]))] : []));
+
+  // Hinweis-Band: neuester Hinweis, 45 s lang sichtbar
+  const h = z.hinweise.at(-1);
+  const zeigen = h && h.id !== hinweisWeg && z.zeit - h.zeit < 45 && aktiv;
+  $("hinweis-band").hidden = !zeigen;
+  if (zeigen) {
+    const rot = h.art === "ton" || h.stufe === "warnung";
+    $("hinweis-band").className = `hinweis-band${rot ? " rot" : ""}`;
+    $("hinweis-icon").replaceChildren(icon(HINWEIS_ICON[h.art] ?? "achtung"));
+    $("hinweis-text").textContent = h.text;
+  }
+
+  if (!vorbereitung) liveRendern(z);
+  leisteRendern(z);
+  kostenRendern(z);
+  schluesselRendern(z);
+}
+
+function liveRendern(z) {
+  // Zeit – nur an dieser Stelle
+  $("laufzeit").textContent = mmss(z.zeit);
+  const akt = z.agenda[z.aktiver_punkt];
+  $("punkt-titel").textContent = akt ? `${z.aktiver_punkt + 1}. ${akt.titel}` : "Keine Agenda";
+  if (akt) {
+    const rest = akt.verbleibend;
+    $("countdown").className = `countdown ${akt.ampel}`;
+    $("countdown").replaceChildren(
+      el("span", { class: "zahl" }, rest >= 0 ? mmss(rest) : `+${mmss(-rest)}`),
+      el("span", { class: "einheit" }, rest >= 0 ? "übrig" : "drüber"));
+    $("zeit-fortschritt").style.width = `${Math.min(100, (akt.genutzt / Math.max(1, akt.minuten * 60)) * 100)}%`;
+    $("zeit-fortschritt").className = akt.ampel;
+    // Prognose fürs ganze Meeting: Gelaufenes + Rest des aktuellen Punkts + offene Punkte nach Plan
+    const plan = z.agenda.reduce((s, p) => s + p.minuten * 60, 0);
+    const offen = z.agenda.reduce((s, p, i) => s + (p.status === "offen" && i !== z.aktiver_punkt ? p.minuten * 60 : 0), 0);
+    const prognose = z.zeit + Math.max(0, rest) + offen;
+    const diff = Math.round((prognose - plan) / 60);
+    $("prognose").className = `prognose${diff > 2 ? " rot" : ""}`;
+    $("prognose").textContent = `Plan ${Math.round(plan / 60)} min · ${diff > 0 ? `voraussichtlich ${diff} min drüber` : diff < 0 ? `${-diff} min Puffer` : "im Plan"}`;
+  } else { $("countdown").replaceChildren(); $("zeit-fortschritt").style.width = "0"; $("prognose").textContent = ""; }
+
+  $("agenda").replaceChildren(...z.agenda.map((p, i) => el("li", {
+      class: p.status, "data-tip": "Klicken: diesen Punkt als aktuell setzen",
+      onclick: () => api("/api/punkt", { index: i }),
+    },
+    el("span", { class: "nr" }, p.status === "abgeschlossen" ? "✓" : String(i + 1)),
+    el("span", { class: "punkt-titel" }, p.titel,
+      ...(p.ergebnis?.ergebnis ? [el("span", { class: "punkt-ergebnis" }, p.ergebnis.ergebnis)] : [])),
+    el("span", { class: "min" }, p.status === "offen" ? `${p.minuten} min` : `${mmss(p.genutzt)} / ${p.minuten}`))));
+
+  const v = z.vorschlag;
+  $("vorschlag").hidden = !v;
+  if (v) $("vorschlag").replaceChildren(
+    el("span", {}, `Weiter zu „${v.titel}“?`),
+    el("div", { class: "knoepfe" },
+      el("button", { class: "klein primaer", onclick: () => api("/api/punkt", { index: v.punkt }) }, "Ja, weiter"),
+      el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
+
+  // Regeln als Ampeln (Zeit steht nur links)
+  $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("div", { class: `ampel ${r.farbe}`, "data-tip": r.detail || r.titel },
+    el("span", { class: "a-icon" }, icon(r.id)), el("strong", {}, r.titel), el("span", { class: "detail" }, r.detail))));
+  $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
+
+  // Redeanteile, ohne Bewertung
+  const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);
+  const summe = anteile.reduce((s, [, x]) => s + x, 0) || 1;
+  $("redeanteile").replaceChildren(...(anteile.length ? anteile.map(([wer, sek]) => el("div", { class: "balken", "data-tip": `${mmss(sek)} min gesprochen` },
+    el("span", {}, wer.replace("Person ", "P ")),
+    el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${(sek / summe) * 100}%` })),
+    el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
+
+  bildRendern(z);
+}
+
+function leisteRendern(z) {
+  $("leiste").hidden = !leisteOffen;
+  $("btn-transkript").classList.toggle("an", leisteOffen);
+  if (!leisteOffen) return;
+  $("reiter-transkript").classList.toggle("aktiv", reiter === "transkript");
+  $("reiter-hinweise").classList.toggle("aktiv", reiter === "hinweise");
+  $("transkript").hidden = reiter !== "transkript";
+  $("hinweise").hidden = reiter !== "hinweise";
+  const tr = $("transkript");
+  const unten = tr.scrollTop + tr.clientHeight >= tr.scrollHeight - 20;
+  const zeilen = z.segmente.map((s) => el("li", {},
+    el("span", { class: "wann" }, mmss(s.start)), el("span", { class: "wer" }, s.sprecher), el("span", {}, s.text)));
+  if (z.teiltext) zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }, "live"), el("span"), el("span", {}, z.teiltext)));
+  tr.replaceChildren(...zeilen);
+  if (unten) tr.scrollTop = tr.scrollHeight;
+  $("hinweise").replaceChildren(...[...z.hinweise].reverse().map((h) => el("li", { class: h.art === "ton" || h.stufe === "warnung" ? "rot" : "" },
+    el("span", { class: "meta" }, mmss(h.zeit)), h.text)));
+}
+
+function einstellungenRendern(e) {
+  if (!e || !$("einstellungen").hidden) return; // nicht überschreiben, während jemand einstellt
+  $("e-assistent").checked = e.assistent;
+  $("e-modus").value = e.modus;
+  $("e-stimme").value = e.stimme;
+  $("e-bild").value = e.bild_minuten;
+  $("e-monolog").value = e.monolog_sekunden;
+  $("e-bild-anbieter").value = e.bild_anbieter;
+  $("e-live-art").value = e.live_art;
+  $("e-live-hinweis").hidden = e.live_art !== "sparsam";
+}
+
+function verbinden() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); };
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.typ === "stimme") return stimme.abspielen(d.pcm);
+    if (d.typ === "stimme_stopp") return stimme.stopp();
+    zustand = d; rendern(); einstellungenRendern(d.einstellungen);
+  };
+  ws.onclose = () => setTimeout(verbinden, 1000);
+}
+
+// Start: Icons setzen, Formular vorbelegen, Regeln, Szenarien und Aufnahmen laden
+(async () => {
+  iconSetzen("btn-fragen", "frage"); iconSetzen("btn-still", "stopp"); iconSetzen("btn-fortsetzen", "weiter");
+  iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-einstellungen", "einstellungen");
+  iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
+  iconSetzen("kosten-icon", "muenze");
+  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("bild-leer-icon", "bild");
+  $("f-titel").value = "Testmeeting";
+  punktZeile({ titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 });
+  punktZeile({ titel: "Hauptthema", ziel: "Optionen sammeln und bewerten", minuten: 5 });
+  punktZeile({ titel: "Nächste Schritte", ziel: "Wer macht was bis wann", minuten: 2 });
+  const rk = await fetch("/api/regeln").then((r) => r.json());
+  regelkatalog = rk.katalog; regelwahl(rk.standard);
+  personZeile(); personZeile();
+  const [szenarien, aufnahmen] = await Promise.all([fetch("/api/szenarien").then((r) => r.json()), fetch("/api/aufnahmen").then((r) => r.json())]);
+  $("f-szenario").replaceChildren(...szenarien.map((n) => el("option", { value: n }, n)));
+  $("f-aufnahme").replaceChildren(...aufnahmen.map((n) => el("option", { value: n }, n)));
+  $("zeile-aufnahme").hidden = !aufnahmen.length;
+  verbinden();
+})();

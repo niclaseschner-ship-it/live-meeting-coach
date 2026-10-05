@@ -6,3 +6,15 @@ node_modules/
 *.wav
 *.mp3
 recordings/
+logs/
+.pytest_cache/
+!.env.example
+modelle/
+aufnahmen/
+testbibliothek/audio/
+
+# Testbibliothek bleibt intern (Proben öffentlicher Aufnahmen, Referenzen); nur die README liegt im Repo
+testbibliothek/*
+!testbibliothek/README.md
+# lokale Vorschau-Konfiguration
+.claude/

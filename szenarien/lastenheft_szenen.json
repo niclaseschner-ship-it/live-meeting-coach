@@ -1,0 +1,47 @@
+{
+  "beschreibung": "Demonstrationsszenario nach Lastenheft Kap. 10 (frei erfundene Besprechung). Szene 1 Start, 2 Monolog, 3 Zeitüberschreitung, 4 Exkurs (themenfremd und späterer Agendapunkt), 5 Sprecherüberlappung. Kurze Zeitbudgets, damit alles in rund vier Minuten passiert.",
+  "setup": {
+    "titel": "Messeplanung 2027",
+    "ziel": "Entscheiden, ob wir 2027 mit eigenem Stand auf die Fachmesse gehen",
+    "agenda": [
+      { "titel": "Begrüßung und Ziel", "ziel": "Worüber wird heute entschieden?", "minuten": 1 },
+      { "titel": "Budget Messestand", "ziel": "Kosten abwägen, Freigabe ja oder nein", "minuten": 2 },
+      { "titel": "Standpersonal und Termine", "ziel": "Wer steht wann am Stand?", "minuten": 2 },
+      { "titel": "Nächste Schritte", "ziel": "Wer macht was bis wann", "minuten": 1 }
+    ],
+    "regeln": ["Ausreden lassen"],
+    "teilnehmende": ["Anna", "Ben", "Carla", "David"]
+  },
+  "wechsel": [
+    { "zeit": 48, "punkt": 2, "kommentar": "FR-02: Moderation schaltet manuell auf Punkt 2" }
+  ],
+  "segmente": [
+    { "sprecher": "Anna", "start": 1, "ende": 9, "text": "Hallo zusammen. Heute entscheiden wir, ob wir 2027 mit einem eigenen Stand auf die Fachmesse gehen." },
+    { "sprecher": "Carla", "start": 10, "ende": 16, "text": "Gut. Mir ist wichtig, dass wir heute wirklich entscheiden und nicht wieder vertagen." },
+    { "sprecher": "David", "start": 17, "ende": 24, "text": "Einverstanden. Für mich heißt Ziel erreicht: wir gehen hier mit einer klaren Entscheidung raus." },
+    { "sprecher": "Ben", "start": 25, "ende": 32, "text": "Passt. Ich würde vorschlagen, wir halten uns an die Reihenfolge der Agenda." },
+    { "sprecher": "Anna", "start": 33, "ende": 42, "text": "Gut, dann ist das Ziel für heute klar: am Ende steht ein Ja oder Nein zur Messeteilnahme." },
+
+    { "sprecher": "Ben", "start": 50, "ende": 63, "text": "Also, wir haben drei Angebote für den Standbau, zwischen achtzehn- und sechsundzwanzigtausend Euro, je nach Fläche und Ausstattung." },
+    { "sprecher": "Ben", "start": 63.5, "ende": 77, "text": "Dazu kommt die Standmiete mit rund zwölftausend Euro, plus Reisekosten und Hotel für vier Personen, insgesamt also vierzig- bis fünfzigtausend." },
+    { "sprecher": "Ben", "start": 77.5, "ende": 91, "text": "Beim günstigsten Angebot fehlt die Beleuchtung, das wären noch einmal zwei- bis dreitausend Euro. Das teuerste liefert erst sechs Wochen vor der Messe." },
+    { "sprecher": "Ben", "start": 91.5, "ende": 106, "text": "Das mittlere Angebot liegt bei zweiundzwanzigtausend, Beleuchtung inklusive, Lieferung acht Wochen vorher. Bei der Standmiete gibt es zehn Prozent Frühbucherrabatt." },
+    { "sprecher": "Ben", "start": 106.5, "ende": 121, "text": "Wenn wir früh buchen und das mittlere Angebot nehmen, landen wir bei etwa zweiundvierzigtausend Euro für den gesamten Messeauftritt." },
+    { "sprecher": "Carla", "start": 123, "ende": 134, "text": "Danke, Ben. Zweiundvierzigtausend ist mehr als letztes Jahr. Was haben wir denn damals an Aufträgen aus der Messe mitgenommen?" },
+    { "sprecher": "David", "start": 132.5, "ende": 140, "text": "Das waren über dreißig qualifizierte Kontakte und zwei Aufträge, das Budget hat sich gerechnet." },
+    { "sprecher": "Carla", "start": 141, "ende": 148, "text": "Dann spricht viel dafür, das Budget freizugeben." },
+
+    { "sprecher": "David", "start": 150, "ende": 158, "text": "Übrigens, habt ihr gesehen, dass die Kantine ab nächster Woche umgebaut wird? Drei Monate nur Foodtrucks." },
+    { "sprecher": "Carla", "start": 159, "ende": 165, "text": "Echt? Den Bowl-Truck vom letzten Sommer fand ich super." },
+    { "sprecher": "Ben", "start": 166, "ende": 173, "text": "Und die Kaffeemaschine im dritten Stock ist schon wieder kaputt, ich habe ein Ticket bei der Haustechnik aufgemacht." },
+    { "sprecher": "David", "start": 174, "ende": 180, "text": "Vielleicht kaufen wir einfach eine gebrauchte Siebträgermaschine fürs Team." },
+
+    { "sprecher": "Anna", "start": 182, "ende": 189, "text": "Zurück zum Budget: Geben wir die zweiundvierzigtausend Euro für den Messestand frei?" },
+    { "sprecher": "Ben", "start": 190, "ende": 196, "text": "Ja, mit dem mittleren Angebot und Frühbucherrabatt bin ich für die Freigabe des Budgets." },
+
+    { "sprecher": "Carla", "start": 198, "ende": 206, "text": "Dann müssen wir klären, wer am Stand steht. Ich kann am ersten und zweiten Messetag." },
+    { "sprecher": "David", "start": 207, "ende": 214, "text": "Ich übernehme den dritten Tag, und wir brauchen noch jemanden aus dem Vertrieb für die Standbesetzung." },
+    { "sprecher": "Ben", "start": 215, "ende": 224, "text": "Für den Schichtplan am Stand frage ich bis Freitag die Verfügbarkeiten im Vertrieb ab." },
+    { "sprecher": "Carla", "start": 225, "ende": 232, "text": "Gut, dann haben wir für jeden Messetag mindestens zwei Personen am Stand." }
+  ]
+}

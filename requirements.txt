@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+python-dotenv>=1.0
+openai>=1.60
+pytest>=8.0
+numpy>=2.0
+sherpa-onnx>=1.12
+websockets>=13
