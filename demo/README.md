@@ -10,6 +10,7 @@ synthetisch (OpenAI-Sprachausgabe), die Aufnahme ist also frei verwendbar. Erzeu
 | `messeplanung.json` | Einrichtung: Titel, Ziel, Agenda mit je 1 min, sechs Gesprächsregeln, Nestor an |
 | `dashboard_live.png` | Dashboard bei 2:09: Ton-Regel rot, Nestor beantwortet „Wo stehen wir gerade?“ |
 | `dashboard_ende.png` | Dashboard nach dem Meeting: Agenda mit Ergebnissen, Live-Bild, Redeanteile |
+| `dashboard_monolog.png` | **Nachgestellt**, nicht aus einem Lauf: Monolog-Hinweis, wenn eine Person länger als 1 min am Stück spricht (Texte und Darstellung wie im echten Dashboard) |
 | `zusammenfassung.png` | Meeting-Zusammenfassung (Live-Bild, Stand 3:11) |
 | `protokoll.md` | Ergebnisse je Punkt, Hinweise an die Runde, Transkript |
 

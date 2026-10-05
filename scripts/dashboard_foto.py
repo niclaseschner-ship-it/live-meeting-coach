@@ -23,7 +23,7 @@ EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 PORT = 9333
 
 
-async def foto(ziel: Path, url: str, breite: int, hoehe: int, warten: float) -> None:
+async def foto(ziel: Path, url: str, breite: int, hoehe: int, warten: float, js: str | None = None) -> None:
     profil = tempfile.mkdtemp(prefix="lmc-foto-")
     edge = subprocess.Popen([str(EDGE), "--headless=new", "--disable-gpu", "--hide-scrollbars",
                              f"--remote-debugging-port={PORT}", f"--user-data-dir={profil}",
@@ -52,6 +52,9 @@ async def foto(ziel: Path, url: str, breite: int, hoehe: int, warten: float) -> 
             await cdp("Emulation.setDeviceMetricsOverride", width=breite, height=hoehe, deviceScaleFactor=1, mobile=False)
             await cdp("Page.navigate", url=url)
             await asyncio.sleep(warten)  # WebSocket verbinden, ersten Zustand und Live-Bild laden
+            if js:  # z. B. einen Zustand nachstellen (Bild für Doku, kein echter Lauf)
+                await cdp("Runtime.evaluate", expression=js, awaitPromise=True)
+                await asyncio.sleep(1.0)
             bild = await cdp("Page.captureScreenshot", format="png")
         ziel.write_bytes(base64.b64decode(bild["data"]))
         print(f"{ziel}: {breite}×{hoehe}")
@@ -66,8 +69,10 @@ def main() -> None:
     ap.add_argument("--breite", type=int, default=1600)
     ap.add_argument("--hoehe", type=int, default=900)
     ap.add_argument("--warten", type=float, default=3.0)
+    ap.add_argument("--js", type=Path, help="JavaScript-Datei, die vor dem Foto in der Seite läuft")
     a = ap.parse_args()
-    asyncio.run(foto(a.ziel, a.url, a.breite, a.hoehe, a.warten))
+    js = a.js.read_text(encoding="utf-8") if a.js else None
+    asyncio.run(foto(a.ziel, a.url, a.breite, a.hoehe, a.warten, js))
 
 
 if __name__ == "__main__":
