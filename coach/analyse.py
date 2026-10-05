@@ -126,7 +126,8 @@ ABSEITS = ("neu", "vorgriff", "zurueck")
 # löst die Themen-Zuordnung sofort aus und braucht keine Karenz – der Wechselvorschlag kommt direkt.
 ANKUENDIGUNG = re.compile(
     r"tagesordnungspunkt|\btop\s*\d|agendapunkt|"
-    r"(kommen|gehen|machen|springen) wir (jetzt |nun |dann |gleich )*(weiter )?(zu|zum|mit)\b|"
+    r"(kommen|gehen|machen|springen|wechseln) wir (?:\w+ ){0,3}?(zu|zum|zur|mit)\b|"
+    r"\bzum (zweiten|dritten|vierten|f(ü|ue)nften|sechsten|letzten) (punkt|thema|tagesordnungspunkt)|"
     r"weiter (zu|mit) (punkt|top|thema)|n(ä|ae)chste[nrs]? (punkt|thema|tagesordnungspunkt)|"
     r"zum n(ä|ae)chsten (punkt|thema)|punkt \w+ (der|unserer) (agenda|tagesordnung)",
     re.IGNORECASE,
@@ -261,6 +262,12 @@ def prozess_ampeln(
 
     # 4. Gesprächsregeln / Sprecherüberlappung (FR-06)
     seit = jetzt - ueberlappung_halte
+    if meeting.ueberlappungen_gezaehlt:
+        if ueberlappungs_vorfaelle(meeting, seit):
+            ampeln.append({"name": "Sprecherüberlappung", "farbe": "gelb", "detail": "mehrere sprechen gleichzeitig"})
+        else:
+            ampeln.append({"name": "Sprecherüberlappung", "farbe": "gruen", "detail": "normale Sprecherwechsel"})
+        return ampeln
     if any(t >= seit for t in meeting.mischungen) or ueberlappung_erkannt(
         meeting.segmente, seit, ueberlappung_min, zickzack_fenster, zickzack_wechsel
     ):

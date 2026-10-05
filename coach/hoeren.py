@@ -171,7 +171,8 @@ class Hoerstrom:
         o["person_fertig"] = True
         mischung = [o["start"] + x for x in erg["mischung"]]
         abschnitte = [Segment(person_name(p), "", o["start"] + a, o["start"] + b) for a, b, p in erg["abschnitte"]]
-        ueber = [(o["start"] + a, o["start"] + b) for a, b in erg.get("ueberlappung", [])]
+        ueber = ([(o["start"] + a, o["start"] + b) for a, b in erg["ueberlappung"]]
+                 if "ueberlappung" in erg else None)  # None: ohne Segmentierung keine gezählten Vorfälle
         await self.coach.sprecher_abschnitt(abschnitte, o["ende"], mischung, ueber)
         # Regel 1 nur mit sicher zugeordneten Abschnitten – „Person ?“ ist kein Sprecherwechsel
         sicher = [(a, b, p) for a, b, p in erg["abschnitte"] if p is not None]

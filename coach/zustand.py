@@ -63,6 +63,7 @@ class Meeting:
     hinweise: list[Hinweis] = field(default_factory=list)
     mischungen: list[float] = field(default_factory=list)  # Zeitpunkte mit Stimmen-Mischung (Überlappung)
     ueberlappungen: list[list[float]] = field(default_factory=list)  # Vorfälle gleichzeitigen Sprechens [von, bis]
+    ueberlappungen_gezaehlt: bool = False  # True, sobald die Segmentierung Vorfälle liefert (statt Mischungs-Schätzung)
     teiltext: str = ""  # laufender Live-Text der aktuellen Äußerung
     themen_verlauf: list[dict] = field(default_factory=list)
     block_texte: list[str] = field(default_factory=list)

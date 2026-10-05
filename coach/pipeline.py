@@ -480,6 +480,15 @@ class Coach:
     def _ueberlappung_pruefen(self) -> None:
         """FR-06: technisches Signal, keine Bewertung von Unterbrechungen."""
         m = self.meeting
+        if EINST.segmentierung:
+            # Mit Segmentierung: ein Hinweis an die Gruppe erst bei wiederholtem Durcheinander – mindestens zwei
+            # Vorfälle in einer Minute. Einzelne kurze Überlappungen sind normal (synthetische Kontrollrunde 06.10.:
+            # ein Hinweis bei null gezählten Vorfällen) und erscheinen nur im Zähler.
+            if len(analyse.ueberlappungs_vorfaelle(m, m.jetzt() - 60)) >= 2:
+                zusatz = regeln.vereinbart(m.regel_ids, "ausreden")
+                self.entscheider.vorschlagen(m, "ueberlappung", "hinweis", "gruppe",
+                                             "Mehrere Personen sprechen gleichzeitig." + zusatz)
+            return
         seit = m.jetzt() - EINST.ueberlappung_halte_sekunden
         if any(t >= seit for t in m.mischungen) or analyse.ueberlappung_erkannt(
             m.segmente,
@@ -588,8 +597,9 @@ class Coach:
             return
         hs, self.hoerstrom = self.hoerstrom, None
         await hs.beenden()
-        if self._abschnitt:
-            await self._abschnitt_auswerten()
+        # Kein letzter Themen-Abgleich mehr: nach dem Ende erzeugte er nur Hinweise, die niemand mehr sieht
+        # (synthetische Kontrollrunde 06.10.: zwei Fokus-Hinweise in der letzten Sekunde)
+        self._abschnitt = []
         self.meeting.teiltext = ""
         self.meeting.beenden()
         if self.assistent.gespraech:
@@ -619,6 +629,8 @@ class Coach:
         if mischung:
             m.mischungen.extend(mischung)
             self.protokoll.append({"zeit": mischung[0], "art": "ueberlappung"})
+        if ueber is not None:
+            m.ueberlappungen_gezaehlt = True
         for a, b in ueber or []:
             # Vorfälle zählen: weniger als 1 s auseinander gehört zusammen
             if m.ueberlappungen and a - m.ueberlappungen[-1][1] < 1.0:

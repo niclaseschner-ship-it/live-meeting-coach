@@ -111,7 +111,13 @@ def auswerten(name: str) -> tuple[list[str], dict]:
     z.append(f"| Frage an Nestor | {len(fragen)} | {beantwortet} beantwortet | – | Nestor |")
     erg["nestor"] = (beantwortet, len(fragen))
     # Fehlalarme: Hinweise, die keinem eingebauten Ereignis zugeordnet wurden (ohne Zeit/Ergebnisse)
-    rest = [h for h in hinweise if id(h) not in benutzt and h["art"] not in ("zeit", "ergebnisse")]
+    # Keine Fehlalarme: Fokus-Hinweise, die einen Agenda-Wechsel vorschlagen (im Abspielmodus sofort übernommen),
+    # und Überlappungs-Hinweise an eingebauten Unterbrechungen (dort sprechen zwei gleichzeitig)
+    w_zeiten = [e["zeit"] for e in wechsel]
+    u_zeiten = [r["von"] for r in ref if "unterbrechung" in r["ereignisse"]]
+    rest = [h for h in hinweise if id(h) not in benutzt and h["art"] not in ("zeit", "ergebnisse")
+            and not (h["art"] == "fokus" and any(abs(h["zeit"] - t) <= 5 for t in w_zeiten))
+            and not (h["art"] == "ueberlappung" and any(-2 <= h["zeit"] - t <= 15 for t in u_zeiten))]
     z += ["", f"**Weitere Hinweise ohne eingebautes Ereignis:** {len(rest)} – "
           + (", ".join(f"{k} {v}" for k, v in Counter(h["art"] for h in rest).most_common()) or "keine"), ""]
     for h in rest[:8]:

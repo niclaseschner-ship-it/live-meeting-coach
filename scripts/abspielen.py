@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 import wave
@@ -70,7 +71,7 @@ async def main() -> None:
         if not (coach._onepager_laeuft or coach._folie_laeuft):
             break
         await asyncio.sleep(1)
-    await asyncio.sleep(5)
+    await asyncio.sleep(25 if os.getenv("LMC_KI") == "codex" else 8)  # Ergebnisprüfung des letzten Punkts abwarten
     await beobachten()
     m = coach.meeting
 

@@ -59,8 +59,12 @@ def hinweise(titel: str, erg: dict) -> list[str]:
     aus = []
     if not erg["ergebnis"] and not erg["entscheidungen"]:
         aus.append(f"„{titel}“ ist abgeschlossen, ein Ergebnis wurde nicht ausgesprochen. Kurz festhalten?")
-    for a in erg["aufgaben"]:
-        fehlt = [w for w, k in (("Verantwortliche/n", "wer"), ("Termin", "bis")) if not a[k]]
-        if fehlt:
-            aus.append(f"„{titel}“: Aufgabe „{a['was']}“ ohne {' und '.join(fehlt)}.")
+    # Eine Zeile je Punkt statt je Aufgabe (synthetischer Testlauf 06.10.: sechs Einzelhinweise für zwei Punkte)
+    offen = [a for a in erg["aufgaben"] if not a["wer"] or not a["bis"]]
+    if offen:
+        ohne_wer = sum(1 for a in offen if not a["wer"])
+        ohne_bis = sum(1 for a in offen if not a["bis"])
+        fehlt = " und ".join(t for n, t in ((ohne_wer, "Verantwortliche/n"), (ohne_bis, "Termin")) if n)
+        beispiel = f", z. B. „{offen[0]['was']}“" if len(offen) > 1 else f": „{offen[0]['was']}“"
+        aus.append(f"„{titel}“: {len(offen)} Aufgabe{'n' if len(offen) > 1 else ''} ohne {fehlt}{beispiel}.")
     return aus

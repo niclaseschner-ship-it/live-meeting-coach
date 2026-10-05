@@ -298,3 +298,24 @@ def test_angekuendigter_punkt_wechselt_direkt():
     assert angekuendigter_punkt("Punkt drei war gut vorbereitet.", titel, 0) is None
     assert angekuendigter_punkt("Gehen wir weiter zu Punkt zwei.", titel, 1) is None
     assert angekuendigter_punkt("Kommen wir zu Punkt neun.", titel, 0) is None
+
+
+def test_ankuendigung_mit_wechseln_und_ordnungszahl():
+    from coach.analyse import angekuendigter_punkt, ankuendigung
+
+    titel = ["Projektstand", "Urlaubsplanung im Dezember", "Zeiterfassung"]
+    assert angekuendigter_punkt("Und jetzt wechseln wir ausdrücklich zum zweiten Punkt, der Urlaubsplanung.", titel, 0) == 1
+    assert ankuendigung("Dann kommen wir jetzt endlich mal zur Zeiterfassung.")
+    assert not ankuendigung("Wir wechseln die Agentur nicht, das ist klar.")
+    assert not ankuendigung("Das kommt gleich noch, lass uns beim Budget bleiben.")
+
+
+def test_ergebnis_hinweis_fasst_offene_aufgaben_zusammen():
+    from coach.ergebnisse import hinweise
+
+    erg = {"ergebnis": "Import wird bereinigt.", "entscheidungen": [{"was": "x", "ergebnis": "y"}],
+           "aufgaben": [{"was": "Validierung bauen", "wer": None, "bis": "Freitag"},
+                        {"was": "Import durchführen", "wer": None, "bis": None},
+                        {"was": "Liste schreiben", "wer": "Lea", "bis": "Montag"}]}
+    assert hinweise("Projektstand", erg) == [
+        "„Projektstand“: 2 Aufgaben ohne Verantwortliche/n und Termin, z. B. „Validierung bauen“."]
