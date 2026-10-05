@@ -51,9 +51,10 @@ STANDARD_EREIGNISSE = ("ein Agenda-Wechsel mit ausdrücklicher Ansage, einer ohn
                        "Zuständigen, zwei Fragen an den Moderationsassistenten Nestor")
 
 
-async def drehbuch(name: str, thema: str, minuten: int = 15, personen: int = 4) -> None:
+async def drehbuch(name: str, thema: str, minuten: int = 15, personen: int = 4,
+                   ereignisse: str = STANDARD_EREIGNISSE) -> None:
     text = await codex(AUFTRAG.format(thema=thema, minuten=minuten, woerter=minuten * 140, personen=personen,
-                                      ereignisse=STANDARD_EREIGNISSE))
+                                      ereignisse=ereignisse), frist=600)
     d = json.loads(text)
     ZIEL.mkdir(parents=True, exist_ok=True)
     (ZIEL / f"{name}.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -136,6 +137,9 @@ def vertonen(name: str, azure: bool = False) -> None:
 
 if __name__ == "__main__":
     if sys.argv[1] == "drehbuch":
-        asyncio.run(drehbuch(sys.argv[2], sys.argv[3]))
+        # drehbuch <name> <thema> [ereignisse] [minuten] [personen]
+        ereignisse = sys.argv[4] if len(sys.argv) > 4 else STANDARD_EREIGNISSE
+        asyncio.run(drehbuch(sys.argv[2], sys.argv[3], int(sys.argv[5]) if len(sys.argv) > 5 else 15,
+                             int(sys.argv[6]) if len(sys.argv) > 6 else 4, ereignisse))
     elif sys.argv[1] == "vertonen":
         vertonen(sys.argv[2], azure="--azure" in sys.argv)

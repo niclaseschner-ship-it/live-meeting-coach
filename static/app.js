@@ -495,19 +495,42 @@ function liveRendern(z) {
       el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
 
   // Regeln als Ampeln (Zeit steht nur links)
-  $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("div", { class: `ampel ${r.farbe}`, "data-tip": r.detail || r.titel },
-    el("span", { class: "a-icon" }, icon(r.id)), el("strong", {}, r.titel), el("span", { class: "detail" }, r.detail))));
+  $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("div", { class: `ampel ${r.farbe}`,
+    "data-tip": (r.detail || r.titel) + (r.experimentell ? " – experimentell: im Raum noch nicht geprüft" : "") },
+    el("span", { class: "a-icon" }, icon(r.id)),
+    el("strong", {}, r.titel, ...(r.experimentell ? [el("span", { class: "exp" }, "exp.")] : [])),
+    el("span", { class: "detail" }, r.detail))));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
 
   // Redeanteile, ohne Bewertung
   const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);
   const summe = anteile.reduce((s, [, x]) => s + x, 0) || 1;
-  $("redeanteile").replaceChildren(...(anteile.length ? anteile.map(([wer, sek]) => el("div", { class: "balken", "data-tip": `${mmss(sek)} min gesprochen` },
+  $("redeanteile").replaceChildren(...(anteile.length ? anteile.map(([wer, sek]) => el("div", { class: wer === "Person ?" ? "balken unsicher" : "balken",
+    "data-tip": wer === "Person ?" ? `${mmss(sek)} min nicht sicher zuzuordnen – zu kurz oder mehrere gleichzeitig` : `${mmss(sek)} min gesprochen` },
     el("span", {}, wer.replace("Person ", "P ")),
     el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${(sek / summe) * 100}%` })),
     el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
 
+  dynamikRendern(z.dynamik);
   bildRendern(z);
+}
+
+const KLIMA_HOEHE = { ruhig: 30, lebhaft: 65, hitzig: 100 };
+function dynamikRendern(d) {
+  if (!d) return;
+  const k = d.klima ?? { stufe: "ruhig", gruende: [] };
+  const box = $("klima");
+  box.className = `klima ${k.stufe}`;
+  const thermo = el("span", { class: "thermo" }, el("span"));
+  thermo.firstChild.style.height = `${KLIMA_HOEHE[k.stufe] ?? 30}%`;
+  box.dataset.tip = "Letzte 3 Minuten: gleichzeitiges Sprechen, Ins-Wort-Fallen, Lautstärke und Ton";
+  box.replaceChildren(thermo, el("div", {}, el("div", { class: "stufe" }, k.stufe[0].toUpperCase() + k.stufe.slice(1)),
+    el("div", { class: "gruende" }, k.gruende.length ? k.gruende.join(" · ") : "keine Auffälligkeiten")));
+  $("dynamik").replaceChildren(
+    el("div", { "data-tip": "Vorfälle, in denen zwei gleichzeitig sprachen (seit Beginn / letzte 10 min)" },
+      el("strong", {}, d.ueberlappungen), el("span", {}, `gleichzeitig gesprochen · ${d.ueberlappungen_10min} in 10 min`)),
+    el("div", { "data-tip": "Wechsel ohne Pause, nach denen die neue Person das Wort behält (seit Beginn / letzte 10 min)" },
+      el("strong", {}, d.unterbrechungen), el("span", {}, `ins Wort gefallen · ${d.unterbrechungen_10min} in 10 min`)));
 }
 
 function leisteRendern(z) {

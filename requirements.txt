@@ -7,3 +7,4 @@ pytest>=8.0
 numpy>=2.0
 sherpa-onnx>=1.12
 websockets>=13
+onnxruntime>=1.18

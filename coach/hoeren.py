@@ -66,8 +66,11 @@ def text_cache_datei(wav: bytes):
     return Path(EINST.text_cache) / h[:2] / f"{h}.txt"
 
 
+UNSICHER = "Person ?"
+
+
 def person_name(index: int | None) -> str:
-    return f"Person {index + 1}" if index is not None else "–"
+    return f"Person {index + 1}" if index is not None else UNSICHER
 
 
 class Hoerstrom:
@@ -168,8 +171,11 @@ class Hoerstrom:
         o["person_fertig"] = True
         mischung = [o["start"] + x for x in erg["mischung"]]
         abschnitte = [Segment(person_name(p), "", o["start"] + a, o["start"] + b) for a, b, p in erg["abschnitte"]]
-        await self.coach.sprecher_abschnitt(abschnitte, o["ende"], mischung)
-        self.coach.aeusserung_merken(Aeusserung(o["start"], o["ende"], erg["abschnitte"], o["pegel"]))
+        ueber = [(o["start"] + a, o["start"] + b) for a, b in erg.get("ueberlappung", [])]
+        await self.coach.sprecher_abschnitt(abschnitte, o["ende"], mischung, ueber)
+        # Regel 1 nur mit sicher zugeordneten Abschnitten – „Person ?“ ist kein Sprecherwechsel
+        sicher = [(a, b, p) for a, b, p in erg["abschnitte"] if p is not None]
+        self.coach.aeusserung_merken(Aeusserung(o["start"], o["ende"], sicher, o["pegel"]))
         await self._ausgeben(uid)
 
     async def _text_je_aeusserung(self, uid: int, proben: np.ndarray, vorher) -> None:

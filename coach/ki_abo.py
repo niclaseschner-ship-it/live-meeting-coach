@@ -47,7 +47,7 @@ def bereinigen(text: str) -> str:
     return m.group(1) if m else text
 
 
-async def codex(prompt: str) -> str:
+async def codex(prompt: str, frist: float = FRIST) -> str:
     befehl = shlex.split(EINST.codex_befehl, posix=True) + [
         "exec", "-c", f"model_reasoning_effort={EINST.codex_aufwand}", "--skip-git-repo-check",
         "--sandbox", "read-only", "--ephemeral", "-"]
@@ -55,7 +55,7 @@ async def codex(prompt: str) -> str:
         p = await asyncio.create_subprocess_exec(*befehl, stdin=asyncio.subprocess.PIPE,
                                                  stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
-            raus, fehler = await asyncio.wait_for(p.communicate(prompt.encode("utf-8")), FRIST)
+            raus, fehler = await asyncio.wait_for(p.communicate(prompt.encode("utf-8")), frist)
         except asyncio.TimeoutError:
             p.kill()
             raise

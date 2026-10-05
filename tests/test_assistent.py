@@ -210,3 +210,16 @@ def test_abo_client_leitet_chat_an_codex_und_den_rest_an_die_api(monkeypatch):
                                               response_format={"type": "json_object"}))
     assert r.choices[0].message.content == '{"ok": true}' and r.usage.prompt_tokens == 0
     assert c.audio == "echte-api"
+
+
+def test_name_aus_der_vorstellung():
+    from coach.assistent import name_aus
+
+    assert name_aus("Ich bin Lea.") == "Lea"
+    assert name_aus("Hallo, mein Name ist Jonas und ich mache das Design.") == "Jonas"
+    assert name_aus("Miriam hier.") == "Miriam"
+    assert name_aus("Ja, also ich bin der Tarek.") == "Tarek"
+    assert name_aus("Ich glaube, das passt so.") is None
+    assert name_aus("Nestor.") is None
+    assert name_aus("Hier ist Lea Brandt", ["Lea Brandt", "Jonas Ott"]) == "Lea Brandt"
+    assert name_aus("Leander hier", ["Lea Brandt"]) == "Leander"  # Wortgrenze: Lea ≠ Leander

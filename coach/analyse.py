@@ -268,3 +268,46 @@ def prozess_ampeln(
     else:
         ampeln.append({"name": "Sprecherüberlappung", "farbe": "gruen", "detail": "normale Sprecherwechsel"})
     return ampeln
+
+
+# --- Gesprächsdynamik: wie oft gleichzeitig, wie oft ins Wort, wie „heiß“ -----------------------------------
+# Vorbild aus der Forschung: Konflikt- und „Hot-Spot“-Erkennung in Besprechungen stützt sich vor allem auf Rate von
+# Überlappungen und Unterbrechungen, dazu Lautstärke und Sprechtempo (Wrede & Shriberg 2003, ICSI-Meetings; Kim et
+# al. 2012, Konflikte in politischen Debatten). Gewichte und Stufen sind Startwerte – im Raumtest kalibrieren.
+KLIMA_FENSTER = 180.0
+
+
+def ueberlappungs_vorfaelle(meeting: Meeting, seit: float = 0.0, min_dauer: float = 0.4) -> list[list[float]]:
+    return [u for u in meeting.ueberlappungen if u[1] - u[0] >= min_dauer and u[0] >= seit]
+
+
+def klima(meeting: Meeting, aeusserungen: list, unterbrechungen: list[float], ton: list[float]) -> dict:
+    """Gesprächsklima der letzten 3 Minuten: ruhig / lebhaft / hitzig, mit Gründen."""
+    import statistics
+
+    jetzt = meeting.jetzt()
+    seit = max(0.0, jetzt - KLIMA_FENSTER)
+    minuten = max(1.0, min(KLIMA_FENSTER, jetzt) / 60)
+    ov = len(ueberlappungs_vorfaelle(meeting, seit))
+    ib = sum(1 for t in unterbrechungen if t >= seit)
+    tn = sum(1 for t in ton if t >= jetzt - 300)
+
+    def pegel(ae) -> float | None:
+        sprache = [x for x in ae.pegel if x > -50]
+        return statistics.median(sprache) if len(sprache) >= 4 else None
+
+    alle = [p for p in (pegel(a) for a in aeusserungen) if p is not None]
+    jung = [p for p in (pegel(a) for a in aeusserungen if a.ende >= seit) if p is not None]
+    lauter = (statistics.mean(sorted(jung)[len(jung) // 2:]) - statistics.median(alle)) if len(alle) >= 10 and len(jung) >= 3 else 0.0
+    punkte = ov / minuten + 1.5 * ib / minuten + max(0.0, lauter - 3) / 3 + tn
+    gruende = []
+    if ov:
+        gruende.append(f"{ov}× gleichzeitig gesprochen")
+    if ib:
+        gruende.append(f"{ib}× ins Wort gefallen")
+    if lauter >= 3:
+        gruende.append(f"lauter als sonst (+{lauter:.0f} dB)")
+    if tn:
+        gruende.append(f"{tn}× rauer Ton")
+    stufe = "hitzig" if punkte >= 2.5 else "lebhaft" if punkte >= 1.0 else "ruhig"
+    return {"stufe": stufe, "punkte": round(punkte, 2), "gruende": gruende}

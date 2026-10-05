@@ -52,7 +52,7 @@ async def main() -> None:
         t = round(m.jetzt())
         if not zeitreihe or zeitreihe[-1]["t"] != t:
             s = coach.schnappschuss()
-            zeitreihe.append({"t": t, "punkt": m.aktiver_punkt,
+            zeitreihe.append({"t": t, "punkt": m.aktiver_punkt, "klima": (s.get("dynamik") or {}).get("klima"),
                               "ampeln": {a["name"]: a["farbe"] for a in s["ampeln"]}})
         for seg in m.transkript:
             erste_saetze.setdefault(seg.start, time.monotonic())
@@ -91,6 +91,9 @@ async def main() -> None:
         "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
         "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)} for i, p in enumerate(m.agenda)],
         "kosten": coach.kosten_stand(),
+        "dynamik": coach.dynamik(),
+        "namen": coach.namen,
+        "ueberlappungen": m.ueberlappungen,
         "tempo": args.tempo,
         "einstellungen": coach.einstellungen(),
         "fehler": coach.fehler,

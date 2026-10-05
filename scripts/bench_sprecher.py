@@ -30,10 +30,12 @@ AUDIO = WURZEL / "testbibliothek" / "audio"
 RASTER = 0.25
 
 
-def bewerten(probe: dict) -> tuple[float, int, int]:
+def bewerten(probe: dict) -> tuple[float, int, int, float]:
     with wave.open(str(AUDIO / f"{probe['name']}.wav")) as w:
         a = nach_16k(np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768)
     vad, stimmen = Pausenerkennung(), Stimmen()
+    if "--anzahl" in sys.argv:  # Teilnehmerzahl bekannt (Einrichtung oder Vorstellungsrunde)
+        stimmen.register.max_personen = len({r["person"] for r in probe["referenz"]["sprecher"]})
     erkannt = []  # (von, bis, person)
     for start, _, proben in vad.zufuehren(a) + vad.ende():
         erg = stimmen.analysieren(proben)
@@ -42,7 +44,7 @@ def bewerten(probe: dict) -> tuple[float, int, int]:
     paare: dict[tuple, int] = {}
     for r in ref:
         for t in np.arange(r["von"], r["bis"], RASTER):
-            p = next((p for x, y, p in erkannt if x <= t < y), None)
+            p = next((p for x, y, p in erkannt if x <= t < y), None)  # None: „Person ?“ oder nichts erfasst
             paare[(p, r["person"])] = paare.get((p, r["person"]), 0) + 1
     gesamt = sum(paare.values())
     richtig, frei_p, frei_r = 0, set(), set()
@@ -50,18 +52,20 @@ def bewerten(probe: dict) -> tuple[float, int, int]:
         if p is not None and p not in frei_p and r not in frei_r:
             richtig += n; frei_p.add(p); frei_r.add(r)
     personen = sum(s >= 10 for s in stimmen.register.sekunden)
-    return richtig / gesamt, personen, len({r["person"] for r in ref})
+    unsicher = sum(n for (p, _), n in paare.items() if p is None)  # „Person ?“ oder gar nicht erfasst
+    return richtig / gesamt, personen, len({r["person"] for r in ref}), unsicher / gesamt
 
 
 def main() -> None:
-    namen = sys.argv[1:] or [p.parent.name for p in sorted(PROBEN.glob("*/probe.json"))]
+    namen = [a for a in sys.argv[1:] if not a.startswith("--")] or [p.parent.name for p in sorted(PROBEN.glob("*/probe.json"))]
     print(f"Modell {EINST.stimm_modell}, Schwelle {EINST.stimm_schwelle}")
     for name in namen:
         probe = json.loads((PROBEN / name / "probe.json").read_text(encoding="utf-8"))
         if not probe.get("referenz", {}).get("sprecher") or not (AUDIO / f"{name}.wav").exists():
             continue
-        richtig, n, soll = bewerten(probe)
-        print(f"  {name:14} richtig {richtig:5.1%}   Personen {n} (Soll {soll})", flush=True)
+        richtig, n, soll, unsicher = bewerten(probe)
+        print(f"  {name:14} richtig {richtig:5.1%}   falsch {1 - richtig - unsicher:5.1%}   „?“/nicht erfasst "
+              f"{unsicher:5.1%}   Personen {n} (Soll {soll})", flush=True)
 
 
 if __name__ == "__main__":

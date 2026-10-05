@@ -65,7 +65,7 @@ def test_24k_nach_16k():
     a = np.sin(np.linspace(0, 20, 2400)).astype(np.float32)
     b = nach_16k(a)
     assert len(b) == 1600 and b.dtype == np.float32
-    assert person_name(0) == "Person 1" and person_name(None) == "–"
+    assert person_name(0) == "Person 1" and person_name(None) == "Person ?"
 
 
 # --- Überlappung über Stimmen-Mischung -------------------------------------
@@ -177,3 +177,42 @@ def test_prompt_echo_der_transkription_wird_erkannt():
     assert prompt_echo("Der Moderationsassistent heißt Nestor. Thema: Kommunal-Wahl-Check Frankfurt.", prompt)
     assert not prompt_echo("Nestor, wo stehen wir gerade?", prompt)
     assert not prompt_echo("Wir brauchen mehr Gewerbeflächen in Frankfurt, das ist klar.", prompt)
+
+
+# --- Segmentierung, Überlappung, Klima ---------------------------------------
+
+def test_glaetten_entfernt_flackern():
+    from coach.segmentierung import glaetten
+
+    k = np.array([1] * 10 + [2] + [1] * 10 + [4] * 20)
+    g = glaetten(k, 5)
+    assert (g[:21] == 1).all() and (g[-15:] == 4).all()
+
+
+def test_ueberlappung_wird_als_person_unbekannt_ausgeschnitten():
+    from coach.stimmen import ausschneiden
+
+    aus = ausschneiden([(0.0, 4.0, 0), (4.0, 8.0, 1)], [(3.5, 4.5)])
+    assert aus == [(0.0, 3.5, 0), (3.5, 4.5, None), (4.5, 8.0, 1)]
+
+
+def test_teilnehmerzahl_begrenzt_neue_personen():
+    r = Personenregister(schwelle=0.5, max_personen=1)
+    a, b = vek(1, 0, 0), vek(0, 1, 0)
+    r.fenster_zuordnen([a, a, a], 0.75)
+    # eine zweite, ganz andere Stimme: keine neue Person, sondern „?“ (zu unähnlich zur einzigen bekannten)
+    assert r.fenster_zuordnen([b, b, b, b], 0.75) == [None, None, None, None]
+    assert len(r.sekunden) == 1
+
+
+def test_klima_ruhig_und_hitzig():
+    from coach.unterbrechung import Aeusserung
+
+    m = Meeting(agenda=[Agendapunkt("A")])
+    m.starten(virtuell=True)
+    m.virtuelle_zeit = 600
+    ruhig = analyse.klima(m, [], [], [])
+    assert ruhig["stufe"] == "ruhig" and ruhig["gruende"] == []
+    m.ueberlappungen = [[t, t + 1.0] for t in range(430, 600, 20)]  # 9 Vorfälle in 3 min
+    heiss = analyse.klima(m, [Aeusserung(0, 1, [], [-20.0] * 8)], [500.0, 550.0], [590.0])
+    assert heiss["stufe"] == "hitzig" and "9× gleichzeitig gesprochen" in heiss["gruende"]

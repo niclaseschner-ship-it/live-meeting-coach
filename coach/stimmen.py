@@ -34,8 +34,10 @@ def normiert(v: np.ndarray) -> np.ndarray:
 class Personenregister:
     """Reine Zuordnungslogik ohne Modell – testbar mit beliebigen Vektoren."""
 
-    def __init__(self, schwelle: float) -> None:
+    def __init__(self, schwelle: float, unsicher: float = 0.0, max_personen: int | None = None) -> None:
         self.schwelle = schwelle
+        self.unsicher = unsicher  # darunter passt das Fenster zu niemandem sicher genug -> „Person ?“ statt raten
+        self.max_personen = max_personen  # bekannte Teilnehmerzahl: keine weiteren Personen anlegen
         self.summen: list[np.ndarray] = []  # zeitgewichtete Summe der Fingerabdrücke je Person
         self.sekunden: list[float] = []
         self._kandidat: list[np.ndarray] = []  # Fenster, die zu niemandem passen (mögliche neue Person)
@@ -77,6 +79,10 @@ class Personenregister:
                 self._kandidat, kand_idx = [], []
                 roh.append(k)
                 continue
+            voll = self.max_personen is not None and len(self.summen) >= self.max_personen
+            if voll:  # alle Teilnehmenden sind bekannt: zur ähnlichsten, wenn halbwegs sicher, sonst „?“
+                roh.append(k if k is not None and sims[k] >= max(self.unsicher, 0.25) else None)
+                continue
             self._kandidat.append(v)
             kand_idx.append(i)
             letzte = self._kandidat[-NEU_FENSTER:]
@@ -89,12 +95,28 @@ class Personenregister:
                 self._kandidat, kand_idx = [], []
                 roh.append(neu)
             else:
-                roh.append(k)
+                roh.append(k if k is not None and sims[k] >= self.unsicher else None)
         glatt: list[int | None] = []
         for i in range(len(roh)):
             w = [x for x in roh[max(0, i - 1):i + 2] if x is not None]  # Nachbarn innerhalb der Äußerung
             glatt.append(max(set(w), key=w.count) if w else None)
         return glatt
+
+    def stueck_zuordnen(self, v: np.ndarray, dauer: float, min_neu: float = 1.5) -> int | None:
+        """Ein Segment (eine Stimme, allein gesprochen): ähnlichste Person über der Schwelle; sonst eine neue Person,
+        wenn das Stück lang genug für einen sicheren Fingerabdruck ist; sonst None („Person ?“)."""
+        sims = self.aehnlichkeiten(v)
+        if sims:
+            k = int(np.argmax(sims))
+            if sims[k] >= self.schwelle:
+                self.summen[k] = self.summen[k] + v * dauer
+                self.sekunden[k] += dauer
+                return k
+        if dauer >= min_neu:
+            self.summen.append(v * dauer)
+            self.sekunden.append(dauer)
+            return len(self.summen) - 1
+        return None
 
     def mischung(self, fenster_vektoren: list[np.ndarray], max_sicher: float, zweit_min: float) -> list[int]:
         """Indizes der Fenster, die wie eine Mischung zweier bekannter Stimmen aussehen.
@@ -122,7 +144,12 @@ class Stimmen:
 
         self._ext = sherpa_onnx.SpeakerEmbeddingExtractor(sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(WURZEL / "modelle" / EINST.stimm_modell), num_threads=2))
-        self.register = Personenregister(EINST.stimm_schwelle)
+        self.register = Personenregister(EINST.stimm_schwelle, EINST.stimm_unsicher)
+        self._seg = None
+        if EINST.segmentierung and (WURZEL / "modelle" / "pyannote_segmentation_3_0.onnx").exists():
+            from .segmentierung import Segmentierer
+
+            self._seg = Segmentierer()
 
     def vektor(self, proben: np.ndarray) -> np.ndarray:
         st = self._ext.create_stream()
@@ -136,6 +163,17 @@ class Stimmen:
         Liefert {person (überwiegend), abschnitte [(von, bis, person)] relativ zum Äußerungsbeginn, mischung}.
         """
         dauer = len(proben) / RATE
+        if self._seg is not None and EINST.segmentierung_art == "segmente":
+            return self._analysieren_segmente(proben, dauer)
+        erg = self._analysieren_fenster(proben, dauer)
+        if self._seg is not None:  # Mischform: Personen aus den Fenstern, Überlappung aus der Segmentierung
+            ueber = self._seg.analysieren(proben)["ueberlappung"]
+            erg["ueberlappung"] = ueber
+            erg["mischung"] = [round(t, 2) for a, b in ueber for t in np.arange(a, b, 0.5)]
+            erg["abschnitte"] = ausschneiden(erg["abschnitte"], ueber)
+        return erg
+
+    def _analysieren_fenster(self, proben: np.ndarray, dauer: float) -> dict:
         if dauer < MIN_SEKUNDEN:
             return {"person": None, "abschnitte": [], "mischung": []}
         f, s = int(FENSTER_SEKUNDEN * RATE), int(SCHRITT_SEKUNDEN * RATE)
@@ -164,3 +202,57 @@ class Stimmen:
             anteil[p] = anteil.get(p, 0) + b - a
         person = max(anteil, key=anteil.get) if anteil else None
         return {"person": person, "abschnitte": abschnitte, "mischung": mischung}
+
+    def _analysieren_segmente(self, proben: np.ndarray, dauer: float) -> dict:
+        """Segmentierung (coach/segmentierung.py): Stücke je lokaler Stimme -> Fingerabdruck -> Person oder None
+        („Person ?“, wenn zu kurz und keinem sicher zuzuordnen). Überlappung direkt aus dem Signal.
+        Sprecher-Labor AMI (4 Sitzungen): 78 % richtig, 4–5 % falsch (vorher 6,5 %), Überlappung erstmals erkannt."""
+        erg = self._seg.analysieren(proben)
+        roh = []
+        for stuecke in erg["stimmen"].values():
+            teile = [proben[int(a * RATE):int(b * RATE)] for a, b in stuecke]
+            laenge = sum(len(t) for t in teile) / RATE
+            p = self.register.stueck_zuordnen(self.vektor(np.concatenate(teile)), laenge) if laenge >= 0.5 else None
+            roh += [(a, b, p) for a, b in stuecke]
+        roh.sort(key=lambda x: x[0])
+        # kurze Lücken (Atempausen) schließen; Ränder bis zur Äußerungsgrenze
+        abschnitte = []
+        for i, (a, b, p) in enumerate(roh):
+            nb = roh[i + 1][0] if i + 1 < len(roh) else dauer
+            a = 0.0 if i == 0 and a < 0.6 else a
+            b = nb if nb - b < 0.6 else b
+            if abschnitte and abschnitte[-1][2] == p and a - abschnitte[-1][1] < 0.01:
+                abschnitte[-1] = (abschnitte[-1][0], b, p)
+            else:
+                abschnitte.append((a, b, p))
+        anteil: dict = {}
+        for a, b, p in abschnitte:
+            anteil[p] = anteil.get(p, 0) + b - a
+        bekannt = {k: v for k, v in anteil.items() if k is not None}
+        person = max(bekannt, key=bekannt.get) if bekannt else None
+        # Überlappung als Zeitpunkte im Halbsekundentakt (wie bisher die Mischungs-Fenster)
+        mischung = [round(t, 2) for a, b in erg["ueberlappung"] for t in np.arange(a, b, 0.5)]
+        return {"person": person, "abschnitte": abschnitte, "mischung": mischung,
+                "ueberlappung": erg["ueberlappung"]}
+
+
+def ausschneiden(abschnitte: list[tuple[float, float, int | None]], ueber: list[tuple[float, float]]
+                 ) -> list[tuple[float, float, int | None]]:
+    """Überlappungsstellen aus den Abschnitten herausnehmen und als „Person ?“ (None) einsetzen."""
+    aus = []
+    for a, b, p in abschnitte:
+        teile = [(a, b)]
+        for x, y in ueber:
+            neu = []
+            for c, d in teile:
+                if y <= c or x >= d:
+                    neu.append((c, d))
+                    continue
+                if c < x:
+                    neu.append((c, x))
+                if y < d:
+                    neu.append((y, d))
+            teile = neu
+        aus += [(c, d, p) for c, d in teile if d - c > 0.05]
+    aus += [(x, y, None) for x, y in ueber]
+    return sorted(aus)

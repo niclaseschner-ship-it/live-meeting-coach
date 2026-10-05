@@ -1,4 +1,4 @@
-"""Lädt die lokalen Modelle nach modelle/ (Pausenerkennung und Stimm-Fingerabdruck), ~29 MB.
+"""Lädt die lokalen Modelle nach modelle/ (Pausenerkennung, Stimm-Fingerabdruck, Segmentierung), ~35 MB.
 
 Quelle: offizielle Releases von k2-fsa/sherpa-onnx auf GitHub.
     .venv\\Scripts\\python scripts\\modelle_laden.py
@@ -15,6 +15,10 @@ QUELLEN = {
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
         "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
 }
+# Segmentierung (pyannote segmentation 3.0, MIT): Überlappung und Sprecherwechsel – liegt als Archiv vor
+SEGMENTIERUNG = ("pyannote_segmentation_3_0.onnx",
+                 "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/"
+                 "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", "sherpa-onnx-pyannote-segmentation-3-0/model.onnx")
 
 ZIEL.mkdir(exist_ok=True)
 for name, url in QUELLEN.items():
@@ -24,4 +28,15 @@ for name, url in QUELLEN.items():
         continue
     print(f"lade {name} …")
     urllib.request.urlretrieve(url, pfad)
+
+name, url, im_archiv = SEGMENTIERUNG
+if (ZIEL / name).is_file():
+    print(f"vorhanden: {name}")
+else:
+    import io
+    import tarfile
+
+    print(f"lade {name} …")
+    with urllib.request.urlopen(url) as r, tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:bz2") as t:
+        (ZIEL / name).write_bytes(t.extractfile(im_archiv).read())
 print("fertig:", ZIEL)

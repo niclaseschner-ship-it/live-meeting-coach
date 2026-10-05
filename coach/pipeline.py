@@ -87,6 +87,7 @@ class Coach:
         self.folie_version = 0
         self._folie_laeuft = False
         self.karten: list[dict] = []  # Nestor-Karten (Pop-ups), bleiben im Verlauf abrufbar
+        self.namen: dict[str, str] = {}  # „Person 2“ -> „Lea“ aus der Vorstellungsrunde
         self.onepager_analyse: str | None = None
         self.onepager_version = 0
         self.onepager_stand: float | None = None
@@ -144,6 +145,7 @@ class Coach:
         self.letzte_recherche = self.folie = None
         self.folie_version = 0
         self.karten = []
+        self.namen = {}
 
     def client_neu(self) -> None:
         """OpenAI-Client mit dem aktuellen Schlüssel (im Dashboard eingetragen oder aus der Umgebung)."""
@@ -181,6 +183,7 @@ class Coach:
         daten.update(
             {
                 "regel_status": self.regel_status(ampeln),
+                "dynamik": self.dynamik(),
                 "stumm": self.stumm,
                 "einstellungen": self.einstellungen(),
                 "referenzen": list(self.referenzen),
@@ -231,9 +234,11 @@ class Coach:
                           else "Gespräch im Wechsel")
             elif rid == "ausreden":
                 n = sum(1 for t in self._unterbrechungen_gemeldet if t >= jetzt - 300)
+                ov = len(analyse.ueberlappungs_vorfaelle(m, jetzt - 300))
                 ueber = a.get("Sprecherüberlappung", {})
-                farbe = "rot" if n >= 3 else "gelb" if n or ueber.get("farbe") == "gelb" else "gruen"
-                detail = f"{n}× ins Wort gefallen (5 min)" if n else ueber.get("detail", "")
+                farbe = "rot" if n >= 3 else "gelb" if n or ov >= 3 or ueber.get("farbe") == "gelb" else "gruen"
+                teile = ([f"{n}× ins Wort"] if n else []) + ([f"{ov}× gleichzeitig"] if ov else [])
+                detail = (", ".join(teile) + " (5 min)") if teile else "normale Sprecherwechsel"
             elif rid == "thema":
                 fokus = a.get("Fokus", {})
                 farbe, detail = fokus.get("farbe", "grau"), fokus.get("detail", "")
@@ -255,7 +260,8 @@ class Coach:
                 detail = "Ergebnis oder Zuständigkeit fehlt" if h else "Ergebnisse festgehalten"
             if not m.laeuft and not m.segmente:
                 farbe = "grau"
-            aus.append({"id": rid, "titel": r.titel.split(" – ")[0], "farbe": farbe, "detail": detail})
+            aus.append({"id": rid, "titel": r.titel.split(" – ")[0], "farbe": farbe, "detail": detail,
+                        "experimentell": rid == "ausreden"})  # hängt an kurzen Sprecherwechseln (Sprecher-Labor AMI)
         return aus
 
     def status_kurz(self) -> dict:
@@ -280,6 +286,17 @@ class Coach:
                       f"fertig: {self.folie['titel']}" if self.folie else "keine"),
             "letzte_recherche": self.letzte_recherche["frage"] if self.letzte_recherche else None,
         }
+
+    def dynamik(self) -> dict:
+        """Wie oft gleichzeitig gesprochen und ins Wort gefallen wurde (gesamt und in 10 min) und das Gesprächsklima."""
+        m = self.meeting
+        jetzt = m.jetzt()
+        ton = [e["zeit"] for e in self.protokoll if e["art"] == "ton"]
+        unterbr = sorted(self._unterbrechungen_gemeldet)
+        ov = analyse.ueberlappungs_vorfaelle(m)
+        return {"ueberlappungen": len(ov), "ueberlappungen_10min": sum(1 for u in ov if u[0] >= jetzt - 600),
+                "unterbrechungen": len(unterbr), "unterbrechungen_10min": sum(1 for t in unterbr if t >= jetzt - 600),
+                "klima": analyse.klima(m, self.aeusserungen, unterbr, ton) if m.laeuft or m.segmente else None}
 
     def einstellungen(self) -> dict:
         return {"assistent": self.assistent.aktiv, "modus": EINST.assistent_modus, "stimme": EINST.stimme,
@@ -588,26 +605,54 @@ class Coach:
         self.assistent.teiltext(text)
         await self.melden()
 
-    async def sprecher_abschnitt(self, abschnitte: list[Segment], ende: float, mischung: list[float]) -> None:
+    async def sprecher_abschnitt(self, abschnitte: list[Segment], ende: float, mischung: list[float],
+                                 ueber: list[tuple[float, float]] | None = None) -> None:
         """Strom 2: Personen einer Äußerung bekannt (kommt vor dem Text); mehrere bei Sprecherwechsel ohne Pause."""
         m = self.meeting
         m.letztes_block_ende = max(m.letztes_block_ende, ende)
         abschnitte = [a for a in abschnitte if not self.assistent.eigene_sprache(a.start, a.ende)]
+        for a in abschnitte:
+            a.sprecher = self.namen.get(a.sprecher, a.sprecher)
         if abschnitte:
             m.segmente.extend(abschnitte)
             m.segmente.sort(key=lambda s: s.start)
         if mischung:
             m.mischungen.extend(mischung)
             self.protokoll.append({"zeit": mischung[0], "art": "ueberlappung"})
+        for a, b in ueber or []:
+            # Vorfälle zählen: weniger als 1 s auseinander gehört zusammen
+            if m.ueberlappungen and a - m.ueberlappungen[-1][1] < 1.0:
+                m.ueberlappungen[-1][1] = max(m.ueberlappungen[-1][1], b)
+            else:
+                m.ueberlappungen.append([a, b])
         self._ueberlappung_pruefen()
         self._monolog_pruefen()
         await self.melden()
+
+    def name_lernen(self, sprecher: str, text: str) -> None:
+        """Vorstellungsrunde: „Ich bin Lea“ von Person 2 -> Person 2 heißt ab jetzt Lea, auch rückwirkend."""
+        from .assistent import name_aus
+        from .hoeren import UNSICHER
+
+        if not sprecher.startswith("Person ") or sprecher == UNSICHER or sprecher in self.namen:
+            return
+        name = name_aus(text, self.meeting.teilnehmende)
+        if not name or name in self.namen.values():
+            return
+        self.namen[sprecher] = name
+        for s in self.meeting.segmente + self.meeting.transkript:
+            if s.sprecher == sprecher:
+                s.sprecher = name
+        self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name", "person": sprecher, "name": name})
 
     async def satz(self, seg: Segment) -> None:
         """Strom 1: fertiger Satz mit Sprecher. Sammelt Text für die Themen-Zuordnung (Strom 4)."""
         m = self.meeting
         if self.assistent.eigene_sprache(seg.start, seg.ende):
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
+        if self.assistent.vorstellung_bis is not None:
+            self.name_lernen(seg.sprecher, seg.text)
+        seg.sprecher = self.namen.get(seg.sprecher, seg.sprecher)
         m.transkript.append(seg)
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
@@ -681,6 +726,7 @@ class Coach:
         m.segmente.clear()
         m.block_texte.clear()
         m.mischungen.clear()
+        m.ueberlappungen.clear()
         m.teiltext = ""
         self._abschnitt = []
         if self.hoerstrom:

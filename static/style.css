@@ -383,3 +383,21 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .karten-liste strong { font-size: 15px; }
 .karten-liste span { font-size: 12.5px; color: var(--text-3); font-weight: 600; }
 #btn-transkript.an { background: var(--marke-weich); color: var(--marke); border-color: var(--marke); }
+
+/* Gesprächsdynamik: Klima und Zähler */
+.experimentell { margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: none; color: var(--gelb); background: var(--gelb-weich); vertical-align: middle; }
+.klima { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--gruen-weich); }
+.klima .stufe { font-size: 18px; font-weight: 700; color: var(--gruen); }
+.klima.lebhaft { background: var(--gelb-weich); } .klima.lebhaft .stufe { color: var(--gelb); }
+.klima.hitzig { background: var(--rot-weich); } .klima.hitzig .stufe { color: var(--rot); }
+.klima .gruende { font-size: 13px; color: var(--text-2); }
+.klima .thermo { width: 10px; height: 34px; border-radius: 5px; background: var(--rand); position: relative; overflow: hidden; flex: none; }
+.klima .thermo span { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 5px; background: currentColor; }
+.dynamik { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.dynamik div { padding: 8px 10px; border-radius: 10px; background: var(--bg); }
+.dynamik strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.dynamik span { font-size: 12.5px; color: var(--text-2); }
+.redeanteile .unsicher { color: var(--text-3); }
+.redeanteile .unsicher .spur span { background: var(--rand); }
+.ampel .exp { font-size: 11px; font-weight: 700; color: var(--gelb); margin-left: 4px; }

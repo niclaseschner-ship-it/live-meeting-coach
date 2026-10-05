@@ -59,6 +59,15 @@ class Einstellungen:
     # Strom 2 Wer spricht (lokal, Stimm-Fingerabdruck je Fenster); Modell und Schwelle am Benchmark 05.10. ermittelt
     stimm_modell: str = os.getenv(
         "LMC_STIMM_MODELL", "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx")
+    # Segmentierung (pyannote 3.0): Sprecherwechsel und Überlappung im Signal statt fester Fenster
+    segmentierung: bool = os.getenv("LMC_SEGMENTIERUNG", "1") == "1"
+    ueberlappung_schwelle: float = _zahl("LMC_UEBERLAPPUNG_SCHWELLE", 0.3)
+    # „misch“: Personen aus festen Fenstern (bewährt), Überlappung aus der Segmentierung; „segmente“: alles daraus
+    segmentierung_art: str = os.getenv("LMC_SEGMENTIERUNG_ART", "misch")
+    # Vorstellungsrunde nach der Begrüßung: so viele Sekunden Namen sammeln (0 = keine Vorstellungsrunde)
+    vorstellung_sekunden: float = _zahl("LMC_VORSTELLUNG_SEKUNDEN", 45)
+    # unter dieser Ähnlichkeit „Person ?“ statt raten (Benchmark 06.10.: AMI weniger Fehlzuordnungen, saubere Proben gleich)
+    stimm_unsicher: float = _zahl("LMC_STIMM_UNSICHER", 0.4)
     stimm_schwelle: float = _zahl("LMC_STIMM_SCHWELLE", 0.50)
     # Überlappung im Stimmstrom: Fenster passt zu keiner Person sicher, aber zu zweien mittelmäßig
     mischung_max: float = _zahl("LMC_MISCHUNG_MAX", 0.45)

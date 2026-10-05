@@ -129,6 +129,34 @@ def begruessungstext(meeting) -> tuple[str, str]:
     return gruss, start
 
 
+VORSTELLUNG_BITTE = ("Ich habe kein Nein gehört. Damit ich euch auseinanderhalten kann: Sagt bitte reihum kurz "
+                     "euren Namen, zum Beispiel: Ich bin Lea.")
+
+
+def vorstellung_start(meeting) -> str:
+    erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""
+    return (f"Danke, dann geht es los.{erster} Ich höre zu und melde mich nur, wenn ihr mich braucht. "
+            f"Sprecht mich einfach mit {EINST.assistent_name} an.")
+
+
+VORSTELLUNG_RE = re.compile(r"(?i:ich bin|ich heiße|ich heisse|mein name ist|hier ist|hier spricht)\s+(?i:die |der )?"
+                     r"([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?)")
+NUR_NAME_RE = re.compile(r"^\W*([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?)(?:\s+hier)?\W*$")
+
+
+def name_aus(text: str, bekannte: list[str] | None = None) -> str | None:
+    """Vorname aus einer Vorstellung („Ich bin Lea“, „Mein Name ist Jonas“, „Miriam hier“). Stehen Teilnehmende
+    in der Einrichtung, gewinnt der dort eingetragene Name, wenn er im Satz vorkommt."""
+    for n in bekannte or []:
+        vorname = n.split()[0]
+        if re.search(r"\b" + re.escape(vorname) + r"\b", text, re.IGNORECASE):
+            return n
+    m = VORSTELLUNG_RE.search(text) or NUR_NAME_RE.match(text.strip())
+    if m and m.group(1).lower() not in {"nestor", "ja", "nein", "okay", "hallo", "danke", "gut"}:
+        return m.group(1)
+    return None
+
+
 class Assistent:
     def __init__(self, coach) -> None:
         self.coach = coach
@@ -140,6 +168,7 @@ class Assistent:
         self._angesprochen_bis = -1e9
         self._nachfrage_bis = -1e9
         self._einwand_bis: float | None = None
+        self.vorstellung_bis: float | None = None  # Meetingzeit, bis zu der Namen gesammelt werden
         self._aufgabe: asyncio.Task | None = None
         self._ton_id = 0
         self._bild_ansage = False
@@ -180,11 +209,20 @@ class Assistent:
 
     def takt(self) -> None:
         """Vom Coach-Takt: Ende des Einwand-Fensters ohne Nein → Start ansagen."""
-        if self.zustand == "einwand" and self._einwand_bis is not None and self.coach.meeting.jetzt() > self._einwand_bis:
+        jetzt = self.coach.meeting.jetzt()
+        if self.zustand == "einwand" and self._einwand_bis is not None and jetzt > self._einwand_bis:
             self._einwand_bis = None
             self.zustand = "bereit"
-            _, start = begruessungstext(self.coach.meeting)
-            self._starten(self._sprechen_texte([start]))
+            if EINST.vorstellung_sekunden > 0:  # Vorstellungsrunde: Namen und Stimmen kennenlernen
+                self._starten(self._sprechen_texte([VORSTELLUNG_BITTE]))
+                ende = self.sprechzeiten[-1][1] if self.sprechzeiten else jetzt
+                self.vorstellung_bis = max(ende, jetzt + len(VORSTELLUNG_BITTE) / 14) + EINST.vorstellung_sekunden
+            else:
+                _, start = begruessungstext(self.coach.meeting)
+                self._starten(self._sprechen_texte([start]))
+        if self.vorstellung_bis is not None and jetzt > self.vorstellung_bis:
+            self.vorstellung_bis = None
+            self._starten(self._sprechen_texte([vorstellung_start(self.coach.meeting)]))
 
     # --- Eingang: fertige Sätze und Teiltext --------------------------------
     def teiltext(self, text: str) -> None:
