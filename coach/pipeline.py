@@ -84,6 +84,8 @@ class Coach:
         # Version 2: Ströme
         self.hoerstrom = None
         self.onepager_am_ende = True
+        self.archiv_aktiv = False  # nur der Server legt Meetings ab (coach/archiv.py), Testskripte nicht
+        self.archiv = None
         self.auto_wechsel = False  # Abspielmodus: Agenda-Vorschläge wie von der Moderation bestätigt übernehmen
         self.protokoll: list[dict] = []  # Ereignisse für den Testbericht (Wechsel, Ampeln, Doku)
         self._abschnitt: list[Segment] = []
@@ -208,6 +210,7 @@ class Coach:
                 "onepager_version": self.onepager_version,
                 "onepager_stand": self.onepager_stand,
                 "onepager_laeuft": self._onepager_laeuft,
+                "archiv": self.archiv.stand() if self.archiv else None,
                 "onepager_fehler": self.onepager_fehler,
                 "onepager_minuten": EINST.onepager_minuten,
                 "onepager_fokus": self.onepager_fokus,
@@ -310,6 +313,7 @@ class Coach:
 
     def einstellungen(self) -> dict:
         return {"assistent": self.assistent.aktiv, "modus": EINST.assistent_modus, "stimme": EINST.stimme,
+                "aufnahme": EINST.aufnahme_speichern,
                 "bild_anbieter": EINST.bild_anbieter, "live_art": EINST.live_art,
                 "bild_minuten": EINST.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
 
@@ -328,6 +332,8 @@ class Coach:
             object.__setattr__(EINST, "stimme", daten["stimme"])
         if "bild_minuten" in daten:
             object.__setattr__(EINST, "onepager_minuten", max(0.0, min(60.0, float(daten["bild_minuten"]))))
+        if "aufnahme" in daten:
+            object.__setattr__(EINST, "aufnahme_speichern", bool(daten["aufnahme"]))  # ab dem nächsten Start
         if "monolog_sekunden" in daten:
             self.monolog_sekunden = max(20.0, min(300.0, float(daten["monolog_sekunden"])))
 
@@ -589,6 +595,17 @@ class Coach:
         from .hoeren import Hoerstrom
 
         self.meeting.starten(virtuell=True)  # Meetinguhr folgt der Audiozeit
+        if self.archiv_aktiv:
+            from .archiv import Archiv
+
+            if self.archiv is not None and self.archiv.beobachten in self.beobachter:
+                self.beobachter.remove(self.archiv.beobachten)
+            try:  # Audio nur live – eine abgespielte Aufnahme liegt schon als Datei vor
+                self.archiv = Archiv(self, audio=EINST.aufnahme_speichern and not self.simulation_laeuft)
+                self.beobachter.append(self.archiv.beobachten)
+            except OSError as e:
+                log.warning("Meeting-Ablage nicht möglich: %s", e)
+                self.archiv = None
         KOSTEN.neues_meeting()
         self.hoerstrom = Hoerstrom(self, mit_text=self._client is not None)
         try:
@@ -602,6 +619,9 @@ class Coach:
             hintergrund(self.assistent.begruessen())
 
     async def hoeren_zufuehren(self, pcm24k: bytes) -> None:
+        if self.hoerstrom and self.archiv and not self.archiv.fertig:
+            stumm = self.stumm or self.assistent.pausiert  # was niemand hören soll, wird auch nicht aufgenommen
+            self.archiv.audio(bytes(len(pcm24k)) if stumm else pcm24k)
         if self.hoerstrom:
             await self.hoerstrom.zufuehren(pcm24k)
             if self.hoerstrom.live and self.hoerstrom.live.fehler:
@@ -623,6 +643,24 @@ class Coach:
             hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
         if self.onepager_am_ende:
             self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
+        if self.archiv and not self.archiv.fertig:
+            self.archiv.ereignis("stopp")
+            self.archiv.schreiben(endgueltig=False)
+            hintergrund(self._archiv_abschliessen(self.archiv))
+        await self.melden()
+
+    async def _archiv_abschliessen(self, archiv) -> None:
+        """Ablegen, sobald Abschlussbild, Folie und Ergebnisprüfung durch sind (höchstens ~4 min warten)."""
+        for _ in range(240):
+            if not (self._onepager_laeuft or self._folie_laeuft):
+                break
+            await asyncio.sleep(1)
+        await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
+        try:
+            archiv.schreiben(endgueltig=True)
+        except OSError as e:
+            log.warning("Meeting-Ablage fehlgeschlagen: %s", e)
+            archiv.fertig = True
         await self.melden()
 
     async def teiltext(self, text: str) -> None:
@@ -754,6 +792,8 @@ class Coach:
     async def einwand_umsetzen(self) -> None:
         """Jemand hat der Begrüßung widersprochen: nichts behalten, nicht weiter zuhören."""
         m = self.meeting
+        if self.archiv:
+            self.archiv.audio_verwerfen()
         m.transkript.clear()
         m.segmente.clear()
         m.block_texte.clear()

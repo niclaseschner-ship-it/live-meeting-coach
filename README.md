@@ -60,6 +60,11 @@ der Meeting-Zusammenfassung als Bild.
 - **Handy als Mikrofon und Fernbedienung:** `tailscale serve --bg 8000` (einmalig; HTTPS im eigenen Tailnet),
   dann im Dashboard auf das Handy-Symbol und den QR-Code scannen. Das Handy übernimmt Mikrofon und Nestors Stimme,
   hält das Display wach und lässt sich als App installieren – [docs/handy.md](docs/handy.md).
+- **Meeting-Ablage:** Nach jedem Meeting legt der Coach einen Ordner unter `meetings/` an (nicht im Repo).
+  Darin liegen Abschlussbild, `protokoll.md`, `bericht.json` (Transkript, Hinweise, Agenda, Karten, Dynamik,
+  Kosten), die Aufnahme als WAV und unter `debug/` die Ereignisse, Nestors Antwortzeiten, die API-Aufrufe und das
+  Log. Die Aufnahme lässt sich mit `scriptsbspielen.py` erneut durchspielen. Sie ist in den Einstellungen
+  abschaltbar, die Kopfleiste zeigt „Aufnahme“, und nach einem „Nein“ in der Begrüßung wird sie gelöscht.
 - **Eigener OpenAI-Schlüssel:** Jede Person trägt ihren API-Schlüssel im Dashboard unter Einstellungen ein
   (wird bei OpenAI geprüft, liegt dann nur in `~/.live-meeting-coach/openai_schluessel`, nie im Browser oder Log).
   Alternativ `OPENAI_API_KEY` in `.env`; der Eintrag im Dashboard hat Vorrang. Live-Text, Kontext, Nestor und

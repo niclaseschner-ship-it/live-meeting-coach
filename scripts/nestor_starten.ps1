@@ -56,6 +56,26 @@ while ($true) {
     break
 }
 
-# 3. Coach aus
+# 3. Erst ablegen lassen (Abschlussbild, Protokoll, Bericht – bis ~4 min), dann aus
+$z = Laeuft
+if ($eigener -and $z -and $z.archiv -and -not $z.archiv.fertig) {
+    $hinweis = New-Object System.Windows.Forms.Form
+    $hinweis.Text = "Nestor"; $hinweis.Width = 420; $hinweis.Height = 120; $hinweis.StartPosition = "CenterScreen"
+    $hinweis.TopMost = $true; $hinweis.FormBorderStyle = "FixedDialog"; $hinweis.ControlBox = $false
+    $text = New-Object System.Windows.Forms.Label
+    $text.Text = "Nestor legt das Meeting ab (Bild, Protokoll, Bericht) …`nDas Fenster schließt sich von selbst."
+    $text.Dock = "Fill"; $text.TextAlign = "MiddleCenter"
+    $hinweis.Controls.Add($text); $hinweis.Show()
+    $bis = (Get-Date).AddMinutes(5)
+    while ((Get-Date) -lt $bis) {
+        [System.Windows.Forms.Application]::DoEvents()
+        $z = Laeuft
+        if (-not $z -or -not $z.archiv -or $z.archiv.fertig) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    $hinweis.Close()
+}
+
+# 4. Coach aus
 # python.exe aus der venv ist unter Windows nur ein Starter mit dem echten Python als Kindprozess – ganzen Baum beenden
 if ($eigener -and -not $eigener.HasExited) { taskkill /PID $eigener.Id /T /F | Out-Null }

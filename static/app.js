@@ -127,6 +127,8 @@ $("e-stimme").onchange = (e) => einstellen("stimme", e.target.value);
 $("e-bild").onchange = (e) => einstellen("bild_minuten", Number(e.target.value));
 $("e-monolog").onchange = (e) => einstellen("monolog_sekunden", Number(e.target.value));
 $("e-bild-anbieter").onchange = (e) => einstellen("bild_anbieter", e.target.value);
+$("e-aufnahme").onchange = (e) => einstellen("aufnahme", e.target.checked);
+$("btn-ablage").onclick = () => api("/api/ablage/oeffnen");
 $("e-live-art").onchange = (e) => { $("e-live-hinweis").hidden = e.target.value !== "sparsam"; einstellen("live_art", e.target.value); };
 
 // OpenAI-Schlüssel: geht nur an den eigenen Server (läuft auf diesem Rechner) und kommt nie zurück
@@ -305,6 +307,11 @@ function rendern() {
   $("ziel-anzeige").textContent = z.ziel || "";
   $("btn-start").hidden = !vorbereitung;
   $("btn-neu").hidden = !(beendet && !einrichtungOffen);
+  // Ablage: läuft die Aufnahme, und wo liegt das Meeting danach?
+  const ab = z.archiv;
+  $("aufnahme-pill").hidden = !(ab?.aufnahme && z.hoeren);
+  $("btn-ablage").hidden = !(ab && !z.hoeren);
+  $("btn-ablage").textContent = ab?.fertig ? "Abgelegt – Ordner öffnen" : "Wird abgelegt …";
   $("btn-stopp").hidden = !z.hoeren || z.simulation;
   const pill = $("status-pill");
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
@@ -479,6 +486,7 @@ function einstellungenRendern(e) {
   $("e-monolog").value = e.monolog_sekunden;
   $("e-bild-anbieter").value = e.bild_anbieter;
   $("e-live-art").value = e.live_art;
+  $("e-aufnahme").checked = !!e.aufnahme;
   $("e-live-hinweis").hidden = e.live_art !== "sparsam";
 }
 

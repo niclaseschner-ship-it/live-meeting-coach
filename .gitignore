@@ -20,3 +20,4 @@ testbibliothek/*
 .claude/
 # Demo-Satz liegt im Repo (synthetisch, frei verwendbar)
 !demo/*.wav
+meetings/

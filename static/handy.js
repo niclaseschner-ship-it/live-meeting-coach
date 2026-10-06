@@ -46,7 +46,7 @@ function verbinden() {
     setTimeout(verbinden, 1000);
   };
 }
-function ping() { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: performance.now() })); }
+function ping() { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: performance.now(), laufzeit })); }
 setInterval(ping, 5000);
 
 // ---------- Mikrofon ----------
@@ -160,6 +160,7 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live" : beendet ? "Beendet" : "Bereit";
   $("zeit").textContent = mmss(z.zeit);
+  $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
 
   // Warnung: Mikrofon weg, eigener Hinweis oder Fehler vom Server
   const eigenesWeg = mikroGewollt && !mikro.laeuft();

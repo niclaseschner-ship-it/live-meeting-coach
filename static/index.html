@@ -36,6 +36,8 @@
 
     <div class="kopf-knoepfe">
       <span id="status-pill" class="pill">Vorbereitung</span>
+      <span id="aufnahme-pill" class="pill aufnahme" hidden data-tip="Audio wird lokal im Meeting-Ordner gespeichert (Testphase) – abschaltbar in den Einstellungen">Aufnahme</span>
+      <button id="btn-ablage" class="pill ablage" hidden data-tip="Meeting-Ordner öffnen: Protokoll, Bild, Bericht, Aufnahme"></button>
       <button id="btn-kosten" class="kosten-knopf" data-tip="Geschätzte OpenAI-Kosten dieses Meetings – klicken für Details"><span id="kosten-icon"></span><span id="kosten-wert">0,00 $</span></button>
       <button id="btn-mikro" class="icon" data-tip="Mikro stumm schalten – nichts wird gehört oder ausgewertet" hidden></button>
       <button id="btn-fragen" class="icon" data-tip="Nestor fragen (statt „Nestor, …“ zu sagen)" hidden></button>
@@ -110,6 +112,8 @@
     <p id="e-live-hinweis" class="e-hinweis" hidden>Sparsam: Sätze erscheinen erst nach dem Ende der Äußerung
       (meist ~1 s, bis ~4 s), Nestor antwortet entsprechend etwas später. Sprecher, Redeanteile, Monolog und
       Unterbrechungen sind nicht betroffen. <strong>Gilt ab dem nächsten Meetingstart.</strong></p>
+    <label class="schalter"><input type="checkbox" id="e-aufnahme"> <span>Audio speichern <small>lokal im
+      Meeting-Ordner, zum Nachvollziehen in der Testphase; ab dem nächsten Start</small></span></label>
     <label>Live-Bild zeichnet
       <select id="e-bild-anbieter">
         <option value="openai">OpenAI – wie ChatGPT, ~8 ct/Bild</option>

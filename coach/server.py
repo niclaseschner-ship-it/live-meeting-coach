@@ -26,6 +26,13 @@ SZENARIEN = WURZEL / "szenarien"
 AUFNAHMEN = Path(EINST.aufnahmen)
 
 coach = Coach()
+coach.archiv_aktiv = True  # echte Meetings ablegen (meetings/), Testskripte nicht
+
+
+def ereignis(art: str, **daten) -> None:
+    """Debug-Ereignis ins laufende Meeting (Mikrofon, Lautsprecher, Start/Stopp und woher)."""
+    if coach.archiv and not coach.archiv.fertig:
+        coach.archiv.ereignis(art, **daten)
 verbindungen: set[WebSocket] = set()
 
 
@@ -163,6 +170,25 @@ async def kopplung(request: Request):
     return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg, "befehl": befehl}
 
 
+@app.post("/api/ablage/oeffnen")
+async def ablage_oeffnen(request: Request):
+    """Meeting-Ordner im Explorer öffnen – nur am Laptop selbst."""
+    if not zugang.lokal(request.scope):
+        raise HTTPException(403, "Nur am Laptop.")
+    if coach.archiv is None:
+        raise HTTPException(404, "Noch kein Meeting abgelegt.")
+    import os
+    import subprocess
+    import sys
+
+    ordner = str(coach.archiv.ordner)
+    if sys.platform == "win32":
+        os.startfile(ordner)  # noqa: S606
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", ordner])
+    return {"ok": True}
+
+
 @app.get("/api/zustand")
 async def zustand():
     return stand()
@@ -265,18 +291,25 @@ async def referenz(name: str = Form(...), datei: UploadFile = File(...)):
     return {"ok": True, "referenzen": list(coach.referenzen)}
 
 
+def _herkunft(request: Request) -> str:
+    return "laptop" if zugang.lokal(request.scope) else "handy"
+
+
 @app.post("/api/start")
-async def start():
+async def start(request: Request):
     """Version 2: Hörstrom öffnen; das Audio kommt anschließend über /ws/audio. Ein Meeting zur Zeit – ein zweiter
     Start (zweiter Tab, Handy) würde den laufenden Hörstrom samt Live-Text-Verbindung verwaisen lassen."""
     if coach.hoerstrom is not None:
+        ereignis("start_abgewiesen", von=_herkunft(request))
         raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
     await coach.hoeren_starten()
+    ereignis("start_von", von=_herkunft(request), mikro=audio["quelle"])
     return {"ok": True}
 
 
 @app.post("/api/stopp")
-async def stopp():
+async def stopp(request: Request):
+    ereignis("stopp_von", von=_herkunft(request))
     await coach.hoeren_beenden()
     coach.meeting.beenden()
     await senden()
@@ -290,6 +323,7 @@ async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
     await ws.accept()
     alt = audio["ws"]
     audio.update(ws=ws, quelle="handy" if quelle == "handy" else "laptop", letzt=time.monotonic())
+    ereignis("mikro_an", quelle=audio["quelle"], abgeloest=alt is not None)
     if alt is not None:
         with contextlib.suppress(Exception):
             await alt.close(code=4001)
@@ -305,6 +339,7 @@ async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
         pass
     finally:
         if audio["ws"] is ws:
+            ereignis("mikro_weg", quelle=audio["quelle"], still_s=round(time.monotonic() - audio["letzt"], 1))
             audio.update(ws=None, quelle=None)
             await senden()
 
@@ -424,11 +459,14 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
                     coach.sprache_melden()
                 if "ping" in daten:  # Laufzeitmessung vom Handy: sofort und nur an diesen Client zurück
                     await ws.send_text(json.dumps({"typ": "pong", "t": daten["ping"]}))
+                    if isinstance(daten.get("laufzeit"), (int, float)) and coach.archiv and not coach.archiv.fertig:
+                        coach.archiv.laufzeit(daten["laufzeit"])
                 # Ein gemeldetes Handy trägt den Ton; ein Laptop-Tab nimmt ihn nur auf ausdrücklichen Klick
                 handy_spricht = lautsprecher in verbindungen and geraet.get(lautsprecher) == "handy"
                 if (daten.get("lautsprecher") and lautsprecher is not ws
                         and (not handy_spricht or geraet[ws] == "handy" or daten.get("erzwingen"))):
                     lautsprecher = ws
+                    ereignis("ton_an", geraet=geraet[ws], erzwungen=bool(daten.get("erzwingen")))
                     await senden()
                 elif daten.get("lautsprecher") is False and lautsprecher is ws:
                     lautsprecher = None  # Handy gibt die Stimme ab; der nächste Klick am Laptop holt sie
@@ -440,4 +478,5 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
     finally:
         geraet.pop(ws, None)
         if lautsprecher is ws:
+            ereignis("ton_weg", geraet="?")
             await senden()  # alle Seiten zeigen: Nestor hat gerade keinen Lautsprecher

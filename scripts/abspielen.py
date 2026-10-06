@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from coach.analyse import mmss  # noqa: E402
 from coach.config import WURZEL  # noqa: E402
+from coach import archiv  # noqa: E402
 from coach.pipeline import Coach  # noqa: E402
 
 
@@ -75,30 +76,7 @@ async def main() -> None:
     await beobachten()
     m = coach.meeting
 
-    bericht = {
-        "aufnahme": pfad.name,
-        "laufzeit_s": round(dauer, 1),
-        "personen": sorted({s.sprecher for s in m.segmente}),
-        "redeanteile": {k: round(v, 1) for k, v in m.redeanteile().items()},
-        "transkript": [{"start": round(s.start, 1), "ende": round(s.ende, 1), "sprecher": s.sprecher, "text": s.text}
-                       for s in m.transkript],
-        "hinweise": [{"zeit": round(h.zeit, 1), "art": h.art, "text": h.text} for h in m.hinweise],
-        "protokoll": coach.protokoll,
-        "mischungen": [round(t, 1) for t in m.mischungen],
-        "zeitreihe": zeitreihe,
-        "onepager_version": coach.onepager_version,
-        "karten": coach.karten,
-        "folie": coach.folie,
-        "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
-        "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)} for i, p in enumerate(m.agenda)],
-        "kosten": coach.kosten_stand(),
-        "dynamik": coach.dynamik(),
-        "namen": coach.namen,
-        "ueberlappungen": m.ueberlappungen,
-        "tempo": args.tempo,
-        "einstellungen": coach.einstellungen(),
-        "fehler": coach.fehler,
-    }
+    bericht = archiv.bericht(coach, zeitreihe, aufnahme=pfad.name, laufzeit_s=round(dauer, 1), tempo=args.tempo)
     ziel = WURZEL / "logs" / f"bericht_{pfad.stem}.json"
     ziel.parent.mkdir(exist_ok=True)
     ziel.write_text(json.dumps(bericht, ensure_ascii=False, indent=1), encoding="utf-8")

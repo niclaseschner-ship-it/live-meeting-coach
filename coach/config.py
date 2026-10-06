@@ -124,6 +124,9 @@ class Einstellungen:
     dominanz_anteil: float = _zahl("LMC_DOMINANZ_ANTEIL", 0.5)
     dominanz_fenster_minuten: float = _zahl("LMC_DOMINANZ_FENSTER_MINUTEN", 10)
     port: int = int(_zahl("LMC_PORT", 8000))
+    # Meeting-Ablage (nur Server): Ordner je Meeting; Audio dazu, solange wir testen (Einstellungen, abschaltbar)
+    archiv: str = os.getenv("LMC_ARCHIV", str(WURZEL / "meetings"))
+    aufnahme_speichern: bool = os.getenv("LMC_AUFNAHME", "1") == "1"
 
 
 EINST = Einstellungen()
