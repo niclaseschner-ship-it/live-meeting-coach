@@ -14,16 +14,16 @@ Drehbuch über das ChatGPT-Abo (Codex), Vertonung über Teachbuddys Azure (Stimm
 | abschweifung | 1 | 0 | – | fokus |
 | unterbrechung | 2 | 1 | -15 s | unterbrechung |
 | Wechsel zu Punkt 2 (mit Ansage) | 1 | 1 | +7 s | ansage |
-| Wechsel zu Punkt 3 (ohne Ansage) | 1 | 0 | – | – |
-| beschluss | 3 | 0 Entscheidungen festgehalten | – | Regel 10 |
-| aufgabe ohne Zuständigen | 1 | 0 Hinweise | – | Regel 10 |
+| Wechsel zu Punkt 3 (ohne Ansage) | 1 | 1 | +51 s | Themen-Zuordnung |
+| beschluss | 3 | 13 Entscheidungen festgehalten | – | Regel 10 |
+| aufgabe ohne Zuständigen | 1 | 3 Hinweise | – | Regel 10 |
 | Frage an Nestor | 2 | 2 beantwortet | – | Nestor |
 
-**Weitere Hinweise ohne eingebautes Ereignis:** 1 – ueberlappung 1
+**Weitere Hinweise ohne eingebautes Ereignis:** 1 – fokus 1
 
-- 1:05 [ueberlappung] Mehrere Personen sprechen gleichzeitig. Vereinbart war: „Ausreden lassen“.
+- 17:25 [fokus] Das Thema passt eher zu Agendapunkt 1 („Projektstand Kundenprojekt Elbgarten“). Möchtet ihr jetzt dorthin wechseln oder zunächst A
 
-**Gesprächsdynamik:** 3× gleichzeitig, 1× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 217.
+**Gesprächsdynamik:** 0× gleichzeitig, 1× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 217.
 **Kosten:** 0.00 $.
 
 ## Vorstandssitzung des SV Eichenfeld: Zwischen Kassenlage, Sommerfest und Vereinsbus
@@ -35,21 +35,20 @@ Drehbuch über das ChatGPT-Abo (Codex), Vertonung über Teachbuddys Azure (Stimm
 | Ereignis | eingebaut | erkannt | Verzug | erkannt als |
 |---|---|---|---|---|
 | kraftausdruck | 1 | 1 | +28 s | ton |
-| angriff | 1 | 1 | +34 s | ton |
+| angriff | 1 | 1 | +37 s | ton |
 | monolog | 7 | 1 | +11 s | monolog |
-| abschweifung | 1 | 1 | +27 s | fokus |
+| abschweifung | 1 | 1 | +25 s | fokus |
 | unterbrechung | 3 | 1 | -8 s | unterbrechung |
 | Wechsel zu Punkt 2 (mit Ansage) | 1 | 1 | +23 s | ansage |
 | Wechsel zu Punkt 3 (mit Ansage) | 1 | 1 | +5 s | ansage |
-| beschluss | 1 | 1 Entscheidungen festgehalten | – | Regel 10 |
+| beschluss | 1 | 6 Entscheidungen festgehalten | – | Regel 10 |
 | Frage an Nestor | 1 | 1 beantwortet | – | Nestor |
 
-**Weitere Hinweise ohne eingebautes Ereignis:** 1 – ueberlappung 1
+**Weitere Hinweise ohne eingebautes Ereignis:** 0 – keine
 
-- 14:20 [ueberlappung] Mehrere Personen sprechen gleichzeitig. Vereinbart war: „Ausreden lassen“.
 
-**Gesprächsdynamik:** 1× gleichzeitig, 1× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 295, lebhaft 133.
-**Kosten:** 0.13 $.
+**Gesprächsdynamik:** 0× gleichzeitig, 1× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 175, hitzig 48, lebhaft 31.
+**Kosten:** 0.07 $.
 
 ## Entscheidungsrunde zur Auswahl des neuen Bürostandorts
 
@@ -62,13 +61,12 @@ Drehbuch über das ChatGPT-Abo (Codex), Vertonung über Teachbuddys Azure (Stimm
 | Wechsel zu Punkt 2 (mit Ansage) | 1 | 1 | +3 s | ansage |
 | Wechsel zu Punkt 3 (mit Ansage) | 1 | 1 | +9 s | ansage |
 | Wechsel zu Punkt 4 (mit Ansage) | 1 | 0 | – | – |
-| beschluss | 1 | 0 Entscheidungen festgehalten | – | Regel 10 |
+| beschluss | 1 | 5 Entscheidungen festgehalten | – | Regel 10 |
 | Frage an Nestor | 1 | 1 beantwortet | – | Nestor |
 
-**Weitere Hinweise ohne eingebautes Ereignis:** 1 – ueberlappung 1
+**Weitere Hinweise ohne eingebautes Ereignis:** 0 – keine
 
-- 9:59 [ueberlappung] Mehrere Personen sprechen gleichzeitig. Vereinbart war: „Ausreden lassen“.
 
-**Gesprächsdynamik:** 0× gleichzeitig, 0× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 173.
+**Gesprächsdynamik:** 0× gleichzeitig, 0× ins Wort; Klima am Ende „ruhig“; Klima-Verlauf: ruhig 170.
 **Kosten:** 0.00 $.
 
