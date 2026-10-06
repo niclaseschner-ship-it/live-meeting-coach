@@ -284,7 +284,11 @@ def prozess_ampeln(
 KLIMA_FENSTER = 180.0
 
 
-def ueberlappungs_vorfaelle(meeting: Meeting, seit: float = 0.0, min_dauer: float = 0.4) -> list[list[float]]:
+def ueberlappungs_vorfaelle(meeting: Meeting, seit: float = 0.0, min_dauer: float = 1.0) -> list[list[float]]:
+    """Gleichzeitiges Sprechen ab 1 s zählt als Vorfall („konkurrierende“ Überlappung). Kürzere sind meist
+    Zustimmung („ja“, „mhm“) oder Saalhall: Testlauf 06.10., je 10 min ab 1 s – Talkshow 8,3, Stadtrat Koblenz 3,5,
+    Stadtrat Hoyerswerda 1,7, Anhörung/Podium/Bürgerversammlung 0–0,5; ohne Mindestdauer lag Koblenz gleichauf
+    mit der Talkshow."""
     return [u for u in meeting.ueberlappungen if u[1] - u[0] >= min_dauer and u[0] >= seit]
 
 

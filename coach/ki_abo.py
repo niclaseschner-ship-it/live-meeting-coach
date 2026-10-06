@@ -47,7 +47,19 @@ def bereinigen(text: str) -> str:
     return m.group(1) if m else text
 
 
-async def codex(prompt: str, frist: float = FRIST) -> str:
+async def codex(prompt: str, frist: float = FRIST, versuche: int = 2) -> str:
+    """Ein Aufruf über das Abo; bei einem Fehler (z. B. kurzzeitige Begrenzung) einmal nach 3 s wiederholen."""
+    for i in range(versuche):
+        try:
+            return await _codex(prompt, frist)
+        except RuntimeError:
+            if i + 1 == versuche:
+                raise
+            await asyncio.sleep(3)
+    raise RuntimeError("codex exec ohne Ergebnis")
+
+
+async def _codex(prompt: str, frist: float) -> str:
     befehl = shlex.split(EINST.codex_befehl, posix=True) + [
         "exec", "-c", f"model_reasoning_effort={EINST.codex_aufwand}", "--skip-git-repo-check",
         "--sandbox", "read-only", "--ephemeral", "-"]
