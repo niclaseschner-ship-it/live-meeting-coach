@@ -67,6 +67,7 @@ $("btn-start").onclick = async () => {
   stimme.bereit();
   await einrichten();
   await api("/api/start");
+  if (zustand?.mikro?.quelle === "handy") return; // gemeldetes Handy trägt Mikro und Ton
   try { await mikro.starten($("f-assistent").checked); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); await api("/api/stopp"); }
 };
 $("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); };
@@ -104,10 +105,10 @@ async function handyFensterZeigen() {
       " einrichten oder LMC_HANDY_URL setzen."]));
 }
 $("btn-handy").onclick = handyFensterZeigen;
-$("btn-ton-hier").onclick = () => stimme.bereit();
+$("btn-ton-hier").onclick = () => stimme.bereit(true);
 $("btn-mikro-quelle").onclick = handyFensterZeigen;
 $("hf-laptop").onclick = async () => {
-  stimme.bereit();
+  stimme.bereit(true);
   try { await mikro.starten(zustand?.einstellungen?.assistent ?? true, "laptop"); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); }
 };
 // Laptop-Mikro endet ohne eigenes Stoppen: Handy hat übernommen oder die Verbindung riss ab
@@ -316,7 +317,7 @@ function rendern() {
   $("fehler").hidden = !z.fehler; $("fehler").textContent = z.fehler ?? "";
   // Mikrofon: welche Quelle hört gerade, und kommt überhaupt Ton an?
   const m = z.mikro ?? {};
-  $("btn-mikro-quelle").hidden = !z.hoeren || z.simulation || !m.quelle;
+  $("btn-mikro-quelle").hidden = z.simulation || !m.quelle || (!z.hoeren && m.quelle !== "handy");
   $("btn-mikro-quelle").textContent = m.quelle === "handy" ? "Mikro: Handy" : "Mikro: Laptop";
   $("btn-mikro-quelle").dataset.tip = m.quelle === "handy" ? "Das Handy hört zu – klicken zum Zurückholen" : "Der Laptop hört zu – klicken, um ein Handy zu koppeln";
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
@@ -325,7 +326,7 @@ function rendern() {
   $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
   $("mikro-weg").hidden = !m.weg;
   $("mikro-weg").textContent = !m.weg ? "" : m.quelle === null
-    ? "Kein Mikrofon verbunden – Nestor hört nichts. Am Handy „Mit diesem Handy zuhören“ tippen oder hier zurückholen (Handy-Symbol)."
+    ? "Kein Mikrofon verbunden – Nestor hört nichts. Am Handy „Dieses Handy übernimmt Mikro und Ton“ tippen oder hier zurückholen (Handy-Symbol)."
     : `Seit ${Math.round(m.luecke)} s kein Ton vom ${m.quelle === "handy" ? "Handy – ist es gesperrt oder die App im Hintergrund?" : "Laptop-Mikrofon."}`;
 
   // Nestor

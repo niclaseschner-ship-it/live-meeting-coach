@@ -51,7 +51,7 @@ setInterval(ping, 5000);
 
 // ---------- Mikrofon ----------
 async function mikroStarten() {
-  if ($("lautsprecher").checked) stimme.bereit(); // aus dem Tipp heraus – sonst darf das Handy keinen Ton abspielen
+  stimme.bereit(); // aus dem Tipp heraus – sonst darf das Handy keinen Ton abspielen
   try {
     await mikro.starten(zustand?.einstellungen?.assistent ?? true, "handy");
     mikroGewollt = true;
@@ -75,11 +75,6 @@ async function mikroNeu() { // nach Abriss oder Sperre: still neu verbinden, ohn
   rendern();
 }
 $("btn-mikro").onclick = () => (mikro.laeuft() ? mikroStoppen() : mikroStarten());
-$("lautsprecher").onchange = (e) => {
-  if (e.target.checked) { if (mikro.laeuft()) stimme.bereit(); return; }
-  lautsprecher = false; stimme.stopp();
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ lautsprecher: false }));
-};
 
 // ---------- Display wach halten ----------
 // Ein Wake Lock überlebt das Verdecken nicht – bei jedem Sichtbarwerden neu anfordern; Zustand sichtbar machen.
@@ -105,15 +100,14 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 
 // ---------- Knöpfe ----------
 // nur das zuhörende Handy übernimmt die Stimme – ein zweites Handy als reine Fernbedienung nimmt sie nicht weg
-$("btn-fragen").onclick = () => { if ($("lautsprecher").checked && mikro.laeuft()) stimme.bereit(); api("/api/assistent/fragen"); };
+$("btn-fragen").onclick = () => { if (mikro.laeuft()) stimme.bereit(); api("/api/assistent/fragen"); };
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
-$("btn-ton-hier").onclick = () => { $("lautsprecher").checked = true; stimme.bereit(); };
+$("btn-ton-hier").onclick = () => stimme.bereit();
 $("btn-stumm").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
 $("btn-start").onclick = async () => {
-  if ($("lautsprecher").checked) stimme.bereit();
+  if (!mikro.laeuft()) await mikroStarten(); // erst melden, dann starten – der Laptop hält sich dann raus
   await api("/api/start");
-  await mikroStarten();
 };
 $("btn-stopp").onclick = async () => {
   if (!confirm("Meeting beenden? Danach entstehen Zusammenfassung und Abschlussbild am Laptop.")) return;
@@ -203,9 +197,9 @@ function rendern() {
   const hier = mikro.laeuft();
   $("btn-mikro").classList.toggle("an", hier);
   $("btn-mikro").querySelector(".i").replaceChildren(icon(hier ? "mikro" : "mikroAus"));
-  $("mikro-text").textContent = hier ? "Handy hört zu – tippen zum Beenden" : "Mit diesem Handy zuhören";
-  $("btn-mikro").disabled = !z.hoeren && !hier;
-  $("quelle").textContent = !z.hoeren ? "" : m.quelle === "handy" ? (hier ? "dieses Handy" : "ein anderes Handy")
+  $("mikro-text").textContent = !hier ? "Dieses Handy übernimmt Mikro und Ton"
+    : z.hoeren ? "Handy hört zu – tippen zum Beenden" : "Bereit – hört zu, sobald das Meeting startet";
+  $("quelle").textContent = !z.hoeren && !m.quelle ? "" : m.quelle === "handy" ? (hier ? "dieses Handy" : "ein anderes Handy")
     : m.quelle === "laptop" ? "Laptop hört zu" : "niemand hört zu";
   $("btn-stumm").hidden = !z.hoeren;
   $("btn-stumm").textContent = z.stumm ? "Stumm aus – wieder zuhören" : "Stumm schalten";

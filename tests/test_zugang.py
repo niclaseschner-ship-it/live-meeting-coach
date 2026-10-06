@@ -83,3 +83,27 @@ def test_adresse_passt_zum_eigenen_port():
     assert zugang._serve_adresse(status, 8000) == "https://laptop.ts.net"
     assert zugang._serve_adresse(status, 8001) == "https://laptop.ts.net:8443"
     assert zugang._serve_adresse(status, 8002) is None
+
+
+def test_gemeldetes_handy_behaelt_den_ton():
+    import json
+
+    lokal = TestClient(app, client=("127.0.0.1", 5000))
+
+    def ton(ws):  # nächster Zustand mit Lautsprecher-Angabe
+        while True:
+            d = json.loads(ws.receive_text())
+            if "lautsprecher" in d:
+                return d["lautsprecher"]
+
+    with lokal.websocket_connect("/ws?geraet=handy") as handy, lokal.websocket_connect("/ws") as laptop:
+        ton(handy), ton(laptop)                                         # Anfangszustände
+        handy.send_text('{"lautsprecher": true}')
+        assert ton(handy) == "handy"
+        laptop.send_text('{"lautsprecher": true}')                     # Laptop-Start: Handy bleibt
+        laptop.send_text('{"ping": 1}')
+        while json.loads(laptop.receive_text()).get("typ") != "pong":
+            pass
+        assert lokal.get("/api/zustand").json()["lautsprecher"] == "handy"
+        laptop.send_text('{"lautsprecher": true, "erzwingen": true}')  # ausdrücklich „Hier abspielen“
+        assert ton(laptop) == "laptop"

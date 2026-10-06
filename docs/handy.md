@@ -19,8 +19,11 @@ Eingerichtet wird das Meeting weiter am Laptop, der als Anzeige für alle dient.
    Abschalten mit `tailscale serve --https=443 off`.
 2. Im Dashboard auf das Handy-Symbol tippen und den QR-Code scannen. Alternativ `/handy` öffnen und den
    Kopplungscode eintippen.
-3. Am Handy „Mit diesem Handy zuhören“ tippen. Das Handy übernimmt das Mikrofon, der Laptop gibt es ab
-   (Kopfleiste „Mikro: Handy“). Zurückholen geht über das Handy-Symbol.
+3. Am Handy „Dieses Handy übernimmt Mikro und Ton“ tippen. Das geht schon vor dem Start. Ab da gilt: **Ein
+   gemeldetes Handy trägt Mikrofon und Ton.** Der Laptop nimmt beim Start nichts auf und spielt nichts ab, auch
+   wenn dort „Meeting starten“ gedrückt wird; die Kopfleiste zeigt „Mikro: Handy · Ton: Handy“. Nur ein
+   ausdrücklicher Klick am Laptop („Mikrofon zurück an den Laptop“, „Hier abspielen“) holt beides zurück. So gibt
+   es für den Anfang genau eine Konstellation, die funktionieren muss.
 
 Als App installieren: Android über „Als App installieren“, iPhone über „Teilen → Zum Home-Bildschirm“. Die
 installierte App hat am iPhone eigene Cookies, dort den Code einmal eintippen.

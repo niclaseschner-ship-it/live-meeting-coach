@@ -73,10 +73,12 @@ const HINWEIS_ICON = { ton: "ton", ausreden: "ausreden", ueberlappung: "ausreden
 const RATE = 24000;
 const stimme = {
   ctx: null, naechste: 0, quellen: [],
-  bereit() { // aus einem Klick heraus (Autoplay-Regeln); meldet diesen Tab als Lautsprecher
+  // aus einem Klick heraus (Autoplay-Regeln); meldet diesen Tab als Lautsprecher. Trägt ein Handy den Ton, gibt
+  // der Server ihn nur mit erzwingen (ausdrücklicher Klick „Hier abspielen“) an einen Laptop-Tab.
+  bereit(erzwingen = false) {
     this.ctx ??= new AudioContext({ sampleRate: RATE });
     this.ctx.resume();
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ lautsprecher: true }));
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ lautsprecher: true, erzwingen }));
     lautsprecher = true;
   },
   abspielen(b64) {

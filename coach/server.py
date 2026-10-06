@@ -105,6 +105,16 @@ async def lebenszyklus(app: FastAPI):
 
 app = FastAPI(title="Live Meeting Coach", lifespan=lebenszyklus)
 app.add_middleware(zugang.Zugangsschutz)
+
+
+@app.middleware("http")
+async def immer_nachfragen(request: Request, call_next):
+    """Seiten und Skripte: der Browser fragt jedes Mal nach (meist 304). Sonst mischt ein Handy alte und neue
+    Fassungen – Teachbuddy 14.09., und im eigenen Test 06.10. kam das alte CSS."""
+    antwort = await call_next(request)
+    if request.url.path.startswith("/static/") or request.url.path in ("/", "/handy"):
+        antwort.headers["Cache-Control"] = "no-cache"
+    return antwort
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -414,7 +424,10 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
                     coach.sprache_melden()
                 if "ping" in daten:  # Laufzeitmessung vom Handy: sofort und nur an diesen Client zurück
                     await ws.send_text(json.dumps({"typ": "pong", "t": daten["ping"]}))
-                if daten.get("lautsprecher") and lautsprecher is not ws:
+                # Ein gemeldetes Handy trägt den Ton; ein Laptop-Tab nimmt ihn nur auf ausdrücklichen Klick
+                handy_spricht = lautsprecher in verbindungen and geraet.get(lautsprecher) == "handy"
+                if (daten.get("lautsprecher") and lautsprecher is not ws
+                        and (not handy_spricht or geraet[ws] == "handy" or daten.get("erzwingen"))):
                     lautsprecher = ws
                     await senden()
                 elif daten.get("lautsprecher") is False and lautsprecher is ws:

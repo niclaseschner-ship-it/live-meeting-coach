@@ -7,7 +7,7 @@ body { background: var(--bg); padding-bottom: env(safe-area-inset-bottom); overs
 .h-titel strong { font-size: 17px; color: var(--marke-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-titel span { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-main { display: grid; gap: 12px; padding: 12px 16px 24px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px 16px 24px; }
 .h-karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: var(--radius); padding: 14px;
   box-shadow: var(--schatten); display: grid; gap: 12px; }
 #koppeln { margin: 16px; }
@@ -73,3 +73,5 @@ button.warn { background: var(--gelb); border-color: var(--gelb); color: #fff; }
 .h-blatt-innen ul { padding-left: 20px; margin: 10px 0; display: grid; gap: 6px; font-size: 16px; }
 .nk-art-text { color: var(--marke); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .h-quellen { display: grid; gap: 6px; font-size: 14px; }
+.h-mikro, button.gross { white-space: normal; text-align: left; }
+main, .h-karte { min-width: 0; }
