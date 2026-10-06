@@ -1,0 +1,75 @@
+/* Nestor am Handy – baut auf style.css auf (Farben, Knöpfe, Pill, Nestor-Welle). Eine Spalte, Daumen-Größen. */
+body { background: var(--bg); padding-bottom: env(safe-area-inset-bottom); overscroll-behavior-y: contain; }
+.h-kopf { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--flaeche); border-bottom: 1px solid var(--rand); }
+.h-logo { display: inline-flex; flex: none; }
+.h-titel { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
+.h-titel strong { font-size: 17px; color: var(--marke-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-titel span { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+main { display: grid; gap: 12px; padding: 12px 16px 24px; }
+.h-karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: var(--radius); padding: 14px;
+  box-shadow: var(--schatten); display: grid; gap: 12px; }
+#koppeln { margin: 16px; }
+.h-karte h2 { margin: 0; }
+.h-karte p { margin: 0; }
+.h-zeile { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.h-klein { flex-wrap: wrap; }
+.leise { color: var(--text-3); font-size: 14px; }
+.h-zeit { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-2); }
+
+.h-warnung { padding: 12px 14px; border-radius: 12px; background: var(--rot-weich); color: #8A0F1F; font-weight: 600; }
+.h-hinweis { display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 12px; font-size: 18px; font-weight: 600;
+  background: var(--gelb-weich); color: #7A4100; border: 2px solid var(--gelb); }
+.h-hinweis.rot { background: var(--rot-weich); color: #8A0F1F; border-color: var(--rot); }
+.h-hinweis svg { width: 28px; height: 28px; flex: none; }
+
+.h-nestor .nestor { font-size: 15px; }
+.h-knoepfe { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.h-knoepfe:has(#btn-still:not([hidden])) { grid-template-columns: 2fr 1fr; }
+button.gross { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 56px; font-size: 18px;
+  border-radius: 14px; }
+button.gross .i svg { width: 24px; height: 24px; display: block; }
+button.warn { background: var(--gelb); border-color: var(--gelb); color: #fff; }
+.h-antwort { padding: 10px 12px; border-radius: 10px; background: var(--marke-weich); color: var(--marke-2); font-size: 15px;
+  max-height: 9em; overflow: auto; }
+
+.h-quelle { font-size: 14px; color: var(--text-3); font-weight: 600; }
+.h-mikro { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 72px; font-size: 18px;
+  border-radius: 18px; border: 2px dashed var(--marke); color: var(--marke); background: var(--marke-weich); }
+.h-mikro .i svg { width: 30px; height: 30px; display: block; }
+.h-mikro.an { border-style: solid; background: var(--marke); color: #fff; }
+.h-pegel { height: 8px; border-radius: 4px; background: var(--flaeche-2); overflow: hidden; }
+.h-pegel i { display: block; height: 100%; width: 0; background: var(--gruen); transition: width .08s linear; }
+.h-schalter { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; }
+.h-schalter > span { flex: 1; display: block; }
+.h-schalter input { width: 22px; height: 22px; margin-top: 1px; flex: none; }
+.h-schalter small { display: block; color: var(--text-3); font-size: 13px; }
+.h-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--flaeche-2); color: var(--text-3); }
+.chip.gut { background: var(--gruen-weich); color: var(--gruen); }
+.chip.warn { background: var(--gelb-weich); color: var(--gelb); }
+.chip.schlecht { background: var(--rot-weich); color: var(--rot); }
+
+.h-verlauf .reiter button { flex: 1; padding: 8px 6px; }
+.h-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
+.h-liste li { padding: 9px 11px; border-radius: 10px; background: var(--flaeche-2); font-size: 15px; }
+.h-liste li.rot { background: var(--rot-weich); }
+.h-liste li.leer { background: none; color: var(--text-3); }
+.h-liste li.tippbar { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; cursor: pointer; }
+.h-liste li.tippbar small { grid-column: 2; color: var(--text-3); }
+.h-liste li.teiltext { color: var(--text-3); font-style: italic; }
+.wann { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; margin-right: 8px; }
+.h-meeting button:not(.klein) { min-height: 50px; font-size: 17px; }
+.h-code-zeile { display: flex; gap: 8px; }
+.h-code-zeile input { flex: 1; min-width: 0; font-size: 20px; letter-spacing: .1em; text-transform: uppercase; }
+.h-fehler { color: var(--rot); font-weight: 600; }
+
+/* Karte als Blatt von unten */
+.h-blatt { position: fixed; inset: 0; z-index: 30; background: rgba(11, 19, 36, .35); display: flex; align-items: flex-end; }
+.h-blatt-innen { width: 100%; max-height: 80vh; overflow: auto; background: var(--flaeche); border-radius: 18px 18px 0 0;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(11, 19, 36, .2); }
+.h-blatt-innen h3 { margin: 6px 0 4px; font-size: 19px; }
+.h-blatt-innen ul { padding-left: 20px; margin: 10px 0; display: grid; gap: 6px; font-size: 16px; }
+.nk-art-text { color: var(--marke); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+.h-quellen { display: grid; gap: 6px; font-size: 14px; }

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nestor</title>
+  <meta name="theme-color" content="#1E1B4B">
+  <link rel="manifest" href="/handy.webmanifest">
+  <link rel="icon" href="/static/icons/nestor.svg" type="image/svg+xml">
+  <!-- iOS liest das Manifest nur halb: ohne diese drei startet die App im Safari-Rahmen (Teachbuddy) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nestor">
+  <link rel="apple-touch-icon" href="/static/icons/nestor-180.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/handy.css">
+</head>
+<body>
+  <header class="h-kopf">
+    <span class="h-logo" aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="34" height="34">
+        <defs><linearGradient id="nlg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient></defs>
+        <rect width="40" height="40" rx="11" fill="url(#nlg)"/>
+        <path d="M9.5 28.5a13 13 0 0 1-1.6-13.8M30.5 28.5a13 13 0 0 0 1.6-13.8" stroke="#FBBF24" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M14 27V13l12 14V13" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <div class="h-titel"><strong id="titel">Nestor</strong><span id="untertitel-kopf">Meeting-Coach</span></div>
+    <span id="status" class="pill">Verbinde …</span>
+  </header>
+
+  <!-- Nicht gekoppelt: Code vom Laptop eingeben (auch für die installierte App, die eigene Cookies hat) -->
+  <section id="koppeln" class="h-karte" hidden>
+    <h2>Mit dem Laptop koppeln</h2>
+    <p>Am Laptop im Dashboard auf das Handy-Symbol tippen und den QR-Code scannen – oder den Code hier eingeben.</p>
+    <form id="koppeln-form" class="h-code-zeile">
+      <input id="koppeln-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-EFGH" maxlength="12">
+      <button class="primaer">Koppeln</button>
+    </form>
+    <p id="koppeln-falsch" class="h-fehler" hidden>Der Code passt nicht.</p>
+  </section>
+
+  <main id="app" hidden>
+    <div id="warnung" class="h-warnung" hidden></div>
+
+    <!-- Laufender Hinweis, groß -->
+    <div id="hinweis" class="h-hinweis" hidden><span id="hinweis-icon"></span><span id="hinweis-text"></span></div>
+
+    <!-- Nestor -->
+    <section class="h-karte h-nestor">
+      <div class="h-zeile">
+        <div id="nestor" class="nestor bereit"><span class="welle" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span id="nestor-zustand">Nestor</span></div>
+        <span id="zeit" class="h-zeit">0:00</span>
+      </div>
+      <div class="h-knoepfe">
+        <button id="btn-fragen" class="gross primaer"><span class="i"></span>Nestor fragen</button>
+        <button id="btn-still" class="gross" hidden><span class="i"></span>Stopp</button>
+        <button id="btn-fortsetzen" class="gross warn" hidden><span class="i"></span>Wieder zuhören</button>
+      </div>
+      <p id="antwort" class="h-antwort" hidden></p>
+    </section>
+
+    <!-- Mikrofon -->
+    <section class="h-karte">
+      <div class="h-zeile">
+        <h2>Mikrofon</h2>
+        <span id="quelle" class="h-quelle"></span>
+      </div>
+      <button id="btn-mikro" class="h-mikro"><span class="i"></span><span id="mikro-text">Mit diesem Handy zuhören</span></button>
+      <div class="h-pegel" aria-hidden="true"><i id="pegel"></i></div>
+      <label class="h-schalter"><input type="checkbox" id="lautsprecher" checked>
+        <span>Nestor spricht über dieses Handy <small>empfohlen – so hört er sich nicht selbst</small></span></label>
+      <div class="h-zeile h-klein">
+        <button id="btn-stumm" class="klein">Stumm schalten</button>
+        <span class="h-chips"><span id="wach" class="chip"></span><span id="laufzeit" class="chip"></span></span>
+      </div>
+    </section>
+
+    <!-- Verlauf -->
+    <section class="h-karte h-verlauf">
+      <div class="reiter">
+        <button id="r-hinweise" class="aktiv">Hinweise</button>
+        <button id="r-nestor">Nestor</button>
+        <button id="r-transkript">Transkript</button>
+      </div>
+      <ol id="l-hinweise" class="h-liste"></ol>
+      <ol id="l-nestor" class="h-liste" hidden></ol>
+      <ol id="l-transkript" class="h-liste h-transkript" hidden></ol>
+    </section>
+
+    <!-- Meeting -->
+    <section class="h-karte h-meeting">
+      <button id="btn-start" class="primaer" hidden>Meeting starten</button>
+      <button id="btn-stopp" class="gefahr" hidden>Meeting beenden</button>
+      <p id="meeting-text" class="leise"></p>
+      <button id="btn-installieren" class="klein" hidden>Als App installieren</button>
+      <p id="ios-installieren" class="leise" hidden>Als App: unten auf „Teilen“ → „Zum Home-Bildschirm“.</p>
+    </section>
+  </main>
+
+  <!-- Nestor-Karte als Blatt von unten -->
+  <div id="karte" class="h-blatt" hidden>
+    <div class="h-blatt-innen">
+      <div class="h-zeile"><span id="karte-art" class="nk-art-text"></span><button id="karte-zu" class="icon klein"></button></div>
+      <h3 id="karte-titel"></h3>
+      <p id="karte-frage" class="leise"></p>
+      <ul id="karte-punkte"></ul>
+      <div id="karte-quellen" class="h-quellen"></div>
+    </div>
+  </div>
+
+  <script src="/static/basis.js"></script>
+  <script src="/static/handy.js"></script>
+</body>
+</html>

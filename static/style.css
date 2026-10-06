@@ -401,3 +401,12 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .redeanteile .unsicher { color: var(--text-3); }
 .redeanteile .unsicher .spur span { background: var(--rand); }
 .ampel .exp { font-size: 11px; font-weight: 700; color: var(--gelb); margin-left: 4px; }
+
+/* Handy koppeln (Dashboard) */
+.mikro-quelle { cursor: pointer; font: inherit; font-size: 14px; }
+.mikro-quelle::before { background: var(--gruen); }
+.hf-qr { justify-self: center; line-height: 0; }
+.hf-qr svg { width: 220px; height: 220px; }
+.hf-code { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px; border-radius: 10px;
+  background: var(--marke-weich); color: var(--marke-2); }
+.hf-code strong { font-size: 22px; letter-spacing: .12em; font-variant-numeric: tabular-nums; }

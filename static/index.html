@@ -42,6 +42,8 @@
       <button id="btn-still" class="icon" data-tip="Nestor unterbrechen" hidden></button>
       <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
       <button id="btn-transkript" class="icon" data-tip="Verlauf: Transkript, Hinweise und Nestors Karten"></button>
+      <button id="btn-mikro-quelle" class="pill mikro-quelle" hidden></button>
+      <button id="btn-handy" class="icon" data-tip="Handy als Mikrofon und Fernbedienung koppeln"></button>
       <button id="btn-einstellungen" class="icon" data-tip="Einstellungen"></button>
       <button id="btn-start" class="primaer">Meeting starten</button>
       <button id="btn-stopp" class="gefahr" hidden>Beenden</button>
@@ -60,6 +62,18 @@
     </div>
     <p class="leise-text">Gezählt werden nur Mengen, keine Inhalte. Was wirklich abgerechnet wird, steht unter
       <a href="https://platform.openai.com/usage" target="_blank" rel="noopener">platform.openai.com/usage</a>.</p>
+  </div>
+
+  <!-- Handy koppeln (Klapp-Fenster aus der Kopfleiste) -->
+  <div id="handy-fenster" class="klappfenster" hidden>
+    <h3>Handy als Mikrofon <small>und Fernbedienung</small></h3>
+    <div id="hf-qr" class="hf-qr"></div>
+    <p id="hf-text" class="leise-text"></p>
+    <div class="hf-code"><span>Kopplungscode</span><strong id="hf-code">–</strong></div>
+    <p class="leise-text">Handy im Tailnet, QR-Code scannen, dort „Mit diesem Handy zuhören“. Das Handy übernimmt
+      dann das Mikrofon, Nestor spricht über das Handy (so hört er sich nicht selbst). Am iPhone den Stummschalter
+      aus, sonst bleibt Nestor still.</p>
+    <button id="hf-laptop" class="klein" hidden>Mikrofon zurück an den Laptop</button>
   </div>
 
   <!-- Einstellungen (Klapp-Fenster aus der Kopfleiste) -->
@@ -132,6 +146,7 @@
   </section>
 
   <div id="fehler" class="fehler" hidden></div>
+  <div id="mikro-weg" class="fehler" hidden></div>
 
   <!-- Vorbereitung -->
   <section id="einrichtung" class="einrichtung">
@@ -289,6 +304,7 @@
     <ol id="nestor-verlauf" class="karten-liste" hidden></ol>
   </aside>
 
+  <script src="/static/basis.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

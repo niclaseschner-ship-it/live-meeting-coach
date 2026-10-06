@@ -64,8 +64,8 @@ def test_schluessel_endpunkt_prueft_format_und_laeuft_nur_lokal():
 
     from coach.server import app
 
-    c = TestClient(app)  # TestClient meldet sich als „testclient“, nicht als 127.0.0.1
-    assert c.post("/api/schluessel", json={"schluessel": "sk-x"}).status_code == 403
+    c = TestClient(app)  # TestClient meldet sich als „testclient“, nicht als 127.0.0.1 – ungekoppelt gar kein Zugang
+    assert c.post("/api/schluessel", json={"schluessel": "sk-x"}).status_code == 401
     lokal = TestClient(app, client=("127.0.0.1", 5000))
     r = lokal.post("/api/schluessel", json={"schluessel": "kein schluessel"})
     assert r.status_code == 400 and "sk-" in r.json()["detail"]

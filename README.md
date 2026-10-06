@@ -53,6 +53,9 @@ Dann <http://127.0.0.1:8000> in Edge oder Chrome öffnen.
 **Demo:** [demo/](demo/README.md) – ein dreiminütiges Meeting zum Abspielen im Dashboard, mit Screenshots und
 der Meeting-Zusammenfassung als Bild.
 
+- **Handy als Mikrofon und Fernbedienung:** `tailscale serve --bg 8000` (einmalig; HTTPS im eigenen Tailnet),
+  dann im Dashboard auf das Handy-Symbol und den QR-Code scannen. Das Handy übernimmt Mikrofon und Nestors Stimme,
+  hält das Display wach und lässt sich als App installieren – [docs/handy.md](docs/handy.md).
 - **Eigener OpenAI-Schlüssel:** Jede Person trägt ihren API-Schlüssel im Dashboard unter Einstellungen ein
   (wird bei OpenAI geprüft, liegt dann nur in `~/.live-meeting-coach/openai_schluessel`, nie im Browser oder Log).
   Alternativ `OPENAI_API_KEY` in `.env`; der Eintrag im Dashboard hat Vorrang. Live-Text, Kontext, Nestor und

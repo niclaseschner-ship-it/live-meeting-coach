@@ -1,0 +1,17 @@
+{
+  "name": "Nestor · Meeting-Coach",
+  "short_name": "Nestor",
+  "description": "Mikrofon und Fernbedienung für den Meeting-Coach",
+  "start_url": "/handy",
+  "scope": "/handy",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF1F7",
+  "theme_color": "#1E1B4B",
+  "lang": "de",
+  "icons": [
+    { "src": "/static/icons/nestor-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/nestor-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/icons/nestor-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

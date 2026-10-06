@@ -6,14 +6,15 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import regeln
+from . import regeln, zugang
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -42,9 +43,25 @@ async def _an_alle(text: str) -> None:
     await asyncio.gather(*(eins(ws) for ws in list(verbindungen)))
 
 
+# Mikrofon: genau eine Quelle (Laptop oder Handy). Merkt sich, wann zuletzt Ton kam – ein gesperrtes Handy liefert
+# nichts mehr, und das ist etwas anderes als Stille im Raum (Teachbuddy, 14.09.).
+audio: dict = {"ws": None, "quelle": None, "letzt": 0.0}
+LUECKE = 3.0  # s ohne Audiopaket = Mikrofon weg (Pakete kommen alle 100 ms, auch bei Stille)
+
+
+def mikro_stand() -> dict:
+    luecke = round(time.monotonic() - audio["letzt"], 1) if audio["ws"] is not None else None
+    weg = coach.hoerstrom is not None and not coach.simulation_laeuft and (luecke is None or luecke > LUECKE)
+    return {"quelle": audio["quelle"], "luecke": luecke, "weg": weg}
+
+
+def stand() -> dict:
+    return {**coach.schnappschuss(), "mikro": mikro_stand()}
+
+
 async def senden() -> None:
     if verbindungen:
-        await _an_alle(json.dumps(coach.schnappschuss(), ensure_ascii=False))
+        await _an_alle(json.dumps(stand(), ensure_ascii=False))
 
 
 coach.beobachter.append(senden)
@@ -85,6 +102,7 @@ async def lebenszyklus(app: FastAPI):
 
 
 app = FastAPI(title="Live Meeting Coach", lifespan=lebenszyklus)
+app.add_middleware(zugang.Zugangsschutz)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -93,9 +111,46 @@ async def startseite():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/handy")
+async def handy(k: str | None = None):
+    """Handy-Fernbedienung. Mit ?k=<Code> (aus dem QR-Code) wird das Handy gekoppelt und der Code aus der Adresse
+    genommen; ein falscher Code landet auf der Seite mit Code-Eingabe."""
+    if k is not None:
+        antwort = RedirectResponse("/handy" + ("" if zugang.code_passt(k) else "?falsch=1"), status_code=303)
+        if zugang.code_passt(k):
+            antwort.set_cookie(zugang.COOKIE, zugang.normalisieren(k), max_age=400 * 24 * 3600, httponly=True,
+                               samesite="strict", secure=True)
+        return antwort
+    return FileResponse(STATIC / "handy.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/handy.webmanifest")
+async def handy_manifest():
+    return FileResponse(STATIC / "handy.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    # aus der Wurzel, damit er /handy steuern darf; nie zwischenspeichern, sonst hängt ein altes Handy fest
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/kopplung")
+async def kopplung(request: Request):
+    """QR-Code und Code zum Koppeln – nur am Laptop selbst abrufbar."""
+    if not zugang.lokal(request.scope):
+        raise HTTPException(403, "Nur am Laptop.")
+    import segno
+
+    basis = zugang.adresse()
+    url = f"{basis}/handy?k={zugang.code()}" if basis else None
+    svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2) if url else None
+    return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg}
+
+
 @app.get("/api/zustand")
 async def zustand():
-    return coach.schnappschuss()
+    return stand()
 
 
 @app.post("/api/assistent/fragen")
@@ -142,7 +197,7 @@ async def einstellungen(daten: dict):
 async def schluessel(daten: dict, request: Request):
     """Eigenen OpenAI-Schlüssel eintragen (leer = entfernen). Nur vom eigenen Rechner aus; der Schlüssel wird
     vorher mit einem kostenlosen Aufruf geprüft und nie zurückgegeben oder protokolliert."""
-    if request.client is None or request.client.host not in ("127.0.0.1", "::1", "localhost"):
+    if not zugang.lokal(request.scope):
         raise HTTPException(403, "Den Schlüssel nur am Rechner eintragen, auf dem der Coach läuft.")
     if coach.hoerstrom is not None:
         raise HTTPException(409, "Erst das Meeting beenden, dann den Schlüssel wechseln.")
@@ -209,15 +264,29 @@ async def stopp():
 
 
 @app.websocket("/ws/audio")
-async def ws_audio(ws: WebSocket):
-    """Mikrofon: PCM 16 bit, 24 kHz, mono als Binärnachrichten."""
+async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
+    """Mikrofon: PCM 16 bit, 24 kHz, mono als Binärnachrichten. Eine neue Quelle löst die alte ab (Code 4001) –
+    zwei Mikrofone zugleich ergäben einen zerhackten Strom."""
     await ws.accept()
+    alt = audio["ws"]
+    audio.update(ws=ws, quelle="handy" if quelle == "handy" else "laptop", letzt=time.monotonic())
+    if alt is not None:
+        with contextlib.suppress(Exception):
+            await alt.close(code=4001)
+    await senden()
     try:
         while True:
             daten = await ws.receive_bytes()
+            if audio["ws"] is not ws:
+                break
+            audio["letzt"] = time.monotonic()
             await coach.hoeren_zufuehren(daten)
     except WebSocketDisconnect:
         pass
+    finally:
+        if audio["ws"] is ws:
+            audio.update(ws=None, quelle=None)
+            await senden()
 
 
 DEMO = WURZEL / "demo"
@@ -321,9 +390,10 @@ async def simulation(daten: dict):
 
 @app.websocket("/ws")
 async def ws_endpunkt(ws: WebSocket):
+    global lautsprecher
     await ws.accept()
     verbindungen.add(ws)
-    await ws.send_text(json.dumps(coach.schnappschuss(), ensure_ascii=False))
+    await ws.send_text(json.dumps(stand(), ensure_ascii=False))
     try:
         while True:
             nachricht = await ws.receive_text()
@@ -331,10 +401,13 @@ async def ws_endpunkt(ws: WebSocket):
                 daten = json.loads(nachricht)
                 if daten.get("sprache"):
                     coach.sprache_melden()
+                if "ping" in daten:  # Laufzeitmessung vom Handy: sofort und nur an diesen Client zurück
+                    await ws.send_text(json.dumps({"typ": "pong", "t": daten["ping"]}))
                 if daten.get("lautsprecher"):
-                    global lautsprecher
                     lautsprecher = ws
-            except (ValueError, AttributeError):
+                elif daten.get("lautsprecher") is False and lautsprecher is ws:
+                    lautsprecher = None  # Handy gibt die Stimme ab; der nächste Klick am Laptop holt sie
+            except (ValueError, AttributeError, TypeError):
                 pass
     except WebSocketDisconnect:
         verbindungen.discard(ws)
