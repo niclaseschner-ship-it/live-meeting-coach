@@ -19,6 +19,16 @@ STIMMEN = ("cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad",
 
 log = logging.getLogger("coach")
 NUTZUNG = WURZEL / "logs" / "nutzung.jsonl"
+NESTOR_ZEITEN = WURZEL / "logs" / "nestor_zeiten.jsonl"  # ohne Inhalte: nur Auslöser und Sekunden
+
+
+def _zeit_loggen(eintrag: dict) -> None:
+    try:
+        NESTOR_ZEITEN.parent.mkdir(parents=True, exist_ok=True)
+        with NESTOR_ZEITEN.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"zeit": time.strftime("%Y-%m-%dT%H:%M:%S"), **eintrag}) + "\n")
+    except OSError:
+        pass
 KOSTEN = kosten.Zaehler(NUTZUNG)
 
 
@@ -333,6 +343,11 @@ class Coach:
             await b()
 
     async def direkt_senden(self, nachricht: dict) -> None:
+        mess = self.assistent.messung
+        if mess and nachricht.get("typ") == "stimme":  # erster Ton nach Knopf oder Ansprache
+            self.assistent.messung = None
+            _zeit_loggen({"ausloeser": mess["ausloeser"], "modus": mess["modus"], "verzug_text": mess["verzug_text"],
+                          "bis_ton": round(time.monotonic() - mess["t0"], 2)})
         for b in list(self.direkt):
             await b(nachricht)
 
@@ -657,18 +672,23 @@ class Coach:
                 s.sprecher = name
         self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name", "person": sprecher, "name": name})
 
-    async def satz(self, seg: Segment) -> None:
-        """Strom 1: fertiger Satz mit Sprecher. Sammelt Text für die Themen-Zuordnung (Strom 4)."""
+    async def satz(self, seg: Segment, zeilen: list[Segment] | None = None) -> None:
+        """Strom 1: fertiger Satz mit Sprecher. Sammelt Text für die Themen-Zuordnung (Strom 4).
+
+        `zeilen`: dieselbe Äußerung nach Sprechern geteilt (Wechsel mitten in der Äußerung) – so landet sie im
+        Transkript; Ansagen und Nestor sehen weiter den ganzen Text, damit „Nestor, …“ nicht zerrissen wird.
+        """
         m = self.meeting
         if self.assistent.eigene_sprache(seg.start, seg.ende):
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
-        if self.assistent.vorstellung_bis is not None:
-            self.name_lernen(seg.sprecher, seg.text)
-        seg.sprecher = self.namen.get(seg.sprecher, seg.sprecher)
-        m.transkript.append(seg)
+        for z in zeilen or [seg]:
+            if self.assistent.vorstellung_bis is not None:
+                self.name_lernen(z.sprecher, z.text)
+            z.sprecher = self.namen.get(z.sprecher, z.sprecher)
+            m.transkript.append(z)
+            self._abschnitt.append(z)
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
-        self._abschnitt.append(seg)
         ziel = analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt) if m.laeuft else None
         if ziel is not None:
             # Ausdrückliche Ansage mit Ziel: sofort wechseln, ohne auf die Themen-Zuordnung zu warten
@@ -677,7 +697,7 @@ class Coach:
             self.punkt_wechseln(ziel)
             m.vorschlag = None
             # Was davor gesagt wurde, gehört zum alten Punkt – nicht gegen den neuen prüfen (sonst „zurück zu …“)
-            self._abschnitt = [seg]
+            self._abschnitt = list(zeilen or [seg])
         elif analyse.ankuendigung(seg.text) or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_sekunden:
             hintergrund(self._abschnitt_auswerten())
         await self.melden()

@@ -165,6 +165,7 @@ class Assistent:
         self.letzte: dict | None = None  # {frage, antwort, zeit}
         self.verlauf: list[tuple[str, str]] = []  # (Frage, Antwort) für Rückfragen
         self.sprechzeiten: list[tuple[float, float]] = []  # Meetingzeit, in der der Coach spricht
+        self.messung: dict | None = None  # laufende Zeitmessung Auslöser -> erster Ton
         self._angesprochen_bis = -1e9
         self._nachfrage_bis = -1e9
         self._einwand_bis: float | None = None
@@ -229,8 +230,15 @@ class Assistent:
         if self.aktiv and self.zustand in ("bereit", "spricht") and angesprochen(text):
             self.zustand = "angesprochen"  # sofortige Rückmeldung im Dashboard, bevor der Satz fertig ist
 
+    def messen(self, ausloeser: str, verzug_text: float = 0.0) -> None:
+        """Zeitmessung bis zum ersten Ton (logs/nestor_zeiten.jsonl, Raumtest 06.10.: „Nestor stark verzögert“).
+        verzug_text: wie lange der Satz nach seinem Ende brauchte, bis er als Text ankam."""
+        self.messung = {"ausloeser": ausloeser, "modus": EINST.assistent_modus, "t0": time.monotonic(),
+                        "verzug_text": round(max(0.0, verzug_text), 2)}
+
     def knopf(self) -> None:
         """Knopf „fragen“: wie Ansprechen mit Namen – die nächste Äußerung gilt als Frage."""
+        self.messen("knopf")
         if EINST.assistent_modus == "gespraech":
             if not (self.gespraech and self.gespraech.offen):
                 self._starten(self._gespraech_starten(None))
@@ -251,11 +259,15 @@ class Assistent:
             await self.gespraech.satz(text, ende)  # das Modell hört mit; antworten nur, wenn gemeint
             return
         direkt = angesprochen(text)
+        if direkt:
+            self.messen("ansprache", jetzt - ende)
         if direkt and EINST.assistent_modus == "gespraech":
             frage = frage_aus(text)
             self._starten(self._gespraech_starten(frage if len(frage.split()) >= 3 else None))
             return
         knopf = jetzt <= self._angesprochen_bis
+        if knopf and not direkt:
+            self.messen("frage_nach_knopf", jetzt - ende)
         nachfrage = jetzt <= self._nachfrage_bis and text.rstrip().endswith("?")
         if not (direkt or knopf or nachfrage):
             if self.zustand == "angesprochen" and jetzt > self._angesprochen_bis:

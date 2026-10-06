@@ -10,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -56,7 +56,8 @@ def mikro_stand() -> dict:
 
 
 def stand() -> dict:
-    return {**coach.schnappschuss(), "mikro": mikro_stand()}
+    ton = geraet.get(lautsprecher) if lautsprecher in verbindungen else None
+    return {**coach.schnappschuss(), "mikro": mikro_stand(), "lautsprecher": ton}
 
 
 async def senden() -> None:
@@ -68,6 +69,7 @@ coach.beobachter.append(senden)
 
 
 lautsprecher: WebSocket | None = None  # der Tab, der das Meeting gestartet hat – nur er spielt Nestor ab
+geraet: dict[WebSocket, str] = {}       # Verbindung -> "laptop" | "handy", damit alle Seiten sehen, wo Nestor spricht
 
 
 async def senden_direkt(nachricht: dict) -> None:
@@ -145,7 +147,10 @@ async def kopplung(request: Request):
     basis = zugang.adresse()
     url = f"{basis}/handy?k={zugang.code()}" if basis else None
     svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2) if url else None
-    return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg}
+    # Tailscale erlaubt HTTPS nur auf 443, 8443 und 10000 – also höchstens drei Coaches auf einem Laptop
+    https = {8000: 443, 8001: 8443}.get(EINST.port, 10000)
+    befehl = f"tailscale serve --bg {EINST.port}" if https == 443 else f"tailscale serve --bg --https={https} {EINST.port}"
+    return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg, "befehl": befehl}
 
 
 @app.get("/api/zustand")
@@ -228,6 +233,8 @@ async def regelkatalog():
 
 @app.post("/api/einrichten")
 async def einrichten(daten: dict):
+    if coach.hoerstrom is not None:
+        raise HTTPException(409, "Während des Meetings nicht umstellbar.")
     coach.einrichten(daten)
     await senden()
     return {"ok": True}
@@ -250,7 +257,10 @@ async def referenz(name: str = Form(...), datei: UploadFile = File(...)):
 
 @app.post("/api/start")
 async def start():
-    """Version 2: Hörstrom öffnen; das Audio kommt anschließend über /ws/audio."""
+    """Version 2: Hörstrom öffnen; das Audio kommt anschließend über /ws/audio. Ein Meeting zur Zeit – ein zweiter
+    Start (zweiter Tab, Handy) würde den laufenden Hörstrom samt Live-Text-Verbindung verwaisen lassen."""
+    if coach.hoerstrom is not None:
+        raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
     await coach.hoeren_starten()
     return {"ok": True}
 
@@ -389,10 +399,11 @@ async def simulation(daten: dict):
 
 
 @app.websocket("/ws")
-async def ws_endpunkt(ws: WebSocket):
+async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="geraet")):
     global lautsprecher
     await ws.accept()
     verbindungen.add(ws)
+    geraet[ws] = "handy" if geraet_art == "handy" else "laptop"
     await ws.send_text(json.dumps(stand(), ensure_ascii=False))
     try:
         while True:
@@ -403,11 +414,17 @@ async def ws_endpunkt(ws: WebSocket):
                     coach.sprache_melden()
                 if "ping" in daten:  # Laufzeitmessung vom Handy: sofort und nur an diesen Client zurück
                     await ws.send_text(json.dumps({"typ": "pong", "t": daten["ping"]}))
-                if daten.get("lautsprecher"):
+                if daten.get("lautsprecher") and lautsprecher is not ws:
                     lautsprecher = ws
+                    await senden()
                 elif daten.get("lautsprecher") is False and lautsprecher is ws:
                     lautsprecher = None  # Handy gibt die Stimme ab; der nächste Klick am Laptop holt sie
+                    await senden()
             except (ValueError, AttributeError, TypeError):
                 pass
     except WebSocketDisconnect:
         verbindungen.discard(ws)
+    finally:
+        geraet.pop(ws, None)
+        if lautsprecher is ws:
+            await senden()  # alle Seiten zeigen: Nestor hat gerade keinen Lautsprecher

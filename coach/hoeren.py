@@ -73,6 +73,65 @@ def person_name(index: int | None) -> str:
     return f"Person {index + 1}" if index is not None else UNSICHER
 
 
+MIN_TEIL = 1.0      # s – kürzere Sprecherabschnitte bekommen keine eigene Transkriptzeile
+SATZENDE = ".?!…:"
+
+
+def text_aufteilen(text: str, abschnitte: list[tuple[float, float, int | None]]) -> list[tuple[int | None, str, float, float]]:
+    """Äußerung mit Sprecherwechsel in Zeilen je Person teilen (Raumtest 06.10.: Hörbuch, Stimmen gehen nahtlos
+    ineinander über – eine Zeile pro Äußerung zeigte nur die überwiegende Person und nie „Person ?“).
+
+    Der Live-Text liefert keine Wortzeiten; der Text wird deshalb nach Sprechzeit geteilt und die Grenze auf das
+    nächste Satzende gelegt (Wechsel fallen meist dorthin), sonst auf die nächste Wortgrenze.
+    Gibt (person, text, von, bis) relativ zur Äußerung zurück; ein Element, wenn es nichts zu teilen gibt.
+    """
+    teile: list[list] = []
+    for a, b, p in abschnitte:  # gleiche Person zusammenfassen
+        if teile and teile[-1][2] == p:
+            teile[-1][1] = b
+        else:
+            teile.append([a, b, p])
+    while len(teile) > 1:  # Splitter dem längeren Nachbarn zuschlagen
+        i = min(range(len(teile)), key=lambda k: teile[k][1] - teile[k][0])
+        if teile[i][1] - teile[i][0] >= MIN_TEIL:
+            break
+        j = i - 1 if i == len(teile) - 1 or (i > 0 and teile[i - 1][1] - teile[i - 1][0] >= teile[i + 1][1] - teile[i + 1][0]) else i + 1
+        a, b = min(teile[i][0], teile[j][0]), max(teile[i][1], teile[j][1])
+        teile[j][0], teile[j][1] = a, b
+        del teile[i]
+        k = 0
+        while k < len(teile) - 1:  # nach dem Zuschlagen erneut gleiche Nachbarn verbinden
+            if teile[k][2] == teile[k + 1][2]:
+                teile[k][1] = teile[k + 1][1]
+                del teile[k + 1]
+            else:
+                k += 1
+    woerter = text.split()
+    if len(teile) < 2 or len(woerter) < 2 * len(teile):
+        p = teile[0][2] if teile else None
+        return [(p, text, abschnitte[0][0] if abschnitte else 0.0, abschnitte[-1][1] if abschnitte else 0.0)]
+    t0, t1 = teile[0][0], teile[-1][1]
+    # Wortgrenzen: Index des ersten Worts der neuen Zeile; Zeichenposition für den Zeitanteil
+    pos, n = [], 0
+    for w in woerter:
+        pos.append(n)
+        n += len(w) + 1
+    schnitte, letzter = [], 0
+    for k in range(1, len(teile)):
+        ziel = n * (teile[k][0] - t0) / max(1e-6, t1 - t0)
+        rest = len(teile) - k  # so viele Zeilen brauchen danach noch mindestens ein Wort
+        kandidaten = [i for i in range(letzter + 1, len(woerter) - rest + 1)]
+        if not kandidaten:
+            break
+        satz = [i for i in kandidaten if woerter[i - 1][-1] in SATZENDE and abs(pos[i] - ziel) <= 0.2 * n]
+        i = min(satz or kandidaten, key=lambda i: abs(pos[i] - ziel))
+        schnitte.append(i)
+        letzter = i
+    grenzen = [0, *schnitte, len(woerter)]
+    return [(teile[k][2], " ".join(woerter[grenzen[k]:grenzen[k + 1]]), teile[k][0], teile[k][1])
+            for k in range(len(grenzen) - 1)]
+
+
 class Hoerstrom:
     def __init__(self, coach, mit_text: bool) -> None:
         self.coach = coach
@@ -168,6 +227,7 @@ class Hoerstrom:
             return
         # Transkriptzeile: überwiegende Person; Sprecherspur: Abschnitte je Person (Wechsel innerhalb der Äußerung)
         o["person"] = person_name(erg["person"])
+        o["abschnitte"] = erg["abschnitte"]
         o["person_fertig"] = True
         mischung = [o["start"] + x for x in erg["mischung"]]
         abschnitte = [Segment(person_name(p), "", o["start"] + a, o["start"] + b) for a, b, p in erg["abschnitte"]]
@@ -251,4 +311,8 @@ class Hoerstrom:
             return
         del self._offen[uid]
         if o["text"]:
-            await self.coach.satz(Segment(o["person"], o["text"], o["start"], o["ende"]))
+            ganz = Segment(o["person"], o["text"], o["start"], o["ende"])
+            teile = text_aufteilen(o["text"], o.get("abschnitte") or [])
+            zeilen = ([Segment(person_name(p), tx, o["start"] + a, o["start"] + b) for p, tx, a, b in teile]
+                      if len(teile) > 1 else None)
+            await self.coach.satz(ganz, zeilen)

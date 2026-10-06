@@ -31,7 +31,7 @@ $("koppeln-form").onsubmit = (e) => {
 
 // ---------- Verbindung ----------
 function verbinden() {
-  ws = new WebSocket(`${wsBasis()}/ws`);
+  ws = new WebSocket(`${wsBasis()}/ws?geraet=handy`);
   ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); ping(); };
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
@@ -108,6 +108,7 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 $("btn-fragen").onclick = () => { if ($("lautsprecher").checked && mikro.laeuft()) stimme.bereit(); api("/api/assistent/fragen"); };
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
+$("btn-ton-hier").onclick = () => { $("lautsprecher").checked = true; stimme.bereit(); };
 $("btn-stumm").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
 $("btn-start").onclick = async () => {
   if ($("lautsprecher").checked) stimme.bereit();
@@ -173,6 +174,7 @@ function rendern() {
     : m.weg ? (m.quelle ? `Seit ${Math.round(m.luecke)} s kein Ton vom ${m.quelle === "handy" ? "Handy" : "Laptop"}.` : "Kein Mikrofon verbunden – Nestor hört nichts.")
     : z.fehler ?? null;
   $("warnung").hidden = !warnung; $("warnung").textContent = warnung ?? "";
+  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
 
   // Hinweis
   const h = z.hinweise.at(-1);

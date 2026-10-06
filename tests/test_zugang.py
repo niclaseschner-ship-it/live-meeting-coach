@@ -64,3 +64,22 @@ def test_ein_mikrofon_zur_zeit_und_laufzeitmessung():
         ws.receive_text()                                               # Anfangszustand
         ws.send_text('{"ping": 12.5}')
         assert '"pong"' in ws.receive_text()
+
+
+def test_zweiter_start_und_umrichten_waehrend_des_meetings_abgewiesen(monkeypatch):
+    from coach import server
+
+    monkeypatch.setattr(server.coach, "hoerstrom", object())
+    lokal = TestClient(app, client=("127.0.0.1", 5000))
+    assert lokal.post("/api/start").status_code == 409
+    assert lokal.post("/api/einrichten", json={"titel": "x"}).status_code == 409
+    monkeypatch.setattr(server.coach, "hoerstrom", None)
+    assert lokal.get("/api/zustand").json()["lautsprecher"] is None
+
+
+def test_adresse_passt_zum_eigenen_port():
+    status = {"Web": {"laptop.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8000"}}},
+                      "laptop.ts.net:8443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8001"}}}}}
+    assert zugang._serve_adresse(status, 8000) == "https://laptop.ts.net"
+    assert zugang._serve_adresse(status, 8001) == "https://laptop.ts.net:8443"
+    assert zugang._serve_adresse(status, 8002) is None

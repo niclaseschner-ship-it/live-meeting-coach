@@ -25,6 +25,26 @@ Eingerichtet wird das Meeting weiter am Laptop, der als Anzeige für alle dient.
 Als App installieren: Android über „Als App installieren“, iPhone über „Teilen → Zum Home-Bildschirm“. Die
 installierte App hat am iPhone eigene Cookies, dort den Code einmal eintippen.
 
+## Mehrere Seiten, ein Stand
+
+Das Meeting lebt im Coach-Prozess, nicht in der Seite. Jeder Tab und jedes Handy zeigt denselben Stand; was
+eine Seite tut, sehen alle sofort. Seit dem Raumtest vom 06.10. gilt zusätzlich:
+
+- **Ein Meeting zur Zeit.** Ein zweites „Meeting starten“ (anderer Tab, Handy) wird abgewiesen. Vorher hätte es
+  den laufenden Hörstrom samt Live-Text-Verbindung verwaist. Umrichten geht während des Meetings nicht.
+- **Das Einrichtungsformular übernimmt den Serverstand.** Ein neu geöffneter Tab zeigt die Agenda, die schon
+  eingerichtet ist, statt der Vorgaben. Das gilt nicht, während dort jemand tippt.
+- **Sichtbar, wo Nestor spricht.** Die Kopfleiste zeigt „Mikro: Handy · Ton: Handy“. Ist der Tab, über den Nestor
+  sprach, zu, gibt es eine rote Meldung mit „Hier abspielen“, am Laptop wie am Handy.
+
+## Zweites Meeting
+
+- **Anderer Laptop:** eigener Coach, eigenes Meeting, nichts weiter zu tun. Jeder Laptop hat seinen eigenen
+  Tailnet-Namen und QR-Code.
+- **Gleicher Laptop:** zweiter Coach auf einem anderen Port, `LMC_PORT=8001`, und dazu
+  `tailscale serve --bg --https=8443 8001` (das Kopplungsfenster nennt den Befehl). Der QR-Code zeigt dann
+  auf `https://<laptop>.ts.net:8443/handy`. Tailscale erlaubt HTTPS nur auf 443, 8443 und 10000, also höchstens drei Meetings je Laptop. Schlüssel, Kopplungscode und Kostenprotokoll teilen sich alle.
+
 ## Latenz (geschätzt und gemessen)
 
 | Strecke | Laptop-Mikrofon | Handy über WLAN/Tailnet |

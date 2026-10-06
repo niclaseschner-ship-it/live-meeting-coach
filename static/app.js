@@ -24,6 +24,19 @@ function regelwahl(standard) {
     el("span", {}, r.titel.split(" – ")[0]),
     el("span", { class: "r-stufe" }, r.umgesetzt ? r.stufe_text : "folgt"))));
 }
+// Eine Seite, ein Stand: Das Formular übernimmt, was auf dem Server eingerichtet ist (anderer Tab, anderes Gerät),
+// solange hier niemand gerade tippt.
+let formStand = null;
+function formAusServer(z) {
+  if (!z.agenda?.length) return;
+  const stand = JSON.stringify([z.titel, z.ziel, z.agenda.map((p) => [p.titel, p.ziel, p.minuten]), z.teilnehmende, z.regel_ids]);
+  if (stand === formStand || $("einrichtung").contains(document.activeElement)) return;
+  formStand = stand;
+  $("f-titel").value = z.titel ?? ""; $("f-ziel").value = z.ziel ?? "";
+  $("f-agenda").replaceChildren(); z.agenda.forEach((p) => punktZeile(p));
+  $("f-teilnehmende").replaceChildren(); (z.teilnehmende.length ? z.teilnehmende : ["", ""]).forEach((n) => personZeile(n));
+  if (regelkatalog.length && z.regel_ids) regelwahl(z.regel_ids);
+}
 function formularDaten() {
   return {
     titel: $("f-titel").value,
@@ -83,14 +96,15 @@ async function handyFensterZeigen() {
   $("handy-fenster").hidden = !$("handy-fenster").hidden; $("einstellungen").hidden = $("kosten").hidden = true;
   if ($("handy-fenster").hidden || kopplungGeladen) return;
   const k = await fetch("/api/kopplung").then((r) => r.json());
-  kopplungGeladen = true;
+  kopplungGeladen = !!k.adresse; // ohne Freigabe beim nächsten Öffnen erneut nachsehen
   $("hf-code").textContent = k.code.replace(/(.{4})/, "$1-");
   $("hf-qr").innerHTML = k.qr ?? "";
   $("hf-text").replaceChildren(...(k.adresse ? ["Adresse: ", el("strong", {}, k.adresse)]
-    : ["Kein Tailscale gefunden. HTTPS ist Pflicht fürs Handy-Mikrofon: ", el("code", {}, "tailscale serve --bg 8000"),
+    : ["Kein Tailscale gefunden. HTTPS ist Pflicht fürs Handy-Mikrofon: ", el("code", {}, k.befehl),
       " einrichten oder LMC_HANDY_URL setzen."]));
 }
 $("btn-handy").onclick = handyFensterZeigen;
+$("btn-ton-hier").onclick = () => stimme.bereit();
 $("btn-mikro-quelle").onclick = handyFensterZeigen;
 $("hf-laptop").onclick = async () => {
   stimme.bereit();
@@ -306,6 +320,9 @@ function rendern() {
   $("btn-mikro-quelle").textContent = m.quelle === "handy" ? "Mikro: Handy" : "Mikro: Laptop";
   $("btn-mikro-quelle").dataset.tip = m.quelle === "handy" ? "Das Handy hört zu – klicken zum Zurückholen" : "Der Laptop hört zu – klicken, um ein Handy zu koppeln";
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
+  $("btn-mikro-quelle").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
+  // Nestor ohne Lautsprecher (Tab zu, Handy neu geladen): sichtbar machen und hier übernehmen lassen
+  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
   $("mikro-weg").hidden = !m.weg;
   $("mikro-weg").textContent = !m.weg ? "" : m.quelle === null
     ? "Kein Mikrofon verbunden – Nestor hört nichts. Am Handy „Mit diesem Handy zuhören“ tippen oder hier zurückholen (Handy-Symbol)."
@@ -471,7 +488,7 @@ function verbinden() {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return stimme.abspielen(d.pcm);
     if (d.typ === "stimme_stopp") return stimme.stopp();
-    zustand = d; rendern(); einstellungenRendern(d.einstellungen);
+    zustand = d; formAusServer(d); rendern(); einstellungenRendern(d.einstellungen);
   };
   ws.onclose = () => setTimeout(verbinden, 1000);
 }

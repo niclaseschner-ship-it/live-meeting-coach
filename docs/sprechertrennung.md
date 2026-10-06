@@ -82,3 +82,22 @@ Vorstellungsrunde für die Genauigkeit nur wenige Punkte, dafür richtige Person
 
 - Raumtest mit Freisprecheinrichtung statt Laptop-Mikrofon – der billigste Hebel, nicht simulierbar.
 - Kurze Wechsel (< 3 s) bleiben schwach; „Ausreden lassen“ ist deshalb als experimentell markiert.
+
+## Transkriptzeilen je Sprecher (06.10., nach dem Raumtest)
+
+Im Raumtest mit Hörbuch gingen die Stimmen nahtlos ineinander über. Eine Äußerung, wie die Pausenerkennung sie
+schneidet, enthielt dann mehrere Sprecher. Das Transkript zeigte trotzdem nur die überwiegende Person und nie
+„Person ?“, obwohl die Sprecherspur „Person ?“ schon kannte (10 s im Raumtest). Jetzt wird die Zeile an den
+Sprecherwechseln geteilt (`text_aufteilen` in `coach/hoeren.py`):
+
+- Abschnitte unter 1 s bekommen keine eigene Zeile.
+- Weil der Live-Text keine Wortzeiten liefert, wird der Text nach Sprechzeit aufgeteilt. Die Grenze liegt auf dem
+  nächsten Satzende, wenn eines in der Nähe ist, sonst auf der nächsten Wortgrenze.
+- Nestor und die Agenda-Ansagen sehen weiter den ganzen Satz.
+
+Synthetische Meetings, richtig zugeordnete Sprechzeit im Transkript: Team-Weekly 83 → 84 % (falsch 2 → 1 %),
+Vereinsrunde 72 → 72 % (falsch 14 → 13 %). Die Zeilen mit „Person ?“ sind jetzt sichtbar: 8 von 175 und 10 von 206.
+
+Der größere Fehler in der Vereinsrunde ist ein anderer: Zwei synthetische Stimmen landen als eine Person (4 statt 5
+erkannt). Das kann Teilen nicht lösen. Ein Hörbuch mit einer Sprecherin, die Figuren nur verstellt, ist für die
+Stimmerkennung grundsätzlich eine einzige Person.

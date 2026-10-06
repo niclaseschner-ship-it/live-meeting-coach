@@ -12,7 +12,6 @@ import json
 import os
 import secrets
 import subprocess
-from functools import lru_cache
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -75,17 +74,35 @@ def gekoppelt(scope: dict) -> bool:
     return code_passt(_cookie(scope))
 
 
-@lru_cache(maxsize=1)
+def _serve_adresse(status: dict, port: int) -> str | None:
+    """Aus `tailscale serve status --json` die HTTPS-Adresse, die auf diesen Port weiterleitet (zweites Meeting auf
+    8001 → z. B. https://laptop.ts.net:8443)."""
+    for host, web in (status.get("Web") or {}).items():
+        for h in (web.get("Handlers") or {}).values():
+            if str(h.get("Proxy", "")).rstrip("/").endswith(f":{port}"):
+                name, _, hport = host.rpartition(":")
+                return f"https://{name}" + ("" if hport == "443" else f":{hport}")
+    return None
+
+
+_adresse: str | None = None
+
+
 def adresse() -> str | None:
-    """HTTPS-Adresse im Tailnet (LMC_HANDY_URL oder der MagicDNS-Name dieses Rechners)."""
+    """HTTPS-Adresse im Tailnet: LMC_HANDY_URL, sonst die `tailscale serve`-Freigabe für den eigenen Port."""
+    global _adresse
     if os.getenv("LMC_HANDY_URL"):
         return os.getenv("LMC_HANDY_URL").rstrip("/")
+    from .config import EINST
+
+    if _adresse:  # gefunden bleibt gefunden; nicht gefunden wird beim nächsten Öffnen neu gesucht
+        return _adresse
     try:
-        aus = subprocess.run(["tailscale", "status", "--json"], capture_output=True, timeout=5, check=True).stdout
-        name = (json.loads(aus).get("Self") or {}).get("DNSName", "").rstrip(".")
-        return f"https://{name}" if name else None
+        aus = subprocess.run(["tailscale", "serve", "status", "--json"], capture_output=True, timeout=5, check=True).stdout
+        _adresse = _serve_adresse(json.loads(aus or b"{}"), EINST.port)
     except (OSError, subprocess.SubprocessError, ValueError):
-        return None
+        pass
+    return _adresse
 
 
 class Zugangsschutz:
