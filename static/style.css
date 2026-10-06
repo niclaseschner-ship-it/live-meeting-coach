@@ -416,3 +416,6 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .pill.aufnahme::before { background: var(--rot); }
 .pill.ablage { cursor: pointer; font: inherit; font-size: 14px; }
 .pill.ablage::before { background: var(--gruen); }
+.pegel-mini { display: inline-block; width: 46px; height: 8px; border-radius: 4px; background: rgba(11, 19, 36, .08);
+  overflow: hidden; margin-left: 4px; }
+.pegel-mini i { display: block; height: 100%; width: 0; background: var(--gruen); border-radius: 4px; }

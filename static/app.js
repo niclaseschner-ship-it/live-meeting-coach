@@ -326,11 +326,11 @@ function rendern() {
   const m = z.mikro ?? {};
   // Handy verbunden (gekoppelt, Seite offen) – auch bevor es Mikro und Ton übernimmt
   $("btn-mikro-quelle").hidden = z.simulation || (!m.quelle && !z.handys) || (!z.hoeren && m.quelle !== "handy" && !z.handys);
-  $("btn-mikro-quelle").textContent = m.quelle === "handy" ? "Mikro: Handy"
+  $("mq-text").textContent = m.quelle === "handy" ? "Mikro: Handy"
     : m.quelle === "laptop" && z.hoeren ? "Mikro: Laptop" : `Handy verbunden${z.handys > 1 ? ` (${z.handys})` : ""}`;
   $("btn-mikro-quelle").dataset.tip = m.quelle === "handy" ? "Das Handy hört zu – klicken zum Zurückholen" : "Der Laptop hört zu – klicken, um ein Handy zu koppeln";
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
-  $("btn-mikro-quelle").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
+  $("mq-text").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
   // Nestor ohne Lautsprecher (Tab zu, Handy neu geladen): sichtbar machen und hier übernehmen lassen
   $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
   $("mikro-weg").hidden = !m.weg;
@@ -492,6 +492,19 @@ function einstellungenRendern(e) {
   $("e-live-hinweis").hidden = e.live_art !== "sparsam";
 }
 
+// Pegel des ankommenden Tons (vom Handy oder Laptop-Mikro), vom Server ~5× pro Sekunde; fällt sanft ab
+let pegelWert = 0, pegelZeit = 0;
+function pegelAnzeigen(w) {
+  pegelWert = Math.max(w, pegelWert); pegelZeit = performance.now();
+  $("mq-pegel").style.width = `${Math.round(pegelWert * 100)}%`; // direkt – Animation pausiert in verdeckten Fenstern
+}
+(function pegelZeichnen() {
+  if (performance.now() - pegelZeit > 600) pegelWert = 0;  // kein Ton mehr angekommen: Balken leer
+  $("mq-pegel").style.width = `${Math.round(pegelWert * 100)}%`;
+  pegelWert *= 0.96;  // zwischen zwei Meldungen (200 ms) sanft abklingen
+  requestAnimationFrame(pegelZeichnen);
+})();
+
 function verbinden() {
   ws = new WebSocket(`${wsBasis()}/ws`);
   ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); };
@@ -499,6 +512,7 @@ function verbinden() {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return stimme.abspielen(d.pcm);
     if (d.typ === "stimme_stopp") return stimme.stopp();
+    if (d.typ === "pegel") { pegelAnzeigen(d.wert); return; }
     zustand = d; formAusServer(d); rendern(); einstellungenRendern(d.einstellungen);
   };
   ws.onclose = () => setTimeout(verbinden, 1000);

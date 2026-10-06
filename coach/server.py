@@ -56,6 +56,33 @@ audio: dict = {"ws": None, "quelle": None, "letzt": 0.0}
 LUECKE = 3.0  # s ohne Audiopaket = Mikrofon weg (Pakete kommen alle 100 ms, auch bei Stille)
 
 
+PEGEL_TAKT = 0.2  # s – so oft geht der Pegel an die Laptop-Seiten
+
+
+def pegel(pcm: bytes) -> float:
+    """Lautstärke eines Pakets als 0..1 (−60 dBFS … 0 dBFS, Effektivwert) für die Anzeige."""
+    import numpy as np
+
+    a = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype="<i2").astype(np.float32) / 32768
+    if not len(a):
+        return 0.0
+    db = 20 * np.log10(max(float(np.sqrt(np.mean(a * a))), 1e-6))
+    return round(min(1.0, max(0.0, (db + 60) / 60)), 2)
+
+
+def pegel_senden(wert: float, quelle: str) -> None:
+    """Ohne zu warten an die Laptop-Seiten – der Audiostrom darf nie auf eine langsame Seite warten."""
+    text = json.dumps({"typ": "pegel", "wert": wert, "quelle": quelle})
+    for w, g in list(geraet.items()):
+        if g == "laptop" and w in verbindungen:
+            asyncio.ensure_future(_leise_senden(w, text))
+
+
+async def _leise_senden(ws: WebSocket, text: str) -> None:
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(ws.send_text(text), 1.0)
+
+
 def mikro_stand() -> dict:
     luecke = round(time.monotonic() - audio["letzt"], 1) if audio["ws"] is not None else None
     weg = coach.hoerstrom is not None and not coach.simulation_laeuft and (luecke is None or luecke > LUECKE)
@@ -329,12 +356,17 @@ async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
         with contextlib.suppress(Exception):
             await alt.close(code=4001)
     await senden()
+    zuletzt_pegel, spitze = 0.0, 0.0
     try:
         while True:
             daten = await ws.receive_bytes()
             if audio["ws"] is not ws:
                 break
             audio["letzt"] = time.monotonic()
+            spitze = max(spitze, pegel(daten))  # lauteste Stelle seit der letzten Anzeige
+            if audio["letzt"] - zuletzt_pegel >= PEGEL_TAKT:
+                pegel_senden(spitze, audio["quelle"])
+                zuletzt_pegel, spitze = audio["letzt"], 0.0
             await coach.hoeren_zufuehren(daten)
     except WebSocketDisconnect:
         pass
