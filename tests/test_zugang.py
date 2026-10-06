@@ -90,20 +90,21 @@ def test_gemeldetes_handy_behaelt_den_ton():
 
     lokal = TestClient(app, client=("127.0.0.1", 5000))
 
-    def ton(ws):  # nächster Zustand mit Lautsprecher-Angabe
-        while True:
+    def ton(ws, erwartet):  # warten, bis ein Zustand diesen Lautsprecher meldet (andere Meldungen überspringen)
+        for _ in range(20):
             d = json.loads(ws.receive_text())
-            if "lautsprecher" in d:
-                return d["lautsprecher"]
+            if d.get("lautsprecher", "-") == erwartet:
+                return erwartet
+        return None
 
     with lokal.websocket_connect("/ws?geraet=handy") as handy, lokal.websocket_connect("/ws") as laptop:
-        ton(handy), ton(laptop)                                         # Anfangszustände
+        assert lokal.get("/api/zustand").json()["handys"] == 1                # Handy verbunden, auch ohne Mikro
         handy.send_text('{"lautsprecher": true}')
-        assert ton(handy) == "handy"
+        assert ton(handy, "handy") == "handy"
         laptop.send_text('{"lautsprecher": true}')                     # Laptop-Start: Handy bleibt
         laptop.send_text('{"ping": 1}')
         while json.loads(laptop.receive_text()).get("typ") != "pong":
             pass
         assert lokal.get("/api/zustand").json()["lautsprecher"] == "handy"
         laptop.send_text('{"lautsprecher": true, "erzwingen": true}')  # ausdrücklich „Hier abspielen“
-        assert ton(laptop) == "laptop"
+        assert ton(laptop, "laptop") == "laptop"

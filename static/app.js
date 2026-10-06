@@ -324,8 +324,10 @@ function rendern() {
   $("fehler").hidden = !z.fehler; $("fehler").textContent = z.fehler ?? "";
   // Mikrofon: welche Quelle hört gerade, und kommt überhaupt Ton an?
   const m = z.mikro ?? {};
-  $("btn-mikro-quelle").hidden = z.simulation || !m.quelle || (!z.hoeren && m.quelle !== "handy");
-  $("btn-mikro-quelle").textContent = m.quelle === "handy" ? "Mikro: Handy" : "Mikro: Laptop";
+  // Handy verbunden (gekoppelt, Seite offen) – auch bevor es Mikro und Ton übernimmt
+  $("btn-mikro-quelle").hidden = z.simulation || (!m.quelle && !z.handys) || (!z.hoeren && m.quelle !== "handy" && !z.handys);
+  $("btn-mikro-quelle").textContent = m.quelle === "handy" ? "Mikro: Handy"
+    : m.quelle === "laptop" && z.hoeren ? "Mikro: Laptop" : `Handy verbunden${z.handys > 1 ? ` (${z.handys})` : ""}`;
   $("btn-mikro-quelle").dataset.tip = m.quelle === "handy" ? "Das Handy hört zu – klicken zum Zurückholen" : "Der Laptop hört zu – klicken, um ein Handy zu koppeln";
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
   $("btn-mikro-quelle").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";

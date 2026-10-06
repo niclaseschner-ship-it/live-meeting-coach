@@ -75,3 +75,5 @@ button.warn { background: var(--gelb); border-color: var(--gelb); color: #fff; }
 .h-quellen { display: grid; gap: 6px; font-size: 14px; }
 .h-mikro, button.gross { white-space: normal; text-align: left; }
 main, .h-karte { min-width: 0; }
+.pill.verbunden { color: var(--gruen); background: var(--gruen-weich); border-color: transparent; }
+.pill.verbunden::before { background: var(--gruen); }

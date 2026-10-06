@@ -64,7 +64,8 @@ def mikro_stand() -> dict:
 
 def stand() -> dict:
     ton = geraet.get(lautsprecher) if lautsprecher in verbindungen else None
-    return {**coach.schnappschuss(), "mikro": mikro_stand(), "lautsprecher": ton}
+    handys = sum(1 for w, g in geraet.items() if g == "handy" and w in verbindungen)
+    return {**coach.schnappschuss(), "mikro": mikro_stand(), "lautsprecher": ton, "handys": handys}
 
 
 async def senden() -> None:
@@ -449,6 +450,8 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
     await ws.accept()
     verbindungen.add(ws)
     geraet[ws] = "handy" if geraet_art == "handy" else "laptop"
+    if geraet[ws] == "handy":
+        await senden()  # alle Seiten sehen sofort: Handy verbunden
     await ws.send_text(json.dumps(stand(), ensure_ascii=False))
     try:
         while True:
@@ -476,7 +479,8 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
     except WebSocketDisconnect:
         verbindungen.discard(ws)
     finally:
-        geraet.pop(ws, None)
+        if geraet.pop(ws, None) == "handy":
+            await senden()
         if lautsprecher is ws:
             ereignis("ton_weg", geraet="?")
             await senden()  # alle Seiten zeigen: Nestor hat gerade keinen Lautsprecher

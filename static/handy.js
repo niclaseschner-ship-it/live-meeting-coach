@@ -158,7 +158,8 @@ function rendern() {
   $("untertitel-kopf").textContent = z.ziel || "Meeting-Coach";
   const pill = $("status");
   pill.className = "pill" + (z.stumm ? " stumm" : z.hoeren ? " live" : "");
-  pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live" : beendet ? "Beendet" : "Bereit";
+  pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live" : beendet ? "Beendet" : "Mit Laptop verbunden";
+  if (!z.stumm && !z.hoeren) pill.className = "pill verbunden";
   $("zeit").textContent = mmss(z.zeit);
   $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
 
