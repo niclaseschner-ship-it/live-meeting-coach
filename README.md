@@ -50,6 +50,10 @@ python -m venv .venv
 
 Dann <http://127.0.0.1:8000> in Edge oder Chrome öffnen.
 
+**Einfacher:** Doppelklick auf `Nestor starten.cmd` im Repo-Ordner. Das startet den Coach im Hintergrund und öffnet
+das Dashboard als eigenes Fenster im Vollbild (F11 verlässt das Vollbild). Fenster zu = Coach aus; läuft noch ein
+Meeting, fragt Nestor vorher. Ein schon laufender Coach wird mitbenutzt und bleibt dann an.
+
 **Demo:** [demo/](demo/README.md) – ein dreiminütiges Meeting zum Abspielen im Dashboard, mit Screenshots und
 der Meeting-Zusammenfassung als Bild.
 
