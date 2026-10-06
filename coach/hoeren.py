@@ -204,6 +204,8 @@ class Hoerstrom:
                     cache.write_text(treffer, encoding="utf-8")
             if cache is not None and cache.exists():  # Tests: dieselbe Äußerung wurde schon einmal transkribiert
                 text = cache.read_text(encoding="utf-8")
+                if prompt_echo(text, prompt):  # auch alte Zwischenspeicher-Einträge filtern
+                    text = ""
                 await self._text_ausgeben(uid, text, vorher)
                 return
             try:
