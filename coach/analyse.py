@@ -320,5 +320,8 @@ def klima(meeting: Meeting, aeusserungen: list, unterbrechungen: list[float], to
         gruende.append(f"lauter als sonst (+{lauter:.0f} dB)")
     if tn:
         gruende.append(f"{tn}× rauer Ton")
-    stufe = "hitzig" if punkte >= 2.5 else "lebhaft" if punkte >= 1.0 else "ruhig"
+    # „Hitzig“ nur mit Lautstärke oder rauem Ton: Viel Überlappung allein heißt Engagement, nicht Konflikt
+    # (AMI-Designbesprechungen 06.10.: freundlich, aber 25–30 Überlappungen je 10 min – mehr als die Talkshow)
+    erregt = lauter >= 3 or tn > 0
+    stufe = "hitzig" if punkte >= 2.5 and erregt else "lebhaft" if punkte >= 1.0 else "ruhig"
     return {"stufe": stufe, "punkte": round(punkte, 2), "gruende": gruende}

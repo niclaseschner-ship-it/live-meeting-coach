@@ -56,6 +56,22 @@ bildet daraus ein Klima für die letzten 3 Minuten (ruhig / lebhaft / hitzig, `c
 Erste Probe ohne KI-Kosten: Talkshow 22× gleichzeitig, 12× ins Wort, meist „hitzig“; Stadtrat 3× gleichzeitig,
 0× ins Wort, meist „ruhig“. Gewichte und Stufen sind Startwerte und werden im Raumtest kalibriert.
 
+### Nachjustiert nach den Testläufen vom 06.10.
+
+- **Vorfall erst ab 1 s gleichzeitigem Sprechen.** Kürzere Überlappungen sind meist Zustimmung („ja“, „mhm“) oder
+  Saalhall. Ohne Mindestdauer zählte der Stadtrat Koblenz so viele „Vorfälle“ wie die Talkshow (je 10 min 18,6 zu
+  19,2), weil der Hall der Saalanlage wie eine zweite Stimme wirkt. Ab 1 s: Talkshow 8,3, Koblenz 3,5, Wahlcheck 2,1,
+  Hoyerswerda 1,7, Anhörung/Podium/Bürgerversammlung 0–0,5. In Koblenz fielen damit die Überlappungs-Hinweise von
+  30 auf 7 und „hitzig“ fast ganz weg.
+- **Erkennung echter Vorfälle im Besprechungsraum** (AMI b–d, Referenz ≥ 1 s): 41–68 % der echten Vorfälle werden
+  gefunden, 84–86 % der gemeldeten sind echt. Zählen ist damit brauchbar, wenn auch eher zu niedrig.
+- **„Hitzig“ braucht Lautstärke oder rauen Ton.** Die freundlichen, aber lebhaften AMI-Designbesprechungen haben
+  25–30 echte Überlappungen je 10 min – mehr als die Talkshow – und standen deshalb oft auf „hitzig“. Viel Überlappung
+  heißt Engagement, nicht Konflikt (passt zur Forschung: Konflikt = Überlappung plus erhobene Stimme oder negative
+  Sprache). Überlappung und Unterbrechung allein reichen jetzt höchstens für „lebhaft“.
+- **Der Gruppen-Hinweis „Mehrere Personen sprechen gleichzeitig“** kommt erst bei mindestens zwei Vorfällen in einer
+  Minute; einzelne erscheinen nur im Zähler (synthetische Kontrollrunde: vorher ein Hinweis bei null Vorfällen).
+
 ## Vorstellungsrunde
 
 Nach der Begrüßung bittet Nestor, reihum kurz den Namen zu sagen (`LMC_VORSTELLUNG_SEKUNDEN`, Standard 45 s).
