@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from .abschluss import OrdnerAblage, paket, spenden_dateien, stufen
 from .ablage_r2 import AblageFehler, R2Ablage
-from .config import EINST
+from .config import EINST, schluessel_info, schluessel_speichern
 
 router = APIRouter()
 _ablage = R2Ablage() if EINST.betrieb == "cloud" else OrdnerAblage()
@@ -48,13 +48,18 @@ async def abschluss():
     kosten_usd = coach.kosten_stand()["meeting"]
     liste = stufen(kosten_usd)
     name = EINST.paypal_me or None
+    # Eigener Schlüssel (Angebot auf der Startseite, config.schluessel_info): die KI-Kosten liefen übers eigene
+    # OpenAI-Konto, also kein Kostenausgleich mit Stufen – nur der allgemeine Link ohne Betrag.
+    eigener = schluessel_info()["quelle"] == "dashboard"
     return {
         "dauer_sekunden": round(coach.meeting.jetzt(), 1),
         "kosten_usd": round(kosten_usd, 4),
         "kosten_eur": round(kosten_usd * EINST.eur_je_usd, 2),
+        "eigener_schluessel": eigener,
         "stufen": liste,
         "paypal": ([{**s, "link": f"https://paypal.me/{name}/{s['betrag']}EUR"} for s in liste]
-                   if name else None),
+                   if name and not eigener else None),
+        "paypal_allgemein": f"https://paypal.me/{name}" if name else None,
         "ablage_fertig": coach.archiv.fertig,
     }
 
@@ -114,6 +119,11 @@ async def abschluss_feedback(daten: dict):
 async def abschluss_fertig():
     coach = _nach_ende()
     ordner = coach.archiv.ordner
+    # Cloud-Betrieb: ein im Dashboard eingetragener eigener Schlüssel galt nur für dieses eine Meeting (Angebot
+    # auf der Startseite) und wird jetzt entfernt. Lokal bleibt er wie bisher gespeichert.
+    if EINST.betrieb == "cloud" and schluessel_info()["quelle"] == "dashboard":
+        schluessel_speichern(None)
+        coach.client_neu()
     coach.einrichten({})  # auf ein leeres Meeting zurücksetzen (wie eine neue Einrichtung)
     coach.archiv = None
     if not EINST.ablage_behalten:

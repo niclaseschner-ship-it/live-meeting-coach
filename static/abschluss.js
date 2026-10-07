@@ -19,11 +19,21 @@ async function laden() {
 }
 
 function darstellen(z) {
-  $("ab-kosten-satz").textContent =
-    `Dieses Meeting hat Niclas ${z.kosten_eur.toLocaleString("de-DE", { minimumFractionDigits: 2 })} € an KI-Kosten gekostet.`;
+  const eigenerSchluessel = !!z.eigener_schluessel;
+  const eurText = z.kosten_eur.toLocaleString("de-DE", { minimumFractionDigits: 2 });
+  $("ab-kosten-satz").textContent = eigenerSchluessel
+    ? `Die KI-Kosten dieses Meetings (${eurText} €) liefen über Ihren eigenen Schlüssel.`
+    : `Dieses Meeting hat Niclas ${eurText} € an KI-Kosten gekostet.`;
 
-  $("ab-unterstuetzung").hidden = !z.paypal;
-  if (z.paypal) {
+  // Eigener Schlüssel: kein Kostenausgleich mit Stufen, nur der allgemeine Link ohne Betrag (Lastenheft 4.5)
+  $("ab-stufen-block").hidden = eigenerSchluessel;
+  $("ab-eigener-hinweis").hidden = !eigenerSchluessel || !z.paypal_allgemein;
+  if (eigenerSchluessel && z.paypal_allgemein) {
+    $("ab-eigener-link").textContent = z.paypal_allgemein;
+    $("ab-eigener-link").href = z.paypal_allgemein;
+  }
+  $("ab-unterstuetzung").hidden = eigenerSchluessel ? !z.paypal_allgemein : !z.paypal;
+  if (!eigenerSchluessel && z.paypal) {
     $("ab-kacheln").replaceChildren(...z.paypal.map((s) =>
       el("button", { class: "ab-kachel", type: "button", onclick: () => betragWaehlen(s) },
         el("strong", {}, `${s.betrag} €`), el("span", {}, s.bedeutung))));

@@ -56,6 +56,19 @@
       </button>
     </div>
 
+    <details class="s-schluessel">
+      <summary>Eigenen OpenAI-Schlüssel verwenden (optional)</summary>
+      <div class="s-schluessel-inhalt">
+        <p class="s-datenhinweis">Dann laufen die KI-Kosten über Ihr eigenes OpenAI-Konto. Der Schlüssel liegt
+          nur für dieses Meeting auf dem Server und wird am Ende gelöscht.</p>
+        <div class="schluessel-zeile">
+          <input id="sk-eingabe" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+          <button id="sk-pruefen" class="leise klein">Prüfen</button>
+        </div>
+        <p id="sk-meldung" class="s-meldung" hidden></p>
+      </div>
+    </details>
+
     <section class="s-finanzierung">
       <h2>So finanziert sich Nestor</h2>
       <p>Nestor ist ein privates Projekt von Niclas Eschner und kein Geschäft. Die Kosten für die KI streckt er
