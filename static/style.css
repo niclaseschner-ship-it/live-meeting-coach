@@ -190,10 +190,11 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .regelgruppe.beta .regel .r-icon { background: #F4ECD7; color: #8A6D1E; }
 .regelgruppe.beta .regel:has(input:checked) { border-color: #D9B64A; background: #FBF2D9; }
 .regelgruppe.beta .regel:has(input:checked) .r-icon { background: #D9B64A; color: #fff; }
-/* „Weitere Regeln“ (ersetzt „Eigene Regeln“): eigene Kachel im selben Raster, kein Kästchen zum Ankreuzen */
-.regel-weitere { cursor: default; grid-template-rows: auto 1fr; }
+/* „Weitere Regeln“ (ersetzt „Eigene Regeln“): eigene Kachel im selben Raster, zwei Spalten breit, damit der
+   Freitext Platz hat; kein Kästchen zum Ankreuzen. */
+.regel-weitere { cursor: default; grid-template-rows: auto 1fr; grid-column: span 2; }
 .regel-weitere .r-weitere-titel { font-size: 14px; }
-.regel-weitere textarea { resize: vertical; min-height: 44px; border: 1px solid var(--rand); border-radius: 8px;
+.regel-weitere textarea { resize: vertical; min-height: 56px; border: 1px solid var(--rand); border-radius: 8px;
   padding: 6px 8px; font-size: 13px; font-family: inherit; }
 .nestor-wahl { margin-top: 22px; padding: 14px 16px; border-radius: 12px; background: var(--marke-weich); border: 2px solid #C7CCF7; }
 .test { margin-top: 18px; color: var(--text-2); }
