@@ -15,6 +15,7 @@ baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb
    npx wrangler secret put WORKER_GEHEIMNIS      # langer Zufallswert, z. B. `openssl rand -hex 32`
    npx wrangler secret put COOKIE_GEHEIMNIS      # ebenso, unabhängig vom WORKER_GEHEIMNIS
    npx wrangler secret put OPENAI_API_KEY        # Niclas' Schlüssel, eigenes Projekt mit Ausgabenlimit
+   npx wrangler secret put MISTRAL_API_KEY       # Nestor Basis (Mistral, EU) – geht als LMC_MISTRAL_SCHLUESSEL in den Container
    npx wrangler secret put KUNDEN                # siehe "Kunden pflegen" unten
    npx wrangler secret put PAYPAL_ME             # Name aus paypal.me/<name>
    npx wrangler secret put IMPRESSUM_NAME
