@@ -40,10 +40,10 @@ KATALOG = [
           "Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar."),
     Regel("seitengespraeche", "Keine Seitengespräche", "experimentell",
           "Länger parallel laufende, leisere zweite Unterhaltung", False),
-    Regel("thema", "Beim Thema bleiben", "experimentell",
-          "Inhalt passt ≥ 20 s nicht zum aktuellen Agendapunkt (Fokus-Ampel)", True,
-          "Experimentell: erkennt Abschweifungen auf Satzebene zuverlässig (3 von 3 im Test), live seltener – "
-          "bei fließenden Themenwechseln auch mal falsch."),
+    # Verlässlich für klare Fremdthemen (3/3, 0 Fehlalarme; Niclas' eigene Tests mit Urlaub/Fußball, 07.10.2026).
+    # Das Unsichere – fließende Übergänge zwischen Agendapunkten – steckt im Signal „Agendawechsel ohne Ansage“.
+    Regel("thema", "Beim Thema bleiben", "verlaesslich",
+          "Inhalt passt ≥ 20 s nicht zum aktuellen Agendapunkt (Fokus-Ampel)", True),
     Regel("zeit", "Zeit einhalten", "verlaesslich", "Zeitbudget je Agendapunkt (Countdown, Ampel)", True),
     Regel("kurz", "Sich kurz fassen – keine Monologe", "verlaesslich",
           "Zusammenhängende Redezeit einer Person ≥ 60 s (Monolog-Ampel)", True),

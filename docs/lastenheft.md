@@ -94,7 +94,7 @@ Signalen steht in einem Satz dabei, wie oft sie danebenliegen. Verlässliche Sig
 | Kraftausdrücke, Angriffe | verlässlich | 31/32 erkannt, 2/51 Fehlalarme; Ende zu Ende 8/8 | – |
 | Agendawechsel mit Ansage | verlässlich | sofort, 5–13 s | – |
 | Agendawechsel ohne Ansage | experimentell | 15–60 s Verzug, kurze Punkte werden verpasst | „Experimentell: meldet einen stillen Themenwechsel meist erst nach 15 bis 60 Sekunden, kurze Punkte werden dabei manchmal verpasst.“ |
-| Fokus (Abschweifung) | experimentell | auf Satzebene 3/3, live seltener; schwankt bei fließenden Übergängen | „Experimentell: erkennt Abschweifungen auf Satzebene zuverlässig (3 von 3 im Test), live seltener – bei fließenden Themenwechseln auch mal falsch.“ |
+| Fokus (klares Fremdthema) | verlässlich | 3/3 erkannt nach 26–28 s, 0 Fehlalarme; eigene Tests mit Urlaub und Fußball. Fließende Übergänge zwischen Punkten: siehe Agendawechsel ohne Ansage | |
 | Ergebnisse festhalten | experimentell | 4/5 Beschlüsse richtig, in englischem Material kaum | „Experimentell: erkennt 4 von 5 Beschlüssen richtig, bei englischsprachigem Material kaum.“ |
 | Gleichzeitiges Sprechen | experimentell | findet 41–68 % der echten, 84–86 % der Meldungen stimmen | „Experimentell: findet 41 bis 68 % der echten Stellen; was gemeldet wird, stimmt in 84 bis 86 % der Fälle.“ |
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
