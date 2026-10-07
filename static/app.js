@@ -84,7 +84,7 @@ $("btn-einstellungen").onclick = () => { $("einstellungen").hidden = !$("einstel
 $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
 $("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
-$("btn-bild").onclick = () => api("/api/onepager");
+$("btn-bild").onclick = () => (zustand?.modus === "knopfdruck" ? knopfDruecken("bild") : api("/api/onepager"));
 $("btn-folie").onclick = () => api("/api/folie");
 $("tab-bild").onclick = () => { ansicht = "bild"; if (zustand) bildRendern(zustand); };
 $("tab-folie").onclick = () => { ansicht = "folie"; if (zustand) bildRendern(zustand); };
@@ -206,6 +206,11 @@ function bildAlsPng() {
   c.toBlob((blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `live-bild-${bildVersion}.png`; a.click(); });
 }
 function bildRendern(z) {
+  if (!z.onepager_version && bildVersion) { // Bild verworfen (Knopfdruck „verwerfen“): wieder der Platzhalter
+    bildVersion = 0;
+    $("live-bild").hidden = true; $("bild-leer").hidden = false; $("btn-bild-png").disabled = true;
+    $("btn-bild-analyse").hidden = true;
+  }
   if (z.onepager_version && z.onepager_version !== bildVersion) {
     bildVersion = z.onepager_version; ansicht = "bild"; // neues Live-Bild wird gezeigt
     const img = $("live-bild");
@@ -227,7 +232,8 @@ function bildRendern(z) {
   $("folie-arbeitet").hidden = !z.folie_laeuft;
   $("bild-arbeitet").hidden = !z.onepager_laeuft;
   if (!bildVersion) platzhalterRendern(z);
-  $("btn-bild").disabled = !!z.onepager_laeuft || !z.segmente.length;
+  // Knopfdruck: das Transkript entsteht erst beim Knopf – zeichnen geht, sobald jemand gesprochen hat
+  $("btn-bild").disabled = !!z.onepager_laeuft || (knopfdruck(z) ? !z.hoeren || !!z.knopf?.laeuft : !z.segmente.length);
   let status = z.onepager_stand != null ? `· Stand ${mmss(z.onepager_stand)}` : "";
   if (z.onepager_fokus) status += ` · Fokus: ${z.onepager_fokus}`;
   $("bild-status").textContent = z.onepager_fehler ? `· ${z.onepager_fehler}` : status;
@@ -241,17 +247,83 @@ const SPRUECHE = [
   "Gute Gespräche ergeben gute Bilder. Eures entsteht gerade.",
 ];
 function platzhalterRendern(z) {
-  const spruch = !z.segmente.length ? SPRUECHE[0] : SPRUECHE[Math.floor(z.zeit / 60) % SPRUECHE.length];
+  const knopf = knopfdruck(z);
+  document.querySelectorAll(".bl-tipp, .bl-kann").forEach((e) => { e.hidden = knopf; }); // Ansprache gibt es dort nicht
+  const spruch = knopf ? "Das Bild entsteht auf Knopfdruck."
+    : !z.segmente.length ? SPRUECHE[0] : SPRUECHE[Math.floor(z.zeit / 60) % SPRUECHE.length];
   $("bild-spruch").textContent = z.onepager_laeuft ? "Nestor zeichnet euer erstes Bild …" : spruch;
-  const takt = (z.onepager_minuten ?? 0) * 60;
+  const takt = knopf ? 0 : (z.onepager_minuten ?? 0) * 60; // kein Bild im Takt
   const weg = takt ? Math.min(1, z.zeit / takt) : 0;
   $("bild-weg").style.width = `${z.onepager_laeuft ? 100 : Math.round(weg * 100)}%`;
   $("bild-weg").parentElement.hidden = !takt;
   const rest = Math.ceil((takt - z.zeit) / 60);
   $("bild-wann").textContent = z.onepager_laeuft ? "gleich da – ca. 1 Minute"
+    : knopf ? "Knopf „Bild“ oben drücken – Nestor transkribiert dann und zeichnet."
     : !takt ? "Das Bild entsteht, sobald ihr es euch wünscht."
     : !z.segmente.length ? `Das erste Bild kommt nach ${Math.round(takt / 60)} Minuten Gespräch.`
     : rest > 1 ? `Das erste Bild kommt in ca. ${rest} Minuten.` : "Das erste Bild kommt gleich.";
+}
+
+// ---------- Modus „Auf Knopfdruck“ (Ticket #6, Lastenheft 4.2) ----------
+// Knopfleiste statt Nestor-Leiste. Ein Knopf antwortet sofort; Fortschritt kommt als {typ: "knopf"} über die
+// WebSocket, das Ergebnis als Karte (Wo stehen wir, Regeln, Protokoll, Frage) oder als Live-Bild.
+const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", protokoll: "/api/knopf/protokoll",
+  bild: "/api/knopf/bild", frage: "/api/knopf/frage" };
+const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", protokoll: "Protokoll", bild: "Bild", frage: "Nestor fragen" };
+Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll" });
+Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse" });
+const knopfdruck = (z) => z?.modus === "knopfdruck";
+function knopfDruecken(art, daten = {}) {
+  if (zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
+  knopfRendern(zustand);
+  return api(KNOPF_PFAD[art], daten).then(() => true, () => false); // Fehler zeigt api() schon an
+}
+document.querySelectorAll("#knopf-leiste .knopf-art").forEach((b) => { b.onclick = () => knopfDruecken(b.dataset.knopf); });
+$("knopf-frage-form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("knopf-frage").value.trim();
+  if (!text) return;
+  knopfDruecken("frage", { text }).then((ok) => { if (ok) $("knopf-frage").value = ""; });
+};
+$("knopf-verwerfen-5").onclick = () => api("/api/knopf/verwerfen", { minuten: 5 });
+$("knopf-verwerfen-alles").onclick = () => {
+  if (confirm("Alles bisher Gesagte verwerfen? Ton, Transkript und Auswertungen dieses Meetings werden gelöscht. Redeanteile bleiben.")) {
+    api("/api/knopf/verwerfen", { minuten: null });
+  }
+};
+// Fortschritt zwischen zwei Zustandsmeldungen: in den Stand einarbeiten, der nächste Schnappschuss bestätigt ihn
+function knopfMeldung(d) {
+  if (!zustand?.knopf) return;
+  zustand.knopf = { ...zustand.knopf, laeuft: d.schritt === "fertig" ? null : d.art, schritt: d.schritt, anteil: d.anteil,
+    fertig: d.fertig, gesamt: d.gesamt, fehler: d.fehler ?? null };
+  knopfRendern(zustand);
+}
+function knopfOffenText(k) {
+  if (!k.seit_sekunden) return "Alles ausgewertet";
+  return k.seit_sekunden < 60 ? "Unter 1 Minute noch nicht ausgewertet"
+    : `${Math.round(k.seit_sekunden / 60)} Minuten noch nicht ausgewertet`;
+}
+function knopfRendern(z) {
+  const an = knopfdruck(z) && z.hoeren;
+  $("knopf-leiste").hidden = !an;
+  if (!an) return;
+  const k = z.knopf ?? {};
+  $("knopf-offen").textContent = knopfOffenText(k);
+  $("knopf-offen").dataset.tip = k.aeusserungen ? `${k.aeusserungen} Äußerungen, ${mmss(k.sprache_sekunden)} min Sprache – werden beim nächsten Knopf transkribiert` : "";
+  const laeuft = !!k.laeuft;
+  document.querySelectorAll("#knopf-leiste .knopf-art, #knopf-fragen").forEach((b) => {
+    b.disabled = laeuft; b.classList.toggle("knopf-aktiv", b.dataset.knopf === k.laeuft);
+  });
+  $("knopf-fortschritt").hidden = !laeuft;
+  if (laeuft) {
+    const transkribiert = k.schritt === "transkribiere";
+    $("knopf-balken").style.width = `${Math.round((transkribiert ? (k.anteil ?? 0) : 1) * 100)}%`;
+    $("knopf-balken").parentElement.classList.toggle("denkt", !transkribiert);
+    $("knopf-schritt").textContent = `${KNOPF_NAME[k.laeuft] ?? ""}: ` + (transkribiert
+      ? `transkribiere${k.gesamt ? ` ${k.fertig} von ${k.gesamt}` : ""} …` : "Nestor denkt nach …");
+  }
+  $("knopf-fehler").hidden = laeuft || !k.fehler;
+  $("knopf-fehler").textContent = k.fehler ?? "";
 }
 
 // ---------- Nestor-Karten (Pop-up) ----------
@@ -271,6 +343,7 @@ function karteZeigen(k, automatisch) {
   $("karte-quellen").replaceChildren(el("strong", {}, "Quellen"), ...q.map((x) => el("div", {},
     el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.titel), " ", el("small", {}, x.seite))));
   $("karte-folie").hidden = k.art !== "folie";
+  $("karte-protokoll").hidden = k.art !== "protokoll" || !zustand?.knopf?.protokoll;
   $("karte-folie").onclick = () => { folieBauen(k.folie); ansicht = "folie"; karteSchliessen(); if (zustand) bildRendern(zustand); };
   $("karte").hidden = false;
   clearTimeout(karteTimer);
@@ -315,8 +388,9 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
     : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
-  // Modus (Ticket #1): nur ein Schild, kein Verhalten – was er bewirkt, baut ein anderes Ticket
+  // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
   $("modus-pill").hidden = !z.modus;
+  document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
   $("modus-pill").textContent = z.modus === "knopfdruck" ? "Auf Knopfdruck" : "Live";
   $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
@@ -334,7 +408,7 @@ function rendern() {
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
   $("mq-text").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
   // Nestor ohne Lautsprecher (Tab zu, Handy neu geladen): sichtbar machen und hier übernehmen lassen
-  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
+  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher) || knopfdruck(z);
   $("mikro-weg").hidden = !m.weg;
   $("mikro-weg").textContent = !m.weg ? "" : m.quelle === null
     ? "Kein Mikrofon verbunden – Nestor hört nichts. Am Handy „Dieses Handy übernimmt Mikro und Ton“ tippen oder hier zurückholen (Handy-Symbol)."
@@ -342,7 +416,8 @@ function rendern() {
 
   // Nestor
   const a = z.assistent;
-  const nestorDa = a?.aktiv && z.hoeren;
+  const nestorDa = a?.aktiv && z.hoeren && !knopfdruck(z);
+  knopfRendern(z);
   $("nestor").hidden = !nestorDa;
   $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert";
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
@@ -493,6 +568,13 @@ function leisteRendern(z) {
   const zeilen = z.segmente.map((s) => el("li", {},
     el("span", { class: "wann" }, mmss(s.start)), el("span", { class: "wer" }, s.sprecher), el("span", {}, s.text)));
   if (z.teiltext) zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }, "live"), el("span"), el("span", {}, z.teiltext)));
+  // Knopfdruck: kein Live-Transkript – sagen, was noch kommt, statt leer zu bleiben
+  if (knopfdruck(z) && z.hoeren && z.knopf?.seit_sekunden) {
+    zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }, "offen"), el("span"),
+      el("span", {}, `auf Knopfdruck – ${knopfOffenText(z.knopf).replace("noch nicht ausgewertet", "werden beim nächsten Knopf transkribiert")}`)));
+  } else if (knopfdruck(z) && !zeilen.length) {
+    zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }), el("span"), el("span", {}, "auf Knopfdruck")));
+  }
   tr.replaceChildren(...zeilen);
   if (unten) tr.scrollTop = tr.scrollHeight;
   $("hinweise").replaceChildren(...[...z.hinweise].reverse().map((h) => el("li", { class: h.art === "ton" || h.stufe === "warnung" ? "rot" : "" },
@@ -533,6 +615,7 @@ function verbinden() {
     if (d.typ === "stimme") return stimme.abspielen(d.pcm);
     if (d.typ === "stimme_stopp") return stimme.stopp();
     if (d.typ === "pegel") { pegelAnzeigen(d.wert); return; }
+    if (d.typ === "knopf") { knopfMeldung(d); return; }
     zustand = d; formAusServer(d); rendern(); einstellungenRendern(d.einstellungen);
   };
   ws.onclose = () => setTimeout(verbinden, 1000);

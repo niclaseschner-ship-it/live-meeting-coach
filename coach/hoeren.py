@@ -6,11 +6,17 @@
                                                       └──► Stimm-Fingerabdruck je Fenster (lokal) ─► Personen, Überlappung
 
 Die Meetinguhr folgt der Audiozeit – live wie im Abspielmodus.
+
+Modus „Auf Knopfdruck“ (Lastenheft 3, 4.2): kein Live-Text und keine Transkription je Äußerung. Jede Äußerung
+wartet als WAV in `warteschlange`, bis ein Knopf `nachtranskribieren()` aufruft – dann über denselben Weg wie
+„sparsam“ (`_transkribieren`), höchstens vier gleichzeitig, Sätze in der Reihenfolge des Sprechens.
+Pausenerkennung, Stimm-Fingerabdruck, Überlappung und Unterbrechung laufen unverändert.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import os
 import logging
@@ -64,6 +70,21 @@ def text_cache_datei(wav: bytes):
 
     h = hashlib.sha1(wav + f"{EINST.text_modell}|{EINST.sprache}|v2".encode()).hexdigest()  # Sprache gehört zum Prompt
     return Path(EINST.text_cache) / h[:2] / f"{h}.txt"
+
+
+def wav_aus(proben: np.ndarray) -> bytes:
+    """Äußerung (16 kHz, float) als WAV, so wie sie an die Transkription geht – auch Schlüssel des Zwischenspeichers."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes((np.clip(proben, -1, 1) * 32767).astype("<i2").tobytes())
+    return buf.getvalue()
+
+
+MIN_TEXT = 0.3  # s – kürzere Äußerungen gehen nicht an die Transkription
+KNOPF_GLEICHZEITIG = 4  # Knopfdruck: so viele Äußerungen werden gleichzeitig transkribiert
 
 
 UNSICHER = "Person ?"
@@ -144,16 +165,20 @@ class Hoerstrom:
         self._rechner = ThreadPoolExecutor(max_workers=1)  # Reihenfolge der Zuordnung bleibt erhalten
         self._analysen: list[asyncio.Future] = []
         self.live = None
-        self.sparsam = mit_text and EINST.live_art == "sparsam"  # Text je Äußerung statt Streaming
+        # Knopfdruck: nichts geht von selbst an einen KI-Dienst; Äußerungen warten auf den Knopf
+        self.knopfdruck = coach.modus == "knopfdruck"
+        self.warteschlange: list[dict] = []  # {uid, start, ende, wav, person}: noch nicht transkribiert
+        self._verworfen_bis = -1.0  # Meetingzeit: Äußerungen, die davor begannen, bekommen keinen Text mehr
+        self.sparsam = mit_text and EINST.live_art == "sparsam" and not self.knopfdruck  # Text je Äußerung statt Streaming
         self._vorlage = None  # Tests: {(start, ende): text} aus einem früheren Bericht (LMC_TEXT_VORLAGE)
-        if self.sparsam and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
+        if (self.sparsam or self.knopfdruck) and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
             import json
 
             bericht = json.loads(open(os.environ["LMC_TEXT_VORLAGE"], encoding="utf-8").read())
             self._vorlage = {(round(s["start"], 1), round(s["ende"], 1)): s["text"] for s in bericht["transkript"]}
         self._letzter_text: asyncio.Future | None = None
         self.text_sekunden = 0.0
-        if mit_text and not self.sparsam:
+        if mit_text and not self.sparsam and not self.knopfdruck:
             m = coach.meeting
             stichwoerter = [p.titel for p in m.agenda] + m.teilnehmende
             if coach.assistent.aktiv:
@@ -204,8 +229,16 @@ class Hoerstrom:
         self._naechste_id += 1
         self._offen[uid] = {"start": start, "ende": ende, "person": None, "person_fertig": False, "text": None,
                             "pegel": pegel_db(proben)}  # Regel 1: Pegel-Einbruch = Übergabe, kein Unterbrechen
+        knopf = None
         if self.live:
             await self.live.commit({"id": uid})
+        elif self.knopfdruck:
+            if len(proben) >= 16000 * MIN_TEXT and start >= self._verworfen_bis:
+                # als WAV (16 bit) statt float: halber Speicher, und genau die Bytes für Transkription und Zwischenspeicher
+                knopf = {"uid": uid, "start": start, "ende": ende, "dauer": len(proben) / 16000, "wav": wav_aus(proben)}
+                self.warteschlange.append(knopf)
+            else:
+                self._offen[uid]["text"] = ""
         elif self.sparsam:
             vorher, self._letzter_text = self._letzter_text, None
             self._letzter_text = asyncio.ensure_future(self._text_je_aeusserung(uid, proben, vorher))
@@ -214,7 +247,10 @@ class Hoerstrom:
             self._offen[uid]["text"] = ""
         loop = asyncio.get_running_loop()
         zukunft = loop.run_in_executor(self._rechner, self.stimmen.analysieren, proben)
-        self._analysen.append(asyncio.ensure_future(self._person(uid, zukunft)))
+        person = asyncio.ensure_future(self._person(uid, zukunft))
+        self._analysen.append(person)
+        if knopf is not None:
+            knopf["person"] = person  # der Knopf wartet darauf, bevor er den Satz ausgibt
 
     async def _person(self, uid: int, zukunft) -> None:
         try:
@@ -241,51 +277,94 @@ class Hoerstrom:
 
     async def _text_je_aeusserung(self, uid: int, proben: np.ndarray, vorher) -> None:
         """Sparmodus: die Äußerung als WAV an die Transkription; Sätze bleiben in der Reihenfolge des Sprechens."""
+        text = ""
+        if self.coach._client is not None and len(proben) >= 16000 * MIN_TEXT:
+            text = await self._transkribieren(uid, wav_aus(proben), len(proben) / 16000)
+        await self._text_ausgeben(uid, text, vorher)
+
+    async def _transkribieren(self, uid: int, wav: bytes, dauer: float, sperre: asyncio.Semaphore | None = None) -> str:
+        """Eine Äußerung transkribieren (Sparmodus und Knopfdruck); `sperre` begrenzt gleichzeitige Aufrufe."""
         from .pipeline import fehlertext, nutzung_loggen
 
         c = self.coach
-        text = ""
-        if c._client is not None and len(proben) >= 16000 * 0.3:
-            buf = io.BytesIO()
-            with wave.open(buf, "wb") as w:
-                w.setnchannels(1)
-                w.setsampwidth(2)
-                w.setframerate(16000)
-                w.writeframes((np.clip(proben, -1, 1) * 32767).astype("<i2").tobytes())
-            t0 = time.monotonic()
-            prompt = c.vokabel_prompt()[-800:]
-            cache = text_cache_datei(buf.getvalue())
-            if cache is not None and not cache.exists() and self._vorlage is not None:
-                # Transkript eines früheren Laufs: gleiche Äußerungsgrenzen -> gleicher Text
-                o = self._offen.get(uid) or {}
-                treffer = self._vorlage.get((round(o.get("start", -1), 1), round(o.get("ende", -1), 1)))
-                if treffer:
-                    cache.parent.mkdir(parents=True, exist_ok=True)
-                    cache.write_text(treffer, encoding="utf-8")
-            if cache is not None and cache.exists():  # Tests: dieselbe Äußerung wurde schon einmal transkribiert
-                text = cache.read_text(encoding="utf-8")
-                if prompt_echo(text, prompt):  # auch alte Zwischenspeicher-Einträge filtern
-                    text = ""
-                await self._text_ausgeben(uid, text, vorher)
-                return
-            try:
-                antwort = await c._client.audio.transcriptions.create(
-                    model=EINST.text_modell, file=("aeusserung.wav", buf.getvalue(), "audio/wav"),
-                    language=EINST.sprache, prompt=prompt or None)
-                text = (getattr(antwort, "text", "") or "").strip()
-                if prompt_echo(text, prompt):
-                    log.info("Transkription gab den Kontext-Prompt zurück – verworfen")
-                    text = ""
-            except Exception as e:  # noqa: BLE001
-                log.warning("Transkription je Äußerung fehlgeschlagen: %s", fehlertext(e))
-            if cache is not None and text:
+        t0 = time.monotonic()
+        prompt = c.vokabel_prompt()[-800:]
+        cache = text_cache_datei(wav)
+        if cache is not None and not cache.exists() and self._vorlage is not None:
+            # Transkript eines früheren Laufs: gleiche Äußerungsgrenzen -> gleicher Text
+            o = self._offen.get(uid) or {}
+            treffer = self._vorlage.get((round(o.get("start", -1), 1), round(o.get("ende", -1), 1)))
+            if treffer:
                 cache.parent.mkdir(parents=True, exist_ok=True)
-                cache.write_text(text, encoding="utf-8")
-            dauer = len(proben) / 16000
-            self.text_sekunden += dauer
-            nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(dauer, 1),
-                            "sekunden": round(time.monotonic() - t0, 2)})
-        await self._text_ausgeben(uid, text, vorher)
+                cache.write_text(treffer, encoding="utf-8")
+        if cache is not None and cache.exists():  # Tests: dieselbe Äußerung wurde schon einmal transkribiert
+            text = cache.read_text(encoding="utf-8")
+            if prompt_echo(text, prompt):  # auch alte Zwischenspeicher-Einträge filtern
+                text = ""
+            return text
+        text = ""
+        try:
+            async with sperre or contextlib.nullcontext():
+                antwort = await c._client.audio.transcriptions.create(
+                    model=EINST.text_modell, file=("aeusserung.wav", wav, "audio/wav"),
+                    language=EINST.sprache, prompt=prompt or None)
+            text = (getattr(antwort, "text", "") or "").strip()
+            if prompt_echo(text, prompt):
+                log.info("Transkription gab den Kontext-Prompt zurück – verworfen")
+                text = ""
+        except Exception as e:  # noqa: BLE001
+            log.warning("Transkription je Äußerung fehlgeschlagen: %s", fehlertext(e))
+        if cache is not None and text:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(text, encoding="utf-8")
+        self.text_sekunden += dauer
+        nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(dauer, 1),
+                        "sekunden": round(time.monotonic() - t0, 2)})
+        return text
+
+    # --- Knopfdruck -------------------------------------------------------------
+    def offen(self) -> dict:
+        """Was noch nicht transkribiert ist: Äußerungen, Sprechzeit und Meetingzeit seit der ersten davon."""
+        w = self.warteschlange
+        return {"aeusserungen": len(w), "sprache_sekunden": round(sum(e["dauer"] for e in w), 1),
+                "seit_sekunden": round(max(0.0, self.sekunden - w[0]["start"]), 1) if w else 0.0}
+
+    async def nachtranskribieren(self, fortschritt=None) -> dict:
+        """Knopf: genau die offenen Äußerungen transkribieren, höchstens vier gleichzeitig. Fertige Sätze gehen in der
+        Reihenfolge des Sprechens über `coach.satz()` ins Transkript; `fortschritt(fertig, gesamt)` nach jeder.
+        Was währenddessen gesprochen wird, bleibt für den nächsten Knopf in der Warteschlange."""
+        offen, self.warteschlange = self.warteschlange, []
+        sperre = asyncio.Semaphore(KNOPF_GLEICHZEITIG)
+        gesamt, fertig = len(offen), 0
+
+        async def eins(e: dict, vorher) -> None:
+            nonlocal fertig
+            text = await self._transkribieren(e["uid"], e["wav"], e["dauer"], sperre)
+            await asyncio.gather(e["person"], return_exceptions=True)  # ohne feste Person kein Satz
+            await self._text_ausgeben(e["uid"], text, vorher)
+            fertig += 1
+            if fortschritt is not None:
+                await fortschritt(fertig, gesamt)
+
+        aufgaben, vorher = [], None
+        for e in offen:
+            vorher = asyncio.ensure_future(eins(e, vorher))  # jede wartet vor der Ausgabe auf die vorige
+            aufgaben.append(vorher)
+        if aufgaben:
+            await asyncio.gather(*aufgaben)
+        return {"aeusserungen": gesamt, "sprache_sekunden": round(sum(e["dauer"] for e in offen), 1)}
+
+    def verwerfen(self, seit: float) -> int:
+        """Alle Äußerungen, die nach `seit` enden, aus der Warteschlange nehmen; auch eine gerade laufende Äußerung
+        bekommt keinen Text mehr. Sprecherabschnitte (Redeanteile) bleiben. Liefert die Zahl der verworfenen."""
+        weg = [e for e in self.warteschlange if e["ende"] > seit]
+        self.warteschlange = [e for e in self.warteschlange if e["ende"] <= seit]
+        for e in weg:
+            o = self._offen.get(e["uid"])
+            if o is not None:
+                o["text"] = ""  # der Satz entfällt; die Person zählt trotzdem (_person -> _ausgeben)
+        self._verworfen_bis = self.sekunden
+        return len(weg)
 
     async def _text_ausgeben(self, uid: int, text: str, vorher) -> None:
         if vorher is not None:

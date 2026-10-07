@@ -13,6 +13,7 @@ from . import analyse, ergebnisse, konfidenz, kosten, regeln, themen, transkript
 from .assistent import Assistent
 from .config import EINST, WURZEL, hat_openai_schluessel, openai_schluessel, schluessel_info
 from .entscheider import Entscheider
+from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
 from .zustand import Agendapunkt, Meeting, Segment
 
 STIMMEN = ("cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad", "echo", "shimmer")
@@ -112,9 +113,16 @@ class Coach:
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
-        self.modus = "live"  # Startseite (Ticket #1): "live" oder "knopfdruck" – was der Modus bewirkt, folgt in einem eigenen Ticket
+        # Startseite (Ticket #1): "live" oder "knopfdruck". Knopfdruck (Ticket #6): ohne Knopf kein KI-Aufruf –
+        # die Weichen stehen an jeder Stelle, die sonst von selbst einen KI-Dienst ruft (Suche: `self.knopfdruck`).
+        self.modus = "live"
+        self.knopf = Knopfstand()  # Knopf-Analysen (coach/knopfdruck.py)
         self.aeusserungen: list = []  # Regel 1: Äußerungen mit Sprecherabschnitten und Pegel (unterbrechung.py)
         self._unterbrechungen_gemeldet: set[float] = set()
+
+    @property
+    def knopfdruck(self) -> bool:
+        return self.modus == "knopfdruck"
 
     @property
     def karenz_bloecke(self) -> int:
@@ -159,6 +167,7 @@ class Coach:
         self.folie_version = 0
         self.karten = []
         self.namen = {}
+        self.knopf = Knopfstand()
 
     def client_neu(self) -> None:
         """OpenAI-Client mit dem aktuellen Schlüssel (im Dashboard eingetragen oder aus der Umgebung)."""
@@ -189,7 +198,7 @@ class Coach:
             zeit_rot_prozent=EINST.zeit_rot_prozent,
             ueberlappung_min=EINST.ueberlappung_min_sekunden,
             ueberlappung_halte=EINST.ueberlappung_halte_sekunden,
-            themen_aktiv=self._client is not None,
+            themen_aktiv=self._client is not None and not self.knopfdruck,
             zickzack_fenster=EINST.zickzack_fenster_sekunden,
             zickzack_wechsel=EINST.zickzack_wechsel,
         )
@@ -226,6 +235,7 @@ class Coach:
                 # Einstufung verlässlich/experimentell für Regeln und Signale, eine Quelle (Lastenheft 4.3,
                 # Ticket „Konfidenz“) statt verstreuter Badges.
                 "signale": konfidenz.katalog(),
+                "knopf": self.knopf.schnappschuss(self.hoerstrom) if self.knopfdruck else None,
             }
         )
         return daten
@@ -276,6 +286,10 @@ class Coach:
                 h = juengst("ergebnisse", 180)
                 farbe = "gelb" if h else "gruen"
                 detail = "Ergebnis oder Zuständigkeit fehlt" if h else "Ergebnisse festgehalten"
+            if self.knopfdruck and rid in KNOPF_REGELN:
+                # Diese Regeln brauchen den Text – im Modus Knopfdruck nur der Stand des letzten Knopfs
+                k = self.knopf.regeln.get(rid)
+                farbe, detail = (k["farbe"], k["detail"]) if k else ("grau", "auf Knopfdruck")
             if not m.laeuft and not m.segmente:
                 farbe = "grau"
             aus.append({"id": rid, "titel": r.titel.split(" – ")[0], "farbe": farbe, "detail": detail,
@@ -373,8 +387,10 @@ class Coach:
         # Monolog live: der Hinweis kommt, sobald die hochgezählte Rede die Schwelle erreicht
         if analyse.monolog_live(m, self.monolog_sekunden)[0]:
             self._monolog_hinweis()
-        # Live-Bild alle N Minuten (FR-10); gezählt ab dem letzten Start, damit Läufe sich nicht stapeln
-        if self.hoerstrom and EINST.onepager_minuten > 0 and m.transkript and not self._onepager_laeuft:
+        # Live-Bild alle N Minuten (FR-10); gezählt ab dem letzten Start, damit Läufe sich nicht stapeln.
+        # Knopfdruck: kein Bild im Takt, nur auf Knopf.
+        if (self.hoerstrom and EINST.onepager_minuten > 0 and m.transkript and not self._onepager_laeuft
+                and not self.knopfdruck):
             seit = m.jetzt() - (self._onepager_letzter_start or 0)
             if seit >= EINST.onepager_minuten * 60:
                 self.onepager_starten()
@@ -420,6 +436,8 @@ class Coach:
         return " ".join(teile)[-800:]
 
     async def block_verarbeiten(self, wav: bytes, start: float) -> None:
+        if self.knopfdruck:
+            return  # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription – nicht ohne Knopf
         async with self._sperre:
             if self._client is None:
                 self.fehler = "Kein OpenAI-Schlüssel – in den Einstellungen eintragen."
@@ -535,7 +553,7 @@ class Coach:
     async def _themen_pruefen(self, text: str, karenz: int | None = None) -> None:
         """FR-05: Abgleich Gespräch ↔ aktueller Agendapunkt per Sprachmodell."""
         m = self.meeting
-        if not m.agenda:
+        if not m.agenda or self.knopfdruck:  # Knopfdruck: kein Themen-Abgleich und keine Ton-Prüfung im Lauf
             return
         if self._client is None:
             self.entscheider.einmalig(
@@ -560,10 +578,11 @@ class Coach:
         m = self.meeting
         alt = m.aktiver_punkt
         m.punkt_wechseln(i)
-        if alt != m.aktiver_punkt and "ergebnisse" in m.regel_ids:
+        if alt != m.aktiver_punkt and "ergebnisse" in m.regel_ids and not self.knopfdruck:
             hintergrund(self._ergebnis_pruefen(alt))
 
-    async def _ergebnis_pruefen(self, i: int) -> None:
+    async def _ergebnis_pruefen(self, i: int, mit_hinweisen: bool = True) -> None:
+        """Regel 10 für Punkt i; auch Baustein des Protokoll-Knopfs (dort Hinweise nur, wenn die Regel gewählt ist)."""
         m = self.meeting
         saetze = m.punkt_transkript(i)
         if self._client is None or not 0 <= i < len(m.agenda) or sum(s.dauer for s in saetze) < 20:
@@ -579,7 +598,7 @@ class Coach:
         nutzung_loggen({"art": "ergebnisse", "modell": EINST.analyse_modell, **nutzung})
         m.ergebnisse[i] = erg
         self.protokoll.append({"zeit": m.jetzt(), "art": "ergebnis", "punkt": i, **erg})
-        for n, text in enumerate(ergebnisse.hinweise(p.titel, erg)):
+        for n, text in enumerate(ergebnisse.hinweise(p.titel, erg) if mit_hinweisen else []):
             self.entscheider.einmalig(m, f"ergebnis-{i}-{n}", "ergebnisse", "hinweis", "gruppe",
                                       text + regeln.vereinbart(m.regel_ids, "ergebnisse"))
         await self.melden()
@@ -622,8 +641,12 @@ class Coach:
             log.warning("Live-Text nicht verbunden: %s", fehlertext(e))
             self.fehler = f"Live-Text nicht verbunden: {fehlertext(e)}"
             self.hoerstrom.live = None
+        if self.knopfdruck:
+            # Statt der gesprochenen Begrüßung (ginge an die Sprachausgabe): Einverständnis als Hinweis im Dashboard
+            self.entscheider.einmalig(self.meeting, "knopf-einverstaendnis", "info", "hinweis", "gruppe",
+                                      einverstaendnis(self.meeting))
         await self.melden()
-        if self.assistent.aktiv and self._client is not None:
+        if self.assistent.aktiv and self._client is not None and not self.knopfdruck:
             hintergrund(self.assistent.begruessen())
 
     async def hoeren_zufuehren(self, pcm24k: bytes) -> None:
@@ -647,9 +670,10 @@ class Coach:
         self.meeting.beenden()
         if self.assistent.gespraech:
             await self.assistent.gespraech.schliessen()
-        if "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda:
+        # Knopfdruck: auch am Ende nichts ohne Knopf – Ergebnisse und Bild gibt es, wenn vorher gedrückt wurde
+        if "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda and not self.knopfdruck:
             hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
-        if self.onepager_am_ende:
+        if self.onepager_am_ende and not self.knopfdruck:
             self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
         if self.archiv and not self.archiv.fertig:
             self.archiv.ereignis("stopp")
@@ -727,6 +751,14 @@ class Coach:
         m = self.meeting
         if self.assistent.eigene_sprache(seg.start, seg.ende):
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
+        if self.knopfdruck:
+            # Sätze kommen erst beim Knopf, gesammelt: nur ins Transkript. Keine Ansage-Erkennung (der Wechsel käme
+            # Minuten zu spät), keine Namen aus Text, keine Themen-Zuordnung, kein Nestor. Gemeldet wird danach.
+            for z in zeilen or [seg]:
+                z.sprecher = self.namen.get(z.sprecher, z.sprecher)
+                m.transkript.append(z)
+            m.transkript.sort(key=lambda s: s.start)
+            return
         for z in zeilen or [seg]:
             if self.assistent.vorstellung_bis is not None:
                 self.name_lernen(z.sprecher, z.text)
