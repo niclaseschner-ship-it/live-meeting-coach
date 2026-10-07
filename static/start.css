@@ -1,0 +1,33 @@
+/* Nestor · Startseite – baut auf style.css auf (Farben, Radius, Schatten). Ruhig, eine Spalte, Handy zuerst. */
+body { background: var(--bg); }
+
+.s-kopf { display: flex; align-items: flex-start; gap: 16px; max-width: 760px; margin: 0 auto; padding: 36px 22px 0; }
+.s-titel { display: flex; flex-direction: column; gap: 6px; }
+.s-titel strong { font-size: 26px; color: var(--marke-2); letter-spacing: -.01em; }
+.s-titel span { font-size: 15px; color: var(--text-2); line-height: 1.45; max-width: 560px; }
+
+.s-haupt { max-width: 760px; margin: 0 auto; padding: 28px 22px 36px; display: grid; gap: 28px; }
+.s-frage { font-size: 19px; font-weight: 700; margin: 0; color: var(--text); text-align: center; }
+
+.s-karten { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 680px) { .s-karten { grid-template-columns: 1fr; } }
+
+.moduskarte { display: grid; gap: 12px; text-align: left; align-content: start; padding: 22px 22px 20px;
+  background: var(--flaeche); border: 2px solid var(--rand); border-radius: var(--radius); box-shadow: var(--schatten);
+  cursor: pointer; font: inherit; color: var(--text); white-space: normal; }
+.moduskarte:hover, .moduskarte:focus-visible { border-color: var(--marke); outline: none; }
+.moduskarte:focus-visible { box-shadow: 0 0 0 3px #A5B4FC; }
+.moduskarte h2 { margin: 0; font-size: 19px; color: var(--marke-2); text-transform: none; letter-spacing: 0; }
+.moduskarte ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.moduskarte li { display: flex; gap: 9px; font-size: 14.5px; line-height: 1.4; color: var(--text-2); }
+.moduskarte li::before { content: ""; flex: none; width: 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: var(--gold); }
+.s-datenhinweis { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--marke-weich); color: var(--marke-2);
+  font-size: 13.5px; font-style: italic; line-height: 1.4; }
+.s-kosten { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-2); }
+
+.s-finanzierung { padding: 18px 20px; border-radius: var(--radius); background: var(--flaeche-2); border: 1px solid var(--rand); }
+.s-finanzierung h2 { margin: 0 0 8px; }
+.s-finanzierung p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--text-2); }
+
+.s-fuss { display: flex; justify-content: center; gap: 18px; padding: 0 22px 32px; font-size: 13.5px; color: var(--text-3); }
+.s-fuss a { color: var(--text-3); text-decoration: underline; }

@@ -37,7 +37,7 @@ Version-2-Spezifikation (jetzt [docs/archiv/spezifikation_v2.md](docs/archiv/spe
 - **Rechts:** vier Signale (Monolog, Agenda & Zeit, Fokus, Sprecherüberlappung), aktueller Hinweis,
   Redeanteile ohne Bewertung.
 - **Unten:** Live-Transkript mit laufendem Teiltext (nur Moderationsansicht).
-- Gruppenansicht für den Beamer: `/?ansicht=gruppe`.
+- Gruppenansicht für den Beamer: `/meeting?ansicht=gruppe`.
 
 ## Schnellstart (Windows, Laptop)
 

@@ -112,6 +112,7 @@ class Coach:
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
+        self.modus = "live"  # Startseite (Ticket #1): "live" oder "knopfdruck" – was der Modus bewirkt, folgt in einem eigenen Ticket
         self.aeusserungen: list = []  # Regel 1: Äußerungen mit Sprecherabschnitten und Pegel (unterbrechung.py)
         self._unterbrechungen_gemeldet: set[float] = set()
 
@@ -197,6 +198,7 @@ class Coach:
                 "regel_status": self.regel_status(ampeln),
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,
+                "modus": self.modus,
                 "einstellungen": self.einstellungen(),
                 "referenzen": list(self.referenzen),
                 "fehler": self.fehler,
