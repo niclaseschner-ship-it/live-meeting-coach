@@ -37,9 +37,13 @@ WURZEL = Path(__file__).resolve().parent.parent
 CLOUDTEST = WURZEL / "testbibliothek" / "cloudtest"
 CHROMIUM = "/usr/bin/chromium"
 
-# /tmp ist auf dem Pi eine RAM-Disk (CLAUDE.md) – Chromiums Profil- und Downloadreste gehören in die
-# Arbeitskopie (gitignored), nicht dorthin. Vor dem Playwright-Import setzen, der das beim Start liest.
-_TMP = WURZEL / "logs" / "cloudtest" / ".tmp"
+# /tmp ist auf dem Pi eine RAM-Disk (CLAUDE.md) – Chromiums Profilreste sollen trotzdem nicht dorthin.
+# Aber NICHT unter die Arbeitskopie (WURZEL liegt hier in einem Worktree unter .claude/worktrees/<id>/ –
+# das macht den Pfad so lang, dass Chromiums eigener Singleton-Socket im Profilordner den Unix-Socket-
+# Limit von 108 Byte reißt und beim Start sofort mit SIGTRAP abbricht, egal wie viel Speicher frei ist;
+# erst durch gezieltes Nachstellen gefunden, siehe Bericht). Stattdessen ein kurzer, fester Pfad im
+# Home-Verzeichnis, außerhalb jedes Worktrees. Vor dem Playwright-Import setzen, der das beim Start liest.
+_TMP = Path.home() / ".cache" / "lmc-cloudtest-tmp"
 _TMP.mkdir(parents=True, exist_ok=True)
 os.environ["TMPDIR"] = str(_TMP)
 
