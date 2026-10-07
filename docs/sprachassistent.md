@@ -7,8 +7,10 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 1. **Begrüßung mit Einverständnis.** Beim Start sagt der Coach: „Hallo zusammen, ich bin Nestor und begleite
    heute euer Meeting. Ihr habt euch folgende Regeln gewünscht: … Dafür höre ich mit. Wenn jemand damit nicht
    einverstanden ist, sagt jetzt bitte einfach Nein.“
-   - **Kein Nein in 7 s:** „Ich habe kein Nein gehört. Dann geht es los. Wir starten mit Punkt eins: … Ich höre
-     zu und melde mich nur, wenn ihr mich braucht. Sprecht mich einfach mit Nestor an.“
+   - **Kein Nein in 7 s:** „Ich habe kein Nein gehört. Dann geht es los. Wir starten mit Punkt eins: … Ich kann
+     euch besser begleiten, wenn ihr kurz sagt, wann ihr zum nächsten Punkt geht, oder ihn selbst anklickt. Wenn
+     ihr wollt, fasse ich vorher kurz zusammen, was ihr besprochen habt. Ich höre zu und melde mich nur, wenn ihr
+     mich braucht. Sprecht mich einfach mit Nestor an.“ Die Bitte um den Agendawechsel entfällt bei nur einem Punkt.
    - **Ein Nein:** Bisheriges Transkript und Stimmprofile werden gelöscht. Ab dann geht kein Ton mehr an
      OpenAI. Wieder einschalten geht nur über den Knopf, weil der Coach dann nichts mehr hört.
 2. **Zuhören ohne Einmischen.** Ampeln und Hinweise laufen wie bisher still im Dashboard. Gesprochen wird
