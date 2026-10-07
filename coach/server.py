@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import regeln, zugang
+from .api_agenda import router as agenda_router
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -140,6 +141,7 @@ async def lebenszyklus(app: FastAPI):
 
 app = FastAPI(title="Live Meeting Coach", lifespan=lebenszyklus)
 app.add_middleware(zugang.Zugangsschutz)
+app.include_router(agenda_router)
 
 
 @app.middleware("http")
