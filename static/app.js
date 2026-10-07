@@ -1,5 +1,10 @@
 "use strict";
 
+// ---------- Konfidenz (Ticket „Konfidenz“, Lastenheft 4.3) ----------
+// Eine Quelle im Backend (coach/regeln.py, coach/konfidenz.py), hier nur nachschlagen und zeigen.
+function signal(z, id) { return (z.signale ?? []).find((s) => s.id === id); }
+function konfSchild(klasse = "") { return el("span", { class: `konf-schild ${klasse}`.trim() }, "experimentell"); }
+
 // ---------- Vorbereitung ----------
 let regelkatalog = [];
 function punktZeile(p = {}) {
@@ -16,8 +21,12 @@ function personZeile(name = "") {
   $("f-teilnehmende").append(z);
 }
 function regelwahl(standard) {
+  // Gleiche Einstufung wie im Dashboard (verlässlich/experimentell) statt eigener Prüfstufen-Texte;
+  // Kurzsatz aus Lastenheft 4.3 im Tipp, wenn experimentell.
   $("f-regelwahl").replaceChildren(...regelkatalog.map((r) => el("label",
-    { class: `regel${r.umgesetzt ? "" : " folgt"}`, "data-tip": r.umgesetzt ? r.beobachtet : "folgt in einer späteren Ausbaustufe" },
+    { class: `regel${r.umgesetzt ? "" : " folgt"}`,
+      "data-tip": r.umgesetzt ? (r.stufe === "experimentell" && r.kurzsatz ? r.kurzsatz : r.beobachtet)
+        : "folgt in einer späteren Ausbaustufe" },
     el("input", { type: "checkbox", value: r.id, ...(standard.includes(r.id) && r.umgesetzt ? { checked: "" } : {}),
       ...(r.umgesetzt ? {} : { disabled: "" }) }),
     el("span", { class: "r-icon" }, icon(r.id)),
@@ -408,17 +417,22 @@ function liveRendern(z) {
 
   const v = z.vorschlag;
   $("vorschlag").hidden = !v;
-  if (v) $("vorschlag").replaceChildren(
-    el("span", {}, `Weiter zu „${v.titel}“?`),
-    el("div", { class: "knoepfe" },
-      el("button", { class: "klein primaer", onclick: () => api("/api/punkt", { index: v.punkt }) }, "Ja, weiter"),
-      el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
+  if (v) {
+    const vk = signal(z, "agenda_ohne"); // Agendawechsel ohne Ansage: automatisch erkannt, nicht angesagt
+    $("vorschlag").replaceChildren(
+      el("span", { "data-tip": vk?.stufe === "experimentell" ? vk.kurzsatz : "" },
+        `Weiter zu „${v.titel}“?`, ...(vk?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
+      el("div", { class: "knoepfe" },
+        el("button", { class: "klein primaer", onclick: () => api("/api/punkt", { index: v.punkt }) }, "Ja, weiter"),
+        el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
+  }
 
-  // Regeln als Ampeln (Zeit steht nur links)
+  // Regeln als Ampeln (Zeit steht nur links); verlässliche vorn, experimentelle mit Schild und Kurzsatz
+  // kommen schon sortiert aus regel_status (Backend, einzige Quelle: coach/regeln.py).
   $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("div", { class: `ampel ${r.farbe}`,
-    "data-tip": (r.detail || r.titel) + (r.experimentell ? " – experimentell: im Raum noch nicht geprüft" : "") },
+    "data-tip": (r.detail || r.titel) + (r.stufe === "experimentell" ? ` – ${r.kurzsatz}` : "") },
     el("span", { class: "a-icon" }, icon(r.id)),
-    el("strong", {}, r.titel, ...(r.experimentell ? [el("span", { class: "exp" }, "exp.")] : [])),
+    el("strong", {}, r.titel, ...(r.stufe === "experimentell" ? [konfSchild()] : [])),
     el("span", { class: "detail" }, r.detail))));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
 
@@ -431,26 +445,39 @@ function liveRendern(z) {
     el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${(sek / summe) * 100}%` })),
     el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
 
-  dynamikRendern(z.dynamik);
+  dynamikRendern(z);
   bildRendern(z);
 }
 
 const KLIMA_HOEHE = { ruhig: 30, lebhaft: 65, hitzig: 100 };
-function dynamikRendern(d) {
+function dynamikRendern(z) {
+  const d = z.dynamik;
   if (!d) return;
   const k = d.klima ?? { stufe: "ruhig", gruende: [] };
   const box = $("klima");
   box.className = `klima ${k.stufe}`;
   const thermo = el("span", { class: "thermo" }, el("span"));
   thermo.firstChild.style.height = `${KLIMA_HOEHE[k.stufe] ?? 30}%`;
-  box.dataset.tip = "Letzte 3 Minuten: gleichzeitiges Sprechen, Ins-Wort-Fallen, Lautstärke und Ton";
-  box.replaceChildren(thermo, el("div", {}, el("div", { class: "stufe" }, k.stufe[0].toUpperCase() + k.stufe.slice(1)),
+  // Klima, gleichzeitiges Sprechen und Ausreden lassen je einzeln einstufen statt mit einem Schild fürs
+  // ganze Kärtchen (das verwischte, dass es unterschiedliche Zahlen sind, siehe Lastenheft 4.3).
+  const kKlima = signal(z, "klima");
+  const kGleich = signal(z, "gleichzeitig");
+  const kAusreden = signal(z, "ausreden");
+  box.dataset.tip = "Letzte 3 Minuten: gleichzeitiges Sprechen, Ins-Wort-Fallen, Lautstärke und Ton"
+    + (kKlima?.stufe === "experimentell" ? ` – ${kKlima.kurzsatz}` : "");
+  box.replaceChildren(thermo, el("div", {},
+    el("div", { class: "stufe" }, k.stufe[0].toUpperCase() + k.stufe.slice(1),
+      ...(kKlima?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
     el("div", { class: "gruende" }, k.gruende.length ? k.gruende.join(" · ") : "keine Auffälligkeiten")));
   $("dynamik").replaceChildren(
-    el("div", { "data-tip": "Vorfälle, in denen zwei gleichzeitig sprachen (seit Beginn / letzte 10 min)" },
-      el("strong", {}, d.ueberlappungen), el("span", {}, `gleichzeitig gesprochen · ${d.ueberlappungen_10min} in 10 min`)),
-    el("div", { "data-tip": "Wechsel ohne Pause, nach denen die neue Person das Wort behält (seit Beginn / letzte 10 min)" },
-      el("strong", {}, d.unterbrechungen), el("span", {}, `ins Wort gefallen · ${d.unterbrechungen_10min} in 10 min`)));
+    el("div", { "data-tip": "Vorfälle, in denen zwei gleichzeitig sprachen (seit Beginn / letzte 10 min)"
+        + (kGleich?.stufe === "experimentell" ? ` – ${kGleich.kurzsatz}` : "") },
+      el("strong", {}, d.ueberlappungen, ...(kGleich?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
+      el("span", {}, `gleichzeitig gesprochen · ${d.ueberlappungen_10min} in 10 min`)),
+    el("div", { "data-tip": "Wechsel ohne Pause, nach denen die neue Person das Wort behält (seit Beginn / letzte 10 min)"
+        + (kAusreden?.stufe === "experimentell" ? ` – ${kAusreden.kurzsatz}` : "") },
+      el("strong", {}, d.unterbrechungen, ...(kAusreden?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
+      el("span", {}, `ins Wort gefallen · ${d.unterbrechungen_10min} in 10 min`)));
 }
 
 function leisteRendern(z) {

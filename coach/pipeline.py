@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-from . import analyse, ergebnisse, kosten, regeln, themen, transkription
+from . import analyse, ergebnisse, konfidenz, kosten, regeln, themen, transkription
 from .assistent import Assistent
 from .config import EINST, WURZEL, hat_openai_schluessel, openai_schluessel, schluessel_info
 from .entscheider import Entscheider
@@ -221,6 +221,9 @@ class Coach:
                 "recherche_da": self.letzte_recherche is not None,
                 "karten": self.karten[-50:],
                 "assistent": self.assistent.schnappschuss(),
+                # Einstufung verlässlich/experimentell für Regeln und Signale, eine Quelle (Lastenheft 4.3,
+                # Ticket „Konfidenz“) statt verstreuter Badges.
+                "signale": konfidenz.katalog(),
             }
         )
         return daten
@@ -274,7 +277,10 @@ class Coach:
             if not m.laeuft and not m.segmente:
                 farbe = "grau"
             aus.append({"id": rid, "titel": r.titel.split(" – ")[0], "farbe": farbe, "detail": detail,
-                        "experimentell": rid == "ausreden"})  # hängt an kurzen Sprecherwechseln (Sprecher-Labor AMI)
+                        "stufe": r.stufe, "kurzsatz": r.kurzsatz if r.stufe == "experimentell" else None})
+        # Verlässliche Regeln zuerst (Lastenheft 4.3), experimentelle ans Ende – stabile Sortierung behält
+        # sonst die Katalog-Reihenfolge.
+        aus.sort(key=lambda d: d["stufe"] == "experimentell")
         return aus
 
     def status_kurz(self) -> dict:
