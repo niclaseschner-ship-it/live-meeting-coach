@@ -92,9 +92,11 @@ class Archiv:
         self.zeitreihe: list[dict] = []
         self.laufzeiten: list[float] = []
         self._wav: wave.Wave_write | None = None
+        self._datei = None  # die Datei selbst, damit „verwerfen“ einen Abschnitt herausschneiden kann
         self.mit_audio = audio  # bleibt nach dem Schließen der Datei wahr – außer nach einem Einwand
         if audio:
-            self._wav = wave.open(str(self.ordner / "aufnahme.wav"), "wb")
+            self._datei = open(self.ordner / "aufnahme.wav", "wb")  # noqa: SIM115 – schließt _wav_schliessen()
+            self._wav = wave.open(self._datei, "wb")
             self._wav.setnchannels(1)
             self._wav.setsampwidth(2)
             self._wav.setframerate(24000)
@@ -116,14 +118,39 @@ class Archiv:
         if self._wav is not None:
             self._wav.writeframes(pcm24k)
 
+    def _wav_schliessen(self) -> None:
+        if self._wav is not None:
+            self._wav.close()  # schreibt die Längen in den Kopf; die Datei selbst schließt wave hier nicht
+            self._wav = None
+        if self._datei is not None:
+            self._datei.close()
+            self._datei = None
+
     def audio_verwerfen(self) -> None:
         """Einwand der Runde: nichts behalten."""
         self.mit_audio = False
-        if self._wav is not None:
-            self._wav.close()
-            self._wav = None
+        self._wav_schliessen()
         (self.ordner / "aufnahme.wav").unlink(missing_ok=True)
         self.ereignis("einwand", aufnahme_geloescht=True)
+
+    def ausschneiden(self, seit: float) -> None:
+        """Knopfdruck „verwerfen“ (Ticket #6): den Ton ab Meetingzeit `seit` bis jetzt löschen.
+
+        Die Datei wird an der Stelle gekürzt und auf die alte Länge mit Nullen (Stille) wieder aufgefüllt: der Inhalt
+        ist weg, die Zeitachse bleibt – Transkript-, Hinweis- und Sprecherzeiten passen weiter zur Aufnahme, und die
+        Aufnahme läuft danach einfach weiter. `seit=0` löscht alles Bisherige.
+        """
+        self.ereignis("verworfen", ab_s=round(seit, 1), aufnahme=self._wav is not None)
+        if self._wav is None or self._datei is None:
+            return
+        self._datei.flush()
+        ende = self._datei.tell()
+        frames = self._wav.getnframes()  # bisher geschrieben; die Audiodaten stehen am Ende der Datei
+        beginn = ende - frames * 2
+        ab = beginn + min(frames, max(0, round(seit * 24000))) * 2
+        self._datei.truncate(ab)
+        self._datei.truncate(ende)  # wieder verlängern: das neue Stück liest sich als Nullen
+        self._datei.seek(ende)
 
     def ereignis(self, art: str, **daten) -> None:
         z = {"zeit": time.strftime("%Y-%m-%dT%H:%M:%S"), "meeting_s": round(self.coach.meeting.jetzt(), 1),
@@ -154,8 +181,7 @@ class Archiv:
         dann endgültig, wenn Abschlussbild und Ergebnisprüfung fertig sind."""
         c = self.coach
         if self._wav is not None and endgueltig:
-            self._wav.close()
-            self._wav = None
+            self._wav_schliessen()
         lz = sorted(self.laufzeiten)
         extra = {"archiv": self.ordner.name, "beginn": self.seit, "titel": c.meeting.titel,
                  "laufzeit_handy_ms": ({"anzahl": len(lz), "median": statistics.median(lz), "max": lz[-1],
@@ -166,8 +192,10 @@ class Archiv:
             (self.ordner / "zusammenfassung.png").write_bytes(c.onepager_png)
         elif c.onepager_svg:
             (self.ordner / "zusammenfassung.svg").write_text(c.onepager_svg, encoding="utf-8")
-        if c.onepager_analyse:
-            (self.ordner / "protokoll.md").write_text(c.onepager_analyse, encoding="utf-8")
+        # Knopfdruck: das Protokoll vom Protokoll-Knopf hat Vorrang vor der Analyse hinter dem Bild
+        protokoll = getattr(getattr(c, "knopf", None), "protokoll", None) or c.onepager_analyse
+        if protokoll:
+            (self.ordner / "protokoll.md").write_text(protokoll, encoding="utf-8")
         logs = WURZEL / "logs"
         _jsonl_seit(logs / "nestor_zeiten.jsonl", self.ordner / "debug" / "nestor_zeiten.jsonl", self.seit)
         _jsonl_seit(logs / "nutzung.jsonl", self.ordner / "debug" / "nutzung.jsonl", self.seit)

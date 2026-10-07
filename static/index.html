@@ -55,6 +55,32 @@
     </div>
   </header>
 
+  <!-- Modus „Auf Knopfdruck“: Knopfleiste statt Nestor-Leiste – ohne Knopf geht nichts an einen KI-Dienst -->
+  <section id="knopf-leiste" class="knopf-leiste" hidden>
+    <div class="knopf-knoepfe">
+      <button class="knopf-art" data-knopf="stand">Wo stehen wir?</button>
+      <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
+      <button class="knopf-art" data-knopf="protokoll">Protokoll</button>
+      <button class="knopf-art" data-knopf="bild">Bild</button>
+      <form id="knopf-frage-form" class="knopf-frage">
+        <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
+        <button id="knopf-fragen" class="primaer">Fragen</button>
+      </form>
+    </div>
+    <div class="knopf-zeile">
+      <span id="knopf-offen" class="knopf-offen"></span>
+      <div id="knopf-fortschritt" class="knopf-fortschritt" hidden>
+        <span class="knopf-balken"><i id="knopf-balken"></i></span>
+        <span id="knopf-schritt"></span>
+      </div>
+      <span id="knopf-fehler" class="knopf-fehler" hidden></span>
+      <span class="knopf-verwerfen">
+        <button id="knopf-verwerfen-5" class="klein" data-tip="Ton und Text der letzten 5 Minuten löschen – auch aus der Aufnahme">Letzte 5 min verwerfen</button>
+        <button id="knopf-verwerfen-alles" class="klein knopf-gefahr" data-tip="Alles bisher Gesagte löschen – Ton, Text und Auswertungen">Alles verwerfen</button>
+      </span>
+    </div>
+  </section>
+
   <!-- Kosten (Klapp-Fenster aus der Kopfleiste) -->
   <div id="kosten" class="klappfenster" hidden>
     <h3>OpenAI-Kosten <small>Schätzung nach Listenpreis</small></h3>
@@ -148,6 +174,7 @@
     <p id="karte-frage" class="nk-frage"></p>
     <ul id="karte-punkte" class="nk-punkte"></ul>
     <div id="karte-quellen" class="nk-quellen" hidden></div>
+    <a id="karte-protokoll" class="knopf-link" href="/api/knopf/protokoll.md" target="_blank" hidden>Ganzes Protokoll öffnen</a>
     <button id="karte-folie" class="leise klein" hidden>Als Folie im Bildbereich zeigen</button>
   </section>
 

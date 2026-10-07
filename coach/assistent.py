@@ -186,6 +186,12 @@ class Assistent:
     def pausiert(self) -> bool:
         return self.zustand == "pausiert"
 
+    @property
+    def ansprache_aus(self) -> bool:
+        """Modus „Auf Knopfdruck“ (Lastenheft 3): Nestor hört nicht auf seinen Namen und spricht nicht – Fragen
+        gehen über die Knopfleiste und kommen als Text-Karte zurück (coach/knopfdruck.py)."""
+        return self.coach.modus == "knopfdruck"
+
     def spricht_um(self, t: float) -> bool:
         return any(a - 0.2 <= t <= b for a, b in self.sprechzeiten)
 
@@ -198,7 +204,7 @@ class Assistent:
 
     # --- Begrüßung mit Einwilligung ----------------------------------------
     async def begruessen(self) -> None:
-        if not self.aktiv or self.coach._client is None:
+        if not self.aktiv or self.coach._client is None or self.ansprache_aus:
             return
         gruss, _ = begruessungstext(self.coach.meeting)
         self.zustand = "begruessung"
@@ -238,6 +244,8 @@ class Assistent:
 
     def knopf(self) -> None:
         """Knopf „fragen“: wie Ansprechen mit Namen – die nächste Äußerung gilt als Frage."""
+        if self.ansprache_aus:
+            return
         self.messen("knopf")
         if EINST.assistent_modus == "gespraech":
             if not (self.gespraech and self.gespraech.offen):
@@ -248,7 +256,7 @@ class Assistent:
             self.zustand = "angesprochen"
 
     async def satz(self, text: str, ende: float) -> None:
-        if not self.aktiv or self.pausiert:
+        if not self.aktiv or self.pausiert or self.ansprache_aus:
             return
         jetzt = self.coach.meeting.jetzt()
         if self.zustand == "einwand":
@@ -307,7 +315,7 @@ class Assistent:
 
         Ist ein Gespräch offen, spricht Nestor sie dort – sonst gäbe es zwei Stimmen gleichzeitig (Test 05.10.).
         """
-        if not self.aktiv or self.pausiert:
+        if not self.aktiv or self.pausiert or self.ansprache_aus:
             return
         if self.gespraech and self.gespraech.offen:
             asyncio.ensure_future(self.gespraech.ansagen(text))
@@ -482,7 +490,7 @@ class Assistent:
     async def _sprechen(self, text: str) -> float:
         """Einen Satz synthetisieren und gestreamt ans Dashboard schicken. Liefert die Tondauer in Sekunden."""
         c = self.coach
-        if c._client is None or not text.strip():
+        if c._client is None or not text.strip() or self.ansprache_aus:
             return 0.0
         if EINST.stimme_aus:  # Tests: keine Sprachausgabe, Dauer grob geschätzt (~14 Zeichen je Sekunde)
             return len(text) / 14
