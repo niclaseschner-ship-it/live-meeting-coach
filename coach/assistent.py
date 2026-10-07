@@ -119,8 +119,7 @@ def agenda_bitte(meeting) -> str:
     if len(meeting.agenda) < 2:
         return ""
     # Das Zusammenfassen läuft über die normale Ansprache („Nestor, fass zusammen“) – kein eigener Ablauf nötig.
-    return (" Ich kann euch besser begleiten, wenn ihr kurz sagt, wann ihr zum nächsten Punkt geht, "
-            "oder ihn selbst anklickt. Wenn ihr wollt, fasse ich vorher kurz zusammen, was ihr besprochen habt.")
+    return " Wenn ihr zum nächsten Punkt geht, sagt kurz Bescheid oder klickt ihn an – auf Wunsch fasse ich vorher zusammen."
 
 
 def _weitere_regeln_satz(meeting) -> str:
@@ -174,9 +173,8 @@ def begruessungstext(meeting) -> tuple[str, str]:
              f"Wer nicht einverstanden ist, sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
-    start = (f"Ganz kurz, wie ihr mit mir klarkommt: Wenn ihr etwas braucht, sagt einfach „{name}“ und eure Frage. "
-             "Nachfragen gehen dann auch ohne meinen Namen. Und wenn ich zu viel rede, redet einfach rein, "
-             "dann bin ich still. Von selbst melde ich mich nicht, Hinweise seht ihr auf dem Bildschirm."
+    start = (f"Ganz kurz, wie ihr mit mir klarkommt: Sagt einfach „{name}“ und eure Frage. Nachfragen geht dann "
+             "auch ohne Namen, und wenn ich zu viel rede, redet einfach rein."
              f"{agenda_bitte(meeting)}{agenda_kommentar(meeting)}{erster}")
     return gruss, start
 

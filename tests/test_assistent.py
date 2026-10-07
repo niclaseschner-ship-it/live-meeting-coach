@@ -272,7 +272,7 @@ def test_begruessung_erklaert_ansprache_und_kommentiert_agenda():
                    "regel_ids": []})
     gruss, start = a.begruessungstext(c.meeting)
     assert "Nestor, nein" in gruss and "später" in gruss
-    assert "redet einfach rein" in start and "ohne meinen Namen" in start
+    assert "redet einfach rein" in start and "ohne Namen" in start
     assert "Zwei Punkte in 10 Minuten – das ist sportlich." in start and start.endswith("Punkt eins: A.")
 
 
