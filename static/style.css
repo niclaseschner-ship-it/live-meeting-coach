@@ -147,11 +147,13 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .f-person { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
 
 /* Agenda per Prompt (Lastenheft 4.1): Eingabefeld groß und zentral ganz oben (Ticket #10) */
-.agenda-eingabe-gross { max-width: 760px; margin: 0 auto 26px; }
+.agenda-eingabe-gross { margin: 0 0 26px; }
 .agenda-eingabe-gross .agenda-eingabe textarea { min-height: 72px; font-size: 16px; padding: 14px 16px; }
-.agenda-eingabe-gross .agenda-knoepfe button { height: 100%; }
+.agenda-eingabe-gross .agenda-eingabe { align-items: stretch; }
+.agenda-eingabe-gross .agenda-knoepfe { flex-direction: column; }
+.agenda-eingabe-gross .agenda-knoepfe button { flex: 1; min-width: 110px; }
 .agenda-eingabe { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
-.agenda-eingabe textarea { resize: vertical; min-height: 42px; }
+.agenda-eingabe textarea { flex: 1; resize: vertical; min-height: 42px; }
 .agenda-knoepfe { display: flex; gap: 8px; flex: none; }
 .agenda-eingabe textarea:disabled, .agenda-knoepfe button:disabled { opacity: .5; }
 .agenda-antwort { margin: 0 0 10px; padding: 10px 14px; border-radius: 10px; background: var(--marke-weich);
