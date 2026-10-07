@@ -168,14 +168,24 @@ async def agenda_eingabe_finden(seite: Page):
         lambda: seite.get_by_placeholder(re.compile("sprechen|einfügen|Agenda", re.I)).first,
         lambda: seite.locator("#einrichtung").get_by_role("textbox").first,
     ]
-    for versuch in kandidaten_feld:
-        feld = versuch()
-        try:
-            if await feld.count() and await feld.is_visible():
-                break
-        except Exception:  # noqa: BLE001
-            continue
-    else:
+    # Die Seite füllt den Einrichten-Bereich erst über ihre eigene Start-IIFE (agendaInit(), Regeln,
+    # Szenarien …), das kann nach dem Laden noch ein paar hundert ms dauern - mehrfach probieren statt
+    # einmalig, sonst ein falsches "nicht gefunden" durch reine Zeitlupe.
+    t0 = time.monotonic()
+    feld = None
+    while time.monotonic() - t0 < 8.0:
+        for versuch in kandidaten_feld:
+            kandidat = versuch()
+            try:
+                if await kandidat.count() and await kandidat.is_visible():
+                    feld = kandidat
+                    break
+            except Exception:  # noqa: BLE001
+                continue
+        if feld is not None:
+            break
+        await asyncio.sleep(0.3)
+    if feld is None:
         return None, None
     kandidaten_knopf = [
         lambda: seite.locator("#einrichtung").get_by_role("button", name=re.compile("Absenden|Senden", re.I)).first,
