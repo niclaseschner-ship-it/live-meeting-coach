@@ -27,7 +27,7 @@
     <h2>Verantwortlicher</h2>
     <p class="r-anschrift">
       <span id="imp-name">[wird ergänzt]</span><br>
-      <span id="imp-anschrift">[wird ergänzt]</span><br>
+      <span id="imp-anschrift-zeile" hidden><span id="imp-anschrift"></span><br></span>
       E-Mail: <span id="imp-mail">[wird ergänzt]</span>
     </p>
 
@@ -70,7 +70,10 @@
         if (!r.ok) return;
         const d = await r.json();
         if (d.impressum_name) document.getElementById("imp-name").textContent = d.impressum_name;
-        if (d.impressum_anschrift) document.getElementById("imp-anschrift").textContent = d.impressum_anschrift;
+        if (d.impressum_anschrift) {  // ohne Anschrift entfällt die Zeile (privates Projekt, Zugang nur nach Anmeldung)
+          document.getElementById("imp-anschrift").textContent = d.impressum_anschrift;
+          document.getElementById("imp-anschrift-zeile").hidden = false;
+        }
         if (d.impressum_mail) document.getElementById("imp-mail").textContent = d.impressum_mail;
       } catch { /* Vorgabe „[wird ergänzt]“ bleibt stehen */ }
     })();
