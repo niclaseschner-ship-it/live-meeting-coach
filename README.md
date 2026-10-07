@@ -26,7 +26,7 @@ Die Bilder zeigen die Demo „Messeplanung 2027“ mit Originalansichten der App
 [So sprecht ihr mit Nestor](docs/sprachassistent.md)
 
 Grundlage: **Lastenheft „KI-gestützter Meeting-Assistent (MVP)“** (02.10.2026) und die
-Version-2-Spezifikation für echte Meetings in [docs/spezifikation.md](docs/spezifikation.md).
+Version-2-Spezifikation (jetzt [docs/archiv/spezifikation_v2.md](docs/archiv/spezifikation_v2.md)). **Verbindlich ist das [Lastenheft](docs/lastenheft.md).**
 
 ## Was das Dashboard zeigt
 

@@ -45,7 +45,7 @@ class Einstellungen:
     zickzack_wechsel: int = int(_zahl("LMC_ZICKZACK_WECHSEL", 4))
     zickzack_fenster_sekunden: float = _zahl("LMC_ZICKZACK_FENSTER_SEKUNDEN", 3)
 
-    # --- Version 2: Ströme statt Blöcke (docs/spezifikation.md, Abschnitt 5) ---
+    # --- Version 2: Ströme statt Blöcke (docs/archiv/spezifikation_v2.md, Abschnitt 5) ---
     # Strom 1 Live-Text
     # „schnell“: Streaming (gpt-live-transcribe, Teiltext beim Sprechen, Satz 0,7 s nach Ende, ~1,02 $/h)
     # „sparsam“: je Äußerung per REST (text_modell, Satz im Mittel 1,1 s / max. ~4 s nach Ende, ~0,36 $/h)
