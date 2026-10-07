@@ -7,16 +7,26 @@ Ringimport zwischen server.py und diesem Modul gibt.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
 from .abschluss import OrdnerAblage, paket, spenden_dateien, stufen
+from .ablage_r2 import AblageFehler, R2Ablage
 from .config import EINST
 
 router = APIRouter()
-_ablage = OrdnerAblage()
+_ablage = R2Ablage() if EINST.betrieb == "cloud" else OrdnerAblage()
+
+
+async def _ablegen(dateien: dict[str, bytes]) -> None:
+    """Im Thread: der R2-Weg lädt über das Netz hoch und soll die Ereignisschleife nicht aufhalten."""
+    try:
+        await asyncio.to_thread(_ablage.ablegen, _kurz_id(), dateien)
+    except AblageFehler as e:
+        raise HTTPException(502, "Die Spende ließ sich gerade nicht ablegen – bitte später noch einmal.") from e
 
 
 def _kurz_id() -> str:
@@ -86,7 +96,7 @@ async def abschluss_spende(daten: dict):
         dateien = spenden_dateien(coach.archiv.ordner, str(daten.get("feedback") or ""), bool(daten.get("aufnahme")))
     except OSError as e:
         raise HTTPException(404, "Ablage noch nicht da – bitte kurz warten.") from e
-    _ablage.ablegen(_kurz_id(), dateien)
+    await _ablegen(dateien)
     return {"ok": True}
 
 
@@ -96,7 +106,7 @@ async def abschluss_feedback(daten: dict):
     text = str(daten.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "Kein Feedback-Text.")
-    _ablage.ablegen(_kurz_id(), {"feedback.txt": text.encode("utf-8")})
+    await _ablegen({"feedback.txt": text.encode("utf-8")})
     return {"ok": True}
 
 

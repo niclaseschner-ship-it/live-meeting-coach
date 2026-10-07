@@ -4,6 +4,14 @@ Der Coach lauscht weiter nur auf 127.0.0.1. Ins Netz kommt er über `tailscale s
 nur im eigenen Tailnet). Solche Anfragen kommen ebenfalls von 127.0.0.1, tragen aber die Weiterleitungs-Kopfzeilen –
 daran erkennt der Coach, dass sie nicht vom Laptop stammen. Der Code steckt im QR-Code am Laptop; einmal gekoppelt,
 merkt sich das Handy ihn als Cookie.
+
+**Cloud-Betrieb** (`LMC_BETRIEB=cloud`, Ticket #5): Hier gibt es kein „am Laptop selbst“ mehr – jede Anfrage kommt
+über den Cloudflare-Worker herein, der vorher schon das Kundenpasswort geprüft hat (`cloudflare/`). Der Worker
+beweist sich mit der Kopfzeile `X-Nestor-Geheimnis` (Secret `LMC_WORKER_GEHEIMNIS`, auf beiden Seiten gleich).
+Passt sie: dieselben Rechte wie „am Laptop“ – der Worker hat die eigentliche Prüfung schon gemacht. Passt sie
+nicht (sollte nur bei einem direkten, nicht über den Worker laufenden Zugriff passieren), gibt es 403 für alles,
+auch für die sonst offenen Seiten. Das Handy koppelt weiter ganz normal über den Kopplungscode; nur die Adresse
+im QR-Code kommt dann aus der Anfrage (`Host`) statt aus `tailscale serve`.
 """
 
 from __future__ import annotations
@@ -15,7 +23,7 @@ import subprocess
 from http.cookies import SimpleCookie
 from pathlib import Path
 
-from .config import SCHLUESSEL_DATEI
+from .config import EINST, SCHLUESSEL_DATEI
 
 KOPPLUNG_DATEI = Path(os.getenv("LMC_KOPPLUNG_DATEI", str(SCHLUESSEL_DATEI.parent / "kopplung")))
 COOKIE = "lmc_kopplung"
@@ -23,6 +31,11 @@ COOKIE = "lmc_kopplung"
 OFFEN = ("/handy", "/handy.webmanifest", "/sw.js")
 WEITERGELEITET = (b"x-forwarded-for", b"forwarded", b"tailscale-user-login", b"x-forwarded-host")
 _ZEICHEN = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # ohne I, L, O, 0, 1 – am Handy eintippbar
+
+# Cloud-Betrieb: Kopfzeilen, mit denen sich der Worker und das Meeting zu erkennen geben
+GEHEIMNIS_KOPFZEILE = b"x-nestor-geheimnis"
+KUNDE_KOPFZEILE = b"x-nestor-kunde"
+MEETING_KOPFZEILE = b"x-nestor-meeting"
 
 
 def code() -> str:
@@ -49,8 +62,36 @@ def code_passt(eingabe: str | None) -> bool:
     return bool(eingabe) and secrets.compare_digest(normalisieren(eingabe), code())
 
 
+def _kopfzeile(scope: dict, name: bytes) -> str | None:
+    for k, v in scope.get("headers", []):
+        if k == name:
+            return v.decode("latin-1")
+    return None
+
+
+def worker_geheimnis_passt(scope: dict) -> bool:
+    """Cloud-Betrieb: Beweis, dass die Anfrage wirklich über den eigenen Worker kam (nicht erraten)."""
+    eigenes = EINST.worker_geheimnis
+    fremdes = _kopfzeile(scope, GEHEIMNIS_KOPFZEILE)
+    return bool(eigenes) and bool(fremdes) and secrets.compare_digest(fremdes, eigenes)
+
+
+def kunde(scope: dict) -> str | None:
+    """Kundenname aus der Worker-Kopfzeile – nur verlässlich, wenn worker_geheimnis_passt(scope)."""
+    return _kopfzeile(scope, KUNDE_KOPFZEILE)
+
+
+def meeting_id(scope: dict) -> str | None:
+    """Meeting-Kennung, die der Worker aus seinem Cookie `nestor_meeting` mitgibt (Cloud-Betrieb)."""
+    return _kopfzeile(scope, MEETING_KOPFZEILE)
+
+
 def lokal(scope: dict) -> bool:
-    """Anfrage vom Laptop selbst – nicht über tailscale serve oder einen anderen Vermittler weitergereicht."""
+    """Anfrage mit Laptop-Rechten: am Laptop selbst (nicht über tailscale serve oder einen anderen Vermittler
+    weitergereicht) – oder im Cloud-Betrieb, wo es „am Laptop“ nicht gibt, mit gültigem Worker-Geheimnis
+    (der Worker hat die eigentliche Prüfung – das Kundenpasswort – davor schon gemacht)."""
+    if EINST.betrieb == "cloud":
+        return worker_geheimnis_passt(scope)
     host = (scope.get("client") or ("", 0))[0]
     if host not in ("127.0.0.1", "::1", "localhost"):
         return False
@@ -89,12 +130,15 @@ _adresse: str | None = None
 
 
 def adresse() -> str | None:
-    """HTTPS-Adresse im Tailnet: LMC_HANDY_URL, sonst die `tailscale serve`-Freigabe für den eigenen Port."""
+    """HTTPS-Adresse im Tailnet: LMC_HANDY_URL, sonst die `tailscale serve`-Freigabe für den eigenen Port.
+
+    Nur im lokalen Betrieb – im Cloud-Betrieb gibt es kein tailscale, die Adresse kommt dort stattdessen aus
+    der Anfrage selbst (`adresse_aus_host`, aufgerufen von `/api/kopplung`)."""
     global _adresse
+    if EINST.betrieb == "cloud":
+        return None
     if os.getenv("LMC_HANDY_URL"):
         return os.getenv("LMC_HANDY_URL").rstrip("/")
-    from .config import EINST
-
     if _adresse:  # gefunden bleibt gefunden; nicht gefunden wird beim nächsten Öffnen neu gesucht
         return _adresse
     try:
@@ -103,6 +147,11 @@ def adresse() -> str | None:
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
     return _adresse
+
+
+def adresse_aus_host(host: str) -> str:
+    """Cloud-Betrieb: Handy-Adresse aus der Anfrage (Host-Kopfzeile) – der Worker terminiert TLS, hier zählt nur der Name."""
+    return f"https://{host}"
 
 
 class Zugangsschutz:
@@ -114,15 +163,22 @@ class Zugangsschutz:
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket") or lokal(scope):
             return await self.app(scope, receive, send)
+        if EINST.betrieb == "cloud":
+            # Ohne das Worker-Geheimnis ist die Anfrage nicht über den Worker gekommen – 403 für alles, auch
+            # für die sonst offenen Seiten; dort schützt in der Cloud ohnehin das Passwort am Worker selbst.
+            return await self._verweigern(scope, receive, send, 403, "Nicht über den Worker gekommen.")
         pfad = scope.get("path", "")
         if pfad in OFFEN or pfad.startswith("/static/") or gekoppelt(scope):
             return await self.app(scope, receive, send)
+        await self._verweigern(scope, receive, send, 401, "Nicht gekoppelt – Code vom Laptop eingeben.")
+
+    @staticmethod
+    async def _verweigern(scope, receive, send, status: int, meldung: str) -> None:
         if scope["type"] == "websocket":
             await receive()  # websocket.connect
-            await send({"type": "websocket.close", "code": 4401})
+            await send({"type": "websocket.close", "code": 4401 if status == 401 else 4403})
             return
-        await send({"type": "http.response.start", "status": 401,
+        await send({"type": "http.response.start", "status": status,
                     "headers": [(b"content-type", b"application/json; charset=utf-8")]})
-        await send({"type": "http.response.body",
-                    "body": json.dumps({"detail": "Nicht gekoppelt – Code vom Laptop eingeben."}).encode()})
+        await send({"type": "http.response.body", "body": json.dumps({"detail": meldung}).encode()})
 

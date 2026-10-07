@@ -200,23 +200,37 @@ async def service_worker():
 
 @app.get("/api/kopplung")
 async def kopplung(request: Request):
-    """QR-Code und Code zum Koppeln – nur am Laptop selbst abrufbar."""
+    """QR-Code und Code zum Koppeln – nur mit Laptop-Rechten abrufbar (am Laptop selbst, oder im Cloud-Betrieb
+    über den Worker, der das Kundenpasswort schon geprüft hat)."""
     if not zugang.lokal(request.scope):
         raise HTTPException(403, "Nur am Laptop.")
     import segno
 
-    basis = zugang.adresse()
-    url = f"{basis}/handy?k={zugang.code()}" if basis else None
+    if EINST.betrieb == "cloud":
+        # Die Handy-Adresse kommt aus der Anfrage (Host), nicht aus tailscale; die Meeting-Kennung des Worker
+        # (Cookie `nestor_meeting`, hier als Kopfzeile) muss mit in die URL, damit das gescannte Handy im
+        # selben Meeting-Container landet wie das Dashboard (der Worker wählt den Container über `?meeting=`).
+        host = request.headers.get("host")
+        basis = zugang.adresse_aus_host(host) if host else None
+        meeting = zugang.meeting_id(request.scope)
+        url = f"{basis}/handy?k={zugang.code()}&meeting={meeting}" if basis and meeting else None
+        befehl = None
+    else:
+        basis = zugang.adresse()
+        url = f"{basis}/handy?k={zugang.code()}" if basis else None
+        # Tailscale erlaubt HTTPS nur auf 443, 8443 und 10000 – also höchstens drei Coaches auf einem Laptop
+        https = {8000: 443, 8001: 8443}.get(EINST.port, 10000)
+        befehl = f"tailscale serve --bg {EINST.port}" if https == 443 else f"tailscale serve --bg --https={https} {EINST.port}"
     svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2) if url else None
-    # Tailscale erlaubt HTTPS nur auf 443, 8443 und 10000 – also höchstens drei Coaches auf einem Laptop
-    https = {8000: 443, 8001: 8443}.get(EINST.port, 10000)
-    befehl = f"tailscale serve --bg {EINST.port}" if https == 443 else f"tailscale serve --bg --https={https} {EINST.port}"
     return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg, "befehl": befehl}
 
 
 @app.post("/api/ablage/oeffnen")
 async def ablage_oeffnen(request: Request):
-    """Meeting-Ordner im Explorer öffnen – nur am Laptop selbst."""
+    """Meeting-Ordner im Explorer öffnen – nur am Laptop selbst, und nur lokal: im Container gibt es keinen
+    Explorer, und niemand soll aus der Ferne einen Dateimanager auf dem Server öffnen."""
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     if not zugang.lokal(request.scope):
         raise HTTPException(403, "Nur am Laptop.")
     if coach.archiv is None:

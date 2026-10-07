@@ -1,17 +1,30 @@
-"""Handy-Zugang: vom Laptop alles, über tailscale serve nur gekoppelt, den Schlüssel nie vom Handy."""
+"""Handy-Zugang: vom Laptop alles, über tailscale serve nur gekoppelt, den Schlüssel nie vom Handy.
+
+Dazu der Cloud-Fall (Ticket #5): kein „am Laptop“ mehr, stattdessen das Worker-Geheimnis."""
 
 import pytest
 from fastapi.testclient import TestClient
 
-from coach import zugang
+from coach import server, zugang
+from coach.config import Einstellungen
 from coach.server import app
 
 TS = {"Tailscale-User-Login": "jemand@example.com", "X-Forwarded-For": "100.70.1.127"}
+GEHEIMNIS = "geheim-test-123"
 
 
 @pytest.fixture(autouse=True)
 def eigener_code(tmp_path, monkeypatch):
     monkeypatch.setattr(zugang, "KOPPLUNG_DATEI", tmp_path / "kopplung")
+
+
+@pytest.fixture
+def cloud(monkeypatch):
+    """Cloud-Betrieb mit Worker-Geheimnis; patcht EINST dort, wo es gebunden ist (zugang.py und server.py)."""
+    einst = Einstellungen(betrieb="cloud", worker_geheimnis=GEHEIMNIS, worker_url="https://nestor.example.workers.dev")
+    monkeypatch.setattr(zugang, "EINST", einst)
+    monkeypatch.setattr(server, "EINST", einst)
+    return einst
 
 
 def test_code_bleibt_und_ist_eintippbar():
@@ -108,3 +121,58 @@ def test_gemeldetes_handy_behaelt_den_ton():
         assert lokal.get("/api/zustand").json()["lautsprecher"] == "handy"
         laptop.send_text('{"lautsprecher": true, "erzwingen": true}')  # ausdrücklich „Hier abspielen“
         assert ton(laptop, "laptop") == "laptop"
+
+
+# --- Cloud-Betrieb (Ticket #5): kein „am Laptop“ mehr, dafür das Worker-Geheimnis ------------------------
+
+def test_cloud_erzwingt_openai_auch_bei_falscher_umgebung():
+    """config.py: Abo-Wege sind in der Cloud aus – unabhängig davon, was LMC_KI/LMC_BILD_ANBIETER sagen."""
+    einst = Einstellungen(betrieb="cloud", ki="codex", bild_anbieter="claude")
+    assert einst.ki == "openai" and einst.bild_anbieter == "openai"
+
+
+def test_cloud_ohne_geheimnis_403_fuer_alles(cloud):
+    c = TestClient(app, client=("10.1.2.3", 5000))
+    assert c.get("/api/zustand").status_code == 403
+    assert c.get("/handy").status_code == 403           # in der Cloud auch die sonst offenen Seiten dicht
+    assert c.get("/static/handy.js").status_code == 403
+
+
+def test_cloud_falsches_geheimnis_403(cloud):
+    c = TestClient(app, client=("10.1.2.3", 5000))
+    assert c.get("/api/zustand", headers={"X-Nestor-Geheimnis": "falsch"}).status_code == 403
+
+
+def test_cloud_mit_geheimnis_laptop_rechte(cloud):
+    c = TestClient(app, client=("10.1.2.3", 5000))
+    assert c.get("/api/zustand", headers={"X-Nestor-Geheimnis": GEHEIMNIS}).status_code == 200
+    with c.websocket_connect("/ws", headers={"X-Nestor-Geheimnis": GEHEIMNIS}) as ws:
+        ws.receive_text()  # Anfangszustand – die Verbindung steht
+
+
+def test_cloud_websocket_ohne_geheimnis_wird_abgewiesen(cloud):
+    from starlette.websockets import WebSocketDisconnect
+
+    c = TestClient(app, client=("10.1.2.3", 5000))
+    with pytest.raises(WebSocketDisconnect) as e, c.websocket_connect("/ws"):
+        pass
+    assert e.value.code == 4403
+
+
+def test_kopplung_in_der_cloud_nutzt_host_und_meeting_statt_tailscale(cloud):
+    c = TestClient(app, client=("10.1.2.3", 5000), base_url="https://nestor.example.workers.dev")
+    r = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Meeting": "abc123"})
+    assert r.status_code == 200
+    daten = r.json()
+    assert daten["adresse"] == "https://nestor.example.workers.dev/handy"
+    assert daten["qr"] is not None
+    assert daten["befehl"] is None                        # kein tailscale-Befehl in der Cloud
+
+    ohne_meeting = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS})
+    assert ohne_meeting.json()["qr"] is None               # ohne Meeting-Kennung vom Worker kein QR-Code
+
+
+def test_ablage_oeffnen_in_der_cloud_aus(cloud):
+    c = TestClient(app, client=("10.1.2.3", 5000))
+    r = c.post("/api/ablage/oeffnen", headers={"X-Nestor-Geheimnis": GEHEIMNIS})
+    assert r.status_code == 404

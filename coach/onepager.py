@@ -134,6 +134,10 @@ async def claude(auftrag: str, modell: str, aufwand: str = "", zeitlimit: float 
     (Gedächtnis, Protokolle) nicht mit – Meetinginhalte landen dort nicht –, und der Grundkontext
     schrumpft von ~34 000 auf ~3 000 Tokens. Liefert (Text, Messwerte).
     """
+    if EINST.betrieb == "cloud":
+        # Abo-Weg (Claude über den Pi) ist nur für eigene Tests gedacht; in der Cloud erzwingt config.py
+        # LMC_BILD_ANBIETER=openai, dies hier ist nur die zweite Absicherung.
+        raise ClaudeFehler("Abo-Weg (Claude) ist im Cloud-Betrieb aus.")
     befehl = shlex.split(EINST.claude_befehl, posix=True) + [
         "-p", "--model", modell, "--output-format", "json",
         # leere Werte mit „=“, damit sie auch über ssh (Zeile geht durch eine Shell) ankommen

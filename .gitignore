@@ -22,3 +22,9 @@ testbibliothek/*
 !demo/*.wav
 meetings/
 spenden/
+
+# Cloudflare-Worker (Ticket #5): node_modules und Wrangler-Build-/Testartefakte nicht ins Repo
+cloudflare/node_modules/
+cloudflare/.wrangler/
+cloudflare/dist/
+cloudflare/.dev.vars
