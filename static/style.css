@@ -145,6 +145,26 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .einrichtung h2 { font-size: 22px; text-transform: none; letter-spacing: -.01em; color: var(--text); }
 .f-punkt { display: grid; grid-template-columns: 1.2fr 1.6fr 90px auto; gap: 8px; margin-bottom: 8px; }
 .f-person { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
+
+/* Agenda per Prompt (Lastenheft 4.1) */
+.agenda-eingabe { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.agenda-eingabe textarea { resize: vertical; min-height: 42px; }
+.agenda-knoepfe { display: flex; gap: 8px; flex: none; }
+.agenda-eingabe textarea:disabled, .agenda-knoepfe button:disabled { opacity: .5; }
+.agenda-antwort { margin: 0 0 10px; padding: 10px 14px; border-radius: 10px; background: var(--marke-weich);
+  color: var(--marke-2); font-weight: 600; font-size: 14px; }
+.agenda-hinweis { margin: -2px 0 10px; }
+.agenda-tabelle { display: grid; gap: 8px; margin-bottom: 8px; }
+.agenda-zeile { display: grid; grid-template-columns: auto 1.2fr 90px 1.6fr auto; gap: 8px; align-items: center; }
+.agenda-reihenfolge { display: flex; gap: 4px; }
+.agenda-reihenfolge button { width: 30px; height: 30px; padding: 0; }
+.agenda-plus { justify-self: start; }
+.agenda-summe { margin: 0; text-align: right; }
+
+@media (max-width: 1100px) {
+  .agenda-zeile { grid-template-columns: auto 1fr; }
+  .agenda-eingabe { flex-wrap: wrap; }
+}
 .regelwahl { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .regel { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center;
   padding: 12px 14px; border: 2px solid var(--rand); border-radius: 12px; cursor: pointer; font-weight: 600;

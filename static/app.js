@@ -7,14 +7,6 @@ function konfSchild(klasse = "") { return el("span", { class: `konf-schild ${kla
 
 // ---------- Vorbereitung ----------
 let regelkatalog = [];
-function punktZeile(p = {}) {
-  const z = el("div", { class: "f-punkt" },
-    el("input", { placeholder: "Titel", value: p.titel ?? "" }),
-    el("input", { placeholder: "Frage / Ziel des Punkts", value: p.ziel ?? "" }),
-    el("input", { type: "number", min: "1", value: p.minuten ?? 10, title: "Minuten" }),
-    el("button", { class: "icon klein", "data-tip": "Punkt entfernen", onclick: () => z.remove() }, icon("zu")));
-  $("f-agenda").append(z);
-}
 function personZeile(name = "") {
   const z = el("div", { class: "f-person" }, el("input", { placeholder: "Name", value: name }),
     el("button", { class: "icon klein", "data-tip": "Person entfernen", onclick: () => z.remove() }, icon("zu")));
@@ -37,12 +29,13 @@ function regelwahl(standard) {
 // solange hier niemand gerade tippt.
 let formStand = null;
 function formAusServer(z) {
+  agendaSchluesselRendern(z.schluessel_vorhanden);  // unabhängig vom Rest: greift auch ohne Agenda vom Server
   if (!z.agenda?.length) return;
   const stand = JSON.stringify([z.titel, z.ziel, z.agenda.map((p) => [p.titel, p.ziel, p.minuten]), z.teilnehmende, z.regel_ids]);
   if (stand === formStand || $("einrichtung").contains(document.activeElement)) return;
   formStand = stand;
   $("f-titel").value = z.titel ?? ""; $("f-ziel").value = z.ziel ?? "";
-  $("f-agenda").replaceChildren(); z.agenda.forEach((p) => punktZeile(p));
+  agendaVonServer(z.agenda);
   $("f-teilnehmende").replaceChildren(); (z.teilnehmende.length ? z.teilnehmende : ["", ""]).forEach((n) => personZeile(n));
   if (regelkatalog.length && z.regel_ids) regelwahl(z.regel_ids);
 }
@@ -50,10 +43,7 @@ function formularDaten() {
   return {
     titel: $("f-titel").value,
     ziel: $("f-ziel").value,
-    agenda: [...$("f-agenda").children].map((z) => {
-      const [t, g, m] = z.querySelectorAll("input");
-      return { titel: t.value, ziel: g.value, minuten: Number(m.value) || 10 };
-    }),
+    agenda: agendaErgebnis(),
     regeln: $("f-regeln").value.split("\n"),
     regel_ids: [...$("f-regelwahl").querySelectorAll("input:checked")].map((i) => i.value),
     assistent: $("f-assistent").checked,
@@ -68,7 +58,6 @@ let leisteOffen = false;
 let reiter = "transkript";
 let hinweisWeg = 0; // id des zuletzt weggeklickten Hinweises
 
-$("btn-punkt-neu").onclick = () => punktZeile();
 $("btn-person-neu").onclick = () => personZeile();
 $("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
 $("btn-abspielen").onclick = () => { stimme.bereit(); api("/api/abspielen", { name: $("f-aufnahme").value, tempo: 1, auto_wechsel: $("f-auto").checked }); };
@@ -558,9 +547,12 @@ function verbinden() {
   document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
   iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("karte-zu", "zu");
   $("f-titel").value = "Testmeeting";
-  punktZeile({ titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 });
-  punktZeile({ titel: "Hauptthema", ziel: "Optionen sammeln und bewerten", minuten: 5 });
-  punktZeile({ titel: "Nächste Schritte", ziel: "Wer macht was bis wann", minuten: 2 });
+  agendaPunkte = [
+    { titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 },
+    { titel: "Hauptthema", ziel: "Optionen sammeln und bewerten", minuten: 5 },
+    { titel: "Nächste Schritte", ziel: "Wer macht was bis wann", minuten: 2 },
+  ];
+  agendaInit();
   const rk = await fetch("/api/regeln").then((r) => r.json());
   regelkatalog = rk.katalog; regelwahl(rk.standard);
   personZeile(); personZeile();
