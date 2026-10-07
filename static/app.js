@@ -70,7 +70,7 @@ $("btn-start").onclick = async () => {
   if (zustand?.mikro?.quelle === "handy") return; // gemeldetes Handy trägt Mikro und Ton
   try { await mikro.starten($("f-assistent").checked); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); await api("/api/stopp"); }
 };
-$("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); };
+$("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); location.href = "/abschluss"; };
 $("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
 $("btn-mikro").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
 $("btn-fragen").onclick = () => { stimme.bereit(); api("/api/assistent/fragen"); };

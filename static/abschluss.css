@@ -1,0 +1,26 @@
+/* Abschlussseite: Paket, Unterstützung, Datenspende – ruhiger Nachlauf zum Dashboard (style.css). */
+.ab-seite { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; display: grid; gap: 20px; }
+.ab-seite h3 { margin-top: 18px; }
+.ab-seite textarea { resize: vertical; }
+.ab-seite button.leise.klein { margin-top: 8px; }
+.ab-leer { text-align: center; display: grid; gap: 14px; justify-content: center; }
+.ab-link { text-decoration: none; display: inline-block; }
+.ab-wird-fertig { font-style: italic; }
+.ab-kosten-satz { font-size: 17px; font-weight: 600; color: var(--text-2); }
+
+.ab-kacheln { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
+.ab-kachel { display: grid; gap: 4px; text-align: left; background: var(--marke-weich); border-color: transparent; padding: 14px; }
+.ab-kachel strong { font-size: 20px; color: var(--marke-2); }
+.ab-kachel span { font-size: 13px; color: var(--text-2); font-weight: 500; white-space: normal; }
+.ab-kachel[aria-pressed="true"] { outline: 2px solid var(--marke); }
+
+.ab-gewaehlt { display: flex; gap: 16px; align-items: center; margin-top: 16px; padding: 14px; background: var(--flaeche-2);
+  border-radius: var(--radius); }
+.ab-qr svg { width: 120px; height: 120px; display: block; }
+
+.ab-fertig { justify-self: center; min-width: 160px; }
+
+@media (max-width: 560px) {
+  .ab-kacheln { grid-template-columns: 1fr; }
+  .ab-gewaehlt { flex-direction: column; align-items: flex-start; }
+}

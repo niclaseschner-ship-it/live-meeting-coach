@@ -127,6 +127,13 @@ class Einstellungen:
     # Meeting-Ablage (nur Server): Ordner je Meeting; Audio dazu, solange wir testen (Einstellungen, abschaltbar)
     archiv: str = os.getenv("LMC_ARCHIV", str(WURZEL / "meetings"))
     aufnahme_speichern: bool = os.getenv("LMC_AUFNAHME", "1") == "1"
+    # Abschluss (Lastenheft 2 Schritt 5, 4.4–4.6): Paket, Unterstützung, Datenspende
+    eur_je_usd: float = _zahl("LMC_EUR_JE_USD", 0.92)
+    # Standard wahr = heutiges Verhalten (Ordner bleibt liegen); in der Cloud auf falsch gesetzt
+    ablage_behalten: bool = os.getenv("LMC_ABLAGE_BEHALTEN", "1") == "1"
+    # PayPal.me-Name für die Unterstützungs-Links; leer = Unterstützungsteil bleibt auf der Abschlussseite aus
+    paypal_me: str = os.getenv("LMC_PAYPAL_ME", "")
+    spenden: str = os.getenv("LMC_SPENDEN", str(WURZEL / "spenden"))
 
 
 EINST = Einstellungen()

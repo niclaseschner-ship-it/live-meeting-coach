@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import regeln, zugang
+from .api_abschluss import router as abschluss_router
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -151,11 +152,19 @@ async def immer_nachfragen(request: Request, call_next):
         antwort.headers["Cache-Control"] = "no-cache"
     return antwort
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+# Nicht include_router(): das legt in dieser FastAPI-Version einen _IncludedRouter-Platzhalter in app.routes ab,
+# der kein .path kennt – test_dashboard_endpunkte_existieren läuft über app.routes und bräuchte sonst flache Routen.
+app.routes.extend(abschluss_router.routes)
 
 
 @app.get("/")
 async def startseite():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/abschluss")
+async def abschlussseite():
+    return FileResponse(STATIC / "abschluss.html")
 
 
 @app.get("/handy")
