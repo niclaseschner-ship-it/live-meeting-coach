@@ -104,13 +104,52 @@ def auswahl(d: dict) -> list[int]:
     return kept
 
 
-def blocks_aus_quelle(d: dict, indizes: list[int]) -> list[dict]:
+# Im Rollenspiel heißt eine der fünf Personen (Index 4) "Nestor" (Beisitzer für Infrastruktur) und wird an
+# zwei Stellen beim Namen angesprochen bzw. genannt – das würde mit dem echten Assistenten Nestor
+# verwechselt werden. Nachtrag des Koordinators (07.10.2026): ihre Äußerungen ganz heraus, die zwei
+# Anrede-Stellen umgeschrieben (Text ohne "Nestor", neu vertont), eine Äußerung (Abschweifung) auf eine
+# andere, schon vorhandene Stimme umgehängt statt sie zu verlieren. Danach kommt "Nestor" nur noch in den
+# sechs Einschüben vor (geprüft in main()).
+NESTOR_PERSON_INDEX = 4
+AUSGESCHLOSSEN = {41}  # Antwort der Person "Nestor" - für kein Pflicht-Ereignis gebraucht
+PERSON_UMGEHAENGT = {26: 3}  # Abschweifung: Text nennt "Nestor" nicht, nur die Stimme wechselt (-> Mehmet)
+TEXT_ERSETZT = {
+    40: ("Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines Vereinsbusses. Wir haben noch "
+        "ungefähr vier Minuten. Lasst uns zuerst einen Überblick verschaffen, was ein gebrauchter Neunsitzer "
+        "kostet und mit welchen laufenden Kosten wir rechnen müssen.", ["wechsel_ansage"]),
+    56: ("Wir legen uns heute auf kein Fahrzeug fest. Bis zur nächsten Sitzung stellen wir eine Übersicht mit "
+        "drei gebrauchten Neunsitzern zusammen: vollständige Anschaffungsnebenkosten, geschätzte Jahreskosten, "
+        "Fördermöglichkeiten, Leasingvergleich und eine Gegenüberstellung zu unseren bisherigen Miet- und "
+        "Fahrtkosten. Sabine liefert dafür bis Freitag die Fahrten der Jugend aus dem letzten Jahr, Jörg die "
+        "verbuchten Miet- und Erstattungskosten. Dann können wir entscheiden, ob wir einen konkreten "
+        "Finanzierungsrahmen aufstellen.", ["monolog"]),
+}
+
+
+def nestor_pruefen(d: dict, indizes: list[int]) -> None:
+    treffer = [i for i in indizes if "Nestor" in (TEXT_ERSETZT.get(i, (d["aeusserungen"][i]["text"],))[0])]
+    if treffer:
+        raise AssertionError(f"'Nestor' kommt noch in Äußerung(en) {treffer} vor - Material nicht sauber.")
+
+
+def blocks_aus_quelle(d: dict, indizes: list[int], tts) -> list[dict]:
+    indizes = [i for i in indizes if i not in AUSGESCHLOSSEN]
+    nestor_pruefen(d, indizes)
     blocks = []
     for n, i in enumerate(indizes):
         a = d["aeusserungen"][i]
-        mp3 = (QUELLE / "mp3" / f"{i:04d}.mp3").read_bytes()
-        blocks.append({"kind": "utt", "audio": mp3_zu_pcm(mp3), "person": a["person"], "punkt": a.get("punkt"),
-                       "ereignisse": a.get("ereignisse", []), "text": a["text"]})
+        person = PERSON_UMGEHAENGT.get(i, a["person"])
+        if i in TEXT_ERSETZT:
+            text, ereignisse = TEXT_ERSETZT[i]
+            audio = mp3_zu_pcm(tts.synthese(text=text, voice=PERSON_STIMMEN[person % len(PERSON_STIMMEN)]))
+        elif i in PERSON_UMGEHAENGT:
+            text, ereignisse = a["text"], a.get("ereignisse", [])
+            audio = mp3_zu_pcm(tts.synthese(text=text, voice=PERSON_STIMMEN[person % len(PERSON_STIMMEN)]))
+        else:
+            text, ereignisse = a["text"], a.get("ereignisse", [])
+            audio = mp3_zu_pcm((QUELLE / "mp3" / f"{i:04d}.mp3").read_bytes())
+        blocks.append({"kind": "utt", "audio": audio, "person": person, "punkt": a.get("punkt"),
+                       "ereignisse": ereignisse, "text": text})
         if n < len(indizes) - 1:
             blocks.append({"kind": "gap", "audio": np.zeros(int(GAP * RATE), dtype="<i2")})
     return blocks
@@ -196,8 +235,8 @@ def main() -> None:
     print(f"Quelle: vereinsrunde, {len(indizes)}/{len(d['aeusserungen'])} Äußerungen behalten, "
           f"{woerter} Wörter (~{woerter / 140:.1f} min).")
 
-    blocks = blocks_aus_quelle(d, indizes)
     tts = azure_tts()
+    blocks = blocks_aus_quelle(d, indizes, tts)
     nestor_protokoll = nestor_einfuegen(blocks, tts)
     aufgabe_protokoll = aufgabe_einfuegen(blocks, tts)
     print(f"Azure (Teachbuddy, eigenes Kontingent): {tts.zeichen} Zeichen, 0 $.")
@@ -230,7 +269,8 @@ def main() -> None:
         "Betreff: Einladung Vorstandssitzung SV Eichenfeld - Donnerstag, 19 Uhr\n\n"
         "Hallo zusammen,\n\n"
         "am Donnerstag um 19 Uhr treffen wir uns zur Vorstandssitzung. Teilnehmende: "
-        + ", ".join(p["name"] for p in d["personen"]) + ".\n\n"
+        # Person "Nestor" kommt in der gekürzten Aufnahme nicht mehr zu Wort (s.o.) - auch nicht einladen.
+        + ", ".join(p["name"] for i, p in enumerate(d["personen"]) if i != NESTOR_PERSON_INDEX) + ".\n\n"
         "Agenda:\n"
         + "\n".join(f"{i + 1}. {p['titel']} (ca. {p['minuten']} Min.) - {p['ziel']}"
                     for i, p in enumerate(d["agenda"]))

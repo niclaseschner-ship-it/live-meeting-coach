@@ -19,7 +19,7 @@
    "minuten": 5
   }
  ],
- "dauer_s": 652.0,
+ "dauer_s": 591.8,
  "vorlauf_s": 25.0,
  "ereignisse": [
   {
@@ -45,105 +45,91 @@
   },
   {
    "ereignis": "monolog",
-   "zeit_s": 200.63,
+   "zeit_s": 200.67,
    "person": 3,
    "punkt": 1,
    "text": "Ich habe den bisherigen Plan noch einmal zusammengerechnet. Mit Bühne, Technik, zwei Zelten, Toilettenwagen, Kinderprogramm, Sicherheitsdienst und den Gebühren liegen wir bei 8.900 Euro Ausgaben. Dem stehen vorsichtig geschätzt 5.500 Euro Einnahmen aus Essen, Getränken und den Standgebühren gegenüber. Der Zuschussbedarf wäre also 3.400 Euro. Wenn das Wetter gut ist, kann der deutlich niedriger ausfallen. Ich würde trotzdem nicht mit dem besten Fall rechnen."
   },
   {
    "ereignis": "angriff",
-   "zeit_s": 232.28,
+   "zeit_s": 232.33,
    "person": 3,
    "punkt": 1,
    "text": "Jörg, ich habe gerade einen Vorschlag gemacht. Und bei den Einnahmen setzt du grundsätzlich immer nur die schwächste Variante an. Du rechnest ja immer schön, damit du hinterher sagen kannst, du hättest uns gewarnt. So kann ich keine Veranstaltung planen."
   },
   {
    "ereignis": "kraftausdruck",
-   "zeit_s": 262.89,
+   "zeit_s": 262.94,
    "person": 3,
    "punkt": 1,
    "text": "Ach, und deshalb sollen wir jetzt jeden Betrag so lange herunterrechnen, bis auf dem Papier gar nichts mehr passieren kann? Das ist doch Mist! Dann können wir das Sommerfest gleich als Grillabend mit drei Biertischen anmelden."
   },
   {
    "ereignis": "monolog",
-   "zeit_s": 277.75,
+   "zeit_s": 277.79,
    "person": 0,
    "punkt": 1,
    "text": "Stopp. Mehmet, der Ton hilft gerade nicht, und der Satz von eben an Jörg war nicht in Ordnung. Jörg, du hast deinen Risikopunkt deutlich gemacht. Wir brauchen jetzt eine Zahl. Es ist neunzehn Uhr siebzehn; damit haben wir die vorgesehenen sechs Minuten für diesen Punkt bereits um eine Minute überzogen. Ich gebe uns noch drei Minuten, dann entscheiden wir."
   },
   {
    "ereignis": "abschweifung",
-   "zeit_s": 300.45,
-   "person": 4,
+   "zeit_s": 300.5,
+   "person": 3,
    "punkt": 1,
    "text": "Bevor wir uns auf 300 Euro festbeißen: Der größere finanzielle Brocken wird ohnehin der Bus. Wenn ein brauchbarer Neunsitzer zwanzig- oder fünfundzwanzigtausend Euro kostet, ist die Differenz beim Kinderprogramm im Verhältnis doch eher klein."
   },
   {
    "ereignis": "unterbrechung",
-   "zeit_s": 316.94,
+   "zeit_s": 314.97,
    "person": 1,
    "punkt": 1,
    "text": "Du musst nicht bis kurz vor dem Fest warten, du musst nur die Zusagen einsammeln, bevor du alles buchst. Zwei Sponsoren haben doch grundsätzliches Interesse signalisiert."
   },
   {
    "ereignis": "beschluss",
-   "zeit_s": 422.09,
+   "zeit_s": 420.24,
    "person": 0,
    "punkt": 1,
    "text": "Dann ist einstimmig beschlossen: Das Sommerfest erhält einen Ausgabenrahmen von höchstens 9.000 Euro und einen geplanten Vereinszuschuss von höchstens 3.500 Euro. Oberhalb von 7.000 Euro dürfen Verpflichtungen erst eingegangen werden, wenn 3.000 Euro an sicheren Einnahmen oder schriftlichen Zusagen nachgewiesen sind. Abweichungen meldet Mehmet sofort dem Vorstand. Es ist neunzehn Uhr einundzwanzig; der Budgetpunkt hat elf statt sechs Minuten gedauert."
   },
   {
    "ereignis": "wechsel_ansage",
-   "zeit_s": 480.47,
+   "zeit_s": 478.76,
    "person": 0,
    "punkt": 2,
-   "text": "Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines Vereinsbusses. Wir haben noch ungefähr vier Minuten. Nestor, gib uns bitte zuerst einen Überblick, was ein gebrauchter Neunsitzer kostet und mit welchen laufenden Kosten wir rechnen müssen."
-  },
-  {
-   "ereignis": "nestor_frage",
-   "zeit_s": 480.47,
-   "person": 0,
-   "punkt": 2,
-   "text": "Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines Vereinsbusses. Wir haben noch ungefähr vier Minuten. Nestor, gib uns bitte zuerst einen Überblick, was ein gebrauchter Neunsitzer kostet und mit welchen laufenden Kosten wir rechnen müssen."
-  },
-  {
-   "ereignis": "aufgabe_ohne_zustaendig",
-   "zeit_s": 496.78,
-   "person": 1,
-   "punkt": 2,
-   "text": "Und für die Probefahrt mit dem möglichen Bus müsste auch noch jemand die Zusatzversicherung klären, bevor wir losfahren."
-  },
-  {
-   "ereignis": "monolog",
-   "zeit_s": 503.71,
-   "person": 4,
-   "punkt": 2,
-   "text": "Ja. Ich habe mir Fahrzeuge angesehen, die höchstens acht Jahre alt sind, unter 150.000 Kilometer haben und als Neunsitzer zugelassen sind. Bei einfachen Modellen wie Renault Trafic, Ford Transit Custom oder Opel Vivaro beginnen brauchbare Angebote ungefähr bei 18.000 Euro. Für Fahrzeuge mit nachvollziehbarer Wartung, Klimaanlage hinten und vernünftigem Zustand landet man eher zwischen 22.000 und 28.000 Euro. Ein VW-Bus liegt meistens darüber. Dazu kommen Zulassung, erste Inspektion, eventuell Reifen und unsere Vereinsbeschriftung. Ich würde dafür mindestens 2.500 Euro zusätzlich einplanen. Laufend rechne ich grob mit 2.000 bis 3.000 Euro pro Jahr für Versicherung, Steuer, Wartung und kleinere Reparaturen, noch ohne Kraftstoff."
+   "text": "Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines Vereinsbusses. Wir haben noch ungefähr vier Minuten. Lasst uns zuerst einen Überblick verschaffen, was ein gebrauchter Neunsitzer kostet und mit welchen laufenden Kosten wir rechnen müssen."
   },
   {
    "ereignis": "unterbrechung",
-   "zeit_s": 556.51,
+   "zeit_s": 493.31,
    "person": 1,
    "punkt": 2,
    "text": "Das bestreite ich überhaupt nicht. Ich will nur eine vollständige Rechnung, bevor wir sagen, der Bus finanziere sich über gesparte Mieten von selbst."
   },
   {
+   "ereignis": "aufgabe_ohne_zustaendig",
+   "zeit_s": 503.21,
+   "person": 1,
+   "punkt": 2,
+   "text": "Und für die Probefahrt mit dem möglichen Bus müsste auch noch jemand die Zusatzversicherung klären, bevor wir losfahren."
+  },
+  {
    "ereignis": "unterbrechung",
-   "zeit_s": 566.11,
+   "zeit_s": 510.36,
    "person": 3,
    "punkt": 2,
    "text": "Ich wollte nur vermeiden, dass wir uns schon auf die teuerste Variante festlegen, bevor wir die Nutzung sauber erfasst haben."
   },
   {
    "ereignis": "monolog",
-   "zeit_s": 586.92,
+   "zeit_s": 518.81,
    "person": 0,
    "punkt": 2,
-   "text": "Wir legen uns heute auf kein Fahrzeug fest. Nestor erstellt bis zur nächsten Sitzung eine Übersicht mit drei gebrauchten Neunsitzern, den vollständigen Anschaffungsnebenkosten, geschätzten Jahreskosten, Fördermöglichkeiten, Leasingvergleich und einer Gegenüberstellung zu unseren bisherigen Miet- und Fahrtkosten. Sabine liefert ihm dafür bis Freitag die Fahrten der Jugend aus dem letzten Jahr. Jörg gibt die verbuchten Miet- und Erstattungskosten dazu. Dann können wir entscheiden, ob wir einen konkreten Finanzierungsrahmen aufstellen."
+   "text": "Wir legen uns heute auf kein Fahrzeug fest. Bis zur nächsten Sitzung stellen wir eine Übersicht mit drei gebrauchten Neunsitzern zusammen: vollständige Anschaffungsnebenkosten, geschätzte Jahreskosten, Fördermöglichkeiten, Leasingvergleich und eine Gegenüberstellung zu unseren bisherigen Miet- und Fahrtkosten. Sabine liefert dafür bis Freitag die Fahrten der Jugend aus dem letzten Jahr, Jörg die verbuchten Miet- und Erstattungskosten. Dann können wir entscheiden, ob wir einen konkreten Finanzierungsrahmen aufstellen."
   },
   {
    "ereignis": "monolog",
-   "zeit_s": 620.57,
+   "zeit_s": 547.94,
    "person": 0,
    "punkt": 2,
    "text": "Gut. Dann haben wir keinen Kaufbeschluss, aber einen klaren Prüfauftrag. Zum Abschluss noch einmal: Kassenbericht zur Kenntnis genommen, Sommerfest mit maximal 9.000 Euro Ausgaben beschlossen, Busvergleich kommt zur nächsten Sitzung. Das Protokoll verschickt Mehmet bis Montag. Gibt es einen Einwand gegen diese Zusammenfassung? Nein. Dann schließen wir um neunzehn Uhr siebenundzwanzig. Danke euch, und bitte klärt den Rest zum Sommerfest morgen in Ruhe, nicht heute Abend in der Chatgruppe."
@@ -153,7 +139,7 @@
   {
    "ziel_s": 150,
    "start": 176.21,
-   "ende": 178.03,
+   "ende": 178.07,
    "text": "Nestor, wo stehen wir gerade?",
    "recherche": false,
    "bild": false,
@@ -162,59 +148,59 @@
   },
   {
    "ziel_s": 300,
-   "start": 327.46,
-   "ende": 334.07,
+   "start": 325.49,
+   "ende": 332.17,
    "text": "Nestor, gib uns einen kurzen Überblick, was ein Messestand auf einer Fachmesse in Deutschland typischerweise kostet.",
    "recherche": true,
    "bild": false,
    "pause_s": 35.0,
-   "zeit_s": 327.46
+   "zeit_s": 325.49
   },
   {
    "ziel_s": 335.0,
-   "start": 369.37,
-   "ende": 370.84,
+   "start": 367.47,
+   "ende": 369.01,
    "text": "Ja, mach uns dazu eine Folie.",
    "recherche": false,
    "bild": true,
    "pause_s": 10.0,
-   "zeit_s": 369.37
+   "zeit_s": 367.47
   },
   {
    "ziel_s": 360,
-   "start": 381.44,
-   "ende": 387.09,
+   "start": 379.61,
+   "ende": 385.24,
    "text": "Nestor, wie ist der aktuelle Stand bei der Förderung von Messeauftritten für kleine Unternehmen?",
    "recherche": true,
    "bild": false,
    "pause_s": 35.0,
-   "zeit_s": 381.44
+   "zeit_s": 379.61
   },
   {
    "ziel_s": 420,
-   "start": 453.82,
-   "ende": 457.87,
+   "start": 451.97,
+   "ende": 456.16,
    "text": "Nestor, fass bitte kurz zusammen, was wir zu Punkt zwei besprochen haben.",
    "recherche": false,
    "bild": false,
    "pause_s": 22.0,
-   "zeit_s": 453.82
+   "zeit_s": 451.97
   },
   {
    "ziel_s": 540,
-   "start": 566.73,
-   "ende": 569.1,
+   "start": 571.94,
+   "ende": 574.4,
    "text": "Nestor, mach uns die visuelle Übersicht.",
    "recherche": false,
    "bild": true,
    "pause_s": 10.0,
-   "zeit_s": 566.73
+   "zeit_s": 571.94
   }
  ],
  "aufgabe_ohne_zustaendig_ergaenzt": {
   "ziel_s": 480,
-  "start": 496.78,
-  "ende": 503.31,
+  "start": 503.21,
+  "ende": 509.96,
   "text": "Und für die Probefahrt mit dem möglichen Bus müsste auch noch jemand die Zusatzversicherung klären, bevor wir losfahren."
  },
  "echte_stimmen_ausschnitt": "ausgelassen (yt-dlp/Download/Zuschnitt zu aufwändig für diesen Lauf, siehe Bericht) - Material ist durchgehend synthetisch (Azure)."
