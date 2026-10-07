@@ -148,18 +148,30 @@ Verbindung), reicht auch die enger gelesene Variante der Doku („eingehende Anf
 sicher zu sein. `20m` ist deshalb bewusst großzügig für die Einrichtungsphase gewählt, nicht weil das Meeting
 selbst länger bräuchte.
 
-## `max_meetings` je Kunde
+## `max_meetings` je Kunde (Ticket #12: Start- und Ende-Signal)
 
-Umgesetzt, mit einer offenen Einschränkung (Abnahme erlaubt das: „sonst im Bericht begründen"):
+Ein kleines Durable Object `KundenZaehler` (eins je Kunde, `src/zaehler.ts`) zählt gestartete Meeting-IDs.
+Anders als im ursprünglichen Stand (Ticket #5) zählt ein Meeting nicht mehr schon beim ersten Seitenaufruf:
 
-Ein kleines Durable Object `KundenZaehler` (eins je Kunde, `src/zaehler.ts`) zählt bekannte Meeting-IDs. Ein
-Meeting zählt, sobald der Worker es zum ersten Mal sieht; es zählt weiter, bis 6 Stunden lang keine Anfrage
-mehr dafür kam (`VERFALL_MS`). Das ist eine Näherung: Der Worker erfährt vom tatsächlichen Ende eines
-Meetings nicht, weil das Abschluss-Ticket (#3) in diesem Stand noch nicht existiert und keinen Rückruf zum
-Worker macht. Ein gerade beendetes Meeting zählt darum bis zu 6 Stunden nach, und ein Kunde könnte knapp an
-seinem Limit vorbeirutschen. Für v1 reicht das; ein echtes Ende-Signal (derselbe Mechanismus wie die
-Datenspende: der Coach ruft beim Worker an) ist eine naheliegende Erweiterung für Ticket #3 – siehe
-`src/zaehler.ts`, Kommentar am Kopf.
+- **Start:** `coach/server.py` meldet den echten Start (`POST /api/start`, nicht das bloße Ansehen der
+  Startseite) an den Worker: `POST /intern/meeting-start` mit `X-Nestor-Geheimnis`, Meeting-ID und Kunde. Erst
+  das zählt gegen `max_meetings` (`zaehler-logik.ts`, `pruefenUndAktualisieren`).
+- **Aktives Ende:** `coach/api_abschluss.py` meldet „Fertig“ (`POST /api/abschluss/fertig`) als
+  Hintergrundaufgabe – also erst, nachdem die Antwort beim Browser ist – an den Worker: `POST
+  /intern/meeting-ende`. Der Worker gibt den Platz sofort frei (`beenden()`) **und stoppt den Container**
+  (`getContainer(env.NESTOR, meetingId).stop()`, SIGTERM; `destroy()`/SIGKILL wäre nur für ein erzwungenes Ende
+  nötig – Doku: [Container-Class-Referenz](https://developers.cloudflare.com/containers/container-class/),
+  Stand 08.10.2026: „`stop()` sends a signal to the container … defaults to SIGTERM … triggers `onStop`“,
+  „`destroy()` … sends SIGKILL“). Der Worker löscht dabei nicht selbst das Meeting-Cookie – das tut `coach/
+  api_abschluss.py` direkt in seiner Antwort an den Browser (derselbe Pfad, den der Worker ohnehin nur
+  durchreicht), damit der nächste Aufruf ein neues Meeting bekommt.
+- **Ohne „Fertig“** (Browser zu, Absturz, Netz weg): Der Platz fällt nach `VERFALL_MS` = 30 Minuten ohne
+  Anfrage automatisch frei (vorher 6 Stunden) – weiterhin eine Näherung, jetzt aber nur noch die
+  Rückfalllösung für den selteneren Fall, nicht mehr der einzige Weg. Der Container selbst schläft davon
+  unabhängig weiter nach `sleepAfter` (siehe unten).
+
+Siehe `src/zaehler.ts` und `src/zaehler-logik.ts` (Kommentare am Kopf) für Einzelheiten; Tests in
+`src/zaehler.test.ts`.
 
 Daneben gilt weiter `max_instances: 10` (global, alle Kunden zusammen) in `wrangler.jsonc`.
 
@@ -197,5 +209,8 @@ npm test
 
 Prüft die Anmeldung (Passwort → Kunde über den SHA-256-Hash, ohne Namensfeld), die Cookie-Signatur
 (signieren/prüfen/verwerfen bei falschem Geheimnis oder Manipulation) und die `max_meetings`-Zählung
-(Limit, Verfall, keine Doppelzählung) – reine Funktionen, ohne Miniflare/Workers-Laufzeit nötig
-(`src/anmeldung.ts`, `src/zaehler.ts`).
+(Limit, Verfall nach 30 min, keine Doppelzählung, aktives `beenden()` gibt sofort frei – Ticket #12) – reine
+Funktionen, ohne Miniflare/Workers-Laufzeit nötig (`src/anmeldung.ts`, `src/zaehler-logik.ts`). Die neuen
+`/intern/meeting-start`/`/intern/meeting-ende`-Routen in `index.ts` selbst (Container `stop()`, Cookie-Pfad)
+brauchen die Workers-Laufzeit und sind darum nicht separat unit-getestet – geprüft über `tsc --noEmit` und,
+für den Rückruf von der Coach-Seite, `tests/test_meeting_ende.py` (Python, Netz gemockt).

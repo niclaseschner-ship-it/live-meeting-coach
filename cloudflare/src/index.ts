@@ -186,16 +186,47 @@ function offenOhneAnmeldung(pfad: string): boolean {
   );
 }
 
-async function meetingPruefenUndMerken(env: Env, kunde: string, meetingId: string): Promise<boolean> {
-  const eintrag = kundenliste(env)[kunde];
-  const maxMeetings = eintrag?.max_meetings ?? 1;
+/** Meeting-Start melden (Ticket #12): vom Coach aufgerufen (`coach/server.py`, echtes `/api/start`), NICHT vom
+ * normalen Seitenaufruf – ein Meeting zählt beim Kunden erst jetzt, nicht schon beim Ansehen der Startseite. */
+async function handleMeetingStart(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
+  if (!meetingId || !kunde) return new Response("meetingId/kunde fehlen.", { status: 400 });
+  const maxMeetings = kundenliste(env)[kunde]?.max_meetings ?? 1;
   const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
   const antwort = await zaehler.fetch("https://zaehler/pruefen", {
     method: "POST",
     body: JSON.stringify({ meetingId, maxMeetings }),
   });
-  const { erlaubt } = (await antwort.json()) as { erlaubt: boolean };
-  return erlaubt;
+  return Response.json(await antwort.json());
+}
+
+/** Meeting-Ende melden (Ticket #12): vom Coach aufgerufen (`coach/api_abschluss.py`, `/api/abschluss/fertig`,
+ * als Hintergrundaufgabe erst NACH der Antwort an den Browser). Gibt den Platz im KundenZaehler sofort frei und
+ * stoppt den Container – `stop()` (SIGTERM; Doku: developers.cloudflare.com/containers/container-class/) reicht
+ * für ein regulär beendetes Meeting, `destroy()` (SIGKILL) wäre nur für ein erzwungenes Ende nötig. */
+async function handleMeetingEnde(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
+  if (!meetingId) return new Response("meetingId fehlt.", { status: 400 });
+  if (kunde) {
+    const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
+    await zaehler.fetch("https://zaehler/beenden", { method: "POST", body: JSON.stringify({ meetingId }) });
+  }
+  const container = getContainer(env.NESTOR, meetingId);
+  try {
+    await container.stop();
+  } catch {
+    // Container war evtl. schon gestoppt oder eingeschlafen – kein Fehler für den Aufrufer, der Platz im
+    // Zähler ist zu diesem Zeitpunkt ohnehin schon frei.
+  }
+  return Response.json({ ok: true });
 }
 
 export default {
@@ -205,6 +236,12 @@ export default {
 
     if (pfad.startsWith("/intern/spende/")) {
       return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)));
+    }
+    if (pfad === "/intern/meeting-start") {
+      return handleMeetingStart(request, env);
+    }
+    if (pfad === "/intern/meeting-ende") {
+      return handleMeetingEnde(request, env);
     }
     if (pfad === "/anmelden") {
       return handleAnmelden(request, env);
@@ -218,7 +255,9 @@ export default {
       return Response.redirect(new URL("/anmelden", request.url).toString(), 303);
     }
 
-    // Meeting-Zuordnung: Cookie, sonst ?meeting= aus dem QR-Code, sonst (nur mit Login) ein neues Meeting.
+    // Meeting-Zuordnung: Cookie, sonst ?meeting= aus dem QR-Code, sonst (nur mit Login) ein neues Meeting. Zählt
+    // hier noch NICHT gegen max_meetings (Ticket #12) – das meldet der Coach erst beim echten Start
+    // (`/api/start` → `/intern/meeting-start`), damit das bloße Ansehen der Startseite niemanden blockiert.
     let meetingId = url.searchParams.get("meeting") ?? cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE);
     let cookieSetzen: string | null = null;
     if (!meetingId) {
@@ -226,16 +265,9 @@ export default {
         return new Response("Kein Meeting zugeordnet – bitte den QR-Code am Dashboard scannen.", { status: 400 });
       }
       meetingId = crypto.randomUUID();
-      if (!(await meetingPruefenUndMerken(env, kunde, meetingId))) {
-        return new Response("Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht.", { status: 429 });
-      }
       cookieSetzen = meetingId;
     } else if (url.searchParams.get("meeting") && kunde) {
-      // aus der QR-URL übernommen (Handy) – zählt beim Kunden mit, sonst könnte man das Limit umgehen
-      if (!(await meetingPruefenUndMerken(env, kunde, meetingId))) {
-        return new Response("Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht.", { status: 429 });
-      }
-      cookieSetzen = meetingId;
+      cookieSetzen = meetingId; // aus der QR-URL übernommen (Handy) – eigenes Cookie, damit es gekoppelt bleibt
     }
 
     const kopfzeilen = new Headers(request.headers);
