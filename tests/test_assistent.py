@@ -55,6 +55,15 @@ def test_begruessung_nennt_regeln_und_ersten_punkt():
     gruss, start = a.begruessungstext(c.meeting)
     assert "Ausreden lassen und Zeit einhalten" in gruss and "Nein" in gruss
     assert "Punkt eins: Budget" in start and "Nestor" in start
+    assert "nächsten Punkt" not in start  # nur ein Punkt: nichts zu wechseln
+
+
+def test_begruessung_bittet_um_agendawechsel():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}, {"titel": "Urlaub"}], "regel_ids": []})
+    _, start = a.begruessungstext(c.meeting)
+    assert "zum nächsten Punkt geht" in start and "zusammen" in start
+    assert "zum nächsten Punkt geht" in a.vorstellung_start(c.meeting)
 
 
 def test_eigene_sprache_wird_nur_live_herausgefiltert():

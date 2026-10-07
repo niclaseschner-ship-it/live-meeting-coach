@@ -113,6 +113,16 @@ def saetze_teilen(puffer: str) -> tuple[list[str], str]:
     return [t.strip() for t in teile[:-1] if t.strip()], teile[-1]
 
 
+def agenda_bitte(meeting) -> str:
+    """Den Agendawechsel ohne Ansage erkennt Nestor nur unsicher (Lastenheft 4.3) – deshalb gleich zu Beginn
+    darum bitten, ihn anzusagen oder anzuklicken. Bei nur einem Punkt gibt es nichts zu wechseln."""
+    if len(meeting.agenda) < 2:
+        return ""
+    # Das Zusammenfassen läuft über die normale Ansprache („Nestor, fass zusammen“) – kein eigener Ablauf nötig.
+    return (" Ich kann euch besser begleiten, wenn ihr kurz sagt, wann ihr zum nächsten Punkt geht, "
+            "oder ihn selbst anklickt. Wenn ihr wollt, fasse ich vorher kurz zusammen, was ihr besprochen habt.")
+
+
 def begruessungstext(meeting) -> tuple[str, str]:
     """(Begrüßung mit Bitte um Einwand, Startsatz) – fest formuliert, damit es schnell und verlässlich ist."""
     name = EINST.assistent_name
@@ -124,8 +134,8 @@ def begruessungstext(meeting) -> tuple[str, str]:
     gruss = (f"Hallo zusammen, ich bin {name} und begleite heute euer Meeting.{teil_regeln} Dafür höre ich mit. "
              "Wenn jemand damit nicht einverstanden ist, sagt jetzt bitte einfach Nein.")
     erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""
-    start = (f"Ich habe kein Nein gehört. Dann geht es los.{erster} Ich höre zu und melde mich nur, "
-             f"wenn ihr mich braucht. Sprecht mich einfach mit {name} an.")
+    start = (f"Ich habe kein Nein gehört. Dann geht es los.{erster}{agenda_bitte(meeting)} Ich höre zu und melde "
+             f"mich nur, wenn ihr mich braucht. Sprecht mich einfach mit {name} an.")
     return gruss, start
 
 
@@ -135,8 +145,8 @@ VORSTELLUNG_BITTE = ("Ich habe kein Nein gehört. Damit ich euch auseinanderhalt
 
 def vorstellung_start(meeting) -> str:
     erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""
-    return (f"Danke, dann geht es los.{erster} Ich höre zu und melde mich nur, wenn ihr mich braucht. "
-            f"Sprecht mich einfach mit {EINST.assistent_name} an.")
+    return (f"Danke, dann geht es los.{erster}{agenda_bitte(meeting)} Ich höre zu und melde mich nur, wenn ihr "
+            f"mich braucht. Sprecht mich einfach mit {EINST.assistent_name} an.")
 
 
 VORSTELLUNG_RE = re.compile(r"(?i:ich bin|ich heiße|ich heisse|mein name ist|hier ist|hier spricht)\s+(?i:die |der )?"
