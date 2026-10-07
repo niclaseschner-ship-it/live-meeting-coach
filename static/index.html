@@ -37,6 +37,7 @@
     <div class="kopf-knoepfe">
       <span id="modus-pill" class="pill" hidden></span>
       <a id="modus-wechseln" class="textknopf" href="/" hidden data-tip="Nur außerhalb eines laufenden Meetings">Modus wechseln</a>
+      <span id="eigener-schluessel-pill" class="pill" hidden data-tip="Die KI-Kosten dieses Meetings laufen über Ihren eigenen OpenAI-Schlüssel">eigener Schlüssel</span>
       <span id="status-pill" class="pill">Vorbereitung</span>
       <span id="aufnahme-pill" class="pill aufnahme" hidden data-tip="Audio wird lokal im Meeting-Ordner gespeichert (Testphase) – abschaltbar in den Einstellungen">Aufnahme</span>
       <button id="btn-ablage" class="pill ablage" hidden data-tip="Meeting-Ordner öffnen: Protokoll, Bild, Bericht, Aufnahme"></button>
@@ -191,28 +192,31 @@
         <span>Ohne OpenAI-Schlüssel laufen nur die Demos. Jede Person nutzt ihren eigenen Schlüssel.</span>
         <button id="btn-schluessel" class="primaer klein">Schlüssel eintragen</button>
       </div>
+      <div id="f-agenda-eingabe" class="agenda-eingabe-gross"></div>
+
       <div class="zwei">
         <label>Titel <input id="f-titel" placeholder="z. B. Messeplanung 2027"></label>
         <label>Ziel <input id="f-ziel" placeholder="z. B. Entscheidung über den Messestand"></label>
       </div>
 
-      <h3>Agenda <small>tippen, einfügen oder sprechen – Nestor macht daraus die Tabelle</small></h3>
+      <h3>Agenda <small>von Hand ergänzen oder ändern, Reihenfolge per Pfeil</small></h3>
       <div id="f-agenda"></div>
 
       <h3>Gesprächsregeln <small>Nestor achtet nur auf das, was ausgewählt ist</small></h3>
-      <div id="f-regelwahl" class="regelwahl"></div>
-
-      <div class="zwei">
-        <div>
-          <h3>Eigene Regeln <small>nur Erinnerung, wird nicht geprüft</small></h3>
-          <textarea id="f-regeln" rows="2" placeholder="Eine pro Zeile, z. B. Handys bleiben in der Tasche"></textarea>
+      <div class="regelgruppen">
+        <div class="regelgruppe">
+          <p class="regelgruppe-titel">Prüft Nestor zuverlässig</p>
+          <div id="f-regelwahl-verlaesslich" class="regelwahl"></div>
         </div>
-        <div>
-          <h3>Teilnehmende <small>optional</small></h3>
-          <div id="f-teilnehmende"></div>
-          <button id="btn-person-neu" class="leise klein">+ Person</button>
+        <div class="regelgruppe beta">
+          <p class="regelgruppe-titel">Beta <small>noch nicht durchweg verlässlich</small></p>
+          <div id="f-regelwahl-beta" class="regelwahl"></div>
         </div>
       </div>
+
+      <h3>Teilnehmende <small>optional</small></h3>
+      <div id="f-teilnehmende"></div>
+      <button id="btn-person-neu" class="leise klein">+ Person</button>
 
       <label class="schalter nestor-wahl"><input type="checkbox" id="f-assistent" checked>
         <span><strong>Nestor spricht mit</strong> – begrüßt die Runde, fragt nach Einverständnis und antwortet,

@@ -65,6 +65,23 @@ def test_nur_zwei_sichtbare_stufen():
     assert set(regeln.STUFEN) == {"verlaesslich", "experimentell"}
 
 
+def test_anzeige_heisst_beta_statt_experimentell():
+    """Ticket #10: der Schlüssel "experimentell" bleibt in Katalog/Code, nur der Anzeige-Text ändert sich."""
+    assert regeln.STUFEN["experimentell"] == "Beta"
+    assert regeln.STUFEN["verlaesslich"] == "verlässlich"
+
+
+def test_katalog_gruppiert_trennt_verlaesslich_und_beta_ohne_regeln_umzustufen():
+    gruppen = regeln.gruppiert()
+    assert [stufe for stufe, _ in gruppen] == ["verlaesslich", "experimentell"]
+    verlaesslich, beta = gruppen[0][1], gruppen[1][1]
+    assert verlaesslich and beta
+    assert all(r["stufe"] == "verlaesslich" for r in verlaesslich)
+    assert all(r["stufe"] == "experimentell" for r in beta)
+    # Gruppierung verändert nur die Anordnung, keine Regel geht verloren oder wird umgestuft
+    assert {r["id"] for r in verlaesslich} | {r["id"] for r in beta} == {r["id"] for r in regeln.katalog()}
+
+
 def test_jede_umgesetzte_regel_hat_einstufung_und_kurzsatz_nur_bei_experimentell():
     for r in regeln.KATALOG:
         assert r.stufe in regeln.STUFEN

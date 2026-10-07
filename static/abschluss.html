@@ -44,17 +44,22 @@
       <section id="ab-unterstuetzung" class="karte" hidden>
         <h2>Nestor unterstützen</h2>
         <p id="ab-kosten-satz" class="ab-kosten-satz"></p>
-        <p class="leise-text">Es gibt keine Rechnung und keine Gegenleistung – nur drei Vorschläge, ganz wie ihr
-          mögt.</p>
-        <div id="ab-kacheln" class="ab-kacheln"></div>
-        <div id="ab-gewaehlt" class="ab-gewaehlt" hidden>
-          <div id="ab-qr" class="ab-qr"></div>
-          <div>
-            <strong id="ab-gewaehlt-betrag"></strong>
-            <p class="leise-text">Mit dem Handy scannen oder den Link öffnen:</p>
-            <a id="ab-gewaehlt-link" target="_blank" rel="noopener"></a>
+        <!-- Stufen-Block: nur ohne eigenen Schlüssel (sonst liefen die Kosten übers eigene OpenAI-Konto) -->
+        <div id="ab-stufen-block">
+          <p class="leise-text">Es gibt keine Rechnung und keine Gegenleistung – nur drei Vorschläge, ganz wie ihr
+            mögt.</p>
+          <div id="ab-kacheln" class="ab-kacheln"></div>
+          <div id="ab-gewaehlt" class="ab-gewaehlt" hidden>
+            <div id="ab-qr" class="ab-qr"></div>
+            <div>
+              <strong id="ab-gewaehlt-betrag"></strong>
+              <p class="leise-text">Mit dem Handy scannen oder den Link öffnen:</p>
+              <a id="ab-gewaehlt-link" target="_blank" rel="noopener"></a>
+            </div>
           </div>
         </div>
+        <p id="ab-eigener-hinweis" class="leise-text" hidden>Wer die Entwicklung trotzdem unterstützen möchte:
+          <a id="ab-eigener-link" target="_blank" rel="noopener"></a></p>
       </section>
 
       <!-- Nestor verbessern -->

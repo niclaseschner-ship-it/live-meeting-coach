@@ -51,9 +51,26 @@ AGENDA_BITTE = (" Ich kann euch besser begleiten, wenn ihr den nächsten Punkt a
                 "ihr wollt, drückt vorher „Wo stehen wir?“, dann fasse ich kurz zusammen, was ihr besprochen habt.")
 
 
+def _weitere_regeln_hinweis(meeting) -> str:
+    """Freitext-Regeln (coach/zustand.py: Meeting.regeln, Kachel „Weitere Regeln“, Ticket #10) im geschriebenen
+    Einverständnis-Hinweis – Gegenstück zu assistent._weitere_regeln_satz() für den Modus ohne gesprochene
+    Begrüßung. Höchstens drei wörtlich, sonst zusammengefasst; Nestor prüft sie auch hier nicht."""
+    weitere = [r.strip() for r in meeting.regeln if r.strip()]
+    if not weitere:
+        return ""
+    if len(weitere) <= 3:
+        liste = ", ".join(weitere[:-1]) + (" und " if len(weitere) > 1 else "") + weitere[-1]
+    else:
+        rest = len(weitere) - 3
+        liste = f"{', '.join(weitere[:3])} und {rest} weitere, die ihr auf dem Bildschirm seht"
+    return f" Außerdem habt ihr euch vorgenommen: {liste} – das prüfe ich nicht, nur zur Erinnerung."
+
+
 def einverstaendnis(meeting) -> str:
-    """Hinweis beim Start statt der gesprochenen Begrüßung; die Bitte um Agendawechsel erst ab zwei Punkten."""
-    return EINVERSTAENDNIS + (AGENDA_BITTE if len(meeting.agenda) >= 2 else "")
+    """Hinweis beim Start statt der gesprochenen Begrüßung; die Bitte um Agendawechsel erst ab zwei Punkten,
+    danach die weiteren (freien) Regeln als Erinnerung."""
+    return (EINVERSTAENDNIS + (AGENDA_BITTE if len(meeting.agenda) >= 2 else "")
+            + _weitere_regeln_hinweis(meeting))
 
 
 class KnopfFehler(RuntimeError):

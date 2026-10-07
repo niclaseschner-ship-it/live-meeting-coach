@@ -3,7 +3,9 @@
 // ---------- Konfidenz (Ticket „Konfidenz“, Lastenheft 4.3) ----------
 // Eine Quelle im Backend (coach/regeln.py, coach/konfidenz.py), hier nur nachschlagen und zeigen.
 function signal(z, id) { return (z.signale ?? []).find((s) => s.id === id); }
-function konfSchild(klasse = "") { return el("span", { class: `konf-schild ${klasse}`.trim() }, "experimentell"); }
+// Anzeige-Wort "Beta" statt "experimentell" (Ticket #10) – der Schlüssel "experimentell" bleibt in
+// coach/regeln.py und coach/konfidenz.py unverändert, nur was man liest, heißt jetzt Beta.
+function konfSchild(klasse = "") { return el("span", { class: `konf-schild ${klasse}`.trim() }, "Beta"); }
 
 // ---------- Vorbereitung ----------
 let regelkatalog = [];
@@ -12,10 +14,16 @@ function personZeile(name = "") {
     el("button", { class: "icon klein", "data-tip": "Person entfernen", onclick: () => z.remove() }, icon("zu")));
   $("f-teilnehmende").append(z);
 }
-function regelwahl(standard) {
-  // Gleiche Einstufung wie im Dashboard (verlässlich/experimentell) statt eigener Prüfstufen-Texte;
-  // Kurzsatz aus Lastenheft 4.3 im Tipp, wenn experimentell.
-  $("f-regelwahl").replaceChildren(...regelkatalog.map((r) => el("label",
+// Ersetzt die Teilnehmenden-Liste komplett – vom Server (formAusServer) oder aus der Agenda per Prompt
+// (agenda.js: agendaUebernehmen(), wenn die Einladung Namen nennt).
+function teilnehmendeSetzen(namen) {
+  $("f-teilnehmende").replaceChildren();
+  (namen.length ? namen : ["", ""]).forEach((n) => personZeile(n));
+}
+// Eine Regel-Kachel – gleiche Einstufung wie im Dashboard (verlässlich/Beta) statt eigener Prüfstufen-Texte;
+// Kurzsatz aus Lastenheft 4.3 im Tipp, wenn Beta (Schlüssel bleibt "experimentell", coach/regeln.py).
+function regelKachel(r, standard) {
+  return el("label",
     { class: `regel${r.umgesetzt ? "" : " folgt"}`,
       "data-tip": r.umgesetzt ? (r.stufe === "experimentell" && r.kurzsatz ? r.kurzsatz : r.beobachtet)
         : "folgt in einer späteren Ausbaustufe" },
@@ -23,7 +31,26 @@ function regelwahl(standard) {
       ...(r.umgesetzt ? {} : { disabled: "" }) }),
     el("span", { class: "r-icon" }, icon(r.id)),
     el("span", {}, r.titel.split(" – ")[0]),
-    el("span", { class: "r-stufe" }, r.umgesetzt ? r.stufe_text : "folgt"))));
+    el("span", { class: "r-stufe" }, r.umgesetzt ? r.stufe_text : "folgt"));
+}
+// „Weitere Regeln“ (Ticket #10, ersetzt das frühere „Eigene Regeln“): Freitext, den Nestor einmal am Anfang
+// vorliest, aber nicht prüft – im selben Raster wie die anderen Regel-Kacheln, deshalb hier statt als
+// eigenständiges Feld in index.html gebaut. #f-regeln wird unverändert von formularDaten() gelesen.
+function weitereRegelnKachel() {
+  return el("div", { class: "regel regel-weitere", "data-tip": "Nestor liest das einmal vor, prüft es aber nicht" },
+    el("span", { class: "r-icon" }, icon("datei")),
+    el("span", { class: "r-weitere-titel" }, "Weitere Regeln"),
+    el("textarea", { id: "f-regeln", rows: "2",
+      placeholder: "Eine pro Zeile, z. B. Handys bleiben in der Tasche" }));
+}
+function regelwahl(standard) {
+  const vorherigeWeitere = $("f-regeln")?.value ?? "";
+  $("f-regelwahl-verlaesslich").replaceChildren(
+    ...regelkatalog.filter((r) => r.stufe === "verlaesslich").map((r) => regelKachel(r, standard)),
+    weitereRegelnKachel());
+  $("f-regelwahl-beta").replaceChildren(
+    ...regelkatalog.filter((r) => r.stufe === "experimentell").map((r) => regelKachel(r, standard)));
+  $("f-regeln").value = vorherigeWeitere;
 }
 // Eine Seite, ein Stand: Das Formular übernimmt, was auf dem Server eingerichtet ist (anderer Tab, anderes Gerät),
 // solange hier niemand gerade tippt.
@@ -36,7 +63,7 @@ function formAusServer(z) {
   formStand = stand;
   $("f-titel").value = z.titel ?? ""; $("f-ziel").value = z.ziel ?? "";
   agendaVonServer(z.agenda);
-  $("f-teilnehmende").replaceChildren(); (z.teilnehmende.length ? z.teilnehmende : ["", ""]).forEach((n) => personZeile(n));
+  teilnehmendeSetzen(z.teilnehmende ?? []);
   if (regelkatalog.length && z.regel_ids) regelwahl(z.regel_ids);
 }
 function formularDaten() {
@@ -148,6 +175,7 @@ $("s-entfernen").onclick = () => schluesselSenden("");
 
 function schluesselRendern(z) {
   const s = z.schluessel ?? {};
+  $("eigener-schluessel-pill").hidden = s.quelle !== "dashboard";  // dezenter Hinweis in der Kopfleiste
   $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline;
   $("s-status").textContent = s.offline ? "Offline-Modus (LMC_OFFLINE=1): keine KI-Aufrufe."
     : !s.vorhanden ? "Noch kein Schlüssel – nur Demos möglich."
@@ -495,13 +523,19 @@ function liveRendern(z) {
         el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
   }
 
-  // Regeln als Ampeln (Zeit steht nur links); verlässliche vorn, experimentelle mit Schild und Kurzsatz
-  // kommen schon sortiert aus regel_status (Backend, einzige Quelle: coach/regeln.py).
-  $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("div", { class: `ampel ${r.farbe}`,
+  // Regeln als Ampeln (Zeit steht nur links); kommen schon verlässlich-vorn sortiert aus regel_status
+  // (Backend, einzige Quelle: coach/regeln.py). Räumlich getrennt wie die Kacheln in der Einrichtung
+  // (Ticket #10): Beta-Ampeln stehen unter einer eigenen kleinen Überschrift.
+  const ampel = (r) => el("div", { class: `ampel ${r.farbe}`,
     "data-tip": (r.detail || r.titel) + (r.stufe === "experimentell" ? ` – ${r.kurzsatz}` : "") },
     el("span", { class: "a-icon" }, icon(r.id)),
     el("strong", {}, r.titel, ...(r.stufe === "experimentell" ? [konfSchild()] : [])),
-    el("span", { class: "detail" }, r.detail))));
+    el("span", { class: "detail" }, r.detail));
+  const regelStatus = z.regel_status ?? [];
+  const beta = regelStatus.filter((r) => r.stufe === "experimentell");
+  $("regel-ampeln").replaceChildren(
+    ...regelStatus.filter((r) => r.stufe !== "experimentell").map(ampel),
+    ...(beta.length ? [el("p", { class: "etikett ampel-beta-titel" }, "Beta"), ...beta.map(ampel)] : []));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
 
   // Redeanteile, ohne Bewertung

@@ -57,6 +57,23 @@ class Explodiert:
         raise RuntimeError(f"KI-Aufruf ohne Knopf: {name}")
 
 
+# --- Einverständnis-Hinweis: weitere (freie) Regeln, Ticket #10 ------------------
+
+def test_einverstaendnis_nennt_weitere_regeln():
+    from coach.zustand import Agendapunkt, Meeting
+
+    m = Meeting(agenda=[Agendapunkt("Budget")], regeln=["Handys bleiben in der Tasche"])
+    text = knopfdruck.einverstaendnis(m)
+    assert "Handys bleiben in der Tasche" in text and "prüfe ich nicht" in text
+
+
+def test_einverstaendnis_ohne_weitere_regeln_unveraendert():
+    from coach.zustand import Agendapunkt, Meeting
+
+    m = Meeting(agenda=[Agendapunkt("Budget")])
+    assert knopfdruck.einverstaendnis(m) == knopfdruck.EINVERSTAENDNIS
+
+
 # --- 1. Ohne Knopf kein Aufruf ----------------------------------------------------
 
 def test_ohne_knopf_kein_ki_aufruf_lokale_signale_laufen(monkeypatch):

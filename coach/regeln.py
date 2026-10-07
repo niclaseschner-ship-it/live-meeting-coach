@@ -16,9 +16,12 @@ from dataclasses import asdict, dataclass
 # einzelnen Regel ab (ton: 31/32 erkannt → verlässlich; ausreden, ergebnisse: schwach im Feld → experimentell).
 # Deshalb zwei sichtbare Stufen statt drei, direkt an jeder Regel, nicht mechanisch aus der alten Stufe
 # abgeleitet.
+# Anzeige-Text, nicht der Schlüssel (Ticket #10, Rückmeldung 07.10.2026): „experimentell“ klingt in der
+# Oberfläche nach Labor, nicht nach Produkt. Der Schlüssel "experimentell" bleibt im Code/Katalog unverändert,
+# nur das, was Nutzer lesen, heißt jetzt "Beta".
 STUFEN = {
     "verlaesslich": "verlässlich",
-    "experimentell": "experimentell",
+    "experimentell": "Beta",
 }
 
 
@@ -65,6 +68,13 @@ STANDARD = ["ausreden", "thema", "zeit", "kurz"]
 
 def katalog() -> list[dict]:
     return [asdict(r) | {"stufe_text": STUFEN[r.stufe]} for r in KATALOG]
+
+
+def gruppiert() -> list[tuple[str, list[dict]]]:
+    """Katalog nach Verlässlichkeit getrennt (Ticket #10, Lastenheft 4.3): „verlässlich“ zuerst, dann Beta –
+    reine Anzeige-Gruppierung für die Einrichten-Kacheln, ändert nichts an der Einstufung einzelner Regeln."""
+    eintraege = katalog()
+    return [(stufe, [r for r in eintraege if r["stufe"] == stufe]) for stufe in ("verlaesslich", "experimentell")]
 
 
 def gueltige(ids: list[str]) -> list[str]:

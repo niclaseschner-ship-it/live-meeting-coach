@@ -26,8 +26,9 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    gleichzeitig führen.
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Modi (Abschnitt 3), die erwarteten Kosten je
    Stunde und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und Datenschutz.
-3. **Meeting einrichten:** Die Agenda entsteht aus freier Eingabe (Abschnitt 4.1). Dann werden die
-   Gesprächsregeln gewählt.
+3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
+   eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
+   getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
 4. **Meeting:** Dashboard wie bisher, je nach Modus mit oder ohne Live-Unterstützung.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite mit drei Angeboten:
    - **Eigenes Paket** herunterladen (Abschnitt 4.4).
@@ -46,24 +47,36 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 | Nestor | hört auf seinen Namen und antwortet gesprochen | auf Knopfdruck, als Text (Abschnitt 4.2) |
 | Live-Bild | alle 10 min und auf Zuruf | nur auf Knopfdruck |
 | Löschen | „Nein“ in der Begrüßung löscht alles | zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“ |
-| Kosten (Richtwert) | ~2 $ je Stunde | ~0,5 $ je Stunde, je nach Zahl der Knopfdrücke |
+| Kosten (Richtwert) | ~2 $ je Stunde | ~0,4 $ je Stunde bei 4 Knopfdrücken (Stand, Regeln, Protokoll, Bild) |
 
 Auf der Startseite steht zu **Live** wörtlich: „Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.“ Zu
 **Auf Knopfdruck**: „Ohne Ihren Knopfdruck gibt Nestor nichts an KI-Dienste weiter. Ihr Ton liegt bis dahin
 nur auf unserem Server in der EU und wird am Ende gelöscht.“
 
-Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll (`coach/kosten.py`). Der Wert für „Auf Knopfdruck“ wird
-gemessen, sobald es den Modus gibt, und dann hier nachgetragen.
+Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll (`coach/kosten.py`). Der Wert für „Auf Knopfdruck“ ist
+gemessen (Ticket #7, [docs/messung_knopfdruck.md](messung_knopfdruck.md)) an einer 60-Minuten-Probe mit vier
+Knopfdrücken (Stand, Regeln, Protokoll, Bild): Transkription + Bild zusammen 0,25 $ bei ~49 % Sprechanteil in der
+Probe, hochgerechnet bis ~0,32 $ bei durchgehender Rede; dazu kommen im echten Betrieb (API statt Codex) ein bis
+zwei Cent für die Text-Analyse. Macht zusammen rund 0,3–0,4 $/h – daher der Richtwert 0,4.
 
 ## 4. Funktionen
 
 ### 4.1 Agenda per Prompt
 
-Ein Eingabefeld nimmt Text, Eingefügtes (Tabelle aus Outlook, Mail, Liste) oder Sprache entgegen. Daraus
-macht ein Sprachmodell eine Tabelle mit den Spalten Punkt, Minuten und Ziel (optional). Die Tabelle ist
-direkt bearbeitbar. Über dasselbe Feld lässt sie sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer,
-dafür Pause einbauen“. Titel und Gesamtdauer schlägt das Modell mit vor. Im Modus „Auf Knopfdruck“ gilt das
-Absenden einer Spracheingabe als Knopfdruck.
+Ein Eingabefeld – groß und zentral ganz oben im Einrichten-Bereich – nimmt Text, Eingefügtes (Tabelle aus
+Outlook, Mail, Liste, eine ganze Einladungsmail) oder Sprache entgegen. Daraus macht ein Sprachmodell eine
+Tabelle mit den Spalten Punkt, Minuten und Ziel (optional); dazu schlägt es Titel, Ziel des Meetings und,
+wenn genannt, die Teilnehmenden vor. Aus einer Einladungsmail wird der Betreff zum Titel, der einleitende
+Satz mit Zweck oder Anlass zum Ziel, eine Uhrzeit „von–bis“ zur Gesamtdauer, auf die Punkte ohne eigene
+Minutenangabe gleichmäßig verteilt werden. Titel, Ziel und Teilnehmende überschreibt das Modell nur, wenn sie
+leer sind oder die Eingabe eindeutig ein neues Meeting beschreibt; ein gezielter Änderungswunsch („Ziel ist
+eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbeitbar. Über dasselbe Feld lässt sie
+sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Im Modus „Auf Knopfdruck“ gilt
+das Absenden einer Spracheingabe als Knopfdruck.
+
+Daneben gibt es „Weitere Regeln“: ein Freitext (Kachel im selben Raster wie die Gesprächsregeln), den Nestor
+einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N weitere, die ihr
+auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
 
 ### 4.2 Analysen auf Knopfdruck
 
@@ -76,8 +89,21 @@ und führt dann die gewählte Analyse aus:
 - **Live-Bild**
 - **Nestor fragen:** freie Frage als Text (Spracheingabe folgt)
 
-Bis die Antwort kommt, sieht man den Fortschritt. Die gemessene Wartezeit für 15, 30 und 60 Minuten Meeting
-steht hier, sobald sie gemessen ist.
+Bis die Antwort kommt, sieht man den Fortschritt. Gemessene Wartezeit (Ticket #7, 60-Minuten-Probe, Einzelheiten
+und Messverfahren in [docs/messung_knopfdruck.md](messung_knopfdruck.md)):
+
+| Meetingzeit | Knopf | Transkription | Analyse (Codex) | Gesamt | Kosten |
+|---|---|---|---|---|---|
+| 15 min | Stand | 28,0 s | 10,4 s | 38,4 s | 0,044 $ |
+| 30 min | Regeln | 26,2 s | 14,6 s | 40,8 s | 0,044 $ |
+| 60 min | Protokoll | 52,2 s | 10,4 s | 62,6 s | 0,088 $ |
+| einmalig | Bild | – | 50,1 s | 50,1 s | 0,074 $ |
+
+Die Analysezeit ist hier die des ChatGPT-Abos (`LMC_KI=codex`, ~8–15 s je Aufruf); über die echte API maß der
+Vergleichslauf 2,6 s für denselben Aufruf (Begründung und Zahlen im Messbericht) – kostet dafür ein bis zwei
+Cent statt nichts. Die Transkriptionszeit wächst mit der Menge offener Sprache (seit dem letzten Knopf), nicht
+mit der Meetingdauer selbst; bei „Protokoll“ war sie am größten, weil seit „Regeln“ 30 Minuten statt 15
+aufgelaufen waren.
 
 Weitere Regeln in diesem Modus:
 - Agendawechsel nur per Klick (Ansagen kämen erst beim nächsten Knopf an).
@@ -85,11 +111,15 @@ Weitere Regeln in diesem Modus:
 - **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Bild, Protokoll, Befunde) aus dem
   Zeitraum; die Aufnahme wird dort zu Stille. Redeanteile bleiben, sie enthalten keine Inhalte.
 - Erster Probelauf (3 min, 4 Knöpfe): je Knopf 9–15 s, davon Transkription 1–6 s; 0,009 $ Transkription.
+  Ausführliche Messung über 60 Minuten: siehe Tabelle oben.
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
-Jedes Signal ist im Dashboard als **verlässlich** oder **experimentell** gekennzeichnet. Bei experimentellen
-Signalen steht in einem Satz dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn.
+Jedes Signal ist im Dashboard als **verlässlich** oder **Beta** gekennzeichnet (Schlüssel im Katalog/Code
+weiterhin „experimentell“, Ticket #10 ändert nur den Anzeige-Text). Bei Beta-Signalen steht in einem Satz
+dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn und sind von den Beta-Signalen farblich
+und räumlich getrennt – bei den Gesprächsregeln in der Einrichtung (zwei Gruppen) genauso wie bei den
+Regel-Ampeln im Dashboard.
 
 | Signal | Einstufung | Grundlage | Kurzsatz im Dashboard |
 |---|---|---|---|
@@ -127,6 +157,11 @@ aufgerundet, mindestens 2 €:
 Daneben stehen der PayPal-QR-Code und der Link auf PayPal.me. Der Betrag steht im Link, wenn PayPal das
 zulässt. Es gibt keine Rechnung und keine Gegenleistung, und es heißt „Unterstützung“, nicht „Kauf“.
 
+Wer auf der Startseite einen eigenen OpenAI-Schlüssel hinterlegt hat (Abschnitt 6), sieht hier keine Stufen:
+Die KI-Kosten liefen über das eigene OpenAI-Konto, ein Kostenausgleich entfällt also. Stattdessen steht knapper
+„Wer die Entwicklung trotzdem unterstützen möchte“ mit dem allgemeinen PayPal.me-Link, ohne vorgeschlagenen
+Betrag.
+
 ### 4.6 Datenspende und Feedback
 
 - Freitextfeld für Feedback, auch ohne Datenspende absendbar.
@@ -151,8 +186,12 @@ zulässt. Es gibt keine Rechnung und keine Gegenleistung, und es heißt „Unter
 - **Cloudflare Containers** (Workers-Paid-Plan, 5 $/Monat). Ein Worker prüft das Passwort und startet je
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
-- **OpenAI-Schlüssel:** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Den
-  Eintrag eines eigenen Schlüssels gibt es weiterhin.
+- **OpenAI-Schlüssel:** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Wer
+  möchte, trägt auf der Startseite (aufklappbare Zeile unter den Modus-Karten, optional) seinen eigenen Schlüssel
+  ein – ein Angebot, kein Pflichtschritt. Ein eingetragener Schlüssel hat Vorrang vor Niclas' Schlüssel; die
+  Kopfleiste im Dashboard zeigt dann unauffällig „eigener Schlüssel“. Im Cloud-Betrieb wird ein so eingetragener
+  Schlüssel beim Abschluss des Meetings („Fertig“) wieder gelöscht – er gilt nur für dieses eine Meeting; im
+  lokalen Betrieb bleibt er wie bisher gespeichert.
 - **Kunden** stehen in einer Liste: Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings.
 - **Abo-Wege** (Codex, Claude über den Pi) sind nur für Tests und in der Cloud aus.
 - **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt

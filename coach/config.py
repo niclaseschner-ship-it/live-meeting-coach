@@ -134,9 +134,10 @@ class Einstellungen:
     spenden: str = os.getenv("LMC_SPENDEN", str(WURZEL / "spenden"))
 
     # --- Startseite (Lastenheft Abschnitt 2/3/6): Kostenrichtwerte, Unterstützung, Rechtstexte ---
-    # Richtwerte für die Startseite; "Knopfdruck" ist noch nicht gemessen (Lastenheft Abschnitt 3), 0,5 € als erste Schätzung
+    # Richtwerte für die Startseite (Lastenheft Abschnitt 3). "Knopfdruck" gemessen Ticket #7
+    # (docs/messung_knopfdruck.md): ~0,3-0,4 $/h bei 4 Knopfdrücken im echten Betrieb (API statt Codex).
     richtwert_live_eur: float = _zahl("LMC_RICHTWERT_LIVE_EUR", 2.0)
-    richtwert_knopfdruck_eur: float = _zahl("LMC_RICHTWERT_KNOPFDRUCK_EUR", 0.5)
+    richtwert_knopfdruck_eur: float = _zahl("LMC_RICHTWERT_KNOPFDRUCK_EUR", 0.4)
     paypal_me: str = os.getenv("LMC_PAYPAL_ME", "")  # leer = noch kein PayPal.me-Link, Unterstützung entfällt
     impressum_name: str = os.getenv("LMC_IMPRESSUM_NAME", "")
     impressum_anschrift: str = os.getenv("LMC_IMPRESSUM_ANSCHRIFT", "")
