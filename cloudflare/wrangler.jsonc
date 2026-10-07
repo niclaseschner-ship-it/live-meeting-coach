@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nestor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Ein Image, zentral verwaltet (scheduling_policy "default", hier weggelassen = Standard) – damit gilt
+  // "constraints.jurisdiction" (anders als bei scheduling_policy "durable_object", siehe README.md
+  // "EU-Prüfung"). standard-1 ist die kleinste Stufe ab 1/2 vCPU und ≥ 2 GiB (Ticket-Vorgabe); die
+  // tatsächlich verfügbaren Stufen stehen in README.md.
+  "containers": [
+    {
+      "class_name": "Nestor",
+      "image": "../Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 10,
+      "constraints": { "jurisdiction": "eu" }
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "NESTOR", "class_name": "Nestor" },
+      { "name": "ZAEHLER", "class_name": "KundenZaehler" }
+    ]
+  },
+  // sqlite-Speicher für beide Klassen (frischer Namensraum, kein Umzug bestehender Daten nötig)
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Nestor", "KundenZaehler"] }
+  ],
+
+  "r2_buckets": [
+    { "binding": "SPENDEN", "bucket_name": "nestor-spenden" }
+  ],
+
+  // Öffentlich, keine Geheimnisse: eigene Adresse für den Rückruf aus dem Container (Datenspende). Nach dem
+  // ersten `wrangler deploy` mit der echten *.workers.dev-Adresse (oder einer eigenen Domain) füllen.
+  "vars": {
+    "WORKER_URL": "https://nestor.example.workers.dev"
+  }
+}

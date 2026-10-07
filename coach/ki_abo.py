@@ -49,6 +49,10 @@ def bereinigen(text: str) -> str:
 
 async def codex(prompt: str, frist: float = FRIST, versuche: int = 2) -> str:
     """Ein Aufruf über das Abo; bei einem Fehler (z. B. kurzzeitige Begrenzung) einmal nach 3 s wiederholen."""
+    if EINST.betrieb == "cloud":
+        # Abo-Wege sind nur für eigene Tests gedacht; in der Cloud gibt es keinen Pi mit angemeldetem Codex,
+        # und config.py erzwingt dort ohnehin LMC_KI=openai – das hier ist nur die zweite Absicherung.
+        raise RuntimeError("Abo-Weg (Codex) ist im Cloud-Betrieb aus.")
     for i in range(versuche):
         try:
             return await _codex(prompt, frist)

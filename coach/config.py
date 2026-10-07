@@ -128,6 +128,28 @@ class Einstellungen:
     archiv: str = os.getenv("LMC_ARCHIV", str(WURZEL / "meetings"))
     aufnahme_speichern: bool = os.getenv("LMC_AUFNAHME", "1") == "1"
 
+    # --- Cloud-Betrieb (Ticket #5): Nestor als Container bei Cloudflare, ein Worker je Kunde/Meeting davor ---
+    # "lokal" (Standard, Laptop) oder "cloud" (hinter dem Cloudflare-Worker, siehe cloudflare/README.md)
+    betrieb: str = os.getenv("LMC_BETRIEB", "lokal")
+    # Gemeinsames Geheimnis mit dem Worker (Secret WORKER_GEHEIMNIS dort): beweist, dass eine Anfrage wirklich
+    # über ihn kam (Kopfzeile X-Nestor-Geheimnis), und schützt umgekehrt den Aufruf des Coachs beim Worker
+    # (POST /intern/... für die Datenspende, siehe coach/ablage_r2.py).
+    worker_geheimnis: str = os.getenv("LMC_WORKER_GEHEIMNIS", "")
+    # Basisadresse des Worker (für den Rückruf aus dem Container, z. B. https://nestor.<konto>.workers.dev)
+    worker_url: str = os.getenv("LMC_WORKER_URL", "")
+    # Cloud: Meeting-Ordner nach dem Meeting nicht behalten (Datenhaltung, Lastenheft §5) – ausgewertet vom
+    # Abschluss-Ticket, hier nur definiert, damit es den Wert schon lesen kann.
+    ablage_behalten: bool = os.getenv("LMC_ABLAGE_BEHALTEN", "1") == "1"
+
+    def __post_init__(self) -> None:
+        # Cloud: Abo-Wege (Codex/Claude über den Pi) sind nur für eigene Tests gedacht und in der Cloud nicht
+        # erreichbar – unabhängig davon, was LMC_KI/LMC_BILD_ANBIETER versehentlich mitbekommen.
+        if self.betrieb == "cloud":
+            if self.ki != "openai":
+                object.__setattr__(self, "ki", "openai")
+            if self.bild_anbieter != "openai":
+                object.__setattr__(self, "bild_anbieter", "openai")
+
 
 EINST = Einstellungen()
 

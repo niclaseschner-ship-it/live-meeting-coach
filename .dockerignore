@@ -1,0 +1,27 @@
+# Ticket #5: Build-Kontext fürs Cloud-Image – klein halten und nichts Lokales/Privates mitnehmen.
+.git
+.github
+.claude
+cloudflare
+docs
+testbibliothek
+meetings
+logs
+demo
+szenen
+node_modules
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+*.env
+.env
+!.env.example
+*.wav
+*.mp3
+recordings
+aufnahmen
+modelle
+Nestor starten.cmd
+README.md

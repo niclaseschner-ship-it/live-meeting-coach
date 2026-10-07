@@ -1,0 +1,204 @@
+/**
+ * Nestor-Worker (Ticket #5): prüft das Kundenpasswort, wählt je Meeting einen eigenen Container und reicht
+ * die Datenspende nach R2 weiter. Ausgerollt wird in diesem Ticket nichts – nur gebaut und mit
+ * `wrangler deploy --dry-run` geprüft (Workers-Paid-Plan fehlt noch).
+ *
+ * Zugehörige Doku: ../docs/lastenheft.md (Abschnitte 2, 5, 6) und README.md in diesem Ordner.
+ */
+
+import { Container, getContainer } from "@cloudflare/containers";
+import { cookieLesen, cookiePruefen, cookieSigniere, kundeFuerPasswort, type Kundenliste } from "./anmeldung";
+import { KundenZaehler } from "./zaehler";
+
+export { KundenZaehler };
+
+export interface Env {
+  NESTOR: DurableObjectNamespace<Nestor>;
+  ZAEHLER: DurableObjectNamespace<KundenZaehler>;
+  SPENDEN: R2Bucket;
+  KUNDEN: string; // Secret, JSON: {"<kunde>": {"hash": "<sha256 hex>", "max_meetings": 3}}
+  COOKIE_GEHEIMNIS: string; // Secret – signiert das Kunden-Cookie
+  WORKER_GEHEIMNIS: string; // Secret – beweist dem Coach, dass eine Anfrage vom Worker kommt
+  OPENAI_API_KEY: string; // Secret – Niclas' Schlüssel, eigenes OpenAI-Projekt mit Ausgabenlimit
+  WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
+  // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
+}
+
+/** Der Nestor-Container selbst: ein Image, 8080, schläft nach Ruhe ein (siehe README zur Begründung). */
+export class Nestor extends Container<Env> {
+  defaultPort = 8080;
+  // Während eines laufenden Meetings schickt der Browser durchgehend Audio über /ws/audio (alle ~100 ms,
+  // beide Modi – Lastenheft §3) – das sind eingehende Anfragen auf der offenen WebSocket und halten den
+  // Container während des GANZEN Meetings wach, unabhängig von sleepAfter. Dieser Wert deckt nur die
+  // Einrichtungsphase davor ab (Agenda tippen, Regeln wählen), in der es länger keine Anfrage geben kann.
+  sleepAfter = "20m";
+
+  constructor(ctx: ConstructorParameters<typeof Container<Env>>[0], env: Env) {
+    super(ctx, env);
+    this.envVars = {
+      LMC_BETRIEB: "cloud",
+      LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
+      LMC_WORKER_URL: env.WORKER_URL,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
+    };
+  }
+}
+
+const KUNDE_COOKIE = "nestor_kunde";
+const MEETING_COOKIE = "nestor_meeting";
+const DREISSIG_TAGE = 30 * 24 * 60 * 60;
+
+function kundenliste(env: Env): Kundenliste {
+  try {
+    return JSON.parse(env.KUNDEN) as Kundenliste;
+  } catch {
+    return {};
+  }
+}
+
+function setzeCookie(antwort: Response, name: string, wert: string, maxAge: number): Response {
+  const kopie = new Response(antwort.body, antwort);
+  kopie.headers.append(
+    "Set-Cookie",
+    `${name}=${encodeURIComponent(wert)}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+  );
+  return kopie;
+}
+
+const ANMELDEN_SEITE = (fehler: boolean) => `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nestor – Anmelden</title>
+<style>
+  body { font-family: "Inter", "Segoe UI", system-ui, sans-serif; background: #F8FAFC; color: #0F172A;
+         display: flex; min-height: 100vh; align-items: center; justify-content: center; margin: 0; }
+  form { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; padding: 32px; width: 320px; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #1E1B4B; }
+  p.unter { color: #475569; font-size: 14px; margin: 0 0 20px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px;
+          font-size: 15px; margin-bottom: 14px; }
+  button { width: 100%; padding: 10px 12px; border: none; border-radius: 8px; background: #1E1B4B; color: #fff;
+           font-size: 15px; cursor: pointer; }
+  .fehler { color: #DC2626; font-size: 14px; margin: 0 0 14px; }
+</style>
+</head>
+<body>
+<form method="post" action="/anmelden">
+  <h1>Nestor</h1>
+  <p class="unter">Ihr Zugang für die Besprechung.</p>
+  ${fehler ? '<p class="fehler">Passwort nicht erkannt.</p>' : ""}
+  <input type="password" name="passwort" placeholder="Passwort" autofocus required />
+  <button type="submit">Anmelden</button>
+</form>
+</body>
+</html>`;
+
+async function handleAnmelden(request: Request, env: Env): Promise<Response> {
+  if (request.method === "GET") {
+    const fehler = new URL(request.url).searchParams.has("falsch");
+    return new Response(ANMELDEN_SEITE(fehler), { headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  const form = await request.formData();
+  const passwort = String(form.get("passwort") ?? "");
+  const kunde = await kundeFuerPasswort(passwort, kundenliste(env));
+  if (!kunde) {
+    return Response.redirect(new URL("/anmelden?falsch=1", request.url).toString(), 303);
+  }
+  const cookieWert = await cookieSigniere(kunde, env.COOKIE_GEHEIMNIS);
+  const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
+  return setzeCookie(antwort, KUNDE_COOKIE, cookieWert, DREISSIG_TAGE);
+}
+
+/** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
+async function handleSpende(request: Request, env: Env, name: string): Promise<Response> {
+  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const form = await request.formData();
+  let anzahl = 0;
+  for (const [dateiname, wert] of form.entries()) {
+    if (typeof wert !== "string") {
+      // FormDataEntryValue ist File | string; alles, was kein reiner Text ist, ist eine Datei
+      await env.SPENDEN.put(`${name}/${dateiname}`, await (wert as File).arrayBuffer());
+      anzahl++;
+    }
+  }
+  return Response.json({ ok: true, dateien: anzahl });
+}
+
+/** Pfade, die ohne Anmeldung erreichbar bleiben: Handy koppelt über den Kopplungscode, Rechtstexte sind frei. */
+function offenOhneAnmeldung(pfad: string): boolean {
+  return (
+    pfad === "/handy" ||
+    pfad === "/handy.webmanifest" ||
+    pfad === "/sw.js" ||
+    pfad === "/impressum.html" ||
+    pfad === "/datenschutz.html" ||
+    pfad.startsWith("/static/")
+  );
+}
+
+async function meetingPruefenUndMerken(env: Env, kunde: string, meetingId: string): Promise<boolean> {
+  const eintrag = kundenliste(env)[kunde];
+  const maxMeetings = eintrag?.max_meetings ?? 1;
+  const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
+  const antwort = await zaehler.fetch("https://zaehler/pruefen", {
+    method: "POST",
+    body: JSON.stringify({ meetingId, maxMeetings }),
+  });
+  const { erlaubt } = (await antwort.json()) as { erlaubt: boolean };
+  return erlaubt;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    const pfad = url.pathname;
+
+    if (pfad.startsWith("/intern/spende/")) {
+      return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)));
+    }
+    if (pfad === "/anmelden") {
+      return handleAnmelden(request, env);
+    }
+
+    const kunde = await cookiePruefen(cookieLesen(request.headers.get("Cookie"), KUNDE_COOKIE), env.COOKIE_GEHEIMNIS);
+    if (!kunde && !offenOhneAnmeldung(pfad)) {
+      return Response.redirect(new URL("/anmelden", request.url).toString(), 303);
+    }
+
+    // Meeting-Zuordnung: Cookie, sonst ?meeting= aus dem QR-Code, sonst (nur mit Login) ein neues Meeting.
+    let meetingId = url.searchParams.get("meeting") ?? cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE);
+    let cookieSetzen: string | null = null;
+    if (!meetingId) {
+      if (!kunde) {
+        return new Response("Kein Meeting zugeordnet – bitte den QR-Code am Dashboard scannen.", { status: 400 });
+      }
+      meetingId = crypto.randomUUID();
+      if (!(await meetingPruefenUndMerken(env, kunde, meetingId))) {
+        return new Response("Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht.", { status: 429 });
+      }
+      cookieSetzen = meetingId;
+    } else if (url.searchParams.get("meeting") && kunde) {
+      // aus der QR-URL übernommen (Handy) – zählt beim Kunden mit, sonst könnte man das Limit umgehen
+      if (!(await meetingPruefenUndMerken(env, kunde, meetingId))) {
+        return new Response("Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht.", { status: 429 });
+      }
+      cookieSetzen = meetingId;
+    }
+
+    const kopfzeilen = new Headers(request.headers);
+    kopfzeilen.set("X-Nestor-Geheimnis", env.WORKER_GEHEIMNIS);
+    kopfzeilen.set("X-Nestor-Meeting", meetingId);
+    if (kunde) kopfzeilen.set("X-Nestor-Kunde", kunde);
+    const weitergeleitet = new Request(request, { headers: kopfzeilen });
+
+    const container = getContainer(env.NESTOR, meetingId);
+    let antwort = await container.fetch(weitergeleitet);
+    if (cookieSetzen) antwort = setzeCookie(antwort, MEETING_COOKIE, cookieSetzen, DREISSIG_TAGE);
+    return antwort;
+  },
+} satisfies ExportedHandler<Env>;
