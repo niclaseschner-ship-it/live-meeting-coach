@@ -2,7 +2,11 @@
 
 // Agenda per Prompt (Lastenheft 4.1): Eingabefeld (tippen, einfügen, sprechen) + bearbeitbare Tabelle.
 // Backend: coach/agenda_prompt.py, coach/api_agenda.py. Nutzt $, el, icon, api, RATE, WORKLET aus basis.js.
-// Die Tabelle speist dasselbe Format, das /api/einrichten erwartet (siehe agendaErgebnis(), von app.js benutzt).
+// Das Eingabefeld (#f-agenda-eingabe) steht groß und zentral ganz oben im Einrichten-Bereich (Ticket #10);
+// die Tabelle (#f-agenda) darunter, nach Titel/Ziel. Die Tabelle speist dasselbe Format, das /api/einrichten
+// erwartet (siehe agendaErgebnis(), von app.js benutzt). Titel, Ziel und Teilnehmende übernimmt dieselbe
+// Eingabe gleich mit (siehe agendaUebernehmen()) – die Entscheidung, ob über­schrieben wird, trifft das
+// Sprachmodell (coach/agenda_prompt.py), nicht diese Oberfläche.
 
 let agendaPunkte = [];       // [{titel, minuten, ziel}] – die Arbeitskopie, die die Tabelle zeigt
 let agendaLaeuft = false;    // ein Vorschlag (Text oder Sprache) ist unterwegs
@@ -10,11 +14,11 @@ let agendaSchluesselDa = true;
 let agendaHoert = false;     // Mikro-Aufnahme läuft, bis zum zweiten Klick
 
 function agendaInit() {
-  $("f-agenda").replaceChildren(
+  $("f-agenda-eingabe").replaceChildren(
     el("div", { class: "agenda-eingabe" },
       el("textarea", {
-        id: "agenda-feld", rows: "1",
-        placeholder: "Was steht heute an? Tippen, einfügen oder 🎤 sprechen",
+        id: "agenda-feld", rows: "2",
+        placeholder: "Einladung hier einfügen oder sagen, was ansteht – Nestor füllt den Rest aus",
       }),
       el("div", { class: "agenda-knoepfe" },
         el("button", { id: "agenda-mikro", class: "icon", type: "button",
@@ -22,7 +26,8 @@ function agendaInit() {
         el("button", { id: "agenda-senden", class: "primaer klein", type: "button" }, "Absenden"))),
     el("p", { id: "agenda-antwort", class: "agenda-antwort", hidden: "" }),
     el("p", { id: "agenda-hinweis", class: "agenda-hinweis leise-text", hidden: "" },
-      "Ohne OpenAI-Schlüssel nicht möglich – die Tabelle lässt sich weiterhin von Hand bearbeiten."),
+      "Ohne OpenAI-Schlüssel nicht möglich – die Tabelle lässt sich weiterhin von Hand bearbeiten."));
+  $("f-agenda").replaceChildren(
     el("div", { id: "agenda-tabelle", class: "agenda-tabelle" }),
     el("p", { id: "agenda-summe", class: "agenda-summe leise-text" }));
   $("agenda-senden").onclick = agendaSenden;
@@ -86,12 +91,21 @@ function agendaSchluesselRendern(vorhanden) {
 }
 
 // ---------- Eingabe: Text ----------
+// Gibt dem Sprachmodell den vollen Stand mit (Titel, Ziel, Teilnehmende, Tabelle), damit es entscheiden kann,
+// ob eine neue Eingabe sie überschreibt oder unverändert lässt (coach/agenda_prompt.py: nur bei leerem Feld
+// oder eindeutig neuem Meeting; ein gezielter Änderungswunsch trifft nur das gemeinte Feld).
 function agendaBisherWert() {
-  return agendaPunkte.length ? { titel: $("f-titel").value, punkte: agendaPunkte } : null;
+  const titel = $("f-titel").value.trim();
+  const ziel = $("f-ziel").value.trim();
+  const teilnehmende = [...$("f-teilnehmende").querySelectorAll("input")].map((i) => i.value).filter(Boolean);
+  if (!agendaPunkte.length && !titel && !ziel && !teilnehmende.length) return null;
+  return { titel, ziel, punkte: agendaPunkte, teilnehmende };
 }
 function agendaUebernehmen(d) {
   agendaPunkte = (d.punkte ?? []).map((p) => ({ titel: p.titel ?? "", ziel: p.ziel ?? "", minuten: p.minuten ?? 10 }));
-  if (d.titel && !$("f-titel").value.trim()) $("f-titel").value = d.titel;
+  if (d.titel) $("f-titel").value = d.titel;
+  if (d.ziel) $("f-ziel").value = d.ziel;
+  if (d.teilnehmende?.length) teilnehmendeSetzen(d.teilnehmende);
   $("agenda-antwort").hidden = !d.antwort;
   $("agenda-antwort").textContent = d.antwort ?? "";
   agendaTabelleRendern();

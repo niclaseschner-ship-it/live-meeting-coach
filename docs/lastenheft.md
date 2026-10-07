@@ -26,8 +26,9 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    gleichzeitig führen.
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Modi (Abschnitt 3), die erwarteten Kosten je
    Stunde und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und Datenschutz.
-3. **Meeting einrichten:** Die Agenda entsteht aus freier Eingabe (Abschnitt 4.1). Dann werden die
-   Gesprächsregeln gewählt.
+3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
+   eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
+   getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
 4. **Meeting:** Dashboard wie bisher, je nach Modus mit oder ohne Live-Unterstützung.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite mit drei Angeboten:
    - **Eigenes Paket** herunterladen (Abschnitt 4.4).
@@ -62,11 +63,20 @@ zwei Cent für die Text-Analyse. Macht zusammen rund 0,3–0,4 $/h – daher der
 
 ### 4.1 Agenda per Prompt
 
-Ein Eingabefeld nimmt Text, Eingefügtes (Tabelle aus Outlook, Mail, Liste) oder Sprache entgegen. Daraus
-macht ein Sprachmodell eine Tabelle mit den Spalten Punkt, Minuten und Ziel (optional). Die Tabelle ist
-direkt bearbeitbar. Über dasselbe Feld lässt sie sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer,
-dafür Pause einbauen“. Titel und Gesamtdauer schlägt das Modell mit vor. Im Modus „Auf Knopfdruck“ gilt das
-Absenden einer Spracheingabe als Knopfdruck.
+Ein Eingabefeld – groß und zentral ganz oben im Einrichten-Bereich – nimmt Text, Eingefügtes (Tabelle aus
+Outlook, Mail, Liste, eine ganze Einladungsmail) oder Sprache entgegen. Daraus macht ein Sprachmodell eine
+Tabelle mit den Spalten Punkt, Minuten und Ziel (optional); dazu schlägt es Titel, Ziel des Meetings und,
+wenn genannt, die Teilnehmenden vor. Aus einer Einladungsmail wird der Betreff zum Titel, der einleitende
+Satz mit Zweck oder Anlass zum Ziel, eine Uhrzeit „von–bis“ zur Gesamtdauer, auf die Punkte ohne eigene
+Minutenangabe gleichmäßig verteilt werden. Titel, Ziel und Teilnehmende überschreibt das Modell nur, wenn sie
+leer sind oder die Eingabe eindeutig ein neues Meeting beschreibt; ein gezielter Änderungswunsch („Ziel ist
+eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbeitbar. Über dasselbe Feld lässt sie
+sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Im Modus „Auf Knopfdruck“ gilt
+das Absenden einer Spracheingabe als Knopfdruck.
+
+Daneben gibt es „Weitere Regeln“: ein Freitext (Kachel im selben Raster wie die Gesprächsregeln), den Nestor
+einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N weitere, die ihr
+auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
 
 ### 4.2 Analysen auf Knopfdruck
 
@@ -105,8 +115,11 @@ Weitere Regeln in diesem Modus:
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
-Jedes Signal ist im Dashboard als **verlässlich** oder **experimentell** gekennzeichnet. Bei experimentellen
-Signalen steht in einem Satz dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn.
+Jedes Signal ist im Dashboard als **verlässlich** oder **Beta** gekennzeichnet (Schlüssel im Katalog/Code
+weiterhin „experimentell“, Ticket #10 ändert nur den Anzeige-Text). Bei Beta-Signalen steht in einem Satz
+dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn und sind von den Beta-Signalen farblich
+und räumlich getrennt – bei den Gesprächsregeln in der Einrichtung (zwei Gruppen) genauso wie bei den
+Regel-Ampeln im Dashboard.
 
 | Signal | Einstufung | Grundlage | Kurzsatz im Dashboard |
 |---|---|---|---|

@@ -123,6 +123,21 @@ def agenda_bitte(meeting) -> str:
             "oder ihn selbst anklickt. Wenn ihr wollt, fasse ich vorher kurz zusammen, was ihr besprochen habt.")
 
 
+def _weitere_regeln_satz(meeting) -> str:
+    """Freitext-Regeln (coach/zustand.py: Meeting.regeln, Oberfläche-Kachel „Weitere Regeln“, Ticket #10) nach
+    den gewählten Katalog-Regeln: höchstens drei wörtlich, sonst zusammengefasst. Nestor liest sie nur vor,
+    er prüft sie nicht – das steht auch so auf der Kachel."""
+    weitere = [r.strip() for r in meeting.regeln if r.strip()]
+    if not weitere:
+        return ""
+    if len(weitere) <= 3:
+        liste = ", ".join(weitere[:-1]) + (" und " if len(weitere) > 1 else "") + weitere[-1]
+    else:
+        rest = len(weitere) - 3
+        liste = f"{', '.join(weitere[:3])} und {rest} weitere, die ihr auf dem Bildschirm seht"
+    return f" Außerdem habt ihr euch vorgenommen: {liste}."
+
+
 def begruessungstext(meeting) -> tuple[str, str]:
     """(Begrüßung mit Bitte um Einwand, Startsatz) – fest formuliert, damit es schnell und verlässlich ist."""
     name = EINST.assistent_name
@@ -131,6 +146,7 @@ def begruessungstext(meeting) -> tuple[str, str]:
     if regeln:
         liste = ", ".join(regeln[:-1]) + (" und " if len(regeln) > 1 else "") + regeln[-1]
         teil_regeln = f" Ihr habt euch folgende Regeln gewünscht: {liste}."
+    teil_regeln += _weitere_regeln_satz(meeting)
     gruss = (f"Hallo zusammen, ich bin {name} und begleite heute euer Meeting.{teil_regeln} Dafür höre ich mit. "
              "Wenn jemand damit nicht einverstanden ist, sagt jetzt bitte einfach Nein.")
     erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""

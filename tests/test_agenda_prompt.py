@@ -42,6 +42,19 @@ def test_normalisieren_behaelt_bisherigen_titel_wenn_keiner_kommt():
     assert erg["titel"] == "Altes Meeting"
 
 
+def test_normalisieren_behaelt_bisheriges_ziel_und_teilnehmende_wenn_nichts_kommt():
+    bisher = {"titel": "Altes Meeting", "ziel": "Altes Ziel", "teilnehmende": ["Lea", "Jonas"], "punkte": []}
+    erg = normalisieren({"punkte": []}, bisher)
+    assert erg["ziel"] == "Altes Ziel"
+    assert erg["teilnehmende"] == ["Lea", "Jonas"]
+
+
+def test_normalisieren_begrenzt_teilnehmende():
+    roh = {"punkte": [], "teilnehmende": [f"Person {i}" for i in range(30)]}
+    erg = normalisieren(roh, None)
+    assert len(erg["teilnehmende"]) == 20
+
+
 # --- agenda_vorschlagen: Abnahme-Fälle ---------------------------------------
 
 def test_fliesstext_wird_zu_tabelle():
@@ -107,9 +120,11 @@ def test_kaputtes_json_erst_wiederholung_dann_fehlermeldung():
     erg = asyncio.run(agenda_vorschlagen(_client("kein json", gut), "modell", "Eingabe", None))
     assert erg["punkte"][0]["titel"] == "Punkt"  # zweiter Versuch hat gegriffen
 
-    bisher = {"titel": "Altes Meeting", "punkte": [{"titel": "Bleibt", "minuten": 5, "ziel": ""}]}
+    bisher = {"titel": "Altes Meeting", "ziel": "Altes Ziel", "teilnehmende": ["Lea"],
+              "punkte": [{"titel": "Bleibt", "minuten": 5, "ziel": ""}]}
     erg2 = asyncio.run(agenda_vorschlagen(_client("kein json", "immer noch kein json"), "modell", "Eingabe", bisher))
     assert erg2["punkte"] == bisher["punkte"] and erg2["titel"] == "Altes Meeting"
+    assert erg2["ziel"] == "Altes Ziel" and erg2["teilnehmende"] == ["Lea"]
     assert erg2["antwort"]  # Fehlermeldung an den Nutzer
 
 
@@ -117,3 +132,53 @@ def test_rueckfrage_ohne_brauchbare_agenda():
     antwort = _json(titel="", punkte=[], antwort="Worum soll es in dem Meeting gehen?")
     erg = asyncio.run(agenda_vorschlagen(_client(antwort), "modell", "ein Meeting", None))
     assert erg["punkte"] == [] and "?" in erg["antwort"]
+
+
+def test_einladungsmail_liefert_titel_ziel_punkte_und_teilnehmende():
+    """Abnahme-Fall aus dem Ticket: eine ganze Einladungsmail ergibt Titel, Ziel, 4 Punkte (60 min) und
+    4 Teilnehmende. Die Antwort des Sprachmodells ist hier gemockt (siehe Bericht für den echten Codex-Lauf
+    mit genau dieser Mail)."""
+    mail = (
+        "Betreff: Jour fixe Messe 2027 – Standkonzept festzurren\n"
+        "Hallo zusammen, am Donnerstag 10:00–11:00 im Raum Elbe wollen wir das Standkonzept für die Messe "
+        "2027 entscheiden.\n"
+        "Teilnehmende: Lea Brandt, Jonas Weber, Mira Schulz, Tim Krause\n"
+        "Agenda:\n"
+        "1. Rückblick Messe 2026 (kurz)\n"
+        "2. Standgröße und Budget\n"
+        "3. Gestaltung und Give-aways\n"
+        "4. Aufgaben und nächste Schritte\n"
+        "Viele Grüße, Lea"
+    )
+    antwort = _json(
+        titel="Jour fixe Messe 2027 – Standkonzept festzurren",
+        ziel="Entscheidung über das Standkonzept für die Messe 2027",
+        punkte=[
+            {"titel": "Rückblick Messe 2026", "minuten": 10, "ziel": ""},
+            {"titel": "Standgröße und Budget", "minuten": 20, "ziel": ""},
+            {"titel": "Gestaltung und Give-aways", "minuten": 20, "ziel": ""},
+            {"titel": "Aufgaben und nächste Schritte", "minuten": 10, "ziel": ""},
+        ],
+        teilnehmende=["Lea Brandt", "Jonas Weber", "Mira Schulz", "Tim Krause"],
+        antwort="Ich habe 4 Punkte angelegt, zusammen 60 Minuten, mit 4 Teilnehmenden.",
+    )
+    erg = asyncio.run(agenda_vorschlagen(_client(antwort), "modell", mail, None))
+    assert erg["titel"] == "Jour fixe Messe 2027 – Standkonzept festzurren"
+    assert "Standkonzept" in erg["ziel"]
+    assert len(erg["punkte"]) == 4
+    assert sum(p["minuten"] for p in erg["punkte"]) == 60
+    assert erg["teilnehmende"] == ["Lea Brandt", "Jonas Weber", "Mira Schulz", "Tim Krause"]
+
+
+def test_gezielter_aenderungswunsch_an_bisheriges_ziel():
+    """Die Entscheidung, ob Titel/Ziel/Teilnehmende überschrieben werden, liegt beim Sprachmodell (System-
+    Prompt); hier wird nur geprüft, dass ein gezielt geändertes Ziel normal durchgereicht wird, ohne den
+    bisherigen Titel oder die Teilnehmenden zu verlieren."""
+    bisher = {"titel": "Teamrunde", "ziel": "Altes Ziel", "teilnehmende": ["Lea", "Jonas"],
+              "punkte": [{"titel": "Budget", "minuten": 10, "ziel": ""}]}
+    antwort = _json(titel="Teamrunde", ziel="Neues Ziel", punkte=bisher["punkte"],
+                     teilnehmende=bisher["teilnehmende"], antwort="Ziel angepasst.")
+    erg = asyncio.run(agenda_vorschlagen(_client(antwort), "modell", "Ziel ist eigentlich: Neues Ziel", bisher))
+    assert erg["ziel"] == "Neues Ziel"
+    assert erg["titel"] == "Teamrunde"
+    assert erg["teilnehmende"] == ["Lea", "Jonas"]
