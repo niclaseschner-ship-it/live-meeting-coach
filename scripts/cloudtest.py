@@ -135,6 +135,29 @@ async def warten_auf(seite: Page, ausdruck: str, timeout_s: float = 20.0, takt: 
     return False
 
 
+class SchrittFehler(RuntimeError):
+    """Ein Ablaufschritt ist nicht wie erwartet eingetreten – mit Screenshot und Begründung abgebrochen,
+    statt blind weiterzumachen (z. B. auf einen inzwischen verdeckten/versteckten Knopf zu klicken)."""
+
+
+async def schritt_oder_abbrechen(seite: Page, bericht: "Bericht", name: str, ausdruck: str,
+                                 timeout_s: float = 20.0) -> None:
+    """Wartet auf `ausdruck`; bei Erfolg ein ✅-Prüfpunkt, sonst Screenshot + ❌ + Abbruch (SchrittFehler) –
+    kein Folgeschritt (z. B. ein Klick auf einen inzwischen unsichtbaren Knopf) läuft dann noch blind los."""
+    if await warten_auf(seite, ausdruck, timeout_s):
+        bericht.pruefen(name, "ok")
+        return
+    await bericht.screenshot(seite, f"fehler_{name}".replace(" ", "_"))
+    z = None
+    try:
+        z = await zustand(seite)
+    except Exception:  # noqa: BLE001
+        pass
+    detail = f"zustand.fehler={z.get('fehler')!r}, hoeren={z.get('hoeren')}" if z else "Zustand nicht lesbar"
+    bericht.pruefen(name, "fehlt", detail)
+    raise SchrittFehler(f"{name}: {detail}")
+
+
 # ---------- Robuste Stelle: Einrichten-Bereich (Agenda per Prompt), paralleles Ticket #10 kann die DOM ändern ----
 async def agenda_eingabe_finden(seite: Page):
     """Liefert (eingabefeld, senden_knopf) für die Agenda per Prompt – mehrere Strategien, die erste, die ein
@@ -213,11 +236,12 @@ async def anmelden(seite: Page, url: str, passwort: str, bericht: Bericht) -> No
 
 
 async def startseite(seite: Page, modus: str, bericht: Bericht) -> None:
-    await warten_auf(seite, "() => !!document.getElementById('karte-live')", 20.0)
+    await schritt_oder_abbrechen(seite, bericht, "Startseite geladen",
+                                 "() => !!document.getElementById('karte-live')", 20.0)
     await bericht.screenshot(seite, "startseite")
     knopf = seite.locator("#karte-live" if modus == "live" else "#karte-knopfdruck")
     await knopf.click()
-    await warten_auf(seite, "() => location.pathname === '/meeting'", 15.0)
+    await schritt_oder_abbrechen(seite, bericht, "Weiter zu /meeting", "() => location.pathname === '/meeting'", 15.0)
     await seite.wait_for_selector("#einrichtung", state="visible", timeout=15000)
 
 
@@ -225,8 +249,10 @@ async def meeting_starten(seite: Page, agenda_text: str, bericht: Bericht) -> fl
     await einrichten(seite, agenda_text, bericht)
     await bericht.screenshot(seite, "agenda-tabelle")
     await seite.locator("#btn-start").click()
-    gestartet = await warten_auf(seite, "() => !document.getElementById('live').hidden", 25.0)
-    bericht.pruefen("Meeting gestartet (Mikrofon aus Datei angenommen)", "ok" if gestartet else "fehlt")
+    # Hart abbrechen statt blind weiterzumachen: ohne laufendes Meeting wäre jeder folgende Schritt
+    # (Knöpfe, Mitschnitt, "Beenden"-Klick) ohnehin sinnlos und würde nur auf unsichtbare Elemente warten.
+    await schritt_oder_abbrechen(seite, bericht, "Meeting gestartet (Mikrofon aus Datei angenommen)",
+                                 "() => !document.getElementById('live').hidden", 25.0)
     return time.monotonic()
 
 
@@ -251,6 +277,7 @@ async def aufzeichnen(seite: Page, referenz: dict, modus: str, bericht: Bericht,
     naechster_screenshot = iter(sorted(SCREENSHOT_ZEITEN.items(), key=lambda kv: kv[1]))
     ss_name, ss_zeit = next(naechster_screenshot, (None, None))
     kosten_vor_erstem_knopf = None
+    vorzeitig_beendet = False  # hoeren wurde false, bevor wir absichtlich "Beenden" gedrückt haben
 
     while time.monotonic() - meeting_start < soll_dauer + 30:
         try:
@@ -259,6 +286,7 @@ async def aufzeichnen(seite: Page, referenz: dict, modus: str, bericht: Bericht,
             await asyncio.sleep(1.0)
             continue
         if not z or not z.get("hoeren"):
+            vorzeitig_beendet = True
             break
         t = z.get("zeit", 0.0)
         if t < letzte_zeit - 2.0:
@@ -294,8 +322,23 @@ async def aufzeichnen(seite: Page, referenz: dict, modus: str, bericht: Bericht,
             break
         await asyncio.sleep(2.0)
 
+    if vorzeitig_beendet:
+        # Das Mikro/Meeting ist von selbst aus "hoeren" - "Beenden" ist dann versteckt (app.js: btn-stopp.hidden
+        # = !z.hoeren) und ein Klick würde nur 30 s lang auf ein unsichtbares Element warten. Stattdessen den
+        # letzten bekannten Stand und, falls vorhanden, zustand.fehler klar vermerken und zur Abschlussseite
+        # nur gehen, wenn der Server selbst schon dort gelandet ist (z. B. ein serverseitiges Beenden).
+        letzter = verlauf[-1] if verlauf else {}
+        bericht.notieren(f"Hörstrom endete vorzeitig bei {letzter.get('zeit', '?')}s "
+                         f"(Soll ~{soll_dauer:.0f}s) – zustand.fehler={letzter.get('fehler')!r}.")
+        bericht.pruefen("Meeting lief bis zum Ende durch (nicht vorzeitig beendet)", "fehlt",
+                        f"hoeren wurde false bei {letzter.get('zeit', '?')}s statt bei ~{soll_dauer:.0f}s")
+        if await seite.evaluate("() => location.pathname") != "/abschluss":
+            raise SchrittFehler("Meeting endete vorzeitig, ohne auf der Abschlussseite zu landen")
+        return verlauf
+
     await seite.locator("#btn-stopp").click()
-    await warten_auf(seite, "() => location.pathname === '/abschluss'", 15.0)
+    await schritt_oder_abbrechen(seite, bericht, "Zur Abschlussseite gewechselt",
+                                 "() => location.pathname === '/abschluss'", 15.0)
     return verlauf
 
 
@@ -441,7 +484,14 @@ async def lauf(args: argparse.Namespace) -> Bericht:
         browser = await chromium_starten(pw, args, bericht)
         context = await browser.new_context(permissions=["microphone"])
         seite = await context.new_page()
+        # JS-Fehler, Konsole und native Dialoge (alert/confirm) mitschneiden: ein unbeantworteter Dialog
+        # würde die Seite sonst stillschweigend blockieren und jeden folgenden Klick "einfrieren" lassen.
         seite.on("pageerror", lambda e: bericht.fehler.append(f"JS-Fehler im Browser: {e}"))
+        seite.on("console", lambda m: bericht.fehler.append(f"Konsole ({m.type}): {m.text}")
+                 if m.type == "error" else None)
+        seite.on("dialog", lambda d: (bericht.notieren(f"Dialog automatisch bestätigt: {d.message}"),
+                                      asyncio.ensure_future(d.accept())))
+        verlauf: list[dict] = []
         try:
             await anmelden(seite, args.url, args.passwort, bericht)
             await startseite(seite, args.modus, bericht)
@@ -452,6 +502,11 @@ async def lauf(args: argparse.Namespace) -> Bericht:
             offline = bool((z_letzt.get("schluessel") or {}).get("offline"))
             await abschluss(seite, bericht, offline)
             pruefliste_bauen(referenz, verlauf, args.modus, bericht)
+        except SchrittFehler as e:
+            bericht.fehler.append(f"Lauf abgebrochen: {e}")
+            bericht.notieren(f"Abgebrochen: {e}")
+            if verlauf:  # trotz Abbruch die bis dahin gesammelten Prüfpunkte gegen die Referenz auswerten
+                pruefliste_bauen(referenz, verlauf, args.modus, bericht)
         finally:
             await context.close()
             await browser.close()
