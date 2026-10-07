@@ -72,6 +72,21 @@ Ihr seid bei Punkt zwei, dem Budget. Entschieden ist noch nichts, offen ist die 
 """
 
 
+BILD_ZEILE = "                            Sag dazu, dass das Bild etwa eine bis zwei Minuten dauert.\n"
+# Nestor Basis (und Überblick als Text): „AKTION: bild“ zeigt den Überblick als Text – er steht nach wenigen Sekunden
+BILD_ZEILE_TEXT = "                            Sag dazu, dass die Übersicht gleich im Dashboard erscheint.\n"
+UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
+
+
+def system_text() -> str:
+    """Systemanweisung für die gewählte Stufe: in Basis entsteht auf „AKTION: bild“ der Überblick als Text."""
+    s = SYSTEM.format(name=EINST.assistent_name)
+    if EINST.bild_anbieter == "text":
+        s = s.replace("visuelle Übersicht zeichnen lassen", "Übersicht ins Dashboard stellen").replace(
+            BILD_ZEILE, BILD_ZEILE_TEXT)
+    return s
+
+
 def angesprochen(text: str) -> bool:
     return bool(NAME_RE.search(text))
 
