@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import api_start, regeln, zugang
+from . import api_abschluss, api_start, regeln, zugang
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -151,9 +151,10 @@ async def immer_nachfragen(request: Request, call_next):
         antwort.headers["Cache-Control"] = "no-cache"
     return antwort
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
-# app.include_router() verpackt den Router ab FastAPI 0.142 in ein internes Objekt ohne eigenes .path – bricht
-# test_dashboard_endpunkte_existieren, das app.routes als flache Liste von APIRoute liest. Direkt anhängen umgeht das.
-app.router.routes.extend(api_start.router.routes)
+# Router der Einzelmodule (api_*.py). Nicht include_router(): FastAPI 0.142 legt dafür einen Platzhalter ohne .path
+# in app.routes ab, test_dashboard_endpunkte_existieren braucht flache Routen. Neue Module hier in die Liste.
+for _modul in (api_start, api_abschluss):
+    app.router.routes.extend(_modul.router.routes)
 
 
 @app.get("/")
@@ -166,6 +167,11 @@ async def startseite():
 async def meeting_seite():
     """Das bisherige Dashboard – zog von „/“ hierher, als die Startseite dazukam (Ticket #1)."""
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/abschluss")
+async def abschlussseite():
+    return FileResponse(STATIC / "abschluss.html")
 
 
 @app.get("/handy")

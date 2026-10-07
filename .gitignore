@@ -21,3 +21,4 @@ testbibliothek/*
 # Demo-Satz liegt im Repo (synthetisch, frei verwendbar)
 !demo/*.wav
 meetings/
+spenden/
