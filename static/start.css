@@ -25,6 +25,14 @@ body { background: var(--bg); }
   font-size: 13.5px; font-style: italic; line-height: 1.4; }
 .s-kosten { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-2); }
 
+.s-schluessel { margin: -6px 0 0; }
+.s-schluessel summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-3); list-style: none; }
+.s-schluessel summary::-webkit-details-marker { display: none; }
+.s-schluessel[open] summary { color: var(--text-2); }
+.s-schluessel-inhalt { display: grid; gap: 10px; margin-top: 10px; padding: 16px 18px; border-radius: var(--radius);
+  background: var(--flaeche); border: 1px solid var(--rand); }
+.s-schluessel-inhalt .schluessel-zeile input { font: inherit; }
+
 .s-finanzierung { padding: 18px 20px; border-radius: var(--radius); background: var(--flaeche-2); border: 1px solid var(--rand); }
 .s-finanzierung h2 { margin: 0 0 8px; }
 .s-finanzierung p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--text-2); }

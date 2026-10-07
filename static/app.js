@@ -148,6 +148,7 @@ $("s-entfernen").onclick = () => schluesselSenden("");
 
 function schluesselRendern(z) {
   const s = z.schluessel ?? {};
+  $("eigener-schluessel-pill").hidden = s.quelle !== "dashboard";  // dezenter Hinweis in der Kopfleiste
   $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline;
   $("s-status").textContent = s.offline ? "Offline-Modus (LMC_OFFLINE=1): keine KI-Aufrufe."
     : !s.vorhanden ? "Noch kein Schlüssel – nur Demos möglich."

@@ -144,6 +144,11 @@ aufgerundet, mindestens 2 €:
 Daneben stehen der PayPal-QR-Code und der Link auf PayPal.me. Der Betrag steht im Link, wenn PayPal das
 zulässt. Es gibt keine Rechnung und keine Gegenleistung, und es heißt „Unterstützung“, nicht „Kauf“.
 
+Wer auf der Startseite einen eigenen OpenAI-Schlüssel hinterlegt hat (Abschnitt 6), sieht hier keine Stufen:
+Die KI-Kosten liefen über das eigene OpenAI-Konto, ein Kostenausgleich entfällt also. Stattdessen steht knapper
+„Wer die Entwicklung trotzdem unterstützen möchte“ mit dem allgemeinen PayPal.me-Link, ohne vorgeschlagenen
+Betrag.
+
 ### 4.6 Datenspende und Feedback
 
 - Freitextfeld für Feedback, auch ohne Datenspende absendbar.
@@ -168,8 +173,12 @@ zulässt. Es gibt keine Rechnung und keine Gegenleistung, und es heißt „Unter
 - **Cloudflare Containers** (Workers-Paid-Plan, 5 $/Monat). Ein Worker prüft das Passwort und startet je
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
-- **OpenAI-Schlüssel:** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Den
-  Eintrag eines eigenen Schlüssels gibt es weiterhin.
+- **OpenAI-Schlüssel:** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Wer
+  möchte, trägt auf der Startseite (aufklappbare Zeile unter den Modus-Karten, optional) seinen eigenen Schlüssel
+  ein – ein Angebot, kein Pflichtschritt. Ein eingetragener Schlüssel hat Vorrang vor Niclas' Schlüssel; die
+  Kopfleiste im Dashboard zeigt dann unauffällig „eigener Schlüssel“. Im Cloud-Betrieb wird ein so eingetragener
+  Schlüssel beim Abschluss des Meetings („Fertig“) wieder gelöscht – er gilt nur für dieses eine Meeting; im
+  lokalen Betrieb bleibt er wie bisher gespeichert.
 - **Kunden** stehen in einer Liste: Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings.
 - **Abo-Wege** (Codex, Claude über den Pi) sind nur für Tests und in der Cloud aus.
 - **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt
