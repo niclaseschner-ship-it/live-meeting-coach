@@ -16,6 +16,9 @@ testbibliothek/audio/
 # Testbibliothek bleibt intern (Proben öffentlicher Aufnahmen, Referenzen); nur die README liegt im Repo
 testbibliothek/*
 !testbibliothek/README.md
+# Cloud-Testlauf (Ticket Cloudtest): Drehbuch/Referenz/Agenda-Text ins Repo, die Audiodatei nicht
+!testbibliothek/cloudtest/
+testbibliothek/cloudtest/*.wav
 # lokale Vorschau-Konfiguration
 .claude/
 # Demo-Satz liegt im Repo (synthetisch, frei verwendbar)

@@ -1,0 +1,204 @@
+{
+ "titel": "Planung des Messestands für die Hannover Messe 2027",
+ "ziel": "Den aktuellen Planungsstand abstimmen, Budget und Standgröße verbindlich beschließen und die nächsten Aufgaben mit Fristen verteilen.",
+ "agenda": [
+  {
+   "titel": "Planungsstand und nächste Schritte – Überblick, was schon steht",
+   "ziel": "Den bisherigen Stand zusammenfassen, offene Punkte identifizieren und die nächsten Planungsschritte festlegen.",
+   "minuten": 2
+  },
+  {
+   "titel": "Budget und Standgestaltung – Obergrenze und Standgröße beschließen",
+   "ziel": "Einen finanziellen Rahmen und eine passende Standgröße verbindlich festlegen.",
+   "minuten": 3
+  },
+  {
+   "titel": "Aufgabenverteilung – Wer macht was bis wann",
+   "ziel": "Konkrete Arbeitspakete, Verantwortlichkeiten und Termine vereinbaren.",
+   "minuten": 2
+  }
+ ],
+ "personen": [
+  {
+   "name": "Mara",
+   "rolle": "Projektleiterin Marketing"
+  },
+  {
+   "name": "Jonas",
+   "rolle": "Vertriebsleiter"
+  },
+  {
+   "name": "Elif",
+   "rolle": "Eventmanagerin"
+  },
+  {
+   "name": "Timo",
+   "rolle": "Produktmanager"
+  }
+ ],
+ "aeusserungen": [
+  {
+   "person": 0,
+   "text": "Dann fange ich direkt mit dem ersten Punkt an, also mit dem Planungsstand und den nächsten Schritten. Ich gebe einmal den kompletten Überblick, damit wir wirklich vom selben Stand ausgehen. Die Anmeldung für die Hannover Messe 2027 ist raus und vom Veranstalter bestätigt. Wir haben bislang eine Fläche in Halle 12 vorgemerkt, allerdings noch ohne endgültige Größe. Inhaltlich steht das Grundkonzept: Wir wollen nicht einfach Produkte auf Podeste stellen, sondern drei typische Anwendungen zeigen, verbunden durch eine gemeinsame Datenplattform. Der zentrale Satz ist im Moment „Produktion verstehen, bevor Stillstand entsteht“. Das ist noch kein finaler Claim, aber als Arbeitsrichtung funktioniert es ganz gut. Der Standbauer hat unsere erste Anfrage erhalten und wartet auf Größe, Budgetrahmen und technische Anforderungen. Für die Live-Demonstration haben wir eine kompakte Anlage reserviert; Timo prüft noch, ob die neue Steuerung bis zur Messe stabil genug ist. Vom Vertrieb liegt eine Liste mit ungefähr vierzig Zielkunden vor. Außerdem möchten zwei Partnerunternehmen Gesprächstermine am Stand anbieten. Offen sind vor allem das konkrete Raumkonzept, die Anzahl der Besprechungsplätze, Catering, Hostessen und natürlich die Kosten. Bis Ende November sollten wir den Standbauer beauftragen, weil danach erfahrungsgemäß die Preise steigen und gute Teams knapp werden. Heute brauchen wir deshalb eine klare Richtung bei Fläche und Obergrenze. Danach können wir das Briefing fertigstellen, belastbare Angebote einholen und im Dezember das Gestaltungskonzept auswählen. So, das war jetzt viel am Stück, aber damit wäre der aktuelle Stand einmal vollständig zusammengefasst.",
+   "punkt": 0,
+   "ereignisse": [
+    "monolog"
+   ]
+  },
+  {
+   "person": 1,
+   "text": "Danke, das war ausführlich, aber hilfreich. Bei den Zielkunden sind wir inzwischen übrigens bei dreiundvierzig Firmen. Etwa die Hälfte davon wollen wir schon vor der Messe mit festen Terminen versehen. Dafür brauchen wir mindestens einen Bereich, in dem man sich vernünftig unterhalten kann, also nicht direkt neben der laufenden Anlage.",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 2,
+   "text": "Das spricht für einen halb geschlossenen Besprechungsraum. Ich würde trotzdem ungern eine komplett geschlossene Kabine bauen, weil so etwas schnell abweisend wirkt. Vielleicht Lamellen oder Akustikvorhänge. Der Standbauer kann uns dazu Varianten rechnen, sobald wir die Fläche festgelegt haben.",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Von der Technik her steht die Demo grundsätzlich. Wir brauchen Starkstrom, Druckluft und eine stabile kabelgebundene Internetverbindung. Nur auf das Messe-WLAN möchte ich mich ehrlich gesagt nicht verlassen. Außerdem sollten wir einen halben Tag für Tests vor Ort einplanen und nicht erst zehn Minuten vor Eröffnung anfangen.",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Gut. Dann halten wir als nächste Schritte fest: technisches Briefing vervollständigen, Zielkunden priorisieren und auf Basis der heutigen Entscheidung zwei Standentwürfe anfordern. Gibt es zum ersten Punkt noch etwas, das wir unbedingt ergänzen müssen?",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Nur die Partner. Wir sollten früh klären, ob sie tatsächlich Personal schicken oder nur ihr Logo irgendwo sehen wollen. Das verändert ja die Planung der Gesprächsplätze.",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Stimmt, das nehmen wir mit. Wir kommen zu Punkt zwei: Budget und Standgestaltung. Wir müssen heute eine Obergrenze und die Standgröße beschließen, sonst drehen wir uns beim Entwurf weiter im Kreis.",
+   "punkt": 1,
+   "ereignisse": [
+    "wechsel_ansage"
+   ]
+  },
+  {
+   "person": 2,
+   "text": "Ich habe drei Größen grob verglichen: 36, 48 und 60 Quadratmeter. Sechzig wären natürlich komfortabel, aber bei Bau, Medien und Nebenkosten landen wir damit wahrscheinlich deutlich über neunzigtausend Euro. Sechsunddreißig sind günstiger, werden mit Demo, Lager und Besprechungsbereich aber sehr eng. Mein Vorschlag wären deshalb 48 Quadratmeter als Eckstand.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Für die Anlage brauche ich mit Sicherheitsabstand ungefähr zwölf Quadratmeter. Dazu kommt ein Bildschirm, vor dem fünf oder sechs Leute stehen können. Mit 48 Quadratmetern geht das, wenn wir das Lager klein halten und keine riesige Theke in die Mitte setzen.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Ich würde lieber mehr Fläche für Gespräche einplanen als für eine große Empfangstheke. Zwei Tische mit jeweils vier Plätzen wären gut. Wenn gerade ein wichtiger Kunde kommt und alles besetzt ist, sieht das sonst sofort unprofessionell aus.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Apropos besetzt, ich war am Wochenende beim Spiel von Hannover gegen Hamburg, und da war wirklich jeder Platz voll. Erst führen die Hannoveraner, dann fangen sie sich kurz vor Schluss noch den Ausgleich. So ein Mist, ehrlich. Der Typ neben mir hat die ganze zweite Halbzeit die Tabelle auf dem Handy aktualisiert und jedem vorgerechnet, wie viele Punkte bis zum Aufstiegsplatz fehlen. Nach dem Gegentor wollte er plötzlich gar nichts mehr davon wissen. Immerhin war die Stimmung gut, obwohl wir danach ewig aus dem Parkhaus gebraucht haben. Für die nächste Messebesprechung verspreche ich aber, dass ich daraus keine Idee für eine Stadiontribüne am Stand ableite.",
+   "punkt": -1,
+   "ereignisse": [
+    "abschweifung",
+    "kraftausdruck"
+   ]
+  },
+  {
+   "person": 0,
+   "text": "Eine Tribüne wäre vermutlich auch schwer zu genehmigen. Zurück zum Stand: Was steckt bei den 48 Quadratmetern in der bisherigen Kostenschätzung genau drin?",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 2,
+   "text": "Die reine Flächenmiete liegt voraussichtlich bei rund achtzehntausend Euro. Für Standbau, Boden, Beleuchtung und Möbel habe ich vierzigtausend angesetzt. Technik und Anschlüsse etwa zehntausend, Grafik und Medienproduktion achttausend. Dazu kommen Catering, Reinigung, Transport und eine Reserve. Je nach Ausführung landen wir zwischen achtundsiebzig- und sechsundachtzigtausend Euro.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Können wir an der Gestaltung etwas reduzieren, ohne dass es billig aussieht? Mir wäre eine saubere, offene Lösung wichtiger als irgendwelche Spezialeffekte. Eine animierte Decke für zehntausend Euro bringt uns wahrscheinlich kein zusätzliches Kundengespräch.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 2,
+   "text": "Ja, absolut. Wir könnten mit einem modularen System arbeiten und die Wirkung über Licht, starke Grafiken und ein einziges großes Medienmotiv erzeugen. Das wäre später teilweise wiederverwendbar. Teuer werden vor allem Sonderanfertigungen, hängende Bauteile und sehr viel Bildschirmfläche.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Einen großen Bildschirm brauchen wir, aber nicht fünf kleine. Die Demo selbst ist ja der Blickfang. Wenn sie stabil läuft, ist das überzeugender als eine Wand voller Animationen.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Dann sehe ich einen Konsens bei 48 Quadratmetern als Eckstand, modularer Gestaltung, zwei Besprechungstischen und einer klaren Demo-Zone. Als verbindliche Obergrenze beschließen wir 85.000 Euro netto für den gesamten Messestand einschließlich Standmiete, Bau, Technik und Nebenkosten. Alles darüber müsste noch einmal ausdrücklich freigegeben werden.",
+   "punkt": 1,
+   "ereignisse": [
+    "beschluss"
+   ]
+  },
+  {
+   "person": 1,
+   "text": "Damit kann ich gut arbeiten. Wichtig wäre mir nur, dass wir innerhalb dieser Summe nicht als Erstes bei den Gesprächsplätzen sparen. Die sind aus Vertriebssicht wirklich zentral.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Ist notiert. Dann zu Punkt drei, der Aufgabenverteilung: Wer macht was bis wann? Wir gehen am besten einmal die notwendigen Pakete durch.",
+   "punkt": 2,
+   "ereignisse": [
+    "wechsel_ansage"
+   ]
+  },
+  {
+   "person": 2,
+   "text": "Ich übernehme das finale Briefing für den Standbauer und fordere zwei Gestaltungsvarianten für 48 Quadratmeter an. Darin stehen die Kostenobergrenze, der modulare Aufbau, Demo-Zone, Lager und zwei Besprechungstische. Das Briefing schicke ich spätestens am 15. Oktober raus und bitte um Angebote bis zum 5. November.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Ich liefere Elif bis zum 13. Oktober die technischen Daten der Anlage, also Maße, Gewicht, Strom, Druckluft, Netzwerk und Sicherheitsabstände. Außerdem entscheide ich bis Ende Oktober gemeinsam mit der Entwicklung, ob wir die neue Steuerung zeigen oder mit der aktuellen stabilen Version planen.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Ich priorisiere die dreiundvierzig Zielkunden und kennzeichne, bei welchen Firmen wir feste Gesprächstermine anstreben. Das mache ich bis zum 20. Oktober. Die beiden Partner rufe ich ebenfalls an und kläre bis dahin, mit wie vielen Personen und mit welchem eigenen Beitrag sie teilnehmen möchten.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Ich kümmere mich bis zum 18. Oktober um die interne Abstimmung des Arbeitsclaims und um die Freigabe des Gesamtbudgets. Außerdem erstelle ich einen Zeitplan mit den Meilensteinen bis zur Messe und stelle ihn anschließend in unseren Projektordner.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 2,
+   "text": "Eine Aufgabe sollten wir noch festhalten: Bis zur Auswahl des Entwurfs muss geklärt werden, ob wir für Catering und Standbetreuung externe Unterstützung buchen. Das ist wichtig, weil der Standbauer dafür Anschlüsse und einen kleinen Servicebereich einplanen muss.",
+   "punkt": 2,
+   "ereignisse": [
+    "aufgabe_ohne_zustaendig"
+   ]
+  },
+  {
+   "person": 0,
+   "text": "Gut, die Aufgabe steht auf der Liste, zunächst noch ohne Zuordnung. Wir treffen uns am 6. November wieder, vergleichen dann die beiden Angebote und entscheiden, mit welchem Entwurf wir weitergehen. Damit sind alle drei Punkte besprochen und wir haben für heute ein belastbares Ergebnis.",
+   "punkt": 2,
+   "ereignisse": []
+  }
+ ]
+}

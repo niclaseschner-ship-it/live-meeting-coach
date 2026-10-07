@@ -1,0 +1,3 @@
+# Zusätzlich zu requirements.txt, nur für Testskripte (nicht fürs Docker-Image).
+# Playwright treibt scripts/cloudtest.py; das System-Chromium wird benutzt (kein `playwright install`).
+playwright>=1.48
