@@ -133,11 +133,8 @@ async def zurufe() -> None:
 DEMO_VON, DEMO_BIS = 27.0, 116.0  # Messe-Demo ohne „Nestor“ (Punkt 1 bis Ende Budget)
 
 
-async def kette_lauf(c, n: int, kontext: str) -> list[dict]:
-    from coach.hoeren import nach_16k
-    from coach.livetext import LiveTextMistral
-    from coach.vad import Pausenerkennung
-
+def zuruf_audio(n: int, stille_s: float = 3.5) -> tuple[np.ndarray, list[dict]]:
+    """23 s Demo-Gespräch, dann je Zuruf: 1,2 s Pause, Frage, Stille, 8 s Demo-Gespräch (24 kHz, s16)."""
     demo = wav_lesen(WURZEL / "demo" / "messeplanung.wav")
     stuecke, fragen = [demo[int(DEMO_VON * 24000):int(50 * 24000)]], []
     pos, fueller = len(stuecke[0]) / 24000, 50.0
@@ -150,12 +147,20 @@ async def kette_lauf(c, n: int, kontext: str) -> list[dict]:
         fragen.append({"nr": nr, "frage_soll": ZURUFE[nr][0], "start": pos, "ende_audio": round(pos + sprechende(roh), 2)})
         if fueller + 8 > DEMO_BIS:
             fueller = 50.0
-        stille = np.zeros(int(3.5 * 24000), "<i2")
+        stille = np.zeros(int(stille_s * 24000), "<i2")
         teil = demo[int(fueller * 24000):int((fueller + 8) * 24000)]
         fueller += 8
         stuecke += [roh, stille, teil]
         pos += (len(roh) + len(stille) + len(teil)) / 24000
-    audio = np.concatenate(stuecke)
+    return np.concatenate(stuecke), fragen
+
+
+async def kette_lauf(c, n: int, kontext: str) -> list[dict]:
+    from coach.hoeren import nach_16k
+    from coach.livetext import LiveTextMistral
+    from coach.vad import Pausenerkennung
+
+    audio, fragen = zuruf_audio(n)
     t0 = 0.0
     zustand = {"warte_auf_frage": None}
     laeufe: list[asyncio.Task] = []
@@ -271,6 +276,50 @@ async def kette(n: int) -> None:
         print(f"\nMedian Sprechende → erster Ton: {med:.2f} s – {'STOPP (> 2,5 s)' if med > 2.5 else 'weiter (≤ 2,5 s)'}")
 
 
+# --- Ganze Pipeline: Zurufe mitten im Meeting, abgespielt durch den Coach -------------------------------------------
+async def pipeline(stufe: str, n: int) -> None:
+    """Die Zurufe laufen als Aufnahme durch Coach.abspielen – derselbe Weg wie im Dashboard. Gemessen wird mit
+    Nestors eigener Zeitmessung (logs/nestor_zeiten.jsonl): Verzug des Satzes nach Sprechende + bis zum ersten Ton."""
+    import os
+
+    from coach.pipeline import NESTOR_ZEITEN, NUTZUNG, Coach
+
+    config.stufe_setzen(stufe)
+    audio, fragen = zuruf_audio(n, stille_s=8.0)
+    pfad = AUSGABE / f"zurufe_meeting_{n}.wav"
+    wav_schreiben(pfad, audio)
+    einrichtung = json.loads((WURZEL / "demo" / "messeplanung.json").read_text(encoding="utf-8"))
+    pfad.with_suffix(".json").write_text(json.dumps(einrichtung, ensure_ascii=False), encoding="utf-8")
+    vorher_z = NESTOR_ZEITEN.read_text(encoding="utf-8").count("\n") if NESTOR_ZEITEN.exists() else 0
+    vorher_n = NUTZUNG.read_text(encoding="utf-8").count("\n") if NUTZUNG.exists() else 0
+    coach = Coach()
+    coach.onepager_am_ende = False
+
+    async def beobachten() -> None:
+        if coach.assistent.pausiert:  # „hör kurz nicht zu“ – für die Messung gleich wieder einschalten
+            await asyncio.sleep(2)
+            coach.assistent.fortsetzen()
+
+    coach.beobachter.append(beobachten)
+    await coach.abspielen(pfad, tempo=1.0, auto_wechsel=False)
+    await asyncio.sleep(12)
+    zeiten = [json.loads(z) for z in NESTOR_ZEITEN.read_text(encoding="utf-8").splitlines()[vorher_z:]]
+    nutzung = [json.loads(z) for z in NUTZUNG.read_text(encoding="utf-8").splitlines()[vorher_n:]]
+    antworten = [e for e in coach.protokoll if e["art"] in ("assistent", "recherche")]
+    gesamt = [round(z["verzug_text"] + z["bis_ton"], 2) for z in zeiten if z["ausloeser"] == "ansprache"]
+    erg = {"stufe": stufe, "n": n, "zeiten": zeiten, "sprechende_bis_ton": gesamt,
+           "antworten": [{k: e.get(k) for k in ("zeit", "art", "frage", "antwort", "aktion", "quellen", "sekunden")}
+                         for e in antworten],
+           "modelle": sorted({e.get("modell", "") for e in nutzung}),
+           "usd": round(sum(e.get("usd", 0) for e in nutzung), 4), "transkript": [s.text for s in coach.meeting.transkript]}
+    (AUSGABE / f"pipeline_{stufe}.json").write_text(json.dumps(erg, ensure_ascii=False, indent=1), encoding="utf-8")
+    for e in antworten:
+        print(f"{e['zeit']:6.1f}s {e['art']:9s} {str(e.get('frage'))[:50]:50s} → {str(e.get('aktion'))[:40]}  {str(e.get('antwort'))[:80]}")
+    if gesamt:
+        print(f"\n{stufe}: Sprechende → erster Ton (Ansprache) Median {statistics.median(gesamt):.2f} s, "
+              f"min {min(gesamt):.2f}, max {max(gesamt):.2f}, n={len(gesamt)}; Modelle {erg['modelle']}; {erg['usd']} $")
+
+
 # --- Aktionen ------------------------------------------------------------------------------------------------------------
 async def aktionen(stufe: str, laeufe: int) -> None:
     c = client_fuer(stufe)
@@ -338,7 +387,7 @@ def main() -> None:
     for laut in ("httpx", "httpx2", "httpcore", "httpcore2", "openai", "websockets"):
         logging.getLogger(laut).setLevel(logging.WARNING)
     ap = argparse.ArgumentParser()
-    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben"])
+    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben", "pipeline"])
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--stufe", default="basis", choices=["basis", "premium"])
     ap.add_argument("--laeufe", type=int, default=1)
@@ -348,6 +397,8 @@ def main() -> None:
         asyncio.run(zurufe())
     elif a.was == "kette":
         asyncio.run(kette(a.n))
+    elif a.was == "pipeline":
+        asyncio.run(pipeline(a.stufe, a.n))
     elif a.was == "aktionen":
         asyncio.run(aktionen(a.stufe, a.laeufe))
     else:

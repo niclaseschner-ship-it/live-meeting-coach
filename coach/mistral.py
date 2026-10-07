@@ -307,6 +307,8 @@ def websuche_lesen(roh: dict) -> dict:
                     gesehen.add(url)
                     quellen.append({"titel": (teil.get("title") or url)[:120], "url": url})
     u = roh.get("usage") or {}
-    return {"text": text.strip(), "quellen": quellen[:5], "tokens_rein": u.get("prompt_tokens"),
+    # Suchergebnisse zählt Mistral als „connector_tokens“ – vorsichtshalber wie Eingabe-Tokens rechnen
+    rein = (u.get("prompt_tokens") or 0) + (u.get("connector_tokens") or 0)
+    return {"text": text.strip(), "quellen": quellen[:5], "tokens_rein": rein or None,
             "tokens_raus": u.get("completion_tokens"), "suchen": suchen or (1 if quellen else 0)}
 

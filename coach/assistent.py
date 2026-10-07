@@ -74,7 +74,8 @@ Ihr seid bei Punkt zwei, dem Budget. Entschieden ist noch nichts, offen ist die 
 
 BILD_ZEILE = "                            Sag dazu, dass das Bild etwa eine bis zwei Minuten dauert.\n"
 # Nestor Basis (und Überblick als Text): „AKTION: bild“ zeigt den Überblick als Text – er steht nach wenigen Sekunden
-BILD_ZEILE_TEXT = "                            Sag dazu, dass die Übersicht gleich im Dashboard erscheint.\n"
+BILD_ZEILE_TEXT = ("                            Nur bei dieser Aktion sagst du dazu, dass die Übersicht gleich im\n"
+                   "                            Dashboard erscheint.\n")
 UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
 
 

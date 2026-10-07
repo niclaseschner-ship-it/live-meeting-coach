@@ -100,7 +100,50 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 
 // ---------- Knöpfe ----------
 // nur das zuhörende Handy übernimmt die Stimme – ein zweites Handy als reine Fernbedienung nimmt sie nicht weg
-$("btn-fragen").onclick = () => { if (mikro.laeuft()) stimme.bereit(); api("/api/assistent/fragen"); };
+// „Nestor fragen“ halten (Ticket #13): halten, fragen, loslassen → Antwort gesprochen und als Karte. Mit „Nur auf
+// Knopfdruck“ kommt die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf.
+let haelt = false;
+async function haltenAn(e) {
+  e.preventDefault();
+  if (haelt || $("btn-fragen").disabled) return;
+  haelt = true;
+  $("btn-fragen").classList.add("haelt"); $("fragen-text").textContent = "Ich höre … loslassen zum Senden";
+  if (mikro.laeuft()) stimme.bereit();
+  try {
+    await halten.start();
+    await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
+  } catch (err) {
+    haelt = false; halten.teile = null; haltenText();
+    hinweisLokal(`Mikrofon nicht verfügbar: ${err.message ?? err}`);
+  }
+}
+function haltenText() {
+  $("btn-fragen").classList.remove("haelt"); $("fragen-text").textContent = "Nestor fragen – halten und sprechen";
+}
+async function haltenAus() {
+  if (!haelt) return;
+  haelt = false; haltenText();
+  const wav = await halten.ende();
+  if (wav.byteLength < 44 + RATE * 2 * 0.5) { // unter einer halben Sekunde: versehentlich getippt
+    fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: false }) });
+    return hinweisLokal("Zum Fragen gedrückt halten, sprechen, dann loslassen.");
+  }
+  $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor hört die Frage …";
+  try {
+    const r = await fetch("/api/frage/audio", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+    const d = await r.json().catch(() => ({}));
+    $("knopf-stand").textContent = !r.ok ? (d.detail ?? `Fehler ${r.status}`) : !d.ok ? d.grund : `„${d.frage}“`;
+  } catch {
+    $("knopf-stand").textContent = "Laptop nicht erreichbar.";
+  }
+  setTimeout(() => { $("knopf-stand").hidden = true; }, 8000);
+}
+$("btn-fragen").addEventListener("pointerdown", haltenAn);
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-fragen").addEventListener(ev, haltenAus);
+$("btn-fragen").addEventListener("contextmenu", (e) => e.preventDefault());
+const HANDY_KNOPF = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
+  protokoll: "/api/knopf/protokoll" };
+document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = () => api(HANDY_KNOPF[b.dataset.knopf]); });
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-ton-hier").onclick = () => stimme.bereit();
@@ -187,8 +230,13 @@ function rendern() {
   const nestorDa = a?.aktiv && z.hoeren;
   $("nestor").className = `nestor ${nestorDa ? a.zustand : "pausiert"}`;
   $("nestor-zustand").textContent = nestorDa ? `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}` : z.hoeren ? "Nestor ist aus" : "Nestor wartet aufs Meeting";
-  $("btn-fragen").disabled = !nestorDa || a.zustand === "pausiert";
-  $("btn-fragen").hidden = nestorDa && a.zustand === "pausiert";
+  // Knöpfe: in beiden Stufen; „Nestor fragen“ auch bei „Nur auf Knopfdruck“ (dann ohne Stimme, als Karte)
+  const nurKnopf = z.modus === "knopfdruck";
+  const fragenDa = z.hoeren && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
+  $("btn-fragen").disabled = !fragenDa && !haelt;
+  document.querySelectorAll(".h-knopf").forEach((b) => { b.disabled = !z.hoeren || !!z.knopf?.laeuft; });
+  if (z.knopf?.laeuft) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor arbeitet …"; }
+  else if (z.knopf?.fehler) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = z.knopf.fehler; }
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
   $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";
   const l = a?.letzte;
