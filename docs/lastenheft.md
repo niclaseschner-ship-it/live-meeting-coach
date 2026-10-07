@@ -84,24 +84,22 @@ steht hier, sobald sie gemessen ist.
 Jedes Signal ist im Dashboard als **verlässlich** oder **experimentell** gekennzeichnet. Bei experimentellen
 Signalen steht in einem Satz dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn.
 
-| Signal | Einstufung | Grundlage |
-|---|---|---|
-| Zeit und Agenda-Ampel | verlässlich | Uhr |
-| Monolog (≥ 60 s) | verlässlich | 9/9 erkannt, 0 Fehlalarme ([gespraechsregeln.md](gespraechsregeln.md) §6) |
-| Redeanteile, stille Person | verlässlich | ≤ 1 Prozentpunkt Abweichung; stille Person 3/3 |
-| Wer spricht (anonym) | verlässlich bei klaren Stimmen | 0,2–1,6 % falsch zugeordnete Sprechzeit; Tischmikrofon im Besprechungsraum 7,5–14 % ([testlauf_2026-10-06.md](testlauf_2026-10-06.md)) |
-| Live-Transkript | verlässlich | Eigennamen teils falsch |
-| Kraftausdrücke, Angriffe | verlässlich | 31/32 erkannt, 2/51 Fehlalarme; Ende zu Ende 8/8 |
-| Agendawechsel mit Ansage | verlässlich | sofort, 5–13 s |
-| Agendawechsel ohne Ansage | experimentell | 15–60 s Verzug, kurze Punkte werden verpasst |
-| Fokus (Abschweifung) | experimentell | auf Satzebene 3/3, live seltener; schwankt bei fließenden Übergängen |
-| Ergebnisse festhalten | experimentell | 4/5 Beschlüsse richtig, in englischem Material kaum |
-| Gleichzeitiges Sprechen | experimentell | findet 41–68 % der echten, 84–86 % der Meldungen stimmen |
-| Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar |
-| Klima | experimentell | nicht gegen eine Referenz gemessen |
-| Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s |
-
-Die Kurzsätze für experimentelle Signale formuliert Ticket „Konfidenz“ aus diesen Zahlen.
+| Signal | Einstufung | Grundlage | Kurzsatz im Dashboard |
+|---|---|---|---|
+| Zeit und Agenda-Ampel | verlässlich | Uhr | – |
+| Monolog (≥ 60 s) | verlässlich | 9/9 erkannt, 0 Fehlalarme ([gespraechsregeln.md](gespraechsregeln.md) §6) | – |
+| Redeanteile, stille Person | verlässlich | ≤ 1 Prozentpunkt Abweichung; stille Person 3/3 | – |
+| Wer spricht (anonym) | verlässlich bei klaren Stimmen | 0,2–1,6 % falsch zugeordnete Sprechzeit; Tischmikrofon im Besprechungsraum 7,5–14 % ([testlauf_2026-10-06.md](testlauf_2026-10-06.md)) | – |
+| Live-Transkript | verlässlich | Eigennamen teils falsch | – |
+| Kraftausdrücke, Angriffe | verlässlich | 31/32 erkannt, 2/51 Fehlalarme; Ende zu Ende 8/8 | – |
+| Agendawechsel mit Ansage | verlässlich | sofort, 5–13 s | – |
+| Agendawechsel ohne Ansage | experimentell | 15–60 s Verzug, kurze Punkte werden verpasst | „Experimentell: meldet einen stillen Themenwechsel meist erst nach 15 bis 60 Sekunden, kurze Punkte werden dabei manchmal verpasst.“ |
+| Fokus (Abschweifung) | experimentell | auf Satzebene 3/3, live seltener; schwankt bei fließenden Übergängen | „Experimentell: erkennt Abschweifungen auf Satzebene zuverlässig (3 von 3 im Test), live seltener – bei fließenden Themenwechseln auch mal falsch.“ |
+| Ergebnisse festhalten | experimentell | 4/5 Beschlüsse richtig, in englischem Material kaum | „Experimentell: erkennt 4 von 5 Beschlüssen richtig, bei englischsprachigem Material kaum.“ |
+| Gleichzeitiges Sprechen | experimentell | findet 41–68 % der echten, 84–86 % der Meldungen stimmen | „Experimentell: findet 41 bis 68 % der echten Stellen; was gemeldet wird, stimmt in 84 bis 86 % der Fälle.“ |
+| Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
+| Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
+| Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s | – |
 
 ### 4.4 Paket zum Herunterladen
 
