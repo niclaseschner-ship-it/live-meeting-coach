@@ -360,6 +360,21 @@ async def start(request: Request):
     if coach.hoerstrom is not None:
         ereignis("start_abgewiesen", von=_herkunft(request))
         raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
+    if EINST.betrieb == "cloud":
+        # Ticket #12: Ein Meeting zählt beim Worker (KundenZaehler) erst ab hier, nicht schon beim Ansehen der
+        # Startseite. Kein Netzkontakt zum Worker möglich (None) lässt den Start im Zweifel zu, statt an einer
+        # Netzstörung zu scheitern – wie bei der Datenspende (coach/ablage_r2.py) ist das keine harte Grenze.
+        meeting_id = zugang.meeting_id(request.scope)
+        if meeting_id:
+            rueckmeldung = api_abschluss.worker_melden(
+                "/intern/meeting-start", {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)},
+            )
+            if rueckmeldung is not None and not rueckmeldung.get("erlaubt", True):
+                raise HTTPException(
+                    429,
+                    "Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht – bitte ein laufendes "
+                    "Meeting beenden oder kurz warten.",
+                )
     await coach.hoeren_starten()
     ereignis("start_von", von=_herkunft(request), mikro=audio["quelle"])
     return {"ok": True}

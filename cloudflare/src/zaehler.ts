@@ -2,34 +2,46 @@
  * KundenZaehler: ein Durable Object je Kunde, zählt dessen gleichzeitig laufende Meetings gegen
  * `max_meetings` (Secret KUNDEN). Durchsetzung "mit vertretbarem Aufwand" (Ticket #5) – bewusst einfach:
  *
- * - Ein Meeting zählt, sobald der Worker es zum ersten Mal sieht (keine `nestor_meeting`-Kopplung).
- * - Es zählt weiter, bis es `VERFALL_MS` lang keine Anfrage mehr hatte (Herzschlag über `/pruefen`).
+ * - Ein Meeting zählt erst, wenn es wirklich gestartet wurde: `/pruefen`, aufgerufen von `/intern/meeting-start`
+ *   in `index.ts`, das wiederum der Coach beim echten `/api/start` aufruft (Ticket #12) – nicht mehr schon beim
+ *   bloßen Ansehen der Startseite.
+ * - Es zählt weiter, bis entweder `/beenden` kommt (aktives Ende, `/intern/meeting-ende`, vom Coach bei
+ *   `/api/abschluss/fertig` ausgelöst) oder `VERFALL_MS` lang keine Anfrage mehr für dieses Meeting kam.
  *
- * Das ist eine Näherung, kein exaktes "Meeting beendet": Der Worker erfährt vom echten Ende eines Meetings
- * nicht (das Abschluss-Ticket #3 existiert in diesem Stand noch nicht und hat keinen Rückruf zum Worker).
- * Ein beendetes, aber gerade verlassenes Meeting zählt darum bis zu `VERFALL_MS` nach, und ein Kunde kann
- * knapp an seinem Limit vorbeirutschen. Für v1 reicht das; ein echtes Ende-Signal (z. B. derselbe
- * `/intern/`-Mechanismus wie die Datenspende) ist eine naheliegende Erweiterung für Ticket #3.
+ * `VERFALL_MS` ist die Rückfalllösung für den Fall, dass der Coach sein Ende nie meldet (Browser zu, Absturz,
+ * Netz weg) – seit Ticket #12 kein exaktes "Meeting beendet" mehr nötig, weil der häufige Fall (reguläres
+ * Ende über "Fertig") jetzt sofort über `/beenden` freigegeben wird; nur der Rest läuft weiter über die
+ * (jetzt kürzere) Verfallszeit ab.
  *
  * Die eigentliche Zähl-Logik steht in `zaehler-logik.ts` (ohne Workers-Laufzeit, testbar mit `npm test`);
  * hier nur die dünne Durable-Object-Hülle darum.
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
+import { beenden, pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
 
-export { VERFALL_MS, pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
+export { VERFALL_MS, beenden, pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
 
 export class KundenZaehler extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method !== "POST" || url.pathname !== "/pruefen") {
-      return new Response("Nur POST /pruefen.", { status: 404 });
+    if (request.method !== "POST") {
+      return new Response("Nur POST /pruefen oder /beenden.", { status: 404 });
     }
-    const { meetingId, maxMeetings } = (await request.json()) as { meetingId: string; maxMeetings: number };
     const zustand = ((await this.ctx.storage.get<Zustand>("zustand")) ?? {}) as Zustand;
-    const ergebnis = pruefenUndAktualisieren(zustand, meetingId, maxMeetings, Date.now());
-    await this.ctx.storage.put("zustand", ergebnis.zustand);
-    return Response.json({ erlaubt: ergebnis.erlaubt, aktive: ergebnis.aktive });
+
+    if (url.pathname === "/pruefen") {
+      const { meetingId, maxMeetings } = (await request.json()) as { meetingId: string; maxMeetings: number };
+      const ergebnis = pruefenUndAktualisieren(zustand, meetingId, maxMeetings, Date.now());
+      await this.ctx.storage.put("zustand", ergebnis.zustand);
+      return Response.json({ erlaubt: ergebnis.erlaubt, aktive: ergebnis.aktive });
+    }
+    if (url.pathname === "/beenden") {
+      const { meetingId } = (await request.json()) as { meetingId: string };
+      const ergebnis = beenden(zustand, meetingId, Date.now());
+      await this.ctx.storage.put("zustand", ergebnis.zustand);
+      return Response.json({ aktive: ergebnis.aktive });
+    }
+    return new Response("Nur POST /pruefen oder /beenden.", { status: 404 });
   }
 }

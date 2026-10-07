@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pruefenUndAktualisieren, VERFALL_MS, type Zustand } from "./zaehler-logik";
+import { beenden, pruefenUndAktualisieren, VERFALL_MS, type Zustand } from "./zaehler-logik";
 
 describe("max_meetings je Kunde", () => {
   it("lässt neue Meetings bis zum Limit zu und sperrt danach", () => {
@@ -32,5 +32,45 @@ describe("max_meetings je Kunde", () => {
     const r = pruefenUndAktualisieren(zustand, "m2", 1, start + VERFALL_MS + 1000);
     expect(r.erlaubt).toBe(true); // m1 ist verfallen, Platz für m2
     expect(r.aktive).toBe(1);
+  });
+
+  it("die Verfallszeit ist 30 min, nicht mehr 6 h (Ticket #12)", () => {
+    expect(VERFALL_MS).toBe(30 * 60 * 1000);
+  });
+});
+
+describe("aktives Ende (Ticket #12, /beenden)", () => {
+  it("gibt den Platz sofort frei, auch lange vor Ablauf der Verfallszeit", () => {
+    let zustand: Zustand = {};
+    const start = 1_000_000;
+    zustand = pruefenUndAktualisieren(zustand, "m1", 1, start).zustand;
+    let r = pruefenUndAktualisieren(zustand, "m2", 1, start + 1000); // Limit 1 erreicht, m2 abgewiesen
+    expect(r.erlaubt).toBe(false);
+
+    const beendet = beenden(zustand, "m1", start + 2000); // m1 aktiv beendet, weit innerhalb der Verfallszeit
+    expect(beendet.aktive).toBe(0);
+    r = pruefenUndAktualisieren(beendet.zustand, "m2", 1, start + 3000); // jetzt ist Platz für m2
+    expect(r.erlaubt).toBe(true);
+    expect(r.aktive).toBe(1);
+  });
+
+  it("ist idempotent: ein unbekanntes oder schon beendetes Meeting ist kein Fehler", () => {
+    let zustand: Zustand = {};
+    const jetzt = 1_000_000;
+    zustand = pruefenUndAktualisieren(zustand, "m1", 1, jetzt).zustand;
+    zustand = beenden(zustand, "m1", jetzt + 1000).zustand;
+    const r = beenden(zustand, "m1", jetzt + 2000); // schon beendet
+    expect(r.aktive).toBe(0);
+    const r2 = beenden(zustand, "nie-gesehen", jetzt + 2000); // nie registriert
+    expect(r2.aktive).toBe(0);
+  });
+
+  it("räumt beim Beenden nebenbei auch andere, längst verfallene Meetings auf", () => {
+    let zustand: Zustand = {};
+    const start = 1_000_000;
+    zustand = pruefenUndAktualisieren(zustand, "alt", 5, start).zustand;
+    zustand = pruefenUndAktualisieren(zustand, "neu", 5, start + VERFALL_MS + 1000).zustand;
+    const r = beenden(zustand, "neu", start + VERFALL_MS + 1000);
+    expect(r.aktive).toBe(0); // "alt" war schon verfallen, "neu" wurde gerade aktiv beendet
   });
 });

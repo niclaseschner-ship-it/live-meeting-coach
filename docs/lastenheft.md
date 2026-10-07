@@ -192,7 +192,10 @@ Betrag.
   Kopfleiste im Dashboard zeigt dann unauffällig „eigener Schlüssel“. Im Cloud-Betrieb wird ein so eingetragener
   Schlüssel beim Abschluss des Meetings („Fertig“) wieder gelöscht – er gilt nur für dieses eine Meeting; im
   lokalen Betrieb bleibt er wie bisher gespeichert.
-- **Kunden** stehen in einer Liste: Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings.
+- **Kunden** stehen in einer Liste: Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings. Ein Meeting zählt
+  dagegen erst ab dem echten Start (`/api/start`), nicht schon beim Ansehen der Startseite (Ticket #12). „Fertig“
+  im Abschluss gibt seinen Platz sofort frei und schließt den Container, ohne „Fertig“ erst nach 30 Minuten ohne
+  Anfrage.
 - **Abo-Wege** (Codex, Claude über den Pi) sind nur für Tests und in der Cloud aus.
 - **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt
   OpenAI und Cloudflare als Empfänger.
