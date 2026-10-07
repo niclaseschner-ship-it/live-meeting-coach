@@ -74,10 +74,17 @@ und führt dann die gewählte Analyse aus:
 - **Regeln eingehalten?** Prüfung der vereinbarten Gesprächsregeln
 - **Protokoll**
 - **Live-Bild**
-- **Nestor fragen:** freie Frage als Text oder Spracheingabe
+- **Nestor fragen:** freie Frage als Text (Spracheingabe folgt)
 
 Bis die Antwort kommt, sieht man den Fortschritt. Die gemessene Wartezeit für 15, 30 und 60 Minuten Meeting
 steht hier, sobald sie gemessen ist.
+
+Weitere Regeln in diesem Modus:
+- Agendawechsel nur per Klick (Ansagen kämen erst beim nächsten Knopf an).
+- Am Meetingende keine automatische Auswertung; Protokoll und Bild gibt es, wenn vorher gedrückt wurde.
+- **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Bild, Protokoll, Befunde) aus dem
+  Zeitraum; die Aufnahme wird dort zu Stille. Redeanteile bleiben, sie enthalten keine Inhalte.
+- Erster Probelauf (3 min, 4 Knöpfe): je Knopf 9–15 s, davon Transkription 1–6 s; 0,009 $ Transkription.
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
