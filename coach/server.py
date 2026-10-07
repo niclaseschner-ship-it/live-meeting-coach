@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import regeln, zugang
+from . import api_start, regeln, zugang
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -147,14 +147,24 @@ async def immer_nachfragen(request: Request, call_next):
     """Seiten und Skripte: der Browser fragt jedes Mal nach (meist 304). Sonst mischt ein Handy alte und neue
     Fassungen – Teachbuddy 14.09., und im eigenen Test 06.10. kam das alte CSS."""
     antwort = await call_next(request)
-    if request.url.path.startswith("/static/") or request.url.path in ("/", "/handy"):
+    if request.url.path.startswith("/static/") or request.url.path in ("/", "/meeting", "/handy"):
         antwort.headers["Cache-Control"] = "no-cache"
     return antwort
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+# app.include_router() verpackt den Router ab FastAPI 0.142 in ein internes Objekt ohne eigenes .path – bricht
+# test_dashboard_endpunkte_existieren, das app.routes als flache Liste von APIRoute liest. Direkt anhängen umgeht das.
+app.router.routes.extend(api_start.router.routes)
 
 
 @app.get("/")
 async def startseite():
+    """Moduswahl, Kostenhinweis, Links auf Impressum und Datenschutz (Lastenheft Abschnitt 2)."""
+    return FileResponse(STATIC / "start.html")
+
+
+@app.get("/meeting")
+async def meeting_seite():
+    """Das bisherige Dashboard – zog von „/“ hierher, als die Startseite dazukam (Ticket #1)."""
     return FileResponse(STATIC / "index.html")
 
 

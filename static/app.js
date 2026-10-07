@@ -317,6 +317,10 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
     : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
+  // Modus (Ticket #1): nur ein Schild, kein Verhalten – was er bewirkt, baut ein anderes Ticket
+  $("modus-pill").hidden = !z.modus;
+  $("modus-pill").textContent = z.modus === "knopfdruck" ? "Auf Knopfdruck" : "Live";
+  $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
   $("btn-mikro").classList.toggle("an", !!z.stumm);
   $("btn-mikro").replaceChildren(icon(z.stumm ? "mikroAus" : "mikro"));

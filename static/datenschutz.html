@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nestor · Datenschutz</title>
+  <link rel="icon" href="/static/icons/nestor.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/start.css">
+  <style>
+    /* Nur für die Rechtstexte: schmale Lesespalte statt der Start-Layouts */
+    .r-seite { max-width: 640px; margin: 0 auto; padding: 36px 22px 48px; display: grid; gap: 18px; }
+    .r-seite h1 { font-size: 24px; margin: 0; color: var(--marke-2); }
+    .r-seite h2 { font-size: 16px; text-transform: none; letter-spacing: 0; margin: 18px 0 4px; }
+    .r-seite p, .r-seite li { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text-2); }
+    .r-seite ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+    .r-seite .r-anschrift { margin: 0; display: grid; gap: 2px; font-size: 15px; color: var(--text-2); }
+    .r-seite a.r-zurueck { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="r-seite">
+    <a class="r-zurueck" href="/">← zurück zu Nestor</a>
+    <h1>Datenschutzerklärung</h1>
+    <p>Kurz und ohne Juristendeutsch: Was mit Ihren Daten passiert, wenn Sie Nestor in einem Meeting nutzen.</p>
+
+    <h2>Verantwortlicher</h2>
+    <p class="r-anschrift">
+      <span id="imp-name">[wird ergänzt]</span><br>
+      <span id="imp-anschrift">[wird ergänzt]</span><br>
+      E-Mail: <span id="imp-mail">[wird ergänzt]</span>
+    </p>
+
+    <h2>Welche Daten</h2>
+    <ul>
+      <li>Ihr Ton aus dem Meeting</li>
+      <li>das daraus entstehende Transkript</li>
+      <li>ein Nutzungsprotokoll ohne Inhalte (nur Mengen, Modelle und geschätzte Kosten)</li>
+      <li>ein Anmelde-Cookie, damit Sie nicht jedes Mal das Passwort eingeben müssen</li>
+    </ul>
+
+    <h2>Zweck</h2>
+    <p>Allein, um das Meeting zu begleiten: Agenda und Zeit im Blick zu halten, auf Ansprache zu antworten und
+      festzuhalten, was besprochen und entschieden wurde.</p>
+
+    <h2>Empfänger</h2>
+    <p><strong>OpenAI</strong> (USA, auf Grundlage des EU-US Data Privacy Framework) – im Modus „Live“ laufend,
+      im Modus „Auf Knopfdruck“ nur das, was Sie per Knopfdruck freigeben. <strong>Cloudflare</strong> als Hoster,
+      mit Servern in der EU.</p>
+
+    <h2>Speicherdauer</h2>
+    <p>Ton und Transkript bleiben nur bis zum Ende des Meetings. Danach bleibt nichts außer dem, was Sie
+      herunterladen oder ausdrücklich spenden.</p>
+
+    <h2>Datenspende</h2>
+    <p>Am Ende eines Meetings können Sie Transkript, Hinweise, Agenda und optional die Aufnahme spenden, damit
+      Nestor besser wird. Das geht nur, wenn alle Teilnehmenden einverstanden sind – ohne dieses Häkchen wird
+      nichts gespendet.</p>
+
+    <h2>Ihre Rechte</h2>
+    <p>Sie können Auskunft über Ihre Daten verlangen, ihre Berichtigung oder Löschung sowie die Einschränkung der
+      Verarbeitung – schreiben Sie dafür einfach an die oben genannte E-Mail-Adresse. Außerdem können Sie sich
+      bei einer Datenschutz-Aufsichtsbehörde beschweren.</p>
+  </main>
+
+  <script>
+    (async () => {
+      try {
+        const r = await fetch("/api/start");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.impressum_name) document.getElementById("imp-name").textContent = d.impressum_name;
+        if (d.impressum_anschrift) document.getElementById("imp-anschrift").textContent = d.impressum_anschrift;
+        if (d.impressum_mail) document.getElementById("imp-mail").textContent = d.impressum_mail;
+      } catch { /* Vorgabe „[wird ergänzt]“ bleibt stehen */ }
+    })();
+  </script>
+</body>
+</html>

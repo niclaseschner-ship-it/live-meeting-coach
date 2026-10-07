@@ -128,6 +128,15 @@ class Einstellungen:
     archiv: str = os.getenv("LMC_ARCHIV", str(WURZEL / "meetings"))
     aufnahme_speichern: bool = os.getenv("LMC_AUFNAHME", "1") == "1"
 
+    # --- Startseite (Lastenheft Abschnitt 2/3/6): Kostenrichtwerte, Unterstützung, Rechtstexte ---
+    # Richtwerte für die Startseite; "Knopfdruck" ist noch nicht gemessen (Lastenheft Abschnitt 3), 0,5 € als erste Schätzung
+    richtwert_live_eur: float = _zahl("LMC_RICHTWERT_LIVE_EUR", 2.0)
+    richtwert_knopfdruck_eur: float = _zahl("LMC_RICHTWERT_KNOPFDRUCK_EUR", 0.5)
+    paypal_me: str = os.getenv("LMC_PAYPAL_ME", "")  # leer = noch kein PayPal.me-Link, Unterstützung entfällt
+    impressum_name: str = os.getenv("LMC_IMPRESSUM_NAME", "")
+    impressum_anschrift: str = os.getenv("LMC_IMPRESSUM_ANSCHRIFT", "")
+    impressum_mail: str = os.getenv("LMC_IMPRESSUM_MAIL", "")
+
 
 EINST = Einstellungen()
 

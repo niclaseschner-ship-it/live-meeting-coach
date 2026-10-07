@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nestor · Impressum</title>
+  <link rel="icon" href="/static/icons/nestor.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/start.css">
+  <style>
+    /* Nur für die Rechtstexte: schmale Lesespalte statt der Start-Layouts */
+    .r-seite { max-width: 640px; margin: 0 auto; padding: 36px 22px 48px; display: grid; gap: 18px; }
+    .r-seite h1 { font-size: 24px; margin: 0; color: var(--marke-2); }
+    .r-seite h2 { font-size: 16px; text-transform: none; letter-spacing: 0; margin: 18px 0 4px; }
+    .r-seite p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text-2); }
+    .r-seite .r-anschrift { margin: 0; display: grid; gap: 2px; font-size: 15px; color: var(--text-2); }
+    .r-seite a.r-zurueck { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="r-seite">
+    <a class="r-zurueck" href="/">← zurück zu Nestor</a>
+    <h1>Impressum</h1>
+    <p>Nestor ist ein privates, nicht-kommerzielles Projekt von Niclas Eschner. Darum gilt hier das Impressum für
+      private Angebote nach § 5 TMG – ohne Geschäft, ohne Gewinnabsicht.</p>
+
+    <h2>Verantwortlich für diese Seite</h2>
+    <p class="r-anschrift">
+      <span id="imp-name">[wird ergänzt]</span><br>
+      <span id="imp-anschrift">[wird ergänzt]</span><br>
+      E-Mail: <span id="imp-mail">[wird ergänzt]</span>
+    </p>
+
+    <h2>Haftung für Inhalte</h2>
+    <p>Nestor erstellt Hinweise, Zusammenfassungen und Bilder automatisch mit Hilfe von Sprachmodellen. Diese
+      können Fehler enthalten – die Gruppe entscheidet selbst, nicht Nestor.</p>
+  </main>
+
+  <script>
+    (async () => {
+      try {
+        const r = await fetch("/api/start");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.impressum_name) document.getElementById("imp-name").textContent = d.impressum_name;
+        if (d.impressum_anschrift) document.getElementById("imp-anschrift").textContent = d.impressum_anschrift;
+        if (d.impressum_mail) document.getElementById("imp-mail").textContent = d.impressum_mail;
+      } catch { /* Vorgabe „[wird ergänzt]“ bleibt stehen */ }
+    })();
+  </script>
+</body>
+</html>
