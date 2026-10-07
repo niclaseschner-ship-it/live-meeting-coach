@@ -403,6 +403,30 @@ def pruefliste_bauen(referenz: dict, verlauf: list[dict], modus: str, bericht: B
         bericht.messwerte["meeting_s"] = round(verlauf[-1].get("zeit", 0.0), 1)
 
 
+async def chromium_starten(pw, args: argparse.Namespace, bericht: Bericht, versuche: int = 5):
+    """Start mit Wiederholung: der Pi hat wenig freien Speicher (andere Dienste, mehrere parallele
+    Sitzungen) und Chromiums Start schlägt unter Druck gelegentlich mit SIGTRAP fehl (PartitionAlloc bricht
+    hart ab, statt zu warten) – schon beobachtet, kein Einzelfall. Ein neuer Versuch nach kurzer Pause
+    reicht meist, weil der Speicherdruck schwankt; schlägt es mehrfach fehl, ist das ein echter Befund."""
+    sparsam = ["--disable-gpu", "--disable-software-rasterizer", "--renderer-process-limit=1",
+              "--js-flags=--max-old-space-size=256"]
+    fehler = None
+    for versuch in range(1, versuche + 1):
+        try:
+            return await pw.chromium.launch(
+                executable_path=args.chromium, headless=True,
+                args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+                     f"--use-file-for-fake-audio-capture={args.audio}",
+                     "--autoplay-policy=no-user-gesture-required", *sparsam])
+        except Exception as e:  # noqa: BLE001
+            fehler = e
+            bericht.notieren(f"Chromium-Start Versuch {versuch}/{versuche} fehlgeschlagen ({type(e).__name__}) "
+                             "– vermutlich Speicherdruck auf dem Pi, neuer Versuch in 5 s.")
+            await asyncio.sleep(5.0)
+    bericht.fehler.append(f"Chromium startete nach {versuche} Versuchen nicht (Speicherdruck auf dem Pi): {fehler}")
+    raise RuntimeError(f"Chromium startete nach {versuche} Versuchen nicht: {fehler}")
+
+
 # ---------- main ----------
 async def lauf(args: argparse.Namespace) -> Bericht:
     referenz = json.loads(Path(args.referenz).read_text(encoding="utf-8"))
@@ -410,10 +434,7 @@ async def lauf(args: argparse.Namespace) -> Bericht:
     bericht.messwerte.update(modus=args.modus, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"])
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            executable_path=args.chromium, headless=True,
-            args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
-                 f"--use-file-for-fake-audio-capture={args.audio}", "--autoplay-policy=no-user-gesture-required"])
+        browser = await chromium_starten(pw, args, bericht)
         context = await browser.new_context(permissions=["microphone"])
         seite = await context.new_page()
         seite.on("pageerror", lambda e: bericht.fehler.append(f"JS-Fehler im Browser: {e}"))
