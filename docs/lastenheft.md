@@ -46,14 +46,17 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 | Nestor | hört auf seinen Namen und antwortet gesprochen | auf Knopfdruck, als Text (Abschnitt 4.2) |
 | Live-Bild | alle 10 min und auf Zuruf | nur auf Knopfdruck |
 | Löschen | „Nein“ in der Begrüßung löscht alles | zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“ |
-| Kosten (Richtwert) | ~2 $ je Stunde | ~0,5 $ je Stunde, je nach Zahl der Knopfdrücke |
+| Kosten (Richtwert) | ~2 $ je Stunde | ~0,4 $ je Stunde bei 4 Knopfdrücken (Stand, Regeln, Protokoll, Bild) |
 
 Auf der Startseite steht zu **Live** wörtlich: „Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.“ Zu
 **Auf Knopfdruck**: „Ohne Ihren Knopfdruck gibt Nestor nichts an KI-Dienste weiter. Ihr Ton liegt bis dahin
 nur auf unserem Server in der EU und wird am Ende gelöscht.“
 
-Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll (`coach/kosten.py`). Der Wert für „Auf Knopfdruck“ wird
-gemessen, sobald es den Modus gibt, und dann hier nachgetragen.
+Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll (`coach/kosten.py`). Der Wert für „Auf Knopfdruck“ ist
+gemessen (Ticket #7, [docs/messung_knopfdruck.md](messung_knopfdruck.md)) an einer 60-Minuten-Probe mit vier
+Knopfdrücken (Stand, Regeln, Protokoll, Bild): Transkription + Bild zusammen 0,25 $ bei ~49 % Sprechanteil in der
+Probe, hochgerechnet bis ~0,32 $ bei durchgehender Rede; dazu kommen im echten Betrieb (API statt Codex) ein bis
+zwei Cent für die Text-Analyse. Macht zusammen rund 0,3–0,4 $/h – daher der Richtwert 0,4.
 
 ## 4. Funktionen
 
@@ -76,8 +79,21 @@ und führt dann die gewählte Analyse aus:
 - **Live-Bild**
 - **Nestor fragen:** freie Frage als Text (Spracheingabe folgt)
 
-Bis die Antwort kommt, sieht man den Fortschritt. Die gemessene Wartezeit für 15, 30 und 60 Minuten Meeting
-steht hier, sobald sie gemessen ist.
+Bis die Antwort kommt, sieht man den Fortschritt. Gemessene Wartezeit (Ticket #7, 60-Minuten-Probe, Einzelheiten
+und Messverfahren in [docs/messung_knopfdruck.md](messung_knopfdruck.md)):
+
+| Meetingzeit | Knopf | Transkription | Analyse (Codex) | Gesamt | Kosten |
+|---|---|---|---|---|---|
+| 15 min | Stand | 28,0 s | 10,4 s | 38,4 s | 0,044 $ |
+| 30 min | Regeln | 26,2 s | 14,6 s | 40,8 s | 0,044 $ |
+| 60 min | Protokoll | 52,2 s | 10,4 s | 62,6 s | 0,088 $ |
+| einmalig | Bild | – | 50,1 s | 50,1 s | 0,074 $ |
+
+Die Analysezeit ist hier die des ChatGPT-Abos (`LMC_KI=codex`, ~8–15 s je Aufruf); über die echte API maß der
+Vergleichslauf 2,6 s für denselben Aufruf (Begründung und Zahlen im Messbericht) – kostet dafür ein bis zwei
+Cent statt nichts. Die Transkriptionszeit wächst mit der Menge offener Sprache (seit dem letzten Knopf), nicht
+mit der Meetingdauer selbst; bei „Protokoll“ war sie am größten, weil seit „Regeln“ 30 Minuten statt 15
+aufgelaufen waren.
 
 Weitere Regeln in diesem Modus:
 - Agendawechsel nur per Klick (Ansagen kämen erst beim nächsten Knopf an).
@@ -85,6 +101,7 @@ Weitere Regeln in diesem Modus:
 - **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Bild, Protokoll, Befunde) aus dem
   Zeitraum; die Aufnahme wird dort zu Stille. Redeanteile bleiben, sie enthalten keine Inhalte.
 - Erster Probelauf (3 min, 4 Knöpfe): je Knopf 9–15 s, davon Transkription 1–6 s; 0,009 $ Transkription.
+  Ausführliche Messung über 60 Minuten: siehe Tabelle oben.
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
