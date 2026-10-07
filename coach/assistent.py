@@ -138,31 +138,71 @@ def _weitere_regeln_satz(meeting) -> str:
     return f" Außerdem habt ihr euch vorgenommen: {liste}."
 
 
+def agenda_kommentar(meeting) -> str:
+    """Ein menschlicher Halbsatz zur Agenda – zeigt, dass Nestor das Meeting kennt (Niclas, 07.10.: „Aha-Moment“)."""
+    punkte = meeting.agenda
+    if not punkte:
+        return ""
+    minuten = round(sum(p.minuten for p in punkte))
+    je_punkt = minuten / len(punkte)
+    zahl = {1: "Ein Punkt", 2: "Zwei Punkte", 3: "Drei Punkte", 4: "Vier Punkte", 5: "Fünf Punkte",
+            6: "Sechs Punkte"}.get(len(punkte), f"{len(punkte)} Punkte")
+    if je_punkt < 10:
+        wertung = "das ist sportlich"
+    elif je_punkt >= 20:
+        wertung = "da habt ihr euch Zeit genommen"
+    else:
+        wertung = "das passt gut"
+    return f" {zahl} in {minuten} Minuten – {wertung}."
+
+
 def begruessungstext(meeting) -> tuple[str, str]:
-    """(Begrüßung mit Bitte um Einwand, Startsatz) – fest formuliert, damit es schnell und verlässlich ist."""
+    """(Begrüßung mit Einwilligung, Startsatz).
+
+    Die Begrüßung ist fest formuliert – sie trägt die Einwilligung, da darf nichts frei formuliert sein. Danach geht
+    es ohne Wartepause weiter (Niclas, 07.10.: das Warten auf ein Nein war ein toter Moment); ein Nein ist kurz nach
+    der Begrüßung als einfaches „Nein“ möglich und später jederzeit als „Nestor, nein“ (`spaetes_nein`).
+    """
     name = EINST.assistent_name
     regeln = [NACH_ID[r].titel.split(" – ")[0] for r in meeting.regel_ids if r in NACH_ID]
     teil_regeln = ""
     if regeln:
         liste = ", ".join(regeln[:-1]) + (" und " if len(regeln) > 1 else "") + regeln[-1]
-        teil_regeln = f" Ihr habt euch folgende Regeln gewünscht: {liste}."
+        teil_regeln = f" Ihr habt euch diese Regeln vorgenommen: {liste}."
     teil_regeln += _weitere_regeln_satz(meeting)
     gruss = (f"Hallo zusammen, ich bin {name} und begleite heute euer Meeting.{teil_regeln} Dafür höre ich mit. "
-             "Wenn jemand damit nicht einverstanden ist, sagt jetzt bitte einfach Nein.")
-    erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""
-    start = (f"Ich habe kein Nein gehört. Dann geht es los.{erster}{agenda_bitte(meeting)} Ich höre zu und melde "
-             f"mich nur, wenn ihr mich braucht. Sprecht mich einfach mit {name} an.")
+             f"Wer nicht einverstanden ist, sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: "
+             f"„{name}, nein“. Dann lösche ich alles.")
+    erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
+    start = (f"Ganz kurz, wie ihr mit mir klarkommt: Wenn ihr etwas braucht, sagt einfach „{name}“ und eure Frage. "
+             "Nachfragen gehen dann auch ohne meinen Namen. Und wenn ich zu viel rede, redet einfach rein, "
+             "dann bin ich still. Von selbst melde ich mich nicht, Hinweise seht ihr auf dem Bildschirm."
+             f"{agenda_bitte(meeting)}{agenda_kommentar(meeting)}{erster}")
     return gruss, start
 
 
-VORSTELLUNG_BITTE = ("Ich habe kein Nein gehört. Damit ich euch auseinanderhalten kann: Sagt bitte reihum kurz "
-                     "euren Namen, zum Beispiel: Ich bin Lea.")
+# Ton für die Begrüßung: locker und zugewandt, nicht vorgelesen. Ob ein Lachen hörbar wird, entscheidet das Modell.
+STIL_START = ("Sprich warm, locker und zugewandt auf Deutsch, wie eine sympathische Moderatorin, die sich auf das "
+              "Meeting freut – mit einem Lächeln in der Stimme und einem kurzen, leisen Lachen nach dem ersten Satz. "
+              "Natürliches Tempo, kleine Pausen zwischen den Gedanken.")
+
+
+VORSTELLUNG_BITTE = ("Damit ich euch auseinanderhalten kann: Sagt bitte reihum kurz euren Namen, zum Beispiel: "
+                     "Ich bin Lea.")
 
 
 def vorstellung_start(meeting) -> str:
-    erster = f" Wir starten mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else ""
-    return (f"Danke, dann geht es los.{erster}{agenda_bitte(meeting)} Ich höre zu und melde mich nur, wenn ihr "
-            f"mich braucht. Sprecht mich einfach mit {EINST.assistent_name} an.")
+    _, start = begruessungstext(meeting)
+    return "Danke! " + start
+
+
+# Spätes Nein: nur der Name und das Nein, sonst nichts – „Nestor, nein, ich meinte Punkt zwei“ darf nicht alles löschen.
+SPAETES_NEIN_RE = re.compile(rf"^\W*(?:{EINST.assistent_muster})\W+(?:nein|wir sind nicht einverstanden)\W*$",
+                             re.IGNORECASE)
+
+
+def spaetes_nein(text: str) -> bool:
+    return bool(SPAETES_NEIN_RE.match(text))
 
 
 VORSTELLUNG_RE = re.compile(r"(?i:ich bin|ich heiße|ich heisse|mein name ist|hier ist|hier spricht)\s+(?i:die |der )?"
@@ -232,30 +272,29 @@ class Assistent:
     async def begruessen(self) -> None:
         if not self.aktiv or self.coach._client is None or self.ansprache_aus:
             return
-        gruss, _ = begruessungstext(self.coach.meeting)
+        gruss, start = begruessungstext(self.coach.meeting)
         self.zustand = "begruessung"
         await self.coach.melden()
-        await self._sprechen_texte([gruss], danach="einwand")
-        # Das Fenster für ein „Nein“ beginnt, wenn die Begrüßung im Raum zu Ende gesprochen ist
+        await self._sprechen_texte([gruss], danach="begruessung")
+        # Kein Warten auf das Nein: es geht gleich weiter, ein einfaches „Nein“ zählt aber noch eine Weile
         ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()
         self._einwand_bis = ende + EINST.einwand_sekunden
+        if EINST.vorstellung_sekunden > 0:  # Vorstellungsrunde: Namen und Stimmen kennenlernen
+            await self._sprechen_texte([VORSTELLUNG_BITTE])
+            ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()
+            self.vorstellung_bis = ende + EINST.vorstellung_sekunden
+            self._einwand_bis = max(self._einwand_bis, ende + EINST.einwand_sekunden)
+        else:
+            await self._sprechen_texte([start], stil=STIL_START)
 
     def takt(self) -> None:
-        """Vom Coach-Takt: Ende des Einwand-Fensters ohne Nein → Start ansagen."""
+        """Vom Coach-Takt: Ende der Vorstellungsrunde → Start ansagen; Ende des Fensters für ein einfaches Nein."""
         jetzt = self.coach.meeting.jetzt()
-        if self.zustand == "einwand" and self._einwand_bis is not None and jetzt > self._einwand_bis:
+        if self._einwand_bis is not None and jetzt > self._einwand_bis:
             self._einwand_bis = None
-            self.zustand = "bereit"
-            if EINST.vorstellung_sekunden > 0:  # Vorstellungsrunde: Namen und Stimmen kennenlernen
-                self._starten(self._sprechen_texte([VORSTELLUNG_BITTE]))
-                ende = self.sprechzeiten[-1][1] if self.sprechzeiten else jetzt
-                self.vorstellung_bis = max(ende, jetzt + len(VORSTELLUNG_BITTE) / 14) + EINST.vorstellung_sekunden
-            else:
-                _, start = begruessungstext(self.coach.meeting)
-                self._starten(self._sprechen_texte([start]))
         if self.vorstellung_bis is not None and jetzt > self.vorstellung_bis:
             self.vorstellung_bis = None
-            self._starten(self._sprechen_texte([vorstellung_start(self.coach.meeting)]))
+            self._starten(self._sprechen_texte([vorstellung_start(self.coach.meeting)], stil=STIL_START))
 
     # --- Eingang: fertige Sätze und Teiltext --------------------------------
     def teiltext(self, text: str) -> None:
@@ -285,9 +324,9 @@ class Assistent:
         if not self.aktiv or self.pausiert or self.ansprache_aus:
             return
         jetzt = self.coach.meeting.jetzt()
-        if self.zustand == "einwand":
-            if einwand(text):
-                await self._einwand_erhalten()
+        frisch = self._einwand_bis is not None and jetzt <= self._einwand_bis
+        if (frisch and einwand(text)) or spaetes_nein(text):
+            await self._einwand_erhalten()
             return
         if self.gespraech and self.gespraech.offen:
             await self.gespraech.satz(text, ende)  # das Modell hört mit; antworten nur, wenn gemeint
@@ -504,16 +543,16 @@ class Assistent:
         await self.coach.melden()
         return dauer
 
-    async def _sprechen_texte(self, texte: list[str], danach: str = "bereit") -> float:
+    async def _sprechen_texte(self, texte: list[str], danach: str = "bereit", stil: str | None = None) -> float:
         """Feste Texte sprechen (Begrüßung, „Ja?“, Ansagen); danach den angegebenen Zustand setzen."""
         dauer = 0.0
         for t in texte:
-            dauer += await self._sprechen(t)
+            dauer += await self._sprechen(t, stil)
         self.zustand = danach
         await self.coach.melden()
         return dauer
 
-    async def _sprechen(self, text: str) -> float:
+    async def _sprechen(self, text: str, stil: str | None = None) -> float:
         """Einen Satz synthetisieren und gestreamt ans Dashboard schicken. Liefert die Tondauer in Sekunden."""
         c = self.coach
         if c._client is None or not text.strip() or self.ansprache_aus:
@@ -532,8 +571,8 @@ class Assistent:
         try:
             async with c._client.audio.speech.with_streaming_response.create(
                     model=EINST.stimme_modell, voice=EINST.stimme, input=text, response_format="pcm",
-                    instructions="Sprich ruhig, freundlich und klar auf Deutsch, wie eine erfahrene Moderation. "
-                                 "Natürliches Tempo, nicht zu langsam.") as antwort:
+                    instructions=stil or "Sprich ruhig, freundlich und klar auf Deutsch, wie eine erfahrene Moderation. "
+                                         "Natürliches Tempo, nicht zu langsam.") as antwort:
                 async for stueck in antwort.iter_bytes(9600):
                     stueck = rest + stueck
                     gerade = len(stueck) // 2 * 2
