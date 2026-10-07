@@ -41,6 +41,6 @@
   // Öffentlich, keine Geheimnisse: eigene Adresse für den Rückruf aus dem Container (Datenspende). Nach dem
   // ersten `wrangler deploy` mit der echten *.workers.dev-Adresse (oder einer eigenen Domain) füllen.
   "vars": {
-    "WORKER_URL": "https://nestor.example.workers.dev"
+    "WORKER_URL": "https://nestor.niclas-eschner.workers.dev"
   }
 }
