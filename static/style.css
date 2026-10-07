@@ -146,7 +146,10 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .f-punkt { display: grid; grid-template-columns: 1.2fr 1.6fr 90px auto; gap: 8px; margin-bottom: 8px; }
 .f-person { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
 
-/* Agenda per Prompt (Lastenheft 4.1) */
+/* Agenda per Prompt (Lastenheft 4.1): Eingabefeld groß und zentral ganz oben (Ticket #10) */
+.agenda-eingabe-gross { max-width: 760px; margin: 0 auto 26px; }
+.agenda-eingabe-gross .agenda-eingabe textarea { min-height: 72px; font-size: 16px; padding: 14px 16px; }
+.agenda-eingabe-gross .agenda-knoepfe button { height: 100%; }
 .agenda-eingabe { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
 .agenda-eingabe textarea { resize: vertical; min-height: 42px; }
 .agenda-knoepfe { display: flex; gap: 8px; flex: none; }
@@ -165,6 +168,12 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .agenda-zeile { grid-template-columns: auto 1fr; }
   .agenda-eingabe { flex-wrap: wrap; }
 }
+/* Regeln getrennt nach Verlässlichkeit (Ticket #10, Lastenheft 4.3): zwei Gruppen untereinander, Beta in
+   eigener, zurückhaltender Farbe statt Alarm-Rot – sie ist nicht falsch, nur noch nicht durchweg verlässlich. */
+.regelgruppen { display: grid; gap: 18px; margin-bottom: 4px; }
+.regelgruppe-titel { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .04em; }
+.regelgruppe-titel small { text-transform: none; font-weight: 600; letter-spacing: 0; margin-left: 6px; }
 .regelwahl { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .regel { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center;
   padding: 12px 14px; border: 2px solid var(--rand); border-radius: 12px; cursor: pointer; font-weight: 600;
@@ -177,6 +186,15 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .regel:has(input:checked) { border-color: var(--marke); background: var(--marke-weich); }
 .regel:has(input:checked) .r-icon { background: var(--marke); color: #fff; }
 .regel.folgt { cursor: default; opacity: .5; }
+.regelgruppe.beta .regel { border-color: #E6D9AE; }
+.regelgruppe.beta .regel .r-icon { background: #F4ECD7; color: #8A6D1E; }
+.regelgruppe.beta .regel:has(input:checked) { border-color: #D9B64A; background: #FBF2D9; }
+.regelgruppe.beta .regel:has(input:checked) .r-icon { background: #D9B64A; color: #fff; }
+/* „Weitere Regeln“ (ersetzt „Eigene Regeln“): eigene Kachel im selben Raster, kein Kästchen zum Ankreuzen */
+.regel-weitere { cursor: default; grid-template-rows: auto 1fr; }
+.regel-weitere .r-weitere-titel { font-size: 14px; }
+.regel-weitere textarea { resize: vertical; min-height: 44px; border: 1px solid var(--rand); border-radius: 8px;
+  padding: 6px 8px; font-size: 13px; font-family: inherit; }
 .nestor-wahl { margin-top: 22px; padding: 14px 16px; border-radius: 12px; background: var(--marke-weich); border: 2px solid #C7CCF7; }
 .test { margin-top: 18px; color: var(--text-2); }
 .test summary { cursor: pointer; font-weight: 600; font-size: 14px; }
@@ -272,6 +290,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .ampel.rot .a-icon { background: var(--rot); }
 .ampel.grau { background: var(--flaeche-2); }
 .ampel.grau .a-icon { background: #B6C0CF; }
+.ampel-beta-titel { margin: 6px 0 -2px; }
 @keyframes alarm { 50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(209, 31, 53, .18); } }
 .erinnerungen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .erinnerungen span { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--text-3); color: var(--text-2); }

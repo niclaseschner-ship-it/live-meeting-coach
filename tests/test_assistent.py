@@ -66,6 +66,31 @@ def test_begruessung_bittet_um_agendawechsel():
     assert "zum nächsten Punkt geht" in a.vorstellung_start(c.meeting)
 
 
+def test_begruessung_liest_weitere_regeln_nach_den_gewaehlten_vor():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["zeit"],
+                   "regeln": ["Handys bleiben in der Tasche", "Pünktlich beginnen"]})
+    gruss, _ = a.begruessungstext(c.meeting)
+    assert gruss.index("Zeit einhalten") < gruss.index("Handys bleiben in der Tasche")
+    assert "Pünktlich beginnen" in gruss and "vorgenommen" in gruss
+
+
+def test_begruessung_fasst_mehr_als_drei_weitere_regeln_zusammen():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": [],
+                   "regeln": ["Eins", "Zwei", "Drei", "Vier"]})
+    gruss, _ = a.begruessungstext(c.meeting)
+    assert "Eins" in gruss and "Zwei" in gruss and "Drei" in gruss and "Vier" not in gruss
+    assert "1 weitere" in gruss
+
+
+def test_begruessung_ohne_weitere_regeln_unveraendert():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["zeit"]})
+    gruss, _ = a.begruessungstext(c.meeting)
+    assert "vorgenommen" not in gruss
+
+
 def test_eigene_sprache_wird_nur_live_herausgefiltert():
     c = Coach()
     c.assistent.sprechzeiten = [(10.0, 15.0)]
