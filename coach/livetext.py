@@ -236,6 +236,10 @@ class LiveTextMistral:
                 self._getrennt(ws, e)
         await self._ausgeben()
 
+    def luecke(self, sekunden: float) -> None:
+        """Stumm oder Pause: nichts senden, aber die Audiozeit mitlaufen lassen (sie muss zur Pausenerkennung passen)."""
+        self.pos += sekunden
+
     async def commit(self, meta: dict) -> None:
         self._z.commit(meta, float(meta.get("ende", self.pos)), time.monotonic())
         await self._ausgeben()

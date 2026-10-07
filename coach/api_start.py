@@ -1,4 +1,7 @@
-"""Startseite (Ticket #1, Lastenheft Abschnitt 2/3/6): Richtwerte, Pflichtangaben, Moduswahl.
+"""Startseite (Ticket #1, Lastenheft Abschnitt 2/3/6): Richtwerte, Pflichtangaben, Wahl der Stufe.
+
+Seit Ticket #13 wählt die Startseite die Stufe – Nestor Basis (nur Mistral, EU) oder Nestor Premium (OpenAI) – und in
+Basis den Schalter „Nur auf Knopfdruck“ (der frühere Modus). /api/modus bleibt für ältere Aufrufer erhalten.
 
 Eigenes Modul mit APIRouter, damit sich parallele Tickets in server.py nicht in die Quere kommen.
 """
@@ -7,11 +10,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from .config import EINST
+from .config import EINST, STUFEN, mistral_schluessel, openai_schluessel
 
 router = APIRouter()
 
 MODI = ("live", "knopfdruck")
+
+
+def _modus() -> str:
+    from .server import coach  # spät importiert: server.py bindet diesen Router ein
+
+    return coach.modus
 
 
 @router.get("/api/start")
@@ -23,6 +32,13 @@ async def start_daten() -> dict:
     return {
         "richtwert_live_eur": EINST.richtwert_live_eur,
         "richtwert_knopfdruck_eur": EINST.richtwert_knopfdruck_eur,
+        "richtwert_basis_eur": EINST.richtwert_basis_eur,
+        "richtwert_premium_eur": EINST.richtwert_premium_eur,
+        "stufe": EINST.stufe,
+        "modus": _modus(),
+        # ob die Stufe überhaupt nutzbar ist (Schlüssel vorhanden) – nie der Schlüssel selbst
+        "basis_bereit": bool(mistral_schluessel()),
+        "premium_bereit": bool(openai_schluessel()),
         "paypal_aktiv": bool(EINST.paypal_me),
         "impressum_name": EINST.impressum_name or None,
         "impressum_anschrift": EINST.impressum_anschrift or None,
@@ -40,6 +56,23 @@ async def modus_setzen(daten: dict) -> dict:
 
     if coach.hoerstrom is not None:
         raise HTTPException(409, "Während des Meetings nicht wechselbar.")
+    if modus == "knopfdruck":  # „Nur auf Knopfdruck“ gibt es nur in Basis (Ticket #13)
+        coach.stufe_setzen("basis", nur_knopfdruck=True)
     coach.modus = modus
     await coach.melden()
     return {"ok": True, "modus": modus}
+
+
+@router.post("/api/stufe")
+async def stufe_setzen(daten: dict) -> dict:
+    """Stufe für das nächste Meeting: {"stufe": "basis"|"premium", "nur_knopfdruck": bool (nur Basis)}."""
+    stufe = daten.get("stufe")
+    if stufe not in STUFEN:
+        raise HTTPException(400, "Unbekannte Stufe.")
+    from .server import coach
+
+    if coach.hoerstrom is not None:
+        raise HTTPException(409, "Während des Meetings nicht wechselbar.")
+    coach.stufe_setzen(stufe, nur_knopfdruck=bool(daten.get("nur_knopfdruck")))
+    await coach.melden()
+    return {"ok": True, "stufe": coach.stufe, "modus": coach.modus}
