@@ -17,6 +17,10 @@ export interface Env {
   ZAEHLER: DurableObjectNamespace<KundenZaehler>;
   SPENDEN: R2Bucket;
   ASSETS: Fetcher; // Bilder der Anmeldeseite
+  PAYPAL_ME?: string; // Secret – PayPal.me-Name für die Unterstützung
+  IMPRESSUM_NAME?: string; // Secret – Impressum und Datenschutz
+  IMPRESSUM_MAIL?: string;
+  IMPRESSUM_ANSCHRIFT?: string; // optional; ohne Anschrift entfällt die Zeile
   KUNDEN: string; // Secret, JSON: {"<kunde>": {"hash": "<sha256 hex>", "max_meetings": 3}}
   COOKIE_GEHEIMNIS: string; // Secret – signiert das Kunden-Cookie
   WORKER_GEHEIMNIS: string; // Secret – beweist dem Coach, dass eine Anfrage vom Worker kommt
@@ -41,6 +45,11 @@ export class Nestor extends Container<Env> {
       LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
       LMC_WORKER_URL: env.WORKER_URL,
       OPENAI_API_KEY: env.OPENAI_API_KEY,
+      // Startseite, Rechtstexte, Unterstützung – als Secrets gesetzt, damit nichts davon im Repo steht
+      LMC_PAYPAL_ME: env.PAYPAL_ME ?? "",
+      LMC_IMPRESSUM_NAME: env.IMPRESSUM_NAME ?? "",
+      LMC_IMPRESSUM_MAIL: env.IMPRESSUM_MAIL ?? "",
+      LMC_IMPRESSUM_ANSCHRIFT: env.IMPRESSUM_ANSCHRIFT ?? "",
     };
   }
 }

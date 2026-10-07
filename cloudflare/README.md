@@ -16,6 +16,10 @@ baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb
    npx wrangler secret put COOKIE_GEHEIMNIS      # ebenso, unabhängig vom WORKER_GEHEIMNIS
    npx wrangler secret put OPENAI_API_KEY        # Niclas' Schlüssel, eigenes Projekt mit Ausgabenlimit
    npx wrangler secret put KUNDEN                # siehe "Kunden pflegen" unten
+   npx wrangler secret put PAYPAL_ME             # Name aus paypal.me/<name>
+   npx wrangler secret put IMPRESSUM_NAME
+   npx wrangler secret put IMPRESSUM_MAIL
+   # optional: IMPRESSUM_ANSCHRIFT (ohne entfällt die Zeile)
    ```
 4. **Passwort-Hash erzeugen** (für das Secret `KUNDEN`) – SHA-256 des Klartext-Passworts, klein geschrieben:
    ```
