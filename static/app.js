@@ -72,7 +72,8 @@ function formularDaten() {
     ziel: $("f-ziel").value,
     agenda: agendaErgebnis(),
     regeln: $("f-regeln").value.split("\n"),
-    regel_ids: [...$("f-regelwahl").querySelectorAll("input:checked")].map((i) => i.value),
+    regel_ids: [...document.querySelectorAll("#f-regelwahl-verlaesslich input:checked, #f-regelwahl-beta input:checked")]
+      .map((i) => i.value),
     assistent: $("f-assistent").checked,
     teilnehmende: [...$("f-teilnehmende").querySelectorAll("input")].map((i) => i.value),
   };
