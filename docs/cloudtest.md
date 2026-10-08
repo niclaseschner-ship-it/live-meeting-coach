@@ -108,10 +108,14 @@ zählen nicht in Treffer/Verpasst, damit die mit älteren Läufen vergleichbar b
 
 - Begrüßung ungestört durchgelaufen (fertig, kein `stimme_stopp`)
 - je Schnitt: Nestor abgewartet – mit **Zeit bis zur ersten sichtbaren Bestätigung** (Zustand angesprochen/
-  denkt/recherchiert/spricht; stand er beim Frage-Ende schon darauf: 0 s) und **erstem Ton**
+  denkt/recherchiert/spricht oder seit #21 der erste mitlaufende Text `nestor_text`; stand er beim Frage-Ende
+  schon darauf: 0 s) und **erstem Ton** (seit #21 meist die Bestätigungs-Floskel, `stimme` mit `floskel`)
 - je Rückfrage im Redefluss: beantwortet und danach neue Segmente im Transkript (Meeting läuft weiter)
-- **zu jeder Antwort Ton und Text** (#21 Punkt 5): jeder Ton-Block hat eine gespeicherte Antwort
-  (`assistent.letzte`, daraus zeigt das Dashboard Karte/Untertitel) und umgekehrt; Begrüßung ausgenommen
+- **zu jeder Antwort Ton und Text** (#21 Punkt 5): jeder Ton-Block hat einen Text und umgekehrt; Begrüßung
+  ausgenommen. Text ist seit #21 jede Äußerung aus `nestor_text` (beginnt mit `neu`, läuft in `#nestor-feld`/
+  `#nf-text` mit); bei älteren Läufen ohne diese Nachricht `assistent.letzte` (früher Karte/Untertitel)
+- **Meetinguhr läuft:** steht `zustand.zeit` 90 s still, endet der Lauf mit ❌ statt bis zum Notausgang zu
+  warten (Cloudlauf 08.10.: Server verarbeitete ab 217,6 s nichts mehr)
 - **Tonspur im Bericht ≤ 1 s** neben der Ankunft der Stimme (#21 Punkt 5), je Ton-Block. `nestor_stimme.wav`
   berücksichtigt dafür jetzt `stimme_stopp` wie der Browser (abgeschnitten, danach wieder ab Ankunft).
 

@@ -268,6 +268,22 @@ def antwort_texte(zustaende: list[dict]) -> list[dict]:
     return aus
 
 
+def nestor_texte(frames: list[dict]) -> list[dict]:
+    """Seit #21: was Nestor sagt, kommt als `{"typ": "nestor_text", "text", "delta", "neu"?, "frage"?}` vor dem
+    Ton und läuft im mittleren Feld (#nestor-feld/#nf-text) mit. Eine Äußerung beginnt mit `neu`.
+    [{t, frage, antwort}] mit Laufachse `t` der ersten Nachricht."""
+    aus: list[dict] = []
+    for f in frames:
+        d = f["daten"]
+        if f["richtung"] != "empfangen" or not isinstance(d, dict) or d.get("typ") != "nestor_text":
+            continue
+        if d.get("neu") or not aus:
+            aus.append({"t": f["t"], "frage": d.get("frage") or "", "antwort": d.get("text") or ""})
+        else:
+            aus[-1]["antwort"] += (d.get("text") or "") if d.get("delta") else " " + (d.get("text") or "")
+    return aus
+
+
 def ton_text_paare(bloecke: list[dict], texte: list[dict], ab_t: float = 0.0,
                    vor_s: float = 30.0, nach_s: float = 20.0) -> tuple[list[dict], list[dict]]:
     """(Ton ohne Text, Text ohne Ton). Ein Ton-Block hat seinen Text, wenn eine Antwort zwischen Blockbeginn − 5 s
@@ -296,8 +312,11 @@ def zustand_bei(zustaende: list[dict], t: float) -> str | None:
 def bestaetigung_messen(zustaende: list[dict], stimme: list[dict], t_frage_ende: float,
                         bis_t: float) -> tuple[float | None, float | None]:
     """(sichtbar_s, ton_s) ab dem Ende der Frage (Laufachse): erstes sichtbares Zeichen, dass Nestor arbeitet
-    (Zustand angesprochen/denkt/recherchiert/spricht – stand er schon beim Frage-Ende darauf, 0), und erster
-    Ton. None, wenn bis `bis_t` nichts kam."""
+    (Zustand angesprochen/denkt/recherchiert/spricht – stand er schon beim Frage-Ende darauf, 0 – oder seit #21
+    der erste mitlaufende Text, `nestor_text`, falls `stimme` solche Nachrichten enthält), und erster Ton (seit
+    #21 meist die Bestätigungs-Floskel). None, wenn bis `bis_t` nichts kam."""
+    texte = [s for s in stimme if s.get("typ") == "nestor_text"]
+    stimme = [s for s in stimme if s.get("typ", "stimme") == "stimme"]
     sichtbar = None
     if zustand_bei(zustaende, t_frage_ende) in NESTOR_ARBEITET:
         sichtbar = 0.0
@@ -306,6 +325,9 @@ def bestaetigung_messen(zustaende: list[dict], stimme: list[dict], t_frage_ende:
             if t_frage_ende < z["_t"] <= bis_t and (z.get("assistent") or {}).get("zustand") in NESTOR_ARBEITET:
                 sichtbar = round(z["_t"] - t_frage_ende, 2)
                 break
+    text = next((round(s["_t"] - t_frage_ende, 2) for s in texte if t_frage_ende - 0.5 <= s["_t"] <= bis_t), None)
+    if text is not None and (sichtbar is None or text < sichtbar):
+        sichtbar = max(0.0, text)
     ton = next((round(s["_t"] - t_frage_ende, 2) for s in stimme if t_frage_ende - 0.5 <= s["_t"] <= bis_t), None)
     return sichtbar, ton
 
@@ -313,16 +335,18 @@ def bestaetigung_messen(zustaende: list[dict], stimme: list[dict], t_frage_ende:
 def tonspur_abweichungen(platzierung: list[dict], zustaende: list[dict], versatz_nestor: float,
                          luecke_s: float = 1.0) -> list[dict]:
     """#21 Punkt 5: liegt Nestors Stimme in der Tonspur des Berichts dort, wo sie ankam? Je Block das erste
-    Paket: Lage in nestor_stimme.wav + Verschiebung im Bericht gegen die Ankunft auf der Meetinguhr (über die
-    zeitlich nächste Zustandsmeldung). [{t, ankunft, im_bericht, abweichung}]"""
+    Paket: Lage in nestor_stimme.wav + Verschiebung im Bericht gegen die Ankunft auf der Meetinguhr. Die Ankunft
+    rechnet mit dem Uhrversatz der Zustandsmeldungen ±10 s um den Block (Median – eine einzelne verspätete
+    Meldung, wenn der Server gerade rechnet, verfälscht ihn nicht). [{t, ankunft, im_bericht, abweichung}]"""
     if not zustaende:
         return []
-    ts = [z["_t"] for z in zustaende]
     aus = []
     for b in stimme_bloecke(platzierung, luecke_s):
-        i = bisect.bisect_left(ts, b["start_t"])
-        nah = min((j for j in (i - 1, i) if 0 <= j < len(ts)), key=lambda j: abs(ts[j] - b["start_t"]))
-        ankunft = zustaende[nah]["zeit"] + (b["start_t"] - ts[nah])
+        nah = [z for z in zustaende if abs(z["_t"] - b["start_t"]) <= 10.0]
+        lokal = uhr_versatz(nah) if nah else None
+        if lokal is None:
+            continue
+        ankunft = b["start_t"] + lokal
         im_bericht = b["start_pos"] + versatz_nestor
         aus.append({"t": round(b["start_t"], 2), "ankunft": round(ankunft, 2), "im_bericht": round(im_bericht, 2),
                     "abweichung": round(im_bericht - ankunft, 2)})
@@ -330,7 +354,8 @@ def tonspur_abweichungen(platzierung: list[dict], zustaende: list[dict], versatz
 
 
 def takt_pruefpunkte(takt: dict, zustaende: list[dict], stimme_platzierung: list[dict], stimme: list[dict],
-                     versatz_nestor: float | None, offline: bool = False) -> tuple[list[dict], dict]:
+                     versatz_nestor: float | None, offline: bool = False,
+                     nestor_texte_aus: list[dict] | None = None) -> tuple[list[dict], dict]:
     """Prüfpunkte und Kennzahlen zum abwechselnden Reden (#25) und aus #21 Punkt 5. Getrennt von der
     Referenz-Prüfliste, damit Treffer/Verpasst dort vergleichbar mit älteren Läufen bleiben."""
     aus: list[dict] = []
@@ -395,7 +420,7 @@ def takt_pruefpunkte(takt: dict, zustaende: list[dict], stimme_platzierung: list
     # Ton und Text je Antwort
     ab_t = begr["t_ende"] if begr else 0.0
     bloecke = stimme_bloecke(stimme_platzierung)
-    texte = antwort_texte(zustaende)
+    texte = nestor_texte_aus or antwort_texte(zustaende)  # seit #21 nestor_text, ältere Läufe assistent.letzte
     ton_ohne, text_ohne = ton_text_paare(bloecke, texte, ab_t)
     k["antworten_text"], k["ton_bloecke"] = len([x for x in texte if x["t"] >= ab_t]), len(
         [b for b in bloecke if b["start_t"] >= ab_t])
@@ -607,7 +632,8 @@ class Regie:
                 limit = ZEITLIMIT_S
                 p = await self.abwarten("grenzfall", w["modus"], t_frage, limit, REAKTION_FRIST_S, info)
                 zust = self.spur.zustaende()
-                stimme = self.spur.nachrichten("stimme")
+                stimme = self.spur.nachrichten("stimme") + self.spur.nachrichten("nestor_text")
+                stimme.sort(key=lambda s: s["_t"])
                 p["sichtbar_s"], p["ton_s"] = bestaetigung_messen(zust, stimme, t_frage, p["t_ende"])
                 rest = sum(b["bis"] - b["von"] for b in self.abschnitte[a["nr"] + 1:])
                 if p["rueckfrage"] and rest >= 5.0:  # läuft das Meeting nach der Rückfrage weiter?

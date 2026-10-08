@@ -105,7 +105,7 @@ def test_stimme_platzieren_wie_der_browser_mit_stopp():
 
 def test_tonspur_abweichung_je_block():
     frames = [_stimme(10.0, 1.0), _stimme(10.1, 1.0), _stimme(30.0, 1.0)]
-    zust = [{"_t": t, "zeit": t - 5.0} for t in (9.0, 10.0, 29.9, 31.0)]
+    zust = [{"_t": t, "zeit": t - 5.0, "hoeren": True} for t in (9.0, 10.0, 29.9, 31.0)]
     abw = takt.tonspur_abweichungen(takt.stimme_platzieren(frames), zust, -5.0)
     assert [a["ankunft"] for a in abw] == [5.0, 25.0]
     assert all(abs(a["abweichung"]) < 1e-6 for a in abw)
@@ -136,6 +136,26 @@ def test_bestaetigung_messen():
     # stand Nestor beim Frage-Ende schon auf „angesprochen“, zählt das sofort
     z2 = [{"_t": 9.0, "assistent": {"zustand": "angesprochen"}}]
     assert takt.bestaetigung_messen(z2, [], 10.0, 30.0) == (0.0, None)
+
+
+def test_nestor_texte_seit_21():
+    def nt(t, text, **kw):
+        return {"t": t, "richtung": "empfangen", "daten": {"typ": "nestor_text", "text": text, **kw}}
+    frames = [nt(5.0, "Okay, kleinen Moment.", neu=True, frage="Wie spät?"), nt(6.0, "Noch zehn"),
+              nt(6.2, " Minuten.", delta=True), nt(20.0, "Gern.", neu=True)]
+    texte = takt.nestor_texte(frames)
+    assert [(x["t"], x["antwort"]) for x in texte] == [(5.0, "Okay, kleinen Moment. Noch zehn Minuten."),
+                                                       (20.0, "Gern.")]
+    # der mitlaufende Text zählt als erstes sichtbares Zeichen
+    z = [{"_t": 9.0, "assistent": {"zustand": "gespraech"}}, {"_t": 13.0, "assistent": {"zustand": "denkt"}}]
+    nachrichten = [{"typ": "nestor_text", "_t": 10.6}, {"typ": "stimme", "_t": 11.0}]
+    assert takt.bestaetigung_messen(z, nachrichten, 10.0, 30.0) == (0.6, 1.0)
+
+
+def test_uhr_versatz_ignoriert_stehende_uhr():
+    z = [{"zeit": t - 10.0, "_t": t, "hoeren": True} for t in (11.0, 12.0, 13.0)]
+    z += [{"zeit": 3.0, "_t": t, "hoeren": True} for t in range(14, 40)]  # Server steht, gleicher Stand
+    assert takt.uhr_versatz(z) == -10.0
 
 
 def test_takt_pruefpunkte_zeitlimit_und_rueckfrage():

@@ -1116,7 +1116,7 @@ def takt_auswerten(messwerte: dict, frames: list[dict]) -> tuple[list[dict], dic
     _, versatz = meeting_plan(messwerte, zustaende)
     offline = bool(zustaende) and bool((zustaende[-1].get("schluessel") or {}).get("offline"))
     return takt.takt_pruefpunkte(t, zustaende, stimme_platzieren(frames), nachrichten_aus_frames(frames, "stimme"),
-                                 versatz, offline)
+                                 versatz, offline, takt.nestor_texte(frames))
 
 
 def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht,
