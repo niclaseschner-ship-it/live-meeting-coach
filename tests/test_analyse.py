@@ -366,3 +366,28 @@ def test_ergebnis_hinweis_fasst_offene_aufgaben_zusammen():
                         {"was": "Liste schreiben", "wer": "Lea", "bis": "Montag"}]}
     assert hinweise("Projektstand", erg) == [
         "„Projektstand“: 2 Aufgaben ohne Verantwortliche/n und Termin, z. B. „Validierung bauen“."]
+
+
+def test_rueckwaerts_ansage_im_live_text_wechselt_den_punkt():
+    """Grenzfall 11 durch die Pipeline: Satz wie im Cloud-Lauf premium_grenz2 (Punkt 2 aktiv)."""
+    import asyncio
+
+    from coach.pipeline import Coach
+    from coach.zustand import Agendapunkt, Segment
+
+    async def ablauf():
+        c = Coach()
+        c._client = None
+        c.meeting.agenda = [Agendapunkt(t) for t in ("Ablauf des Ausfalls", "Ursache", "Maßnahmen")]
+        c.meeting.aktiver_punkt = 1
+        c.meeting.regel_ids = []
+        c.meeting.starten(virtuell=True)
+        c.meeting.virtuelle_zeit = 546.4
+        await c.satz(Segment("Person 4", "Gut, zurück zur Datenbank.", 362.5, 363.4))
+        assert c.meeting.aktiver_punkt == 1
+        await c.satz(Segment("Person 4", "Lass uns nochmal kurz zu Punkt eins zurück.", 543.3, 545.4))
+        return c
+
+    c = asyncio.run(ablauf())
+    assert c.meeting.aktiver_punkt == 0
+    assert any(e["art"] == "wechsel" and e["durch"] == "ansage" for e in c.protokoll)
