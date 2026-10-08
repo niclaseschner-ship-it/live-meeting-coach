@@ -771,7 +771,8 @@ async def lauf(args: argparse.Namespace) -> Bericht:
     referenz = json.loads(Path(args.referenz).read_text(encoding="utf-8"))
     bericht = Bericht(Path(args.bericht))
     stufe_text = f"{args.stufe}" + (" · nur auf Knopfdruck" if args.nur_knopfdruck else "")
-    bericht.messwerte.update(modus=stufe_text, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"])
+    bericht.messwerte.update(modus=stufe_text, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"],
+                             referenz_datei=str(Path(args.referenz).resolve()))  # für cloudtest_bewerten.py
 
     lauf_start = time.monotonic()
     async with async_playwright() as pw:
