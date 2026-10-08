@@ -8,6 +8,8 @@ Eigenes Modul mit APIRouter, damit sich parallele Tickets in server.py nicht in 
 
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException
 
 from .config import EINST, STUFEN, mistral_schluessel, openai_schluessel
@@ -37,8 +39,9 @@ async def start_daten() -> dict:
         "stufe": EINST.stufe,
         "modus": _modus(),
         # ob die Stufe überhaupt nutzbar ist (Schlüssel vorhanden) – nie der Schlüssel selbst
-        "basis_bereit": bool(mistral_schluessel()),
-        "premium_bereit": bool(openai_schluessel()),
+        # Ohne KI (LMC_OFFLINE=1, Tests) sind beide Stufen wählbar – es geht ohnehin kein Aufruf hinaus
+        "basis_bereit": bool(mistral_schluessel()) or os.getenv("LMC_OFFLINE") == "1",
+        "premium_bereit": bool(openai_schluessel()) or os.getenv("LMC_OFFLINE") == "1",
         "paypal_aktiv": bool(EINST.paypal_me),
         "impressum_name": EINST.impressum_name or None,
         "impressum_anschrift": EINST.impressum_anschrift or None,
