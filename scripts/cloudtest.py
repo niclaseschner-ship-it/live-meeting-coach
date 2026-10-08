@@ -122,7 +122,7 @@ class Bericht:
 
 
 async def zustand(seite: Page) -> dict:
-    return await seite.evaluate("() => zustand")
+    return await seite.evaluate("() => zustand") or {}  # null, bis die WebSocket den ersten Stand geliefert hat
 
 
 async def warten_auf(seite: Page, ausdruck: str, timeout_s: float = 20.0, takt: float = 0.3) -> bool:
@@ -204,6 +204,9 @@ async def agenda_eingabe_finden(seite: Page):
 
 
 async def einrichten(seite: Page, agenda_text: str, bericht: Bericht) -> None:
+    # In der Cloud kommt der erste Stand über die WebSocket spürbar später als lokal – erst darauf warten
+    if not await warten_auf(seite, "() => !!zustand", timeout_s=60.0):
+        bericht.pruefen("Erster Stand vom Server", "fehlt", "nach 60 s kein Zustand über die WebSocket")
     feld, knopf = await agenda_eingabe_finden(seite)
     if feld is None:
         bericht.pruefen("Agenda-Eingabefeld gefunden", "fehlt",
