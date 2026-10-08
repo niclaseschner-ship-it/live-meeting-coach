@@ -6,7 +6,9 @@
     POST /api/frage/halten      {"an": true|false}             – „Nestor fragen“ am Handy wird gehalten/losgelassen
     POST /api/frage/audio       WAV (24 kHz mono) im Körper     – die gehaltene Frage: transkribieren, dann antworten
 
-Ein Knopf antwortet sofort; Fortschritt und Ergebnis kommen über die WebSocket (coach/knopfdruck.py). Je Art eine
+Ohne „Nur auf Knopfdruck“ ist jeder Knopf ein Antwortbogen (Ticket #27, coach/assistent.py): Bestätigung, Karte im
+Verlauf, ein bis zwei Sätze; während ein Bogen läuft, sind die Knöpfe gesperrt (409). Mit „Nur auf Knopfdruck“
+antwortet ein Knopf sofort; Fortschritt und Ergebnis kommen über die WebSocket (coach/knopfdruck.py). Je Art eine
 eigene Route statt /api/knopf/{art}: so findet test_dashboard_endpunkte_existieren jeden Aufruf aus app.js.
 Der `coach` ist die eine laufende Instanz aus server.py, spät importiert (sonst Ringimport beim Hochfahren).
 """
@@ -35,14 +37,29 @@ def _knopf(art: str):
         from .pipeline import hintergrund
         from .server import coach
 
+        from .assistent import BogenBelegt
+        from .bogen import NAMEN as BOGEN_NAMEN
+        from .config import EINST
+
         frage = str((daten or {}).get("text") or "").strip()[:500]
         if art == "frage" and not frage:
             raise HTTPException(400, "Keine Frage.")
-        if art == "frage" and not coach.knopfdruck:
-            # Live: getippte Frage wie eine gesprochene – Nestor antwortet mit Stimme und Karte
+        if not coach.knopfdruck:
+            # Live (Ticket #27): jeder Knopf ist ein Antwortbogen, die getippte Frage wie eine gesprochene
             if coach.hoerstrom is None or coach._client is None:
                 raise HTTPException(409, "Es läuft kein Meeting." if coach.hoerstrom is None else "Kein KI-Schlüssel.")
-            coach.assistent.frage_beantworten(frage, "getippt")
+            if art == "frage":
+                coach.assistent.frage_beantworten(frage, "getippt")
+                return {"ok": True}
+            ziel = knopfdruck.BOGEN[art]
+            if ziel == "bild" and EINST.bild_anbieter == "text":
+                ziel = "ueberblick"  # Basis: kein Bildmodell
+            try:
+                coach.assistent.bogen_starten(ziel, BOGEN_NAMEN.get(ziel, ziel), "band" if (daten or {}).get("band")
+                                              else "knopf")
+            except BogenBelegt as e:
+                raise HTTPException(409, str(e)) from e
+            await coach.melden()
             return {"ok": True}
         try:
             knopfdruck.reservieren(coach, art)
@@ -146,5 +163,5 @@ async def frage_audio(request: Request) -> dict:
             raise HTTPException(409, str(e)) from e
         hintergrund(knopfdruck.ausfuehren(coach, "frage", frage, _an_alle))
     else:
-        coach.assistent.frage_beantworten(frage, "halten")
+        coach.assistent.frage_beantworten(frage, "taste")
     return {"ok": True, "frage": frage}

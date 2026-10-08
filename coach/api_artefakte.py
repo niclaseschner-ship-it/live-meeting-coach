@@ -1,10 +1,9 @@
-"""Artefakt-Endpunkte (Ticket #26): Lücken per Klick schließen, Einträge bearbeiten, Nestors Rückfrage beantworten.
+"""Artefakt-Endpunkte (Ticket #26/#27): Lücken per Klick in der Karte schließen, Einträge bearbeiten.
 
     POST /api/artefakte/bearbeiten  {"id", "was"?, "wer"?, "bis"?, "status"?, "reaktion"?, "typ"?}
     POST /api/artefakte/neu         {"typ", "was", "wer"?, "bis"?}
     POST /api/artefakte/loeschen    {"id"}
-    POST /api/artefakte/ablehnen    {"id"}                – „nicht nötig“: Nestor fragt dazu nie wieder
-    POST /api/artefakte/antwort     {"antwort": "ja"|"nein"} – Knöpfe der Fünf-Minuten-Frage im Nestor-Feld
+    POST /api/artefakte/ablehnen    {"id"}                – „nicht nötig“: die Lücke wird nicht mehr markiert
 
 Was die Runde hier setzt, gilt als bestätigt und wird von der Erkennung nicht überschrieben. Der `coach` ist die eine
 laufende Instanz aus server.py, spät importiert (sonst Ringimport beim Hochfahren).
@@ -69,24 +68,3 @@ async def ablehnen(daten: dict) -> dict:
     ok = coach.artefakte.ablehnen(_nr(daten))
     await coach.melden()
     return {"ok": ok}
-
-
-@router.post("/api/artefakte/antwort")
-async def antwort(daten: dict) -> dict:
-    """Knopf an Nestors Rückfrage: Ja = zusammenfassen (im Hintergrund, gesprochen und als Karte), Nein = still."""
-    from .pipeline import hintergrund
-    from .server import coach
-
-    r = coach.artefakte.rueckfrage
-    if r is None:
-        return {"ok": False}
-    if daten.get("antwort") == "ja" and r.art == "fuenf_minuten":
-        coach.artefakte.verlauf.append({"zeit": round(coach.meeting.jetzt(), 1), "art": "fuenf_minuten_ja",
-                                        "durch": "knopf"})
-        hintergrund(coach.artefakte.zusammenfassen())
-    else:
-        coach.artefakte.verlauf.append({"zeit": round(coach.meeting.jetzt(), 1), "art": f"{r.art}_nein",
-                                        "durch": "knopf"})
-        coach.artefakte.rueckfrage = None
-    await coach.melden()
-    return {"ok": True}

@@ -254,13 +254,17 @@ def themen_auswerten(meeting: Meeting, entscheider: Entscheider, ergebnis: dict,
         rueckkehr_merken(meeting)
         return
     if ausloeser["art"] in ("vorgriff", "zurueck") and ausloeser["punkt"] is not None:
+        # Agenda-Vorschlag „Weiter zu …?“ – ein Band-Hinweis mit Knopf (Ticket #27), auch ohne die Regel
         ziel = ausloeser["punkt"]
-        meeting.vorschlag = {"punkt": ziel, "titel": meeting.agenda[ziel].titel, "begruendung": ausloeser["begruendung"]}
+        meeting.vorschlag = {"punkt": ziel, "titel": meeting.agenda[ziel].titel, "begruendung": ausloeser["begruendung"],
+                             "von": meeting.aktiver_punkt}
         schluessel = f"fokus-punkt-{ziel}"
     else:
         schluessel = "fokus-unklar"
+    if "thema" not in meeting.regel_ids:
+        return  # Ticket #27: nicht gewählte Regeln sind unsichtbar – kein Fokus-Hinweis
     text = fokus_hinweistext(meeting, ausloeser) + regeln.vereinbart(meeting.regel_ids, "thema")
-    entscheider.vorschlagen(meeting, "fokus", "hinweis", "gruppe", text, schluessel)
+    entscheider.vorschlagen(meeting, "fokus", "hinweis", "gruppe", text, schluessel, punkt=meeting.aktiver_punkt)
 
 
 # --- Vier Ampeln (Lastenheft 7.1 C) ----------------------------------------

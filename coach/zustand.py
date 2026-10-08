@@ -39,12 +39,17 @@ class Segment:
 
 @dataclass
 class Hinweis:
-    art: str  # monolog | zeit | fokus | regel | info
+    """Eine Zeile im Band oben (Ticket #27): Regel-Hinweise und Nestors stille Angebote an die Runde. Verschwindet von
+    selbst (`dauer`), höchstens ein Knopf (`aktion`). `punkt`: gilt nur, solange dieser Agendapunkt aktiv ist."""
+    art: str  # monolog | zeit | fokus | ton | ueberlappung | alle | ausreden | fuenf | luecken | namen | taste | info
     stufe: str  # hinweis | warnung | eskalation
     publikum: str  # moderation | gruppe | nachher
     text: str
     zeit: float
     id: int = 0
+    aktion: dict | None = None  # Knopf: {"text": "Zusammenfassen", "bogen": "zusammenfassen"} | {"karte": id}
+    punkt: int | None = None
+    dauer: float = 45.0
 
 
 @dataclass

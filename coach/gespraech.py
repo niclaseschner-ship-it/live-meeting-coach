@@ -1,14 +1,15 @@
-"""Sprachgespräch mit Nestor über das Realtime-Sprachmodell (die Technik hinter dem ChatGPT-Sprachmodus).
+"""Sprachgespräch mit Nestor über das Realtime-Sprachmodell (die Technik hinter dem ChatGPT-Sprachmodus), Premium.
 
 Wird Nestor angesprochen, öffnet sich eine Sitzung: Persona und Meeting-Kontext als Anweisung, die erste Frage
 als Text (sie ist schon transkribiert), danach hört das Modell selbst mit – das Mikrofon geht direkt hinein.
 Wann es antwortet, entscheidet aber der Coach (create_response aus): nur bei seinem Namen im Live-Text oder bei
-einer Rückfrage („…?“) kurz nach seiner letzten Antwort. Abspieltest 05.10.: Mit eigener Entscheidung des
-Modells kommentierte Nestor ungefragt das laufende Gespräch („Alles klar, Vorschlag: maximal 2000 Euro“).
-Damit geht, was eine reine Text-Pipeline nicht kann: natürliche Stimme mit Betonung, Rückfragen ohne
-Namen, Ins-Wort-Fallen (das Modell bricht ab, das Dashboard verstummt sofort). Ist eine Weile Ruhe oder
-sagt die Runde „danke, das war's“, schließt die Sitzung; Nestor hört dann wieder nur auf seinen Namen.
-Kosten nur, solange die Sitzung offen ist.
+einer Nachfrage direkt nach seiner Antwort (coach/assistent.py, Ticket #27: nur der erste Satz, nur wenn er an
+Nestor gerichtet ist). Abspieltest 05.10.: Mit eigener Entscheidung des Modells kommentierte Nestor ungefragt das
+laufende Gespräch („Alles klar, Vorschlag: maximal 2000 Euro“).
+Jede Antwort ist ein Antwortbogen (Ticket #27): kurz, ein bis zwei Sätze, Einzelheiten auf der Karte. Reinreden
+macht Nestor still – aber nur die Stimme: die Antwort wird fertig erzeugt und kommt als Karte in den Verlauf
+(Nachtrag B). Bild und Recherche sind lange Aufträge im Hintergrund; das Ergebnis kommt still.
+Ist eine Weile Ruhe oder sagt die Runde „danke, das war's“, schließt die Sitzung. Kosten nur, solange sie offen ist.
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ RATE = 24000
 
 WERKZEUGE = [
     {"type": "function", "name": "bild_zeichnen",
-     "description": "Visuelle Übersicht (Live-Bild) zeichnen lassen, dauert ein bis zwei Minuten.",
+     "description": "Visuelle Übersicht (Live-Bild) neu zeichnen lassen, dauert etwa eine Minute; das Bild erscheint "
+                    "später still im Verlauf. Nicht, wenn die Runde nur ein vorhandenes Bild erklärt haben möchte.",
      "parameters": {"type": "object", "properties": {"fokus": {
          "type": "string", "description": "gesamt, ein Agendapunkt, was noch ansteht, wo Entscheidungen fehlen …"}},
          "required": ["fokus"]}},
@@ -36,14 +38,22 @@ WERKZEUGE = [
      "description": "Zum genannten Agendapunkt wechseln – nur, wenn die Gruppe das ausdrücklich möchte.",
      "parameters": {"type": "object", "properties": {"nummer": {"type": "integer"}}, "required": ["nummer"]}},
     {"type": "function", "name": "recherchieren",
-     "description": "Im Internet recherchieren, z. B. „gib uns einen Überblick zu …“ oder aktuelle Fakten. Dauert "
-                    "5–15 Sekunden. Formuliere die Frage ohne Namen und ohne Interna aus dem Meeting.",
+     "description": "Im Internet recherchieren, z. B. „gib uns einen Überblick zu …“ oder aktuelle Fakten. Läuft im "
+                    "Hintergrund; das Ergebnis erscheint später still als Karte mit Quellen. Formuliere die Frage ohne "
+                    "Namen und ohne Interna aus dem Meeting.",
      "parameters": {"type": "object", "properties": {"frage": {"type": "string"}}, "required": ["frage"]}},
     {"type": "function", "name": "folie_erstellen",
      "description": "Das letzte Rechercheergebnis mit Quellen als Folie im Dashboard zusammenstellen. Nur nach "
-                    "einer Recherche und wenn die Gruppe das möchte (z. B. „ja, mach eine Folie“). Dauert wenige "
-                    "Sekunden; das Dashboard meldet, wenn sie fertig ist.",
+                    "einer Recherche und wenn die Gruppe das möchte (z. B. „ja, mach eine Folie“).",
      "parameters": {"type": "object", "properties": {}}},
+    {"type": "function", "name": "karte_zeigen",
+     "description": "Eine Karte in den Verlauf stellen, wenn die Runde genau das möchte: zusammenfassen "
+                    "(Zusammenfassung des Meetings), fehlt (was noch fehlt, Lücken), stand (wo stehen wir), "
+                    "festgehalten (Protokoll, Liste des Festgehaltenen), ueberblick (Überblick als Text). Das System "
+                    "sagt selbst dazu, was auffällt – sag nichts.",
+     "parameters": {"type": "object", "properties": {"art": {
+         "type": "string", "enum": ["zusammenfassen", "fehlt", "stand", "festgehalten", "ueberblick"]}},
+         "required": ["art"]}},
     {"type": "function", "name": "status_abfragen",
      "description": "Aktuellen Stand abfragen: Laufzeit, aktueller Agendapunkt und Restzeit, ob das Live-Bild noch "
                     "gezeichnet wird oder fertig ist, Ergebnisse, letzte Hinweise. Immer nutzen, bevor du etwas "
@@ -53,7 +63,7 @@ WERKZEUGE = [
      "description": "Eine Aufgabe, Entscheidung, einen offenen Punkt oder ein Risiko eintragen oder ergänzen, wenn die "
                     "Gruppe es dir sagt („Sofie übernimmt die Statusseite bis Freitag“, „halt fest: wir nehmen Variante "
                     "B“). Nummer aus „Festgehaltene Artefakte“ bzw. status_abfragen, für Neues weglassen. Nur Felder, "
-                    "die gesagt wurden. Bestätige danach in einem kurzen Satz.",
+                    "die gesagt wurden. Das System bestätigt mit „Notiert“ – sag nichts dazu.",
      "parameters": {"type": "object", "properties": {
          "nummer": {"type": "integer", "description": "Nummer eines festgehaltenen Artefakts; weglassen für Neues"},
          "typ": {"type": "string", "enum": ["aufgabe", "entscheidung", "offen", "risiko"]},
@@ -70,28 +80,29 @@ WERKZEUGE = [
 
 ANWEISUNG = """\
 Du bist {name}, Moderationsassistent und Teil dieser Runde in einem Präsenzmeeting. Du sprichst mit der
-Gruppe wie ein erfahrener, freundlicher Kollege, der den Überblick behält: natürlich, locker, kurz – meist
-ein bis drei Sätze, auf Deutsch, per „ihr“. Das Wichtigste zuerst; wenn mehr gewünscht ist, fragen sie nach.
+Gruppe wie ein erfahrener, freundlicher Kollege, der den Überblick behält: natürlich, locker, kurz – ein Satz,
+höchstens zwei, auf Deutsch, per „ihr“, nie „Sie“. Das Wichtigste zuerst; Einzelheiten erscheinen danach als Karte
+auf dem Bildschirm – lies nie vor, was dort steht.
 Du bewertest keine Personen, ergreifst keine Partei und erfindest nichts. „Festgehalten“ oder „entschieden“
 sagst du nur, wenn es ausdrücklich beschlossen wurde. Personen heißen im Transkript „Person N“ – sprich
 stattdessen von „jemandem“. Agendapunkte nennst du mit Nummer und Titel aus der Agenda unten.
 Der Stand unten ist vom Beginn dieses Gesprächs. Ob das Bild fertig ist, wie viel Zeit bleibt oder bei welchem
 Punkt ihr seid, fragst du vor der Antwort mit status_abfragen ab – rate das nie.
 Du hörst über ein Raummikrofon; Gespräche der Gruppe untereinander, die nicht an dich gerichtet sind,
-beantwortest du nicht – dann bleibst du still. Für Bild, Agendawechsel, Pause und Ende hast du Werkzeuge;
-sag kurz dazu, was du tust.
+beantwortest du nicht – dann bleibst du still. Für Bild, Recherche, Karten, Agendawechsel, Pause und Ende hast du
+Werkzeuge; bei Agendawechsel und Pause sag kurz dazu, was du tust.
 
 STAND DES MEETINGS (zu Beginn dieses Gesprächs):
 {kontext}
 """
 # Ohne Sofort-Bestätigung (LMC_BESTAETIGUNG=0) sagt das Modell selbst, dass es nachschaut
-OHNE_BESTAETIGUNG = "\nVor einer Recherche sag kurz, dass du nachschaust.\n"
+OHNE_BESTAETIGUNG = ("\nBei bild_zeichnen, recherchieren, folie_erstellen, karte_zeigen und artefakt_eintragen spricht "
+                     "das System selbst – sag nichts dazu.\n")
 # Ticket #21: Bestätigung und Wartezeit spricht das System aus vorab erzeugten Floskeln (coach/bestaetigung.py)
 MIT_BESTAETIGUNG = """
-Oft hat das System schon kurz bestätigt („Okay, kleinen Moment“), bevor du drankommst. Fang deshalb
-nicht mit „Okay“, „Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt. Bei bild_zeichnen, recherchieren
-und folie_erstellen sagt das System auch an, dass es ein bisschen dauert – ruf das Werkzeug dann auf, ohne selbst
-etwas dazu zu sagen.
+Oft hat das System schon kurz bestätigt („Bin dran“), bevor du drankommst. Fang deshalb nicht mit „Okay“,
+„Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt. Bei bild_zeichnen, recherchieren, folie_erstellen,
+karte_zeigen und artefakt_eintragen spricht das System selbst – ruf das Werkzeug auf, ohne etwas dazu zu sagen.
 """
 
 
@@ -109,16 +120,15 @@ class Gespraech:
         self._frage = ""
         self.beenden_nach_antwort = False
         self._antwort_laeuft = False
-        self._recherche_laeuft = False
-        self._wartet_auf_commit = False
-        self._letztes_commit = 0.0  # Meetingzeit, bis zu der das Modell das Audio als Turn übernommen hat
         self._antwort_ende = 0.0  # Meetingzeit des letzten Antwortendes (für Rückfragen ohne Namen)
-        self._frage_erwartet_bis = 0.0  # nur der Name kam („Ja?“): der nächste Satz ist die Frage, auch ohne „?“
+        self._bogen = None  # der Bogen, dessen Antwort gerade entsteht (coach/assistent.py)
+        self._fertig = asyncio.Event()  # Antwort des aktuellen Bogens fertig (response.done)
+        self._stumm = False  # Nachtrag B: Stimme unterbrochen, die Antwort wird still fertig und kommt als Karte
         # Wiedergabe der letzten Antwort im Dashboard (Item, Beginn in Meetingzeit, Bytes): Hineinreden kürzt sie per
         # conversation.item.truncate auch dann, wenn sie schon fertig erzeugt ist (#20)
         self._wiedergabe: dict | None = None
 
-    async def starten(self, frage: str | None, ja_gesagt: bool = False) -> None:
+    async def starten(self, frage: str | None, bogen=None) -> None:
         import websockets
 
         if EINST.stufe == "basis":  # Realtime-Gespräch ist OpenAI – in Basis nie (Ticket #13), Rückfall Text-Weg
@@ -129,19 +139,41 @@ class Gespraech:
         await self._senden({"type": "session.update", "session": self.sitzung()})
         self.offen = True
         self._empfang = asyncio.create_task(self._empfangen())
-        self._frage = frage or ""
-        if ja_gesagt:  # „Ja?“ kam schon aus dem Zwischenspeicher – auf die Frage warten
-            await self._senden({"type": "conversation.item.create", "item": {
-                "type": "message", "role": "user", "content": [{"type": "input_text", "text":
-                    "(Jemand hat dich gerade angesprochen und „Ja?“ gehört; die eigentliche Frage folgt gleich.)"}]}})
-            self._frage_erwartet_bis = self.coach.meeting.jetzt() + 12
-            self.a.zustand = "angesprochen"
-            await self.coach.melden()
-            return
-        text = frage or "(Jemand hat dich gerade angesprochen; die eigentliche Frage folgt gleich. Sag nur kurz „Ja?“.)"
+        await self._fragen(frage or "", bogen)
+
+    async def frage(self, bogen) -> None:
+        """Ein neuer Bogen in der offenen Sitzung: Frage als Text, Antwort anstoßen, warten bis sie fertig ist."""
+        self.a.text_neu(bogen.frage)
+        await self._fragen(bogen.frage, bogen)
+        await self.warten(bogen)
+
+    async def _fragen(self, frage: str, bogen) -> None:
+        self._frage = frage
+        self._bogen = bogen
+        self._stumm = bool(bogen is not None and bogen.abgeloest)
+        self._fertig = asyncio.Event()
+        self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden + 30
         await self._senden({"type": "conversation.item.create", "item": {
-            "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}})
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": frage or "(Frage folgt)"}]}})
         await self._antworten_lassen()
+
+    async def warten(self, bogen, frist: float = 45.0) -> None:
+        """Bis die Antwort dieses Bogens fertig erzeugt und gespielt ist (höchstens `frist` s)."""
+        try:
+            await asyncio.wait_for(self._fertig.wait(), frist)
+        except asyncio.TimeoutError:
+            log.warning("Gespräch: keine fertige Antwort nach %.0f s", frist)
+        # bis der Ton im Dashboard zu Ende ist – erst dann beginnt das Nachfrage-Fenster
+        while (not bogen.abgeloest and self.a.sprechzeiten
+               and self.a.sprechzeiten[-1][1] - 0.8 > self.coach.meeting.jetzt()):
+            await asyncio.sleep(0.2)
+
+    def stumm_schalten(self) -> None:
+        """Nachtrag B: der Bogen wurde unterbrochen – kein Ton mehr ins Dashboard, die Antwort wird aber fertig
+        erzeugt und kommt still als Karte. Was schon gespielt ist, erfährt das Modell beim Ende (truncate)."""
+        if self._antwort_laeuft:
+            self._stumm = True
+        asyncio.ensure_future(self._hineinreden(erzwingen=True))
 
     def sitzung(self) -> dict:
         """Einstellungen des Gesprächs: der Coach entscheidet, wann Nestor antwortet (create_response aus)."""
@@ -152,9 +184,10 @@ class Gespraech:
             + (MIT_BESTAETIGUNG if EINST.bestaetigung else OHNE_BESTAETIGUNG),
             "output_modalities": ["audio"],
             "audio": {
+                # Nachtrag B: Reinreden stoppt nur die Stimme (coach-seitig), nicht die Antwort – sie kommt als Karte
                 "input": {"format": {"type": "audio/pcm", "rate": RATE},
                           "turn_detection": {"type": "semantic_vad", "create_response": False,
-                                             "interrupt_response": True}},
+                                             "interrupt_response": False}},
                 "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": EINST.stimme},
             },
             "tools": WERKZEUGE, "tool_choice": "auto",
@@ -166,29 +199,6 @@ class Gespraech:
         self.a.zustand = "denkt"
         await self.coach.melden()
 
-    async def satz(self, text: str, ende: float) -> None:
-        """Fertiger Satz aus dem Live-Text, während die Sitzung offen ist: Ist er an Nestor gerichtet?"""
-        from .assistent import angesprochen, frage_aus
-
-        rueckfrage = text.rstrip().endswith("?") and ende - self._antwort_ende <= EINST.nachfrage_sekunden
-        erwartet = ende <= self._frage_erwartet_bis
-        if not (angesprochen(text) or rueckfrage or erwartet) or self._antwort_laeuft:
-            return
-        self._frage_erwartet_bis = 0.0
-        self._frage = text.strip()
-        self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden + 30
-        self.a.text_neu(self._frage)
-        # Ticket #21, gemessen 08.10. (scripts/bestaetigung_messen.py): in der offenen Sitzung kommt der erste Ton des
-        # Modells nach 0,7–1,0 s – das ist schon die Reaktion; eine kurze Floskel davor hielte den Inhalt nur auf.
-        # Lange Aufgaben bekommen ihre Ansage beim Werkzeugaufruf (_werkzeug), 0,4–0,5 s nach der Frage.
-        floskel = self.a.bestaetigung_fuer(frage_aus(text))
-        if floskel and EINST.bestaetigung_im_gespraech:
-            asyncio.ensure_future(self.a.floskel_sagen(floskel))
-        if self._letztes_commit >= ende - 0.8:
-            await self._antworten_lassen()
-        else:
-            self._wartet_auf_commit = True  # das Modell hat den Turn noch nicht übernommen – gleich danach
-
     async def audio(self, pcm24k: bytes) -> None:
         """Mikrofon direkt ins Gespräch (Rückfragen, Ins-Wort-Fallen)."""
         if self.offen:
@@ -197,6 +207,7 @@ class Gespraech:
                 await self.schliessen()
 
     async def schliessen(self) -> None:
+        self._fertig.set()  # ein wartender Bogen hängt nicht
         if not self.offen:
             return
         self.offen = False
@@ -230,26 +241,20 @@ class Gespraech:
                     await self._ton(e["delta"], e.get("item_id"))
                 elif typ in ("response.output_audio_transcript.delta", "response.audio_transcript.delta"):
                     self._antwort_text += e.get("delta", "")
-                    await self.a.text_senden(e.get("delta", ""), delta=True)  # Text läuft mit (Ticket #21)
+                    if not self._stumm:  # unterbrochen: kein Text mehr ohne Ton
+                        await self.a.text_senden(e.get("delta", ""), delta=True)  # Text läuft mit (Ticket #21)
                 elif typ == "input_audio_buffer.speech_started":
                     # jemand spricht: Nestor sofort still – auch wenn die Antwort schon fertig erzeugt ist und nur
                     # noch im Dashboard läuft (#20); das Modell erfährt, wie weit sie zu hören war
-                    await self._hineinreden()
+                    if await self._hineinreden():
+                        self.a.zustand = "angesprochen"
                     self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden + 30
-                    self.a.zustand = "angesprochen"
                     await c.melden()
                 elif typ == "input_audio_buffer.speech_stopped":
                     self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden
                     if self.a.zustand == "angesprochen" and not self._antwort_laeuft:
                         self.a.zustand = "gespraech"
                         await c.melden()
-                elif typ == "input_audio_buffer.committed":
-                    self._letztes_commit = c.meeting.jetzt()
-                    if self._wartet_auf_commit:
-                        self._wartet_auf_commit = False
-                        await self._antworten_lassen()
-                elif typ == "conversation.item.input_audio_transcription.completed":
-                    self._frage = e.get("transcript", "") or self._frage
                 elif typ == "response.function_call_arguments.done":
                     await self._werkzeug(e.get("name", ""), e.get("arguments") or "{}", e.get("call_id"))
                 elif typ == "response.done":
@@ -269,6 +274,12 @@ class Gespraech:
 
     async def _ton(self, b64: str, item: str | None = None) -> None:
         c, m = self.coach, self.coach.meeting
+        if self._stumm:  # unterbrochen: nichts mehr hören lassen, nur mitzählen (für truncate)
+            if self._wiedergabe is not None and item == self._wiedergabe.get("item"):
+                self._wiedergabe["bytes"] += len(b64) * 3 // 4
+            return
+        if self._bogen is not None:
+            self._bogen.merken("satz")
         if self._ton_beginn is None:
             self._ton_beginn = max(m.jetzt() + 0.4, self.a.sprechzeiten[-1][1] if self.a.sprechzeiten else 0)
             self.a.sprechzeiten.append((self._ton_beginn, self._ton_beginn + 60))
@@ -294,28 +305,39 @@ class Gespraech:
             self.a.sprechzeiten[-1] = (a, min(b, jetzt + 0.5))
         self._ton_beginn, self._ton_bytes = None, 0
 
-    async def _hineinreden(self) -> None:
-        """Jemand redet hinein (#20): läuft Nestors Ton noch im Dashboard, sofort still; dem Modell per
-        conversation.item.truncate sagen, wie weit die Antwort zu hören war (wie in der Begrüßung, coach/begruessung.py)."""
+    async def _hineinreden(self, erzwingen: bool = False) -> bool:
+        """Jemand redet hinein (#20, Ticket #27 Nachtrag B): läuft Nestors Ton noch im Dashboard, sofort still. Die
+        Antwort wird weiter erzeugt (interrupt_response aus) und kommt als Karte; dem Modell per
+        conversation.item.truncate sagen, wie weit sie zu hören war (bei einer laufenden Antwort erst an ihrem Ende).
+        True, wenn Nestor dabei verstummt ist."""
         c, a = self.coach, self.a
         jetzt = c.meeting.jetzt()
         spielt = bool(a.sprechzeiten) and jetzt < a.sprechzeiten[-1][1] - 0.6  # ohne den Nachlauf für den Hall
-        if a.zustand != "spricht" and not spielt:
-            return
+        if not erzwingen and a.zustand != "spricht" and not spielt and not self._antwort_laeuft:
+            return False
+        if not erzwingen and not spielt and self._antwort_laeuft and self._ton_beginn is None:
+            return False  # die Antwort denkt noch, es ist nichts zu hören – kein Grund zu verstummen
         await c.direkt_senden({"typ": "stimme_stopp"})
+        if self._antwort_laeuft:
+            self._stumm = True
         w = self._wiedergabe
         if w and w.get("item") and "gekuerzt" not in w:
             dauer = w["bytes"] / 2 / RATE
             gespielt = min(max(0.0, jetzt - w["beginn"]), dauer)
-            if gespielt < dauer:
+            if gespielt < dauer or self._antwort_laeuft:
                 w["gekuerzt"] = gespielt
-                await self._senden({"type": "conversation.item.truncate", "item_id": w["item"], "content_index": 0,
-                                    "audio_end_ms": int(gespielt * 1000)})
-                log.info("Gespräch: unterbrochen nach %.1f von %.1f s", gespielt, dauer)
+                if not self._antwort_laeuft:  # fertig erzeugt: jetzt kürzen, sonst am Ende der Antwort
+                    await self._kuerzen(w)
+                log.info("Gespräch: unterbrochen nach %.1f s", gespielt)
         if a.sprechzeiten:
             s_, b = a.sprechzeiten[-1]
             a.sprechzeiten[-1] = (s_, min(b, jetzt + 0.5))
         self._ton_beginn, self._ton_bytes = None, 0
+        return True
+
+    async def _kuerzen(self, w: dict) -> None:
+        await self._senden({"type": "conversation.item.truncate", "item_id": w["item"], "content_index": 0,
+                            "audio_end_ms": int(w["gekuerzt"] * 1000)})
 
     async def _werkzeug(self, name: str, argumente: str, call_id: str | None) -> None:
         try:
@@ -328,130 +350,66 @@ class Gespraech:
                 "output": json.dumps(self.coach.status_kurz(), ensure_ascii=False)}})
             await self._antworten_lassen()
             return
-        if name == "artefakt_eintragen":  # Ticket #26: Lücke per Stimme schließen, dann kurz bestätigen
+        if name == "artefakt_eintragen":  # Lücke korrigieren (Ticket #27 Nachtrag A): „Notiert“, Karte wird grün
             a, kurz = self.coach.artefakte.eintragen(arg if isinstance(arg, dict) else {})
             if a is not None:
                 self.coach.protokoll.append({"zeit": self.coach.meeting.jetzt(), "art": "artefakt_eingetragen",
                                              "id": a.id, "durch": "stimme"})
                 await self.coach.melden()
-            ausgabe = {"ok": a is not None, "eingetragen": a.kurz() if a else None, "bestaetigung": kurz}
-            await self._senden({"type": "conversation.item.create", "item": {
-                "type": "function_call_output", "call_id": call_id, "output": json.dumps(ausgabe, ensure_ascii=False)}})
-            await self._antworten_lassen()
+            from . import bestaetigung as B
+
+            satz = self.a.floskeln.variante(B.NOTIERT) if a is not None else "Das konnte ich keinem Eintrag zuordnen."
+            aufgabe = asyncio.ensure_future(self.a.floskel_sagen(satz, self._bogen))
+            if self._bogen is not None:
+                self._bogen.zusatz.append(aufgabe)
+            await self._ausgabe(call_id, {"ok": a is not None, "eingetragen": a.kurz() if a else None,
+                                          "hinweis": "das System hat „Notiert“ gesagt – sag nichts"})
             return
-        lang = name in ("recherchieren", "bild_zeichnen", "folie_erstellen")
-        if lang:
-            await self.a.lang_ansagen()  # Ticket #21: „Mach ich, braucht ein bisschen …“, falls noch nicht gesagt
-        if name == "recherchieren":
-            # läuft nebenher, damit der Empfang weiterläuft; die Runde kann Nestor währenddessen weiter fragen
-            asyncio.create_task(self._recherche(str(arg.get("frage") or self._frage), call_id))
+        if name in ("recherchieren", "bild_zeichnen"):  # lange Aufträge: kein Bogen, Ergebnis kommt still (Ticket #27)
+            art = "recherche" if name == "recherchieren" else "bild"
+            fokus = str(arg.get("fokus") or "")
+            fokus = "" if fokus.lower() in ("gesamt", "alles") else fokus
+            titel = str(arg.get("frage") or self._frage) if art == "recherche" else self._frage
+            aufgabe = asyncio.ensure_future(self.a.lang_annehmen(art, titel, fokus, self._bogen))
+            if self._bogen is not None:
+                self._bogen.zusatz.append(aufgabe)
+            await self._ausgabe(call_id, {"ok": True, "hinweis": "läuft im Hintergrund, das Ergebnis erscheint still "
+                                                                 "im Verlauf – sag nichts dazu"})
             return
-        aktion = {"bild_zeichnen": {"typ": "bild", "fokus": str(arg.get("fokus") or "gesamt")},
-                  "agendapunkt_wechseln": {"typ": "weiter", "ziel": str(arg.get("nummer", ""))},
-                  "zuhoeren_pausieren": {"typ": "pause"},
-                  "folie_erstellen": {"typ": "folie"}}.get(name)
+        if name in ("folie_erstellen", "karte_zeigen"):  # Karten-Bogen: das System spricht selbst
+            art = "folie" if name == "folie_erstellen" else str(arg.get("art") or "")
+            if art in ("folie", "zusammenfassen", "fehlt", "stand", "festgehalten", "ueberblick"):
+                self.a.zusatz_bogen(art)
+            await self._ausgabe(call_id, {"ok": True, "hinweis": "die Karte erscheint, das System sagt dazu, was "
+                                                                 "auffällt – sag nichts"})
+            return
+        aktion = {"agendapunkt_wechseln": {"typ": "weiter", "ziel": str(arg.get("nummer", ""))},
+                  "zuhoeren_pausieren": {"typ": "pause"}}.get(name)
         if aktion:
             await self.coach.assistent_aktion(aktion)
             self.a.letzte_aktion = aktion
-            self.a.auftrag_nach_aktion(aktion, self._frage)
         if name in ("gespraech_beenden", "zuhoeren_pausieren"):
             self.beenden_nach_antwort = True
-        await self._senden({"type": "conversation.item.create", "item": {
-            "type": "function_call_output", "call_id": call_id, "output": json.dumps({"ok": True})}})
-        if lang and EINST.bestaetigung:
-            return  # die Wartezeit ist angesagt; Bild und Folie melden sich, wenn sie fertig sind
+        await self._ausgabe(call_id, {"ok": True})
         if name != "gespraech_beenden":
             await self._antworten_lassen()  # nach dem Werkzeug weitersprechen
 
-    async def ansagen(self, text: str, woertlich: bool = False) -> None:
-        """Ansage des Coaches (z. B. Bild fertig) im laufenden Gespräch – wartet, bis Nestor ausgeredet hat.
-        `woertlich`: Nachfrage und Zusammenfassung (Ticket #26) – genau dieser Text, nicht in einem Satz verdichtet."""
-        for _ in range(60):
-            if not self._antwort_laeuft:
-                break
-            await asyncio.sleep(0.5)
-        self.a.text_neu(None)
-        if not self.offen:
-            await self.a._sprechen_texte([text])
-            return
-        await self._senden({"type": "conversation.item.create", "item": {
-            "type": "message", "role": "system", "content": [{"type": "input_text", "text": f"Neu: {text}"}]}})
-        self._antwort_laeuft = True
-        await self._senden({"type": "response.create", "response": {
-            "instructions": (f"Sag der Runde genau diesen Text, natürlich gesprochen, ohne etwas wegzulassen oder "
-                             f"hinzuzufügen: {text}") if woertlich
-            else f"Sag der Runde kurz und natürlich, in einem Satz: {text}"}})
-
-    async def _recherche(self, frage: str, call_id: str | None) -> None:
-        from .recherche import recherchieren
-
-        c, a = self.coach, self.a
-        self._recherche_laeuft = True
-        self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden + 60
-        auftrag = a.auftraege.neu("recherche", frage, c.meeting.jetzt(), task=asyncio.current_task(),
-                                  zustand="wartet" if a.recherche_sperre.locked() else "laeuft")
-        if a.zustand not in ("spricht", "pausiert"):
-            a.zustand = "recherchiert"
-        await c.melden()
-        quellen: list[dict] = []
-        try:
-            async with a.recherche_sperre:
-                auftrag.zustand = "laeuft"
-                await c.melden()
-                erg = await recherchieren(c._client, frage, c.meeting.titel)
-            ausgabe = {"zusammenfassung": erg["text"], "quellen": [q["titel"] for q in erg["quellen"]]}
-            quellen = erg["quellen"]
-            c.recherche_merken(frage, erg)
-            from .pipeline import nutzung_loggen
-            nutzung_loggen({"art": "recherche", "modell": EINST.recherche_modell, "tokens_rein": erg["tokens_rein"],
-                            "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"]})
-            c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "recherche", "frage": frage,
-                                "quellen": erg["quellen"], "sekunden": erg["sekunden"]})
-        except asyncio.CancelledError:  # ✕ oder „Nestor, lass die Recherche“ (Ticket #21)
-            a.auftraege.entfernen(auftrag)
-            self._recherche_laeuft = False
-            if self.offen:
-                await self._senden({"type": "conversation.item.create", "item": {
-                    "type": "function_call_output", "call_id": call_id,
-                    "output": json.dumps({"abgebrochen": "Die Runde hat die Recherche abgebrochen."},
-                                         ensure_ascii=False)}})
-            if a.zustand == "recherchiert":
-                a.zustand = "gespraech" if self.offen else "bereit"
-            await c.melden()
-            raise
-        except Exception as e:  # noqa: BLE001
-            log.warning("Recherche fehlgeschlagen: %s", type(e).__name__)
-            ausgabe = {"fehler": "Die Recherche hat nicht geklappt."}
-        a.auftraege.entfernen(auftrag)
-        for _ in range(60):  # nicht in eine laufende Antwort hinein (die Runde hat Nestor inzwischen etwas gefragt)
-            if not self._antwort_laeuft:
-                break
-            await asyncio.sleep(0.5)
-        if not self.offen:
-            self._recherche_laeuft = False
-            return
-        a.letzte_quellen = quellen
-        self._frage = frage
-        a.text_neu(frage)
+    async def _ausgabe(self, call_id: str | None, ausgabe: dict) -> None:
         await self._senden({"type": "conversation.item.create", "item": {
             "type": "function_call_output", "call_id": call_id, "output": json.dumps(ausgabe, ensure_ascii=False)}})
-        self._antwort_laeuft = True
-        await self._senden({"type": "response.create", "response": {
-            "instructions": "Fasse das Rechercheergebnis für die Runde gesprochen zusammen: 3 bis 5 Sätze, das "
-                            "Wichtigste zuerst, keine Links. Biete am Ende kurz an, das Ergebnis mit den Quellen "
-                            "auf einer Folie zusammenzustellen. Sagt die Gruppe ja, nutze folie_erstellen."}})
-        self._recherche_laeuft = False
-        self.a.zustand = "denkt"
-        await c.melden()
 
     async def _antwort_fertig(self, antwort: dict) -> None:
         c = self.coach
         text = self._antwort_text.strip()
         self._antwort_text = ""
+        stumm = self._stumm
         self._ton_ende(abgebrochen=False)
         self._antwort_laeuft = False
-        self._antwort_ende = self.a.sprechzeiten[-1][1] if text and self.a.sprechzeiten else c.meeting.jetzt()
-        if text and self.a.sprechzeiten:
+        w = self._wiedergabe
+        if stumm and w and w.get("item") and "gekuerzt" in w:
+            await self._kuerzen(w)  # das Modell soll wissen, wie weit die Antwort zu hören war
+        self._stumm = False
+        if text and self.a.sprechzeiten and not stumm:
             # Die Sprechzeit reicht jetzt bis zum Ende der Wiedergabe – mit dem Text entscheidet der Echo-Filter nach
             # dem Inhalt, sonst ginge wer Nestor ins Wort fällt als „eigene Sprache“ verloren (eigene_sprache)
             self.a.sprechtexte.append((*self.a.sprechzeiten[-1], text))
@@ -464,16 +422,17 @@ class Gespraech:
                             "details_raus": nutzung.get("output_token_details")})
         if text:
             self.a.letzte = {"frage": self._frage, "antwort": text, "zeit": c.meeting.jetzt(),
-                             "aktion": getattr(self.a, "letzte_aktion", None), "quellen": self.a.letzte_quellen}
-            c.antwort_karte(self._frage, text, self.a.letzte["aktion"], self.a.letzte_quellen)
-            self.a.letzte_quellen = []
+                             "aktion": getattr(self.a, "letzte_aktion", None)}
+            c.antwort_karte(self._frage, text, self.a.letzte["aktion"], [], still=stumm)
             self.a.verlauf.append((self._frage, text))
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "modus": "gespraech",
-                                "frage": self._frage, "antwort": text, "aktion": self.a.letzte["aktion"]})
+                                "frage": self._frage, "antwort": text, "aktion": self.a.letzte["aktion"],
+                                "unterbrochen": stumm})
             self.a.letzte_aktion = None
         self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden
-        if self.a.zustand not in ("pausiert",):
+        if self.a.zustand not in ("pausiert", "taste") and self.a.bogen is None:
             self.a.zustand = "gespraech"
+        self._fertig.set()
         await c.melden()
         if self.beenden_nach_antwort:
             await asyncio.sleep(1.0)

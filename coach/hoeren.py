@@ -22,6 +22,7 @@ import os
 import logging
 import time
 import wave
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -164,6 +165,7 @@ class Hoerstrom:
         self._naechste_id = 0
         self._rechner = ThreadPoolExecutor(max_workers=1)  # Reihenfolge der Zuordnung bleibt erhalten
         self._analysen: list[asyncio.Future] = []
+        self.vektoren: deque = deque(maxlen=300)  # (start, ende, Fingerabdruck) je Äußerung – Namen (Ticket #27)
         self.live = None
         # Knopfdruck: nichts geht von selbst an einen KI-Dienst; Äußerungen warten auf den Knopf
         self.knopfdruck = coach.modus == "knopfdruck"
@@ -268,6 +270,8 @@ class Hoerstrom:
         # Transkriptzeile: überwiegende Person; Sprecherspur: Abschnitte je Person (Wechsel innerhalb der Äußerung)
         o["person"] = person_name(erg["person"])
         o["abschnitte"] = erg["abschnitte"]
+        if erg.get("vektor") is not None:
+            self.vektoren.append((o["start"], o["ende"], erg["vektor"]))
         o["person_fertig"] = True
         mischung = [o["start"] + x for x in erg["mischung"]]
         abschnitte = [Segment(person_name(p), "", o["start"] + a, o["start"] + b) for a, b, p in erg["abschnitte"]]
@@ -278,6 +282,17 @@ class Hoerstrom:
         sicher = [(a, b, p) for a, b, p in erg["abschnitte"] if p is not None]
         self.coach.aeusserung_merken(Aeusserung(o["start"], o["ende"], sicher, o["pegel"]))
         await self._ausgeben(uid)
+
+    def vektor_an(self, start: float, ende: float):
+        """Fingerabdruck der Äußerung, die [start, ende] am meisten überlappt (oder None)."""
+        best, beste = None, 0.0
+        for a, b, v in reversed(self.vektoren):
+            if b < start - 5:
+                break
+            ueber = min(b, ende) - max(a, start)
+            if ueber > beste:
+                best, beste = v, ueber
+        return best
 
     async def _text_je_aeusserung(self, uid: int, proben: np.ndarray, vorher) -> None:
         """Sparmodus: die Äußerung als WAV an die Transkription; Sätze bleiben in der Reihenfolge des Sprechens."""

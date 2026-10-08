@@ -25,6 +25,7 @@ import logging
 import re
 import time
 
+from .assistent import NAMEN_BITTE
 from .config import EINST
 from .gespraech import RATE, Gespraech
 
@@ -132,25 +133,24 @@ def pflichtinhalte(meeting, basis: bool = False, vorstellung: bool = False) -> s
          f"4. Wer nicht einverstanden ist, sagt einfach „Nein“. Das geht auch später noch, dann mit deinem Namen: "
          f"„{name}, nein“. Dann löschst du alles – sag dabei ausdrücklich „lösche“. Diesen Punkt nie weglassen, nie "
          "abschwächen, nie als Witz."]
-    if vorstellung:
-        z.append("5. Zum Schluss die Bitte, dass alle reihum kurz ihren Namen sagen, damit du sie auseinanderhalten "
-                 "kannst, zum Beispiel „Ich bin Lea“. Mehr nicht – den Rest erklärst du danach.")
-        return "\n".join(z)
     z.append(start_inhalte(meeting, basis, ab=5))
+    if vorstellung:  # Ticket #27: die Begrüßung sagt alles und endet mit der Bitte um die Namen – kein Startsatz danach
+        z.append(f"{len(z) + 1 + z[-1].count(chr(10))}. Ganz zum Schluss, als letzter Satz: „{NAMEN_BITTE}“")
     return "\n".join(z)
 
 
 def start_inhalte(meeting, basis: bool = False, ab: int = 1) -> str:
-    """Punkte 5–7: Ansprache, Agenda-Bitte mit Kommentar, Start mit Punkt eins."""
+    """Punkte 5–7: Ansprache (Telefon bzw. Funkgerät, Ticket #27), Agenda-Bitte mit Kommentar, Start mit Punkt eins."""
     from .assistent import agenda_bitte, agenda_kommentar
 
     name = EINST.assistent_name
     if basis:
-        wie = (f"Wie man mit dir spricht: „{name}“ und die Frage – jedes Mal mit deinem Namen, oder die Knöpfe auf "
-               "dem Bildschirm oder am Handy.")
+        wie = ("Wie man mit dir spricht: Du funktionierst wie ein Funkgerät – Taste halten, sprechen, loslassen, du "
+               "redest dann aus. Die Taste ist auf dem Bildschirm und am Handy, am Laptop geht auch die Leertaste.")
     else:
-        wie = (f"Wie man mit dir spricht: „{name}“ und die Frage. Nachfragen gehen danach auch ohne Namen, und wenn "
-               "du zu viel redest, dürfen sie einfach reinreden.")
+        wie = (f"Wie man mit dir spricht: wie am Telefon – „{name}“ und die Frage. Direkt danach geht eine Nachfrage "
+               "ohne Namen, und wenn du zu viel redest, dürfen sie einfach reinreden. Von dir aus sagst du nichts, "
+               "Hinweise erscheinen still auf dem Bildschirm.")
     z = [f"{ab}. {wie}"]
     agenda = []
     if agenda_bitte(meeting):
@@ -193,12 +193,6 @@ sag sie jetzt in einem kurzen Satz. Dann geht es direkt los{los}.
 dazu. Behaupte nie selbst, dass du etwas löschst oder aufhörst – das erledigt das System.
 
 Das Meeting: {titel}{ziel}. Agenda: {agenda}.
-"""
-
-START_ANWEISUNG = """\
-Die Vorstellungsrunde ist vorbei. Bedank dich kurz und locker und sag dann, frei formuliert, in wenigen Sätzen \
-(per „ihr“, nie „Sie“):
-{start}
 """
 
 BASIS_ANWEISUNG = """\
@@ -247,7 +241,6 @@ class Begruessung(Gespraech):
         self.t0 = time.monotonic()
         self._akt: dict | None = None  # Antwort, deren Ton gerade kommt
         self._ende_aufgabe: asyncio.Task | None = None
-        self._start_laeuft = False
         self._einwand_aufgabe: asyncio.Task | None = None
         # Kosten: Ungenutzt schließt die Sitzung kurz nach der Begrüßung (bzw. nach dem Start nach der
         # Vorstellungsrunde), auch wenn die Runde weiterredet – sonst bliebe sie das ganze Meeting offen und die
@@ -323,11 +316,6 @@ class Begruessung(Gespraech):
             self.genutzt = True  # jemand hat Nestor nach der Begrüßung etwas gefragt
         await super()._antworten_lassen()
 
-    async def satz(self, text: str, ende: float) -> None:
-        if self.phase:
-            return  # das Modell hört selbst und reagiert (create_response) – keine zweite Antwort anstoßen
-        await super().satz(text, ende)
-
     def _ende_planen(self, sekunden: float) -> None:
         if self._ende_aufgabe:
             self._ende_aufgabe.cancel()
@@ -346,8 +334,7 @@ class Begruessung(Gespraech):
         await self._senden({"type": "session.update", "session": self.sitzung()})
         self._ende_bis = time.monotonic() + EINST.gespraech_ende_sekunden
         self._antwort_ende = self.a.sprechzeiten[-1][1] if self.a.sprechzeiten else self.coach.meeting.jetzt()
-        if not self.vorstellung:
-            self._hart_ende = self._ende_bis
+        self._hart_ende = self._ende_bis  # ungenutzt schließt die Sitzung kurz nach der Begrüßung
         self.ergebnis = self.ergebnis or "gesagt"
         self.fertig.set()
 
@@ -435,7 +422,7 @@ class Begruessung(Gespraech):
         await c.melden()
 
     async def _antwort_fertig(self, antwort: dict) -> None:
-        if not (self.phase or self._start_laeuft):
+        if not self.phase:
             await super()._antwort_fertig(antwort)
             return
         c, a = self.coach, self.a
@@ -454,15 +441,6 @@ class Begruessung(Gespraech):
             a.sprechtexte.append((*a.sprechzeiten[-1], text))  # Echo-Filter nach Inhalt
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "begruessung", "status": status,
                             "text": hoerbar(w) if w else text})
-        if self._start_laeuft:
-            self._start_laeuft = False
-            self._antwort_ende = a.sprechzeiten[-1][1] if a.sprechzeiten else c.meeting.jetzt()
-            noch = max(0.0, self._antwort_ende - c.meeting.jetzt())  # Wiedergabe läuft noch
-            self._ende_bis = self._hart_ende = time.monotonic() + noch + EINST.gespraech_ende_sekunden
-            if a.zustand != "pausiert":
-                a.zustand = "gespraech"
-            await c.melden()
-            return
         if status == "completed":
             ende = (w["beginn"] + w["bytes"] / 2 / RATE) if w and w.get("beginn") is not None else c.meeting.jetzt()
             self._ende_planen(ende - c.meeting.jetzt() + 0.3)  # erst wenn alles gespielt ist
@@ -480,17 +458,6 @@ class Begruessung(Gespraech):
                             "tokens_rein": nutzung.get("input_tokens"), "tokens_raus": nutzung.get("output_tokens"),
                             "details_rein": nutzung.get("input_token_details"),
                             "details_raus": nutzung.get("output_token_details")})
-
-    # --- Nach der Vorstellungsrunde ---
-    async def start_sagen(self) -> bool:
-        """Punkte 5–7 frei sprechen, wenn die Sitzung noch offen ist (sonst fester Startsatz per TTS)."""
-        if not self.offen or self._antwort_laeuft:
-            return False
-        self._start_laeuft = self._antwort_laeuft = True
-        await self._senden({"type": "response.create", "response": {
-            "instructions": START_ANWEISUNG.format(start=start_inhalte(self.coach.meeting))}})
-        return self.offen
-
 
 # --- Basis: Text von Mistral, gesprochen per TTS ------------------------------------------------------------
 async def basis_formulieren(client, meeting, vorstellung: bool) -> str | None:

@@ -18,6 +18,12 @@ from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
 from .zustand import Agendapunkt, Meeting, Segment
 
 VORLAUF_MAX = 40  # so viele schon eingeordnete Sätze bleiben für Fensteranfang und Kontext der Zuordnung
+# Namen aus der Vorstellungsrunde (Ticket #27): Ähnlichkeit Vorstellung ↔ Person, Abstand zur zweitbesten Person,
+# so viel Sprechzeit braucht eine Person, und so lange wartet ein genannter Name auf seine Stimme
+NAME_SCHWELLE = 0.45
+NAME_ABSTAND = 0.08
+NAME_MIN_SEKUNDEN = 2.0
+NAME_WARTEN_SEKUNDEN = 600.0
 FENSTER_LUECKE = 10.0  # Sätze, die so lange vor dem ersten neuen Satz endeten, gehören nicht mehr ins Fenster
 KONTEXT_SEKUNDEN = 30.0  # so viel Gesprochenes vor dem Fenster geht als Kontext mit (wie früher zwei Abschnitte)
 
@@ -115,8 +121,11 @@ class Coach:
         self.folie: dict | None = None
         self.folie_version = 0
         self._folie_laeuft = False
-        self.karten: list[dict] = []  # Nestor-Karten (Pop-ups), bleiben im Verlauf abrufbar
+        self.karten: list[dict] = []  # Verlauf (Ticket #27): jede Antwort, Zusammenfassung, Recherche, Bild … als Karte
         self.namen: dict[str, str] = {}  # „Person 2“ -> „Lea“ aus der Vorstellungsrunde
+        self.namen_offen: list[dict] = []  # genannte Namen, deren Stimme noch nicht sicher zugeordnet ist
+        self.bilder: dict[int, bytes | str] = {}  # Live-Bild je Version (für die Bild-Karten im Verlauf)
+        self._taste_hinweis_zeit = -1e9
         self.onepager_analyse: str | None = None
         self.onepager_version = 0
         self.onepager_stand: float | None = None
@@ -194,6 +203,8 @@ class Coach:
         self.ueberblick_version = 0
         self.karten = []
         self.namen = {}
+        self.namen_offen = []
+        self.bilder = {}
         self.knopf = Knopfstand()
         self.artefakte = Artefakte(self)
 
@@ -450,25 +461,18 @@ class Coach:
         # Monolog live: der Hinweis kommt, sobald die hochgezählte Rede die Schwelle erreicht
         if analyse.monolog_live(m, self.monolog_sekunden)[0]:
             self._monolog_hinweis()
-        # Live-Bild alle N Minuten (FR-10); gezählt ab dem letzten Start, damit Läufe sich nicht stapeln.
-        # Knopfdruck: kein Bild im Takt, nur auf Knopf.
-        if (self.hoerstrom and EINST.onepager_minuten > 0 and m.transkript and not self._onepager_laeuft
-                and not self.knopfdruck):
-            seit = m.jetzt() - (self._onepager_letzter_start or 0)
-            takt = EINST.onepager_minuten * 60
-            if self._onepager_letzter_start is None and EINST.bild_anbieter == "text":
-                # Basis: der erste Überblick nach der halben Zeit (5 min), danach alle 10 – sonst gibt es in einem
-                # kurzen Meeting nie einen (Cloud-Lauf 08.10., 10 min: erst nach dem Ende; Ticket #15)
-                takt /= 2
-            if seit >= takt:
-                self.onepager_starten()
+        # Ticket #27: kein Live-Bild und kein Überblick im Takt mehr – nur auf Anfrage und am Ende. Stattdessen die
+        # stille Zusammenfassung je Abschnitt (Punktwechsel, 20 min) aus coach/artefakte.py.
         self.assistent.takt()
-        self.artefakte.takt()  # Ticket #26: Erkennung je Minute Sprache, Fünf-Minuten-Frage
+        self.artefakte.takt()  # Abschnitt nach 20 min, Fünf-Minuten-Band
+        self._namen_zuordnen()
         self._abschnitt_takt()
         if "alle" in m.regel_ids:
             self._alle_pruefen()
         if not 0 <= m.aktiver_punkt < len(m.agenda):
             return
+        if "zeit" not in m.regel_ids:
+            return  # Ticket #27: nicht gewählte Regeln sind unsichtbar – kein Zeit-Hinweis (die Uhr links bleibt)
         i = m.aktiver_punkt
         p = m.agenda[i]
         farbe = p.ampel(m.genutzt(i), EINST.zeit_rot_prozent)
@@ -476,13 +480,13 @@ class Coach:
             self.entscheider.einmalig(
                 m, f"zeit-{i}-gelb", "zeit", "hinweis", "gruppe",
                 f"„{p.titel}“: Zeitfenster erreicht. Weiterarbeiten oder zum nächsten Punkt wechseln?"
-                + regeln.vereinbart(m.regel_ids, "zeit"),
+                + regeln.vereinbart(m.regel_ids, "zeit"), punkt=i,
             )
         if farbe == "rot":
             ueber = m.genutzt(i) - p.minuten * 60
             self.entscheider.einmalig(
                 m, f"zeit-{i}-rot", "zeit", "warnung", "gruppe",
-                f"„{p.titel}“ ist {analyse.mmss(ueber)} Min. über dem Zeitfenster.",
+                f"„{p.titel}“ ist {analyse.mmss(ueber)} Min. über dem Zeitfenster.", punkt=i,
             )
 
     # --- Zuhören -----------------------------------------------------------
@@ -558,6 +562,8 @@ class Coach:
             self._monolog_hinweis()
 
     def _monolog_hinweis(self) -> None:
+        if "kurz" not in self.meeting.regel_ids:
+            return  # Ticket #27: nicht gewählte Regeln sind unsichtbar
         # Wartezeit je Person: ein neuer Monolog einer anderen Person wird sofort gemeldet (Benchmark 05.10.)
         rede = analyse.laufende_rede(self.meeting.segmente)
         self.entscheider.vorschlagen(
@@ -597,8 +603,11 @@ class Coach:
         self.meeting.sprache_bis = self.meeting.jetzt()
 
     def _ueberlappung_pruefen(self) -> None:
-        """FR-06: technisches Signal, keine Bewertung von Unterbrechungen."""
+        """FR-06: technisches Signal, keine Bewertung von Unterbrechungen. Hinweis nur mit der Regel „Ausreden lassen“
+        (Ticket #27: nicht gewählte Regeln sind unsichtbar); gezählt wird trotzdem (Gesprächsdynamik)."""
         m = self.meeting
+        if "ausreden" not in m.regel_ids and not gleichzeitig_regel(m.regeln):
+            return
         if EINST.segmentierung:
             # Mit Segmentierung: ein Hinweis an die Gruppe erst bei wiederholtem Durcheinander – mindestens zwei
             # Vorfälle in einer Minute. Einzelne kurze Überlappungen sind normal (synthetische Kontrollrunde 06.10.:
@@ -635,6 +644,7 @@ class Coach:
                 "Fokus-Erkennung ist aus: kein KI-Schlüssel bzw. Offline-Modus.",
             )
             return None
+        punkt_vorher = m.aktiver_punkt
         try:
             modell = EINST.zuordnung_modell or EINST.analyse_modell
             ergebnis, nutzung = await themen.zuordnen(
@@ -647,7 +657,10 @@ class Coach:
         nutzung_loggen({"art": "themen", "modell": modell, **nutzung})
         # Erst jetzt prüfen: Die Rückkehr-Ansage kann auch während der Zuordnung gefallen sein
         zurueck = fenster_ab is not None and self._rueckkehr_ab is not None and self._rueckkehr_ab >= fenster_ab
-        analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke, zurueck)
+        if m.aktiver_punkt == punkt_vorher:
+            analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke, zurueck)
+        # sonst: während der Zuordnung wurde der Punkt gewechselt – das Fenster bezog sich auf den alten Punkt
+        # (Cloudlauf 08.10.: Band nannte Punkt 3, während nach der Rückwärts-Ansage Punkt 1 aktiv war)
         self._ton_melden(ergebnis.get("ton", []))
         return ergebnis
 
@@ -658,9 +671,10 @@ class Coach:
         m.punkt_wechseln(i)
         if alt != m.aktiver_punkt:  # bisher Gesagtes gehört zum alten Punkt: nicht mehr ins Fenster der Zuordnung
             self._fenster_ab = max(self._fenster_ab, m.jetzt())
-        if alt != m.aktiver_punkt and not self.knopfdruck and self._client is not None:
-            # Ticket #26: Artefakte des alten Punkts fertig erkennen; mit Regel 10 eine gebündelte Nachfrage
-            hintergrund(self.artefakte.punkt_abgeschlossen(alt))
+        if alt != m.aktiver_punkt and not self.knopfdruck and self._client is not None and m.laeuft:
+            # Ticket #27: still die Zusammenfassung des abgeschlossenen Punkts als Karte (Artefakte nur aus diesem
+            # Abschnitt); mit der Regel „Ergebnisse festhalten“ Lücken markiert und ein Band-Hinweis
+            hintergrund(self.artefakte.abschnitt_abschliessen(alt, m.jetzt(), "punkt"))
 
     def _ton_melden(self, stellen: list[dict]) -> None:
         """Regel 7: nur an die Moderation, ohne Namen und ohne Wertung (Lastenheft: keine Personenbewertung)."""
@@ -818,21 +832,75 @@ class Coach:
         self._monolog_pruefen()
         await self.melden()
 
-    def name_lernen(self, sprecher: str, text: str) -> None:
-        """Vorstellungsrunde: „Ich bin Lea“ von Person 2 -> Person 2 heißt ab jetzt Lea, auch rückwirkend."""
+    def name_lernen(self, sprecher: str, text: str, start: float = 0.0, ende: float = 0.0) -> None:
+        """Vorstellungsrunde: „Ich bin Lea“ -> die Stimme, die das gesagt hat, heißt ab jetzt Lea, auch rückwirkend.
+
+        Ticket #27 (in den Demos wurde nur eine von mehreren Personen erkannt): Eine kurze Vorstellung (~1–1,5 s) ist
+        zu kurz für eine neue Person im Stimmregister (coach/stimmen.py braucht drei ähnliche Fenster, ~3 s) – der
+        Satz kam als „Person ?“ an oder bei der ähnlichsten schon bekannten Person, die oft schon einen Namen hatte; in
+        beiden Fällen ging der Name verloren. Jetzt wird der Name mit dem Stimm-Fingerabdruck genau dieser Äußerung
+        gemerkt und still der passenden Person zugeordnet, sobald es sie gibt (`_namen_zuordnen`)."""
         from .assistent import name_aus
         from .hoeren import UNSICHER
 
-        if not sprecher.startswith("Person ") or sprecher == UNSICHER or sprecher in self.namen:
-            return
         name = name_aus(text, self.meeting.teilnehmende)
-        if not name or name in self.namen.values():
+        if not name or name in self.namen.values() or any(o["name"] == name for o in self.namen_offen):
             return
-        self.namen[sprecher] = name
+        vektor = self.hoerstrom.vektor_an(start, ende) if self.hoerstrom is not None else None
+        sicher = sprecher.startswith("Person ") and sprecher != UNSICHER and sprecher not in self.namen
+        self.namen_offen.append({"name": name, "vektor": vektor, "sprecher": sprecher if sicher else None,
+                                 "zeit": self.meeting.jetzt(), "start": start, "ende": ende})
+        self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name_gehoert", "person": sprecher, "name": name})
+        self._namen_zuordnen()
+
+    def _namen_zuordnen(self) -> None:
+        """Offene Namen den Personen im Stimmregister zuordnen: beste Ähnlichkeit zuerst, je Person ein Name.
+        Ohne Fingerabdruck (Tests, Abspielmodus ohne Stimmen) gilt der Sprecher des Satzes, wenn er eindeutig war."""
+        if not self.namen_offen:
+            return
+        from .hoeren import person_name
+
+        reg = self.hoerstrom.stimmen.register if self.hoerstrom is not None else None
+        vergeben = set(self.namen)
+        paare = []
+        schwerpunkte = reg.schwerpunkte() if reg is not None else []
+        for o in self.namen_offen:
+            if o["vektor"] is not None and schwerpunkte:
+                for i, sp in enumerate(schwerpunkte):
+                    p = person_name(i)
+                    if p not in vergeben and reg.sekunden[i] >= NAME_MIN_SEKUNDEN:
+                        paare.append((float(o["vektor"] @ sp), o["name"], p))
+            elif o["vektor"] is None and o["sprecher"] and o["sprecher"] not in vergeben:
+                paare.append((1.0, o["name"], o["sprecher"]))
+        paare.sort(reverse=True)
+        neu = []
+        for aehnlich, name, person in paare:
+            if aehnlich < NAME_SCHWELLE or person in self.namen or name in self.namen.values():
+                continue
+            # eindeutig: die zweitbeste Person darf nicht fast genauso gut passen
+            zweite = max((a for a, n, p in paare if n == name and p != person and p not in self.namen), default=0.0)
+            if aehnlich - zweite < NAME_ABSTAND and aehnlich < 0.99:
+                continue
+            self._name_setzen(person, name)
+            neu.append(name)
+        self.namen_offen = [o for o in self.namen_offen if o["name"] not in self.namen.values()
+                            and self.meeting.jetzt() - o["zeit"] < NAME_WARTEN_SEKUNDEN]
+        if neu:
+            erkannt = ", ".join(self.namen.values())
+            self.entscheider.vorschlagen(self.meeting, "namen", "hinweis", "gruppe", f"Erkannt: {erkannt}",
+                                         schluessel=f"namen-{len(self.namen)}", dauer=20.0)
+
+    def _name_setzen(self, person: str, name: str) -> None:
+        self.namen[person] = name
         for s in self.meeting.segmente + self.meeting.transkript:
-            if s.sprecher == sprecher:
+            if s.sprecher == person:
                 s.sprecher = name
-        self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name", "person": sprecher, "name": name})
+        self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name", "person": person, "name": name})
+
+    def taste_hinweis(self) -> None:
+        """Basis hört nicht auf „Nestor“ (Funkgerät, Ticket #27 Nachtrag D): still ins Band, höchstens einmal je Minute."""
+        self.entscheider.vorschlagen(self.meeting, "taste", "hinweis", "gruppe", "Sprechtaste halten, dann fragen",
+                                     schluessel="taste", cooldown=60.0, dauer=12.0)
 
     async def satz(self, seg: Segment, zeilen: list[Segment] | None = None) -> None:
         """Strom 1: fertiger Satz mit Sprecher. Sammelt Text für die Themen-Zuordnung (Strom 4).
@@ -851,9 +919,9 @@ class Coach:
                 m.transkript.append(z)
             m.transkript.sort(key=lambda s: s.start)
             return
+        if self.assistent.vorstellung_bis is not None:
+            self.name_lernen(seg.sprecher, seg.text, seg.start, seg.ende)
         for z in zeilen or [seg]:
-            if self.assistent.vorstellung_bis is not None:
-                self.name_lernen(z.sprecher, z.text)
             z.sprecher = self.namen.get(z.sprecher, z.sprecher)
             m.transkript.append(z)
             self._abschnitt.append(z)
@@ -876,9 +944,7 @@ class Coach:
                     or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_schritt_sekunden):
                 self._abschnitt_schliessen()
         await self.melden()
-        if self.artefakte.wartet_auf_antwort(seg.ende) and await self.artefakte.satz(seg):
-            return  # Antwort auf Nestors Nachfrage oder die Fünf-Minuten-Frage (Ticket #26)
-        await self.assistent.satz(seg.text, seg.ende)
+        await self.assistent.satz(seg.text, seg.ende, self.namen.get(seg.sprecher, seg.sprecher))
 
     # --- Themen-Zuordnung in gleitenden Fenstern (Strom 4, Ticket #24) ------------------------------------------
     def _abschnitt_zuruecksetzen(self) -> None:
@@ -976,14 +1042,7 @@ class Coach:
     async def assistent_aktion(self, aktion: dict) -> None:
         """Aktion aus einer Antwort des Sprachassistenten ausführen."""
         m = self.meeting
-        if aktion["typ"] == "bild":
-            fokus = None if aktion["fokus"].lower() in ("gesamt", "alles") else aktion["fokus"]
-            if EINST.bild_anbieter == "text":  # Basis: der Überblick als Text (Nestor hat schon angesagt)
-                self.ueberblick_starten(fokus)
-            else:
-                self.assistent._bild_ansage = True
-                self.onepager_starten(fokus=fokus)
-        elif aktion["typ"] == "weiter":
+        if aktion["typ"] == "weiter":
             ziel = aktion["ziel"]
             if ziel.startswith("naechst") or ziel.startswith("nächst"):
                 i = m.aktiver_punkt + 1
@@ -994,12 +1053,8 @@ class Coach:
                 self.protokoll.append({"zeit": m.jetzt(), "art": "wechsel", "von": m.aktiver_punkt, "nach": i,
                                        "durch": "assistent"})
                 self.punkt_wechseln(i)
-        elif aktion["typ"] == "folie":
-            self.folie_starten()
         elif aktion["typ"] == "pause":
             self.assistent.zustand = "pausiert"
-        elif aktion["typ"] == "recherche" and aktion.get("frage"):
-            hintergrund(self.assistent.recherche_vorlesen(aktion["frage"]))
         elif aktion["typ"] == "eintragen":  # Basis: „Nestor, Sofie übernimmt die Statusseite bis Freitag“ (#26)
             a, _ = self.artefakte.eintragen(aktion.get("daten") or {})
             if a is not None:
@@ -1052,24 +1107,28 @@ class Coach:
     def live_text_kosten(self, sekunden: float) -> None:
         nutzung_loggen({"art": "live-text", "modell": EINST.live_modell, "sekunden_audio": round(sekunden, 1)})
 
-    def _karte_ablegen(self, karte: dict) -> None:
-        self.karten.append({"id": len(self.karten) + 1, "zeit": self.meeting.jetzt(), "quellen": [], **karte})
+    def _karte_ablegen(self, karte: dict) -> dict:
+        """Neue Karte in den Verlauf. `still`: kam ohne Bogen (Bild, Recherche, Abschnitts-Zusammenfassung,
+        unterbrochener Bogen) – springt im Dashboard nur nach vorn, wenn die vordere Karte älter als ~60 s ist."""
+        k = {"id": len(self.karten) + 1, "zeit": self.meeting.jetzt(), "quellen": [], "still": False, **karte}
+        self.karten.append(k)
+        return k
 
-    def antwort_karte(self, frage: str, antwort: str, aktion: dict | None, quellen: list[dict]) -> None:
-        """Nestors gesprochene Antwort zusätzlich als Karte: Recherche immer, sonst nur, wenn es etwas zu zeigen
-        gibt. Bei Aktionen (Bild, Wechsel, Pause, Folie) zeigt das Dashboard das Ergebnis selbst – keine Karte."""
-        if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie", "eintragen"):
+    def antwort_karte(self, frage: str, antwort: str, aktion: dict | None, quellen: list[dict],
+                      still: bool = False) -> None:
+        """Nestors gesprochene Antwort zusätzlich als Karte (Antwort in einem Satz, Einzelheiten auf der Karte).
+        Bei Aktionen (Bild, Wechsel, Pause, Folie, Karte, Eintragen) zeigt der Verlauf das Ergebnis selbst."""
+        if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie", "eintragen", "karte", "recherche"):
             return
-        hintergrund(self._karte_bauen(frage, antwort, quellen))
+        hintergrund(self._karte_bauen(frage, antwort, quellen, still=still))
 
-    async def _karte_bauen(self, frage: str, antwort: str, quellen: list[dict]) -> None:
+    async def _karte_bauen(self, frage: str, antwort: str, quellen: list[dict], still: bool = False) -> None:
         from . import karten
         from .folie import quelle_kurz
 
         recherche = bool(quellen)
-        if recherche and self.letzte_recherche:
-            frage = self.letzte_recherche["frage"]
-        karte, nutzung = await karten.verdichten(self._client, frage, antwort)
+        kontext = None if recherche else self.assistent.kontext(frage).rsplit("\n\nFrage an dich:", 1)[0]
+        karte, nutzung = await karten.verdichten(self._client, frage, antwort, kontext=kontext)
         if nutzung:
             nutzung_loggen({"art": "karte", "modell": EINST.assistent_modell, **nutzung})
         if karte is None and recherche:
@@ -1077,7 +1136,7 @@ class Coach:
         if karte is None:
             return
         self._karte_ablegen({"art": "recherche" if recherche else "antwort", "frage": frage, **karte,
-                             "quellen": [quelle_kurz(q) for q in quellen][:5]})
+                             "quellen": [quelle_kurz(q) for q in quellen][:5], "still": still})
         await self.melden()
 
     def recherche_merken(self, frage: str, erg: dict) -> None:
@@ -1086,33 +1145,38 @@ class Coach:
                                  "zeit": self.meeting.jetzt()}
 
     def folie_starten(self) -> bool:
-        """Letzte Recherche mit Quellen als Folie zusammenstellen (Zuruf an Nestor oder Knopf)."""
+        """Letzte Recherche mit Quellen als Folie (Knopf ohne Bogen, z. B. aus Skripten)."""
         if self.letzte_recherche is None or self._client is None or self._folie_laeuft:
             return False
         self._folie_laeuft = True
-        hintergrund(self._folie_bauen())
+        hintergrund(self.folie_bauen())
         return True
 
-    async def _folie_bauen(self) -> None:
+    async def folie_bauen(self, karte: bool = True) -> dict | None:
+        """Folie aus der letzten Recherche (Bogen „Folie“, Ticket #27: „Hier ist die Folie“, keine „fertig“-Ansage)."""
         from . import folie
 
+        self._folie_laeuft = True
         await self.melden()
         try:
             self.folie, nutzung = await folie.erstellen(self._client, self.letzte_recherche)
             self.folie_version += 1
             nutzung_loggen({"art": "folie", "modell": EINST.assistent_modell, **nutzung})
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "folie", "titel": self.folie["titel"]})
-            self._karte_ablegen({"art": "folie", "titel": self.folie["titel"], "frage": self.folie["frage"],
-                                 "punkte": self.folie["punkte"], "quellen": self.folie["quellen"], "folie": self.folie})
-            self.assistent.ansagen("Die Folie mit den Quellen ist fertig, ihr seht sie im Dashboard.")
+            if karte:
+                self._karte_ablegen({"art": "folie", "titel": self.folie["titel"], "frage": self.folie["frage"],
+                                     "punkte": self.folie["punkte"], "quellen": self.folie["quellen"],
+                                     "folie": self.folie})
+            return self.folie
         except Exception as e:  # noqa: BLE001
             log.warning("Folie fehlgeschlagen: %s", fehlertext(e))
+            return None
         finally:
             self._folie_laeuft = False
             await self.melden()
 
     def ueberblick_starten(self, fokus: str | None = None, nachholen: bool = False) -> bool:
-        """Überblick als Text neu erstellen (Knopf „Überblick“, Zuruf in Basis, Takt und Meetingende in Basis).
+        """Überblick als Text neu erstellen (Meetingende in Basis; auf Anfrage läuft er als Bogen).
         `nachholen`: entsteht gerade einer, danach noch einmal (Meetingende – der Stand soll vollständig sein)."""
         if not self.meeting.transkript or self._client is None:
             return False
@@ -1125,7 +1189,7 @@ class Coach:
         hintergrund(self.ueberblick_bauen(fokus))
         return True
 
-    async def ueberblick_bauen(self, fokus: str | None = None) -> dict | None:
+    async def ueberblick_bauen(self, fokus: str | None = None, karte: bool = True) -> dict | None:
         from . import ueberblick
 
         self._ueberblick_laeuft = True
@@ -1137,8 +1201,9 @@ class Coach:
             self.ueberblick_version += 1
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "ueberblick", "version": self.ueberblick_version,
                                    "fokus": fokus})
-            self._karte_ablegen({"art": "ueberblick", "frage": "Überblick", "titel": "Überblick · Stand "
-                                 + u["laufzeit"], "punkte": ueberblick.punkte(u)})
+            if karte:
+                self._karte_ablegen({"art": "ueberblick", "frage": "Überblick", "titel": "Überblick · Stand "
+                                     + u["laufzeit"], "punkte": ueberblick.punkte(u), "ueberblick": u, "still": True})
             return u
         except Exception as e:  # noqa: BLE001
             log.warning("Überblick fehlgeschlagen: %s", fehlertext(e))
@@ -1151,8 +1216,25 @@ class Coach:
                 self.ueberblick_starten()
             await self.melden()
 
+    async def bild_erstellen(self, fokus: str | None = None) -> None:
+        """Langer Auftrag „Bild“ (Ticket #27): wartet auf ein laufendes Bild, zeichnet dann und kehrt zurück, wenn es
+        fertig ist. Das Bild kommt still als Karte in den Verlauf (`_onepager_zeichnen`)."""
+        while self._onepager_laeuft:
+            await asyncio.sleep(0.5)
+        if not self.onepager_starten(fokus):
+            return
+        try:
+            while self._onepager_laeuft:
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            for t in asyncio.all_tasks():
+                if getattr(getattr(t.get_coro(), "cr_code", None), "co_name", "") == "_onepager_zeichnen":
+                    t.cancel()
+            self._onepager_laeuft = False
+            raise
+
     def onepager_starten(self, fokus: str | None = None) -> bool:
-        """Live-Bild neu zeichnen lassen (Knopf, alle N Minuten, Meetingende, Zuruf mit Fokus).
+        """Live-Bild neu zeichnen lassen (Bogen „Bild“, Meetingende, Knopfdruck).
         In Basis (bild_anbieter „text“) entsteht stattdessen der Überblick als Text – kein Bildmodell.
 
         False, wenn schon eins entsteht – dann wird es danach nachgeholt.
@@ -1197,13 +1279,17 @@ class Coach:
             self.onepager_version += 1
             self.onepager_stand = stand
             self.onepager_fehler = None
+            self.bilder[self.onepager_version] = self.onepager_png or self.onepager_svg
+            for v in sorted(self.bilder)[:-6]:  # die letzten sechs Bilder bleiben für die Karten im Verlauf
+                self.bilder.pop(v, None)
+            self._karte_ablegen({"art": "bild", "frage": f"Bild{' · ' + fokus if fokus else ''}",
+                                 "titel": f"Live-Bild · Stand {analyse.mmss(stand)}" + (f" · {fokus}" if fokus else ""),
+                                 "version": self.onepager_version, "format": "png" if self.onepager_png else "svg",
+                                 "still": True})
             nutzung_loggen({"art": "onepager", "anbieter": "openai" if self.onepager_png else "claude-abo",
                             "fortschreibung": vorher is not None,
                             "sekunden": round(time.monotonic() - t0), "schritte": erg.get("messung")})
             self.protokoll.append({"zeit": stand, "art": "onepager", "version": self.onepager_version, "fokus": fokus})
-            if self.assistent._bild_ansage:
-                self.assistent._bild_ansage = False
-                self.assistent.ansagen("Das Bild ist fertig, ihr seht es jetzt im Dashboard.")
         except Exception as e:  # noqa: BLE001
             log.warning("Live-Bild fehlgeschlagen: %s", fehlertext(e))
             self.onepager_fehler = f"Live-Bild fehlgeschlagen: {str(e)[:160] or fehlertext(e)}"

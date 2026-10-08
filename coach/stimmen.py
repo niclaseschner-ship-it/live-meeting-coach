@@ -23,6 +23,7 @@ MIN_SEKUNDEN = 1.0  # kürzere Äußerungen sind zu unsicher für einen eigenen 
 FENSTER_SEKUNDEN = 1.5
 SCHRITT_SEKUNDEN = 0.75
 MIN_PERSON_SEKUNDEN = 10.0  # nur gut bekannte Personen zählen für die Überlappungsprüfung
+VEKTOR_MIN_SEKUNDEN = 0.4  # darunter auch kein Fingerabdruck für die Namenszuordnung
 NEU_FENSTER = 3  # so viele zusammenhängende, unbekannte, untereinander ähnliche Fenster ergeben eine neue Person
 
 
@@ -164,7 +165,9 @@ class Stimmen:
         """
         dauer = len(proben) / RATE
         if self._seg is not None and EINST.segmentierung_art == "segmente":
-            return self._analysieren_segmente(proben, dauer)
+            erg = self._analysieren_segmente(proben, dauer)
+            erg["vektor"] = self.vektor(proben) if dauer >= VEKTOR_MIN_SEKUNDEN else None
+            return erg
         erg = self._analysieren_fenster(proben, dauer)
         if self._seg is not None:  # Mischform: Personen aus den Fenstern, Überlappung aus der Segmentierung
             ueber = self._seg.analysieren(proben)["ueberlappung"]
@@ -175,13 +178,17 @@ class Stimmen:
 
     def _analysieren_fenster(self, proben: np.ndarray, dauer: float) -> dict:
         if dauer < MIN_SEKUNDEN:
-            return {"person": None, "abschnitte": [], "mischung": []}
+            # zu kurz für eine Person, aber der Fingerabdruck reicht, um einen genannten Namen später zuzuordnen
+            # („Ich bin Tom.“, Ticket #27)
+            v = self.vektor(proben) if dauer >= VEKTOR_MIN_SEKUNDEN else None
+            return {"person": None, "abschnitte": [], "mischung": [], "vektor": v}
         f, s = int(FENSTER_SEKUNDEN * RATE), int(SCHRITT_SEKUNDEN * RATE)
         if len(proben) < f:
             fenster, starts = [self.vektor(proben)], [0.0]
         else:
             starts = [i / RATE for i in range(0, len(proben) - f + 1, s)]
             fenster = [self.vektor(proben[int(t * RATE):int(t * RATE) + f]) for t in starts]
+        vektor = normiert(np.sum(fenster, axis=0))  # Fingerabdruck der ganzen Äußerung (Namenszuordnung)
         # Überlappung zuerst prüfen (gegen die bisher bekannten Personen), dann zuordnen
         idx = self.register.mischung(fenster, EINST.mischung_max, EINST.mischung_zweit_min)
         # nur zusammenhängende Treffer (≥ 2 Fenster in Folge) zählen – einzelne sind Rauschen
@@ -201,7 +208,7 @@ class Stimmen:
         for a, b, p in abschnitte:
             anteil[p] = anteil.get(p, 0) + b - a
         person = max(anteil, key=anteil.get) if anteil else None
-        return {"person": person, "abschnitte": abschnitte, "mischung": mischung}
+        return {"person": person, "abschnitte": abschnitte, "mischung": mischung, "vektor": vektor}
 
     def _analysieren_segmente(self, proben: np.ndarray, dauer: float) -> dict:
         """Segmentierung (coach/segmentierung.py): Stücke je lokaler Stimme -> Fingerabdruck -> Person oder None

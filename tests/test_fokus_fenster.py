@@ -185,7 +185,7 @@ def test_rueckkehr_ansage():
 def test_themen_auswerten_nach_rueckkehr_ohne_hinweis():
     from coach.entscheider import Entscheider
 
-    m = Meeting(agenda=[Agendapunkt("A"), Agendapunkt("B")])
+    m = Meeting(agenda=[Agendapunkt("A"), Agendapunkt("B")], regel_ids=["thema"])
     m.starten(virtuell=True)
     e = Entscheider(90)
     analyse.themen_auswerten(m, e, {"art": "neu", "punkt": None, "konfidenz": 0.9, "begruendung": "b"}, 1,

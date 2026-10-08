@@ -134,7 +134,12 @@ class Einstellungen:
     # Recherche auf Zuruf (Websuche über die Responses-API)
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
-    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich
+    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich (Premium)
+    # Ticket #27, Nachtrag C: Denkaufwand der Einordnung „Nachfrage an Nestor oder nicht?“ (Ziel unter 1 s)
+    einordnen_aufwand: str = os.getenv("LMC_EINORDNEN_AUFWAND", "low")
+    # Ticket #27: Zusammenfassung je Abschnitt – beim Punktwechsel und spätestens nach so vielen Minuten am selben
+    # Punkt (ohne Agenda: im selben Takt)
+    abschnitt_minuten: float = _zahl("LMC_ABSCHNITT_MINUTEN", 20)
     # Ticket #21: jeden Auftrag sofort kurz bestätigen – mit vorab erzeugten, je Stimme zwischengespeicherten Floskeln
     bestaetigung: bool = os.getenv("LMC_BESTAETIGUNG", "1") == "1"
     floskel_ordner: str = os.getenv("LMC_FLOSKEL_ORDNER", str(WURZEL / "cache" / "floskeln"))
@@ -214,7 +219,7 @@ STUFEN = ("basis", "premium")
 _STUFEN_FELDER = ("live_modell", "text_modell", "transkriptions_modell", "analyse_modell", "analyse_aufwand",
                   "zuordnung_modell",
                   "assistent_modell", "assistent_aufwand", "recherche_modell", "recherche_aufwand", "stimme_modell",
-                  "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden")
+                  "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden", "einordnen_aufwand")
 _PREMIUM = {f: getattr(EINST, f) for f in _STUFEN_FELDER}
 
 
@@ -227,9 +232,9 @@ def basis_werte() -> dict:
         "recherche_modell": e.basis_text_modell, "zuordnung_modell": e.basis_zuordnung_modell,
         "analyse_aufwand": "", "assistent_aufwand": "", "recherche_aufwand": "",  # Mistral kennt „low“ nicht
         "stimme_modell": e.basis_stimme_modell, "stimme": e.basis_stimme,
-        # Nestor antwortet über Text + Sprachausgabe (kein Realtime-Gespräch): keine Rückfragen ohne Namen,
-        # kein Ins-Wort-Fallen (Ticket #13); statt des Live-Bilds der Überblick als Text (kein Bildmodell)
-        "assistent_modus": "text", "bild_anbieter": "text", "nachfrage_sekunden": 0.0,
+        # Nestor antwortet über Text + Sprachausgabe (kein Realtime-Gespräch); Funkgerät (Ticket #27): Sprechtaste
+        # statt Name, kein Rückfrage-Fenster; statt des Live-Bilds der Überblick als Text (kein Bildmodell)
+        "assistent_modus": "text", "bild_anbieter": "text", "nachfrage_sekunden": 0.0, "einordnen_aufwand": "",
     }
 
 

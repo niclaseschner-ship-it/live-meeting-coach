@@ -1,27 +1,23 @@
-"""Meeting-Artefakte (Ticket #26): Aufgabe, Entscheidung, offener Punkt, Risiko – live erkannt, Lücken markiert,
-per Stimme oder Klick geschlossen. Grundlage: docs/meeting_artefakte_2026-10-08.md.
+"""Meeting-Artefakte (Ticket #26, Ablauf seit Ticket #27): Aufgabe, Entscheidung, offener Punkt, Risiko – erkannt,
+Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_artefakte_2026-10-08.md.
 
-Ersetzt die frühere Ergebnisprüfung je Agendapunkt (Regel 10, coach/ergebnisse.py) statt sie zu verdoppeln:
-
-- **Erkennung live** und unabhängig von der Agenda: Neue Sätze aus dem Live-Transkript gehen gesammelt an ein
-  Sprachmodell (`analyse_modell`: Premium gpt-5.4-mini, Basis mistral) – etwa einmal je Minute Sprache, dazu beim
-  Punktwechsel, vor der Fünf-Minuten-Frage, auf den Protokoll-Knopf und am Ende. Das Modell sieht die schon
-  festgehaltenen Artefakte mit Nummer und ergänzt sie, statt sie doppelt anzulegen.
 - **Ein Datenmodell** (`Artefakt`): Typ, Felder, Vollständigkeit, Lücken, Konfidenz, Quelle (Zeit, Satz),
   Agendabezug, bestätigt ja/nein. Daraus abgeleitet: `Meeting.ergebnisse` im alten Format (Kontext für Nestor,
   Überblick, Protokoll, Abschluss-Kopf) und die Standardgliederung für Abschluss und Export (#22).
-- **Prüfung beim Punktwechsel** (nur mit Regel „Ergebnisse festhalten“): eine gebündelte Nachfrage mit konkretem
-  Vorschlag je unvollständigem Artefakt, sonst Schweigen. Eine Nachfrage kommt je Artefakt nur einmal; abgelehnt
-  bleibt abgelehnt.
-- **Fünf Minuten vor dem geplanten Ende** (immer): Rückfrage im Nestor-Feld und gesprochen; bei Ja
-  Zusammenfassung plus höchstens drei Lücken (Aufgaben ohne Wer, dann ohne Termin, dann unklare Entscheidungen
-  bzw. hohe Risiken).
-- **Lücken schließen:** Antwort auf eine Nachfrage ohne Namen (eigener kleiner Aufruf), „Nestor, Sofie übernimmt
-  die Statusseite bis Freitag“ (Premium: Realtime-Werkzeug `artefakt_eintragen`, Basis: `AKTION: eintragen`),
-  oder Klick und Bearbeiten im Dashboard.
+- **Erkennung bei Bedarf** (Ticket #27): keine ständige Erkennung mehr. Erkannt wird still je **Abschnitt** – beim
+  Punktwechsel, nach 20 Minuten am selben Punkt bzw. ohne Agenda alle 20 Minuten – und nur über diesen Abschnitt;
+  daraus wird still eine Karte „Zusammenfassung · Punkt …“ im Verlauf. Auf Anfrage (Zusammenfassen, Was fehlt,
+  Protokoll) wird nur der laufende Abschnitt nachgeholt (`nachholen`, in parallelen Stücken), damit der Bogen unter
+  15 s bleibt. Das Modell sieht die schon festgehaltenen Artefakte mit Nummer und ergänzt, statt doppelt anzulegen.
+- **Regel „Ergebnisse festhalten“** heißt nur noch: Lücken in den Abschnitts-Karten rot markieren plus ein Band-Hinweis
+  („2 Aufgaben ohne Verantwortliche ›“, der Knopf springt zur Karte). Ohne Regel keine Markierung, kein Band.
+- **Fünf Minuten vor dem geplanten Ende** (immer): Band „Noch 5 Minuten · Zusammenfassen ›“ – der Knopf löst den
+  Bogen „Zusammenfassen“ aus. Nestor fragt nicht mit der Stimme.
+- **Lücken schließen:** „Nestor, Sofie übernimmt die Statusseite bis Freitag“ (Premium: Realtime-Werkzeug
+  `artefakt_eintragen`, Basis per Sprechtaste: `AKTION: eintragen`) – Nestor sagt „Notiert“, die Karte wird grün;
+  oder Klick auf die Lücke in der Karte.
 
-Im Modus „Nur auf Knopfdruck“ erkennt Nestor nichts von selbst – nur der Protokoll-Knopf (und die Fünf-Minuten-
-Rückfrage, deren Ja wie der Knopf wirkt) schickt Text an das Modell.
+Im Modus „Nur auf Knopfdruck“ erkennt Nestor nichts von selbst – nur der Protokoll-Knopf schickt Text an das Modell.
 """
 
 from __future__ import annotations
@@ -53,17 +49,12 @@ FELD_NAME = {"was": "was", "wer": "wer", "bis": "bis wann", "status": "beschloss
 KOLLEKTIV = {"wir", "uns", "alle", "jemand", "man", "ihr", "team", "das team", "die runde", "alle zusammen",
              "irgendwer", "einer", "eine", "wer"}
 
-SPRACHE_SEKUNDEN = {"premium": 60.0, "basis": 120.0}  # so viel neue Sprache, dann ein Erkennungslauf; Basis seltener,
-#   weil mistral-medium je Token doppelt so viel kostet wie gpt-5.4-mini (Rechnung in docs/gespraechsregeln.md, Regel 10)
-SPAETESTENS_SEKUNDEN = 180.0  # mit wenig neuer Sprache spätestens nach dieser Zeit
-MIN_SPRACHE = 12.0        # darunter lohnt kein Aufruf (ein „Gut.“)
+MIN_SPRACHE = 30.0        # ein Abschnitt mit weniger Sprache und ohne Artefakte bekommt keine Karte
 KONTEXT_SEKUNDEN = 40.0   # Gesprochenes vor den neuen Sätzen als Kontext
-MAX_ZEICHEN = 9000        # größere Mengen (Knopfdruck nach 30 min) in mehreren Aufrufen
+MAX_ZEICHEN = 6000        # größere Mengen (20-Minuten-Abschnitt) in mehreren Aufrufen – auf Anfrage parallel
 MIN_KONFIDENZ = 0.4       # darunter wird nichts festgehalten
 FRAGE_KONFIDENZ = 0.5     # darunter fragt Nestor nicht nach (die Karte bleibt sichtbar)
 FUENF_MINUTEN = 300.0
-ANTWORT_SEKUNDEN = 30.0   # so lange nach einer Nachfrage gilt ein Satz ohne Namen als Antwort
-MAX_NACHFRAGEN = 2        # je Punktwechsel gesprochen (kurz und gebündelt); der Rest steht im Dashboard
 
 
 def _text(v, n: int = 160) -> str | None:
@@ -226,16 +217,6 @@ Antworte nur mit JSON: {"artefakte": [{"nummer": null, "typ": "aufgabe", "was": 
 "status": null, "reaktion": null, "hoch": false, "vage": false, "ausserhalb": false, "erledigt": false,
 "konfidenz": 0.8, "zeit": "mm:ss", "zitat": "…"}]}. Leere Liste, wenn die neuen Sätze nichts davon enthalten."""
 
-ANTWORT_SYSTEM = """\
-Der Moderationsassistent Nestor hat die Runde eben zu diesen festgehaltenen Artefakten gefragt (Nummer, Felder,
-was fehlt). Danach kommt, was jemand gesagt hat. Trag nur ein, was ausdrücklich gesagt wurde: „Sofie, bis Freitag“
-→ wer und bis; „mach ich“ → wer ist der Sprecher; „ja, so festhalten“ bei einer Entscheidung → status "endgueltig".
-Sagt die Runde, die Nachfrage sei nicht nötig oder es bleibe offen („brauchen wir nicht“, „lassen wir so“, „nein“),
-gehört die Nummer in abgelehnt. Ist der Satz gar keine Antwort darauf, gib leere Listen zurück.
-Antworte nur mit JSON: {"eintraege": [{"nummer": 1, "was": null, "wer": "…", "bis": "…", "status": null,
-"reaktion": null}], "abgelehnt": []}"""
-
-
 def _artefakte_text(liste: list[Artefakt], n: int = 30) -> str:
     return "\n".join(a.kurz() for a in liste[-n:]) or "(noch keine)"
 
@@ -366,14 +347,6 @@ def rang(a: Artefakt) -> int | None:
     return 3
 
 
-def nachfrage_text(punkt_titel: str | None, fragen: list[Artefakt], weitere: int = 0) -> str:
-    kopf = f"Kurz zu „{punkt_titel}“: " if punkt_titel else "Kurz noch: "
-    text = kopf + " ".join(frage_zu(a) for a in fragen)
-    if weitere:
-        text += f" {'Eine weitere Lücke steht' if weitere == 1 else f'{weitere} weitere Lücken stehen'} im Dashboard."
-    return text
-
-
 def bestaetigung_text(a: Artefakt, felder: dict) -> str:
     teile = []
     if felder.get("wer"):
@@ -394,16 +367,6 @@ def _liste_sprechen(dinge: list[str]) -> str:
 
 
 # --- Speicher und Ablauf ---------------------------------------------------------------------------------------
-@dataclass
-class Rueckfrage:
-    """Offene Frage von Nestor im Nestor-Feld (mit Knöpfen) – Fünf-Minuten-Frage oder Nachfrage beim Punktwechsel."""
-    art: str             # fuenf_minuten | nachfrage
-    text: str
-    ids: list[int] = field(default_factory=list)
-    seit: float = 0.0
-    bis: float = 0.0     # so lange gilt ein Satz ohne Namen als Antwort
-
-
 class Artefakte:
     """Artefakte eines Meetings und ihr Ablauf; am Coach als `coach.artefakte`."""
 
@@ -415,9 +378,10 @@ class Artefakte:
         self.letzter_lauf = 0.0
         self.sperre = asyncio.Lock()
         self.laeuft = False
-        self.rueckfrage: Rueckfrage | None = None
+        self.abschnitt_ab = 0.0      # Beginn des laufenden Abschnitts (Ticket #27: Zusammenfassung je Abschnitt)
+        self._abschnitt_laeuft = False
         self.fuenf_gefragt = False
-        self.verlauf: list[dict] = []  # Nachfragen, Antworten, Ablehnungen (ohne Inhalte der Sätze) für den Bericht
+        self.verlauf: list[dict] = []  # Zusammenfassungen, Abschnitte (ohne Inhalte der Sätze) für den Bericht
 
     # --- Daten ---------------------------------------------------------------------------------------------
     def holen(self, nr: int) -> Artefakt | None:
@@ -522,7 +486,6 @@ class Artefakte:
         """Knopfdruck „verwerfen“: was in dem Zeitraum gesagt wurde, fliegt raus; das Transkript wird dort neu gelesen."""
         self.liste = [a for a in self.liste if a.zeit < seit or a.herkunft == "hand"]
         self.bis = min(self.bis, seit)
-        self.rueckfrage = None
         self.ableiten()
 
     def luecken_liste(self, n: int = 3, punkt: int | None = None) -> list[Artefakt]:
@@ -554,11 +517,9 @@ class Artefakte:
             self.coach.meeting.ergebnisse = self.ergebnisse_je_punkt()
 
     def schnappschuss(self) -> dict:
-        r = self.rueckfrage
         return {"liste": [a.bild() for a in self.liste],
                 "luecken": sum(1 for a in self.liste if a.luecken() and not a.abgelehnt),
-                "laeuft": self.laeuft,
-                "rueckfrage": ({"art": r.art, "text": r.text, "ids": r.ids, "seit": round(r.seit, 1)} if r else None)}
+                "laeuft": self.laeuft}
 
     def kontext_zeilen(self) -> list[str]:
         """Für Nestors Kontext (beide Stufen): mit Nummer, damit „eintragen“ das richtige Artefakt trifft."""
@@ -612,12 +573,12 @@ class Artefakte:
                  "quelle": {"zeit_text": mmss(a.zeit), "satz": a.zitat}}
                 for a in self.liste if a.typ == "aufgabe"]
 
-    # --- Erkennung im Lauf -----------------------------------------------------------------------------------
+    # --- Erkennung bei Bedarf (Ticket #27) ---------------------------------------------------------------------
     def _neue_saetze(self) -> list:
         return [s for s in self.coach.meeting.transkript if s.text and s.ende > self.bis]
 
     def takt(self) -> None:
-        """Vom Coach-Takt: genug neue Sprache → ein Lauf im Hintergrund; Fünf-Minuten-Frage; Antwortfenster."""
+        """Vom Coach-Takt: Abschnitt nach 20 Minuten schließen (still), Fünf-Minuten-Band."""
         c = self.coach
         m = c.meeting
         if not m.laeuft:
@@ -626,23 +587,47 @@ class Artefakte:
             asyncio.get_running_loop()
         except RuntimeError:
             return  # Takt ohne Ereignisschleife (Tests): keine Hintergrundaufgaben
-        if self.rueckfrage and m.jetzt() > self.rueckfrage.bis + 90:
-            self.rueckfrage = None  # unbeantwortet: Pop-up verschwindet nach einer Weile von selbst
-        if not c.knopfdruck and c._client is not None and not self.laeuft:
-            neu = self._neue_saetze()
-            sprache = sum(s.dauer for s in neu)
-            from .config import EINST
+        from .config import EINST
 
-            if sprache >= SPRACHE_SEKUNDEN.get(EINST.stufe, 60.0) or (sprache >= MIN_SPRACHE
-                                               and m.jetzt() - self.letzter_lauf >= SPAETESTENS_SEKUNDEN):
-                from .pipeline import hintergrund
+        if (not c.knopfdruck and c._client is not None and not self._abschnitt_laeuft
+                and m.jetzt() - self.abschnitt_ab >= EINST.abschnitt_minuten * 60):
+            from .pipeline import hintergrund
 
-                self.laeuft = True
-                hintergrund(self.erkennen())
+            self._abschnitt_laeuft = True
+            hintergrund(self.abschnitt_abschliessen(m.aktiver_punkt if m.agenda else None, m.jetzt(), "zeit"))
         self._fuenf_pruefen()
 
-    async def erkennen(self, bis: float | None = None) -> int:
-        """Alle noch nicht ausgewerteten Sätze auswerten (in Stücken). Liefert die Zahl neuer/ergänzter Artefakte."""
+    def _stuecke(self, neu: list) -> list[list]:
+        stuecke, stueck, zeichen = [], [], 0
+        for s in neu:
+            if stueck and zeichen + len(s.text) > MAX_ZEICHEN:
+                stuecke.append(stueck)
+                stueck, zeichen = [], 0
+            stueck.append(s)
+            zeichen += len(s.text) + 20
+        if stueck:
+            stuecke.append(stueck)
+        return stuecke
+
+    def _kontext_vor(self, t: float) -> list:
+        kontext, dauer = [], 0.0
+        for s in reversed([x for x in self.coach.meeting.transkript if x.text and x.ende <= t]):
+            if dauer >= KONTEXT_SEKUNDEN:
+                break
+            kontext.insert(0, s)
+            dauer += s.dauer
+        return kontext
+
+    async def _aufruf(self, stueck: list, kontext: list, liste: list) -> tuple[dict, dict]:
+        from .config import EINST
+
+        return await _json_aufruf(self.coach._client, EINST.analyse_modell, SYSTEM,
+                                  nachricht(self.coach.meeting, liste, stueck, kontext), EINST.analyse_aufwand)
+
+    async def erkennen(self, bis: float | None = None, parallel: bool = False) -> int:
+        """Alle noch nicht ausgewerteten Sätze (bis `bis`) auswerten, in Stücken. `parallel`: auf Anfrage alle Stücke
+        gleichzeitig (Bogen unter 15 s); sonst nacheinander, damit jedes Stück die Ergebnisse des vorigen sieht.
+        Liefert die Zahl neuer/ergänzter Artefakte."""
         from .config import EINST
         from .pipeline import fehlertext, nutzung_loggen
 
@@ -651,79 +636,106 @@ class Artefakte:
         n = 0
         try:
             async with self.sperre:
-                while True:
-                    neu = [s for s in self._neue_saetze() if bis is None or s.start <= bis]
-                    if not neu or c._client is None:
-                        break
-                    stueck, zeichen = [], 0
-                    for s in neu:
-                        if stueck and zeichen + len(s.text) > MAX_ZEICHEN:
+                neu = [s for s in self._neue_saetze() if bis is None or s.start <= bis]
+                if not neu or c._client is None:
+                    return 0
+                stuecke = self._stuecke(neu)
+                if parallel and len(stuecke) > 1:
+                    liste = list(self.liste)
+                    ergebnisse = await asyncio.gather(
+                        *(self._aufruf(st, self._kontext_vor(st[0].start), liste) for st in stuecke),
+                        return_exceptions=True)
+                else:
+                    ergebnisse = []
+                    for st in stuecke:
+                        try:
+                            ergebnisse.append(await self._aufruf(st, self._kontext_vor(st[0].start), self.liste))
+                        except Exception as e:  # noqa: BLE001
+                            ergebnisse.append(e)
                             break
-                        stueck.append(s)
-                        zeichen += len(s.text) + 20
-                    kontext, dauer = [], 0.0
-                    for s in reversed([x for x in c.meeting.transkript if x.text and x.ende <= self.bis]):
-                        if dauer >= KONTEXT_SEKUNDEN:
-                            break
-                        kontext.insert(0, s)
-                        dauer += s.dauer
-                    try:
-                        roh, nutzung = await _json_aufruf(c._client, EINST.analyse_modell, SYSTEM,
-                                                          nachricht(c.meeting, self.liste, stueck, kontext),
-                                                          EINST.analyse_aufwand)
-                    except Exception as e:  # noqa: BLE001 – nicht abstürzen; beim nächsten Lauf noch einmal
-                        log.warning("Artefakt-Erkennung fehlgeschlagen: %s", fehlertext(e))
-                        break
-                    nutzung_loggen({"art": "artefakte", "modell": EINST.analyse_modell, **nutzung})
-                    for e in roh.get("artefakte") or []:
-                        e = normalisieren(e)
-                        if e and self.uebernehmen(e, stueck[0].start, stueck):
-                            n += 1
-                    self.bis = max(self.bis, max(s.ende for s in stueck))
-                    self.letzter_lauf = c.meeting.jetzt()
-                    c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "artefakte", "saetze": len(stueck),
-                                        "anzahl": len(self.liste)})
+                        self._uebernehmen_alle(ergebnisse[-1], st)
+                        ergebnisse[-1] = None  # schon übernommen
+                for st, erg in zip(stuecke, ergebnisse):
+                    if isinstance(erg, Exception):
+                        log.warning("Artefakt-Erkennung fehlgeschlagen: %s", fehlertext(erg))
+                        break  # beim nächsten Lauf noch einmal ab hier
+                    if erg is not None:
+                        n += self._uebernehmen_alle(erg, st)
+                    self.bis = max(self.bis, max(s.ende for s in st))
+                self.letzter_lauf = c.meeting.jetzt()
+                c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "artefakte", "saetze": len(neu),
+                                    "stuecke": len(stuecke), "parallel": parallel, "anzahl": len(self.liste)})
         finally:
             self.laeuft = False
             self.ableiten()
             await c.melden()
         return n
 
-    # --- Prüfung beim Punktwechsel (Regel 10) ---------------------------------------------------------------
-    async def punkt_abgeschlossen(self, i: int, fragen: bool = True) -> list[Artefakt]:
-        """Restliche Sätze auswerten; mit Regel „Ergebnisse festhalten“ eine gebündelte Nachfrage – bei
-        Vollständigkeit Schweigen. Liefert die Artefakte, nach denen gefragt wurde."""
+    def _uebernehmen_alle(self, erg: tuple[dict, dict], stueck: list) -> int:
+        from .config import EINST
+        from .pipeline import nutzung_loggen
+
+        roh, nutzung = erg
+        nutzung_loggen({"art": "artefakte", "modell": EINST.analyse_modell, **nutzung})
+        n = 0
+        for e in roh.get("artefakte") or []:
+            e = normalisieren(e)
+            if e and self.uebernehmen(e, stueck[0].start, stueck):
+                n += 1
+        return n
+
+    async def nachholen(self) -> int:
+        """Auf Anfrage (Zusammenfassen, Was fehlt, Protokoll): nur den laufenden Abschnitt nachholen, parallel."""
+        return await self.erkennen(parallel=True)
+
+    # --- Zusammenfassung je Abschnitt (still, Ticket #27) ----------------------------------------------------------
+    async def abschnitt_abschliessen(self, punkt: int | None, bis: float, grund: str) -> dict | None:
+        """Agendapunkt endet (grund „punkt“) oder 20 min am selben Punkt (grund „zeit“): Artefakte nur aus diesem
+        Abschnitt erkennen und still eine Karte in den Verlauf legen. Mit der Regel „Ergebnisse festhalten“ sind die
+        Lücken markiert und ein Band-Hinweis springt zur Karte."""
+        from .bogen import artefakt_karte, luecken_text
+
         c = self.coach
         m = c.meeting
-        if c._client is None or c.knopfdruck:
-            return []
-        await self.erkennen()
-        if not fragen or "ergebnisse" not in m.regel_ids or not m.laeuft:
-            return []
-        alle = [a for a in self.luecken_liste(n=99, punkt=i) if not a.nachgefragt]
-        if not alle:
-            return []
-        fragen_jetzt = alle[:MAX_NACHFRAGEN]
-        for a in alle:
-            a.nachgefragt = True  # je Artefakt nur einmal, auch die im Dashboard gezeigten
-        titel = m.agenda[i].titel if 0 <= i < len(m.agenda) else None
-        text = nachfrage_text(titel, fragen_jetzt, len(alle) - len(fragen_jetzt))
-        await self._fragen("nachfrage", text, [a.id for a in alle])
-        c.protokoll.append({"zeit": m.jetzt(), "art": "artefakt_nachfrage", "punkt": i,
-                            "ids": [a.id for a in alle], "text": text})
-        return fragen_jetzt
-
-    async def _fragen(self, art: str, text: str, ids: list[int]) -> None:
-        """Rückfrage ins Nestor-Feld und gesprochen; danach gilt ein Satz ohne Namen eine Weile als Antwort."""
-        c = self.coach
-        jetzt = c.meeting.jetzt()
-        self.rueckfrage = Rueckfrage(art, text, ids, jetzt, jetzt + ANTWORT_SEKUNDEN)
-        self.verlauf.append({"zeit": round(jetzt, 1), "art": art, "ids": ids})
-        await c.melden()
-        dauer = await c.assistent.sagen(text)
-        if self.rueckfrage and self.rueckfrage.text == text:
-            self.rueckfrage.bis = c.meeting.jetzt() + ANTWORT_SEKUNDEN + (dauer or 0)
-        await c.melden()
+        von, self.abschnitt_ab = self.abschnitt_ab, max(self.abschnitt_ab, bis)
+        try:
+            if c._client is None or c.knopfdruck:
+                return None
+            await self.erkennen(bis=bis)
+            sprache = sum(s.dauer for s in m.transkript if s.text and von <= s.start < bis)
+            liste = [a for a in self.liste if von <= a.zeit < bis and not a.ausserhalb]
+            if sprache < MIN_SPRACHE and not liste:
+                return None
+            ordnung = {"entscheidung": 0, "aufgabe": 1, "offen": 2, "risiko": 3}
+            liste.sort(key=lambda a: (ordnung[a.typ], a.zeit))
+            titel_punkt = m.agenda[punkt].titel if punkt is not None and 0 <= punkt < len(m.agenda) else None
+            if grund == "punkt" and titel_punkt:
+                titel = f"Punkt {punkt + 1} · {titel_punkt}"
+            elif titel_punkt:
+                titel = f"Zwischenstand · {titel_punkt} · bis {mmss(bis)}"
+            else:
+                titel = f"Zwischenstand · {mmss(von)}–{mmss(bis)}"
+            regel = "ergebnisse" in m.regel_ids
+            karte = artefakt_karte(c, "punkt", titel, liste, regel, still=True, punkt=punkt, frage="Zusammenfassung")
+            if not liste:
+                karte["punkte"] = ["Nichts festgehalten – keine Entscheidung, keine Aufgabe."]
+            karte = c._karte_ablegen(karte)
+            self.verlauf.append({"zeit": round(m.jetzt(), 1), "art": "abschnitt", "grund": grund, "punkt": punkt,
+                                 "ids": [a.id for a in liste]})
+            c.protokoll.append({"zeit": m.jetzt(), "art": "abschnitt", "grund": grund, "punkt": punkt,
+                                "ids": [a.id for a in liste], "karte": karte["id"]})
+            luecken = [a for a in liste if a.luecken() and not a.abgelehnt and a.konfidenz >= FRAGE_KONFIDENZ]
+            if regel and luecken and m.laeuft:
+                for a in luecken:
+                    a.nachgefragt = True
+                text = luecken_text(luecken) + (f" in „{titel_punkt}“" if titel_punkt else "")
+                c.entscheider.vorschlagen(m, "luecken", "hinweis", "gruppe", text, schluessel=f"luecken-{karte['id']}",
+                                          aktion={"text": "Zur Karte", "karte": karte["id"]}, dauer=90.0)
+            await c.melden()
+            return karte
+        finally:
+            if grund == "zeit":
+                self._abschnitt_laeuft = False
 
     # --- Fünf Minuten vor Schluss --------------------------------------------------------------------------
     def geplantes_ende(self) -> float | None:
@@ -732,186 +744,27 @@ class Artefakte:
         return geplant if geplant > 0 else None
 
     def _fuenf_pruefen(self) -> None:
-        """Immer, auch ohne Regel 10: 5 min vor dem geplanten Ende (bei kurzen Meetings zur Hälfte)."""
+        """Immer, auch ohne Regel: 5 min vor dem geplanten Ende (bei kurzen Meetings zur Hälfte) still ins Band –
+        als Angebot mit Knopf, ohne Frage (Ticket #27). Ein bloßes „Ja“ in den Raum wirkt nicht."""
         ende = self.geplantes_ende()
-        m = self.coach.meeting
+        c = self.coach
+        m = c.meeting
         if self.fuenf_gefragt or ende is None or not m.laeuft:
             return
         if m.jetzt() >= max(ende - FUENF_MINUTEN, ende / 2):
-            from .pipeline import hintergrund
-
             self.fuenf_gefragt = True
-            hintergrund(self.fuenf_minuten_fragen())
-
-    async def fuenf_minuten_fragen(self) -> None:
-        c = self.coach
-        text = "Noch fünf Minuten. Soll ich zusammenfassen und die letzten Aufgaben verteilen?"
-        rest = (self.geplantes_ende() or 0) - c.meeting.jetzt()
-        if rest < FUENF_MINUTEN - 30:
-            text = f"Noch etwa {max(1, round(rest / 60))} Minuten. Soll ich zusammenfassen und die letzten Aufgaben verteilen?"
-        c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "fuenf_minuten"})
-        if c.knopfdruck:
-            # Nur auf Knopfdruck: Nestor spricht nicht – das Pop-up allein, Ja wirkt wie der Protokoll-Knopf
-            self.rueckfrage = Rueckfrage("fuenf_minuten", text, [], c.meeting.jetzt(), c.meeting.jetzt() + 120)
-            await c.melden()
-            return
-        await self._fragen("fuenf_minuten", text, [])
-
-    async def zusammenfassen(self) -> str:
-        """Bei Ja: Zusammenfassung plus höchstens drei Lücken in der festgelegten Reihenfolge – gesprochen und als
-        Karte. Aus den Artefakten gebaut, nicht frei formuliert: nichts kommt dazu, was nicht festgehalten ist."""
-        c = self.coach
-        self.rueckfrage = None
-        if c.knopfdruck:
-            from . import knopfdruck
-
-            try:
-                knopfdruck.reservieren(c, "protokoll")
-                await knopfdruck.ausfuehren(c, "protokoll")
-            except knopfdruck.KnopfFehler as e:
-                log.info("Zusammenfassen auf Knopfdruck nicht möglich: %s", e)
-        else:
-            await self.erkennen()
-        text, karte, luecken = self.zusammenfassung()
-        c._karte_ablegen(karte)
-        c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "zusammenfassung", "luecken": [a.id for a in luecken]})
-        if not c.knopfdruck:
-            for a in luecken:
-                a.nachgefragt = True
-            jetzt = c.meeting.jetzt()
-            if luecken:
-                self.rueckfrage = Rueckfrage("nachfrage", " ".join(frage_zu(a) for a in luecken),
-                                             [a.id for a in luecken], jetzt, jetzt + ANTWORT_SEKUNDEN)
-            await c.melden()
-            dauer = await c.assistent.sagen(text)
-            if self.rueckfrage and luecken:
-                self.rueckfrage.bis = c.meeting.jetzt() + ANTWORT_SEKUNDEN + (dauer or 0)
-        await c.melden()
-        return text
-
-    def zusammenfassung(self) -> tuple[str, dict, list[Artefakt]]:
-        m = self.coach.meeting
-        beschl = [a for a in self.liste if a.typ == "entscheidung" and a.status != "vorschlag"]
-        aufgaben = [a for a in self.liste if a.typ == "aufgabe"]
-        luecken = self.luecken_liste(3)
-        teile = ["Kurz zusammengefasst:"]
-        if beschl:
-            teile.append("Entschieden habt ihr " + _liste_sprechen([a.was.rstrip(".") for a in beschl[-3:]]) + ".")
-        if aufgaben:
-            fertig = sum(1 for a in aufgaben if not a.luecken())
-            teile.append(f"{len(aufgaben)} Aufgabe{'n' if len(aufgaben) > 1 else ''} notiert, "
-                         f"{fertig} davon mit Wer und Termin.")
-        if not beschl and not aufgaben:
-            teile = ["Bisher habe ich keine Entscheidung und keine Aufgabe notiert."]
-        if luecken:
-            teile.append("Offen sind noch: " + " ".join(frage_zu(a) for a in luecken))
-            teile.append("Sagt einfach, wer was übernimmt – ich trag's ein.")
-        text = " ".join(teile)
-        punkte = [f"Entschieden: {a.was}" for a in beschl[-4:]]
-        punkte += [f"Aufgabe: {a.was} – {a.wer if a.wer and not kollektiv(a.wer) else 'wer?'} · "
-                   f"{('bis ' + a.bis) if a.bis else 'bis wann?'}" for a in aufgaben[-5:]]
-        if luecken:  # die Lücken selbst stehen in der Rückfrage darüber – hier nicht noch einmal (Ticket #21)
-            n = sum(1 for a in self.liste if a.luecken() and not a.abgelehnt)
-            punkte.append(f"{n} Lücke{'n' if n > 1 else ''} offen – rot markiert unter „Festgehalten“")
-        karte = {"art": "zusammenfassung", "frage": "Zusammenfassen", "titel": f"Zusammenfassung · Stand {mmss(m.jetzt())}",
-                 "punkte": punkte[:10] or ["Noch nichts festgehalten."]}
-        return text, karte, luecken
-
-    # --- Antworten der Runde ---------------------------------------------------------------------------------
-    def wartet_auf_antwort(self, t: float) -> bool:
-        r = self.rueckfrage
-        return r is not None and r.seit <= t <= r.bis
-
-    async def satz(self, seg) -> bool:
-        """Ein fertiger Satz, während Nestor auf eine Antwort wartet (ohne Namen). True = als Antwort verarbeitet."""
-        from .assistent import angesprochen
-
-        r = self.rueckfrage
-        if r is None or not self.wartet_auf_antwort(seg.ende) or angesprochen(seg.text):
-            return False
-        if r.art == "fuenf_minuten":
-            if JA_RE.search(seg.text):
-                self.verlauf.append({"zeit": round(seg.ende, 1), "art": "fuenf_minuten_ja", "durch": "stimme"})
-                await self.zusammenfassen()
-                return True
-            if NEIN_RE.search(seg.text):
-                self.verlauf.append({"zeit": round(seg.ende, 1), "art": "fuenf_minuten_nein", "durch": "stimme"})
-                self.rueckfrage = None
-                await self.coach.melden()
-                return True
-            return False
-        return await self.antwort_deuten(seg.text, seg.sprecher)
-
-    async def antwort_deuten(self, text: str, sprecher: str | None = None) -> bool:
-        """Antwort auf eine Nachfrage: ein kleiner Aufruf trägt Wer/Bis ein oder merkt sich die Ablehnung."""
-        from .config import EINST
-        from .pipeline import fehlertext, nutzung_loggen
-
-        c, r = self.coach, self.rueckfrage
-        gefragt = [a for a in (self.holen(i) for i in (r.ids if r else [])) if a is not None]
-        if not gefragt or c._client is None:
-            return False
-        uebrige = [a for a in self.luecken_liste(n=12) if a not in gefragt][:12 - len(gefragt)]
-        zeile = lambda a: a.kurz() + " · fehlt: " + ", ".join(FELD_NAME[x] for x in a.luecken())  # noqa: E731
-        nutzer = ("Gefragt:\n" + "\n".join(zeile(a) for a in gefragt)
-                  + ("\n\nWeitere Lücken (falls die Antwort eher dazu passt):\n" + "\n".join(zeile(a) for a in uebrige)
-                     if uebrige else "")
-                  + f"\n\nAntwort von {sprecher or 'jemandem'}: {text}")
-        try:
-            roh, nutzung = await _json_aufruf(c._client, EINST.analyse_modell, ANTWORT_SYSTEM, nutzer,
-                                              EINST.analyse_aufwand)
-        except Exception as e:  # noqa: BLE001
-            log.warning("Antwort auf Nachfrage nicht gedeutet: %s", fehlertext(e))
-            return False
-        nutzung_loggen({"art": "artefakte", "zweck": "antwort", "modell": EINST.analyse_modell, **nutzung})
-        ids = {a.id for a in gefragt + uebrige}
-        bestaetigt = []
-        for e in roh.get("eintraege") or []:
-            e = normalisieren({**e, "typ": e.get("typ") or "aufgabe"}) if isinstance(e, dict) else None
-            if not e or e["nummer"] not in ids:
-                continue
-            felder = {k: e[k] for k in ("wer", "bis", "status", "reaktion") if e.get(k)}
-            if not felder:
-                continue
-            a = self.bearbeiten(e["nummer"], felder, herkunft="stimme")
-            if a:
-                bestaetigt.append((a, felder))
-        abgelehnt = []
-        for nr in roh.get("abgelehnt") or []:
-            try:
-                a = self.holen(int(nr))
-            except (TypeError, ValueError):
-                a = None
-            if a is not None and a.id in ids:
-                a.abgelehnt = True
-                abgelehnt.append(a.id)
-        if not bestaetigt and not abgelehnt:
-            return False
-        self.verlauf.append({"zeit": round(c.meeting.jetzt(), 1), "art": "antwort", "ids": [a.id for a, _ in bestaetigt],
-                             "abgelehnt": abgelehnt})
-        offen = [a.id for a in gefragt if a.luecken() and not a.abgelehnt]
-        if r is not None:
-            if offen:
-                r.ids = offen
-                r.bis = c.meeting.jetzt() + ANTWORT_SEKUNDEN
-            else:
-                self.rueckfrage = None
-        self.ableiten()
-        await c.melden()
-        satz = " ".join(bestaetigung_text(a, f) for a, f in bestaetigt) or "Okay, frag ich nicht mehr."
-        await c.assistent.sagen(satz)
-        return True
+            rest = ende - m.jetzt()
+            text = "Noch 5 Minuten" if rest >= FUENF_MINUTEN - 30 else f"Noch etwa {max(1, round(rest / 60))} Minuten"
+            c.entscheider.einmalig(m, "fuenf-minuten", "fuenf", "hinweis", "gruppe", text,
+                                   aktion={"text": "Zusammenfassen", "bogen": "zusammenfassen"}, dauer=180.0)
+            c.protokoll.append({"zeit": m.jetzt(), "art": "fuenf_minuten"})
 
     def ablehnen(self, nr: int) -> bool:
-        """Knopf „nicht nötig“ an einer Lücke: nie wieder nachfragen."""
+        """„Nicht nötig“ an einer Lücke: nicht mehr markieren, nicht mehr im Band."""
         a = self.holen(nr)
         if a is None:
             return False
         a.abgelehnt = True
-        if self.rueckfrage and nr in self.rueckfrage.ids:
-            self.rueckfrage.ids = [i for i in self.rueckfrage.ids if i != nr]
-            if not self.rueckfrage.ids and self.rueckfrage.art == "nachfrage":
-                self.rueckfrage = None
         return True
 
     def eintragen(self, daten: dict, herkunft: str = "stimme") -> tuple[Artefakt | None, str]:
@@ -935,15 +788,7 @@ class Artefakte:
             self.ableiten()
         else:
             return None, "Das konnte ich keinem Eintrag zuordnen."
-        if self.rueckfrage and a.id in self.rueckfrage.ids and not a.luecken():
-            self.rueckfrage.ids = [i for i in self.rueckfrage.ids if i != a.id]
-            if not self.rueckfrage.ids:
-                self.rueckfrage = None
         return a, bestaetigung_text(a, felder)
-
-
-JA_RE = re.compile(r"^\W*(ja|jo|jep|gerne?|bitte|klar|okay|ok|mach (das|mal)|fass (zusammen|mal))\b", re.IGNORECASE)
-NEIN_RE = re.compile(r"^\W*(nein|nee|ne|nö|danke,? nein|lass mal|nicht nötig|brauchen wir nicht)\b", re.IGNORECASE)
 
 
 def aktion_lesen(rest: str) -> dict:

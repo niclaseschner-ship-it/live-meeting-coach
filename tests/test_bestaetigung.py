@@ -1,4 +1,4 @@
-"""Ticket #21 ohne Netz: Sofort-Bestätigung aus dem Zwischenspeicher, Text vor dem Ton, Aufträge abbrechen,
+"""Ticket #21/#27 ohne Netz: Sofort-Bestätigung aus dem Zwischenspeicher, Text vor dem Ton, lange Aufträge abbrechen,
 Hineinreden während der Wiedergabe (#20)."""
 
 import asyncio
@@ -129,13 +129,14 @@ def test_bestaetigung_kommt_vor_der_antwort_und_ihr_text_vor_dem_ton():
     async def ablauf():
         c, gesendet, tts = _coach()
         _vorrat(c.assistent)
-        await c.satz(Segment("Person 1", "Nestor, wo stehen wir gerade?", 1, 3))
-        await c.assistent._aufgabe
+        await c.satz(Segment("Person 1", "Nestor, wie viel Zeit bleibt uns noch?", 1, 3))
+        await c.assistent.bogen.task
         return gesendet, tts
 
     gesendet, tts = asyncio.run(ablauf())
     typen = [(n["typ"], n.get("floskel", False)) for n in gesendet]
-    assert typen[0] == ("nestor_text", False) and gesendet[0]["neu"] and gesendet[0]["frage"] == "wo stehen wir gerade?"
+    assert typen[0] == ("nestor_text", False) and gesendet[0]["neu"]
+    assert gesendet[0]["frage"] == "wie viel Zeit bleibt uns noch?"
     assert gesendet[0]["text"] in B.KURZ
     assert typen[1] == ("stimme", True)  # Floskel aus dem Speicher – vor dem ersten Satz der Antwort
     erster_satz = next(i for i, n in enumerate(gesendet) if n["typ"] == "nestor_text" and "Punkt eins" in n["text"])
@@ -155,7 +156,7 @@ def test_lange_aufgabe_sagt_die_wartezeit_an():
         try:
             # Frage klingt nicht nach Recherche: die lange Ansage kommt mit der Aktionszeile
             await c.satz(Segment("Person 1", "Nestor, was gilt beim Mindestlohn ab 2027?", 1, 3))
-            await c.assistent._aufgabe
+            await c.assistent.bogen.task
             await asyncio.sleep(0.05)
             auftraege = c.assistent.auftraege.schnappschuss()
             for a in list(c.assistent.auftraege.liste):
@@ -166,7 +167,7 @@ def test_lange_aufgabe_sagt_die_wartezeit_an():
         return [n["text"] for n in gesendet if n["typ"] == "nestor_text"], auftraege
 
     texte, auftraege = asyncio.run(ablauf())
-    assert texte[0] in B.KURZ and texte[1] == B.LANG
+    assert texte[0] in B.KURZ and texte[1] in B.LANGE and len(texte) == 2  # das Modell sagt nichts dazu
     assert [(x["art"], x["zustand"]) for x in auftraege] == [("recherche", "laeuft")]
 
 
@@ -175,7 +176,7 @@ def test_danke_wird_nicht_bestaetigt():
         c, gesendet, _ = _coach(["AKTION: keine\nGern."])
         _vorrat(c.assistent)
         await c.satz(Segment("Person 1", "Nestor, danke dir sehr.", 1, 3))
-        await c.assistent._aufgabe
+        await c.assistent.bogen.task
         return gesendet
 
     assert not any(n.get("floskel") for n in asyncio.run(ablauf()))
@@ -193,8 +194,9 @@ def test_recherche_per_stimme_abbrechen_und_weitere_wartet():
             await asyncio.sleep(30)
         coach.recherche.recherchieren, alt = langsam, coach.recherche.recherchieren
         try:
-            erste = asyncio.ensure_future(a.recherche_vorlesen("Mindestlohn 2027"))
-            zweite = asyncio.ensure_future(a.recherche_vorlesen("Mietpreise Hannover"))
+            await a.lang_annehmen("recherche", "Mindestlohn 2027")
+            await a.lang_annehmen("recherche", "Mietpreise Hannover")
+            erste, zweite = [x.task for x in a.auftraege.liste]
             await asyncio.sleep(0.05)
             vorher = a.auftraege.schnappschuss()
             await c.satz(Segment("Person 1", "Nestor, lass die Recherche.", 5, 7))
@@ -217,31 +219,25 @@ def test_bild_auftrag_laeuft_wartet_und_ist_per_x_abbrechbar():
     async def ablauf():
         c, _, _ = _coach()
         a = c.assistent
-        c.meeting.transkript.append(Segment("Person 1", "Wir planen den Stand.", 0, 2))
-        object.__setattr__(EINST, "bild_anbieter", "openai")
+        gezeichnet = []
 
-        async def _onepager_zeichnen(fokus=None):  # gleicher Name wie im Coach: so findet der Assistent die Aufgabe
-            try:
-                await asyncio.sleep(30)
-            finally:
-                c._onepager_laeuft = False
-                if c._onepager_nachholen:
-                    c.onepager_starten(c._onepager_fokus_wunsch)
-        c._onepager_zeichnen = _onepager_zeichnen
-        await c.assistent_aktion({"typ": "bild", "fokus": "gesamt"})
-        erstes = a.auftrag_nach_aktion({"typ": "bild", "fokus": "gesamt"}, "zeig uns die Übersicht")
-        await c.assistent_aktion({"typ": "bild", "fokus": "Budget"})
-        zweites = a.auftrag_nach_aktion({"typ": "bild", "fokus": "Budget"}, "und nur das Budget")
+        async def bild_erstellen(fokus=None):
+            gezeichnet.append(fokus)
+            await asyncio.sleep(30)
+        c.bild_erstellen = bild_erstellen
+        await a.lang_annehmen("bild", "zeig uns die Übersicht")
+        await a.lang_annehmen("bild", "und nur das Budget", "Budget")
+        erstes, zweites = list(a.auftraege.liste)
+        await asyncio.sleep(0.01)
         stand = a.auftraege.schnappschuss()
-        a.auftrag_abbrechen(zweites.id)  # ✕ am wartenden: kein Nachholen mehr
-        nachholen = c._onepager_nachholen
+        a.auftrag_abbrechen(zweites.id)  # ✕ am wartenden: es wird nie gezeichnet
         a.auftrag_abbrechen(erstes.id)  # ✕ am laufenden: Aufgabe abgebrochen
         await asyncio.sleep(0.01)
-        return stand, nachholen, erstes.task.cancelled(), c._onepager_laeuft, a._bild_ansage, a.auftraege.liste
+        return stand, erstes.task.cancelled(), zweites.task.cancelled(), gezeichnet, a.auftraege.liste
 
-    stand, nachholen, abgebrochen, laeuft, ansage, rest = asyncio.run(ablauf())
+    stand, erstes_weg, zweites_weg, gezeichnet, rest = asyncio.run(ablauf())
     assert [(x["art"], x["zustand"]) for x in stand] == [("bild", "laeuft"), ("bild", "wartet")]
-    assert not nachholen and abgebrochen and not laeuft and not ansage and rest == []
+    assert erstes_weg and zweites_weg and gezeichnet == [None] and rest == []
 
 
 def test_abbruch_ohne_offenen_auftrag_sagt_das():
@@ -349,13 +345,16 @@ def test_langes_werkzeug_sagt_die_wartezeit_an_ohne_zweite_antwort():
     async def ablauf():
         c, g, ws, gesendet = _gespraech()
         c.meeting.transkript.append(Segment("Person 1", "Wir planen den Stand.", 0, 2))
-        c.onepager_starten = lambda fokus=None: False
-        c.assistent.lang_angesagt = False
+        async def nichts(fokus=None):
+            await asyncio.sleep(0)
+        c.bild_erstellen = nichts
         await g._werkzeug("bild_zeichnen", json.dumps({"fokus": "gesamt"}), "call_1")
+        await asyncio.sleep(0.01)
         return ws, gesendet
 
     ws, gesendet = asyncio.run(ablauf())
-    assert [n["text"] for n in gesendet if n["typ"] == "nestor_text"] == [B.LANG]
+    texte = [n["text"] for n in gesendet if n["typ"] == "nestor_text"]
+    assert len(texte) == 1 and texte[0] in B.LANGE
     assert [e["type"] for e in ws.gesendet] == ["conversation.item.create"]  # Ergebnis ans Modell, kein response.create
 
 
@@ -376,9 +375,9 @@ def test_recherche_im_gespraech_abbrechen():
             await asyncio.sleep(0.05)
         finally:
             coach.recherche.recherchieren = alt
-        return g, ws
+        return c, ws
 
-    g, ws = asyncio.run(ablauf())
+    c, ws = asyncio.run(ablauf())
     ausgabe = [e for e in ws.gesendet if e["type"] == "conversation.item.create"]
-    assert ausgabe and "abgebrochen" in ausgabe[-1]["item"]["output"]
-    assert not any(e["type"] == "response.create" for e in ws.gesendet) and not g._recherche_laeuft
+    assert ausgabe and "Hintergrund" in ausgabe[-1]["item"]["output"]
+    assert not any(e["type"] == "response.create" for e in ws.gesendet) and c.assistent.auftraege.liste == []

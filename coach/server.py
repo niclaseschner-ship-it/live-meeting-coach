@@ -470,29 +470,49 @@ async def abspielen(daten: dict):
 
 @app.post("/api/onepager")
 async def onepager_neu():
-    """Live-Bild auf Knopfdruck neu zeichnen lassen (FR-10)."""
+    """Live-Bild auf Knopfdruck (ohne laufendes Meeting, z. B. nach dem Abspielen) neu zeichnen lassen (FR-10).
+    Im Meeting ist „Bild“ ein langer Auftrag über /api/knopf/bild (Ticket #27)."""
     return {"ok": coach.onepager_starten()}
 
 
 @app.post("/api/folie")
 async def folie_neu():
-    """Letzte Recherche mit Quellen als Folie (Knopf im Dashboard; per Zuruf macht es Nestor)."""
-    return {"ok": coach.folie_starten()}
+    """Letzte Recherche mit Quellen als Folie – im Meeting als Bogen („Hier ist die Folie“, Ticket #27)."""
+    from .assistent import BogenBelegt
+
+    if coach.hoerstrom is None or coach.knopfdruck:
+        return {"ok": coach.folie_starten()}
+    try:
+        coach.assistent.bogen_starten("folie", "Folie", "knopf")
+    except BogenBelegt as e:
+        raise HTTPException(409, str(e)) from e
+    await coach.melden()
+    return {"ok": True}
+
+
+def _bild(v: int | None, art: type):
+    """Das Bild einer Version (Bild-Karten im Verlauf, Ticket #27), sonst das neueste."""
+    b = coach.bilder.get(v) if v is not None else None
+    if b is None:
+        b = coach.onepager_png if art is bytes else coach.onepager_svg
+    return b if isinstance(b, art) else None
 
 
 @app.get("/api/onepager.svg")
-async def onepager_svg():
-    if not coach.onepager_svg:
+async def onepager_svg(v: int | None = None):
+    svg = _bild(v, str)
+    if not svg:
         raise HTTPException(404, "Noch kein Live-Bild.")
-    return Response(coach.onepager_svg, media_type="image/svg+xml",
+    return Response(svg, media_type="image/svg+xml",
                     headers={"Cache-Control": "no-store", "Content-Security-Policy": "script-src 'none'"})
 
 
 @app.get("/api/onepager.png")
-async def onepager_png():
-    if not coach.onepager_png:
+async def onepager_png(v: int | None = None):
+    png = _bild(v, bytes)
+    if not png:
         raise HTTPException(404, "Noch kein Live-Bild.")
-    return Response(coach.onepager_png, media_type="image/png", headers={"Cache-Control": "no-store"})
+    return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/onepager.md")

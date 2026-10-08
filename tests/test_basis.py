@@ -97,16 +97,16 @@ def test_begruessung_basis_ohne_rueckfragen_ohne_namen():
     _, start_basis = A.begruessungstext(m, basis=True)
     _, start_premium = A.begruessungstext(m, basis=False)
     assert "ohne Namen" not in start_basis and "redet einfach rein" not in start_basis
-    assert "Knöpfe" in start_basis
-    assert "ohne Namen" in start_premium
+    assert "Funkgerät" in start_basis and "Taste halten, sprechen, loslassen" in start_basis  # Ticket #27
+    assert "ohne Namen" in start_premium and "Telefon" in start_premium
 
 
 def test_systemanweisung_basis_bild_ist_uebersicht():
     config.stufe_setzen("basis")
     s = A.system_text()
-    assert "AKTION: bild" in s and "eine bis zwei Minuten" not in s and "Übersicht" in s
+    assert "AKTION: bild" in s and "Übersicht" in s and "nach wenigen Sekunden im Verlauf" in s
     config.stufe_setzen("premium")
-    assert "eine bis zwei Minuten" in A.system_text()
+    assert "nach wenigen Sekunden im Verlauf" not in A.system_text()
 
 
 # --- Live-Text Voxtral: Text den Äußerungen zuordnen --------------------------------------------------------------
@@ -269,15 +269,20 @@ def test_basis_bild_aktion_macht_ueberblick(monkeypatch):
     c.meeting = _meeting()
 
     async def lauf():
-        await c.assistent_aktion({"typ": "bild", "fokus": "gesamt"})
-        for _ in range(50):
-            if c.ueberblick:
-                break
-            await asyncio.sleep(0.02)
+        import time
 
-    asyncio.run(lauf())
+        from coach.assistent import Bogen
+
+        b = Bogen(1, "frage", "zeig uns die Übersicht", "taste", time.monotonic())
+        await c.assistent.aktion_ausfuehren({"typ": "bild", "fokus": "gesamt"}, b)
+
+    object.__setattr__(EINST, "stimme_aus", True)
+    try:
+        asyncio.run(lauf())
+    finally:
+        object.__setattr__(EINST, "stimme_aus", False)
     assert c.ueberblick and c.ueberblick_version == 1 and c.onepager_version == 0
-    assert c.karten[-1]["art"] == "ueberblick"
+    assert c.karten[-1]["art"] == "ueberblick" and c.karten[-1]["ueberblick"] == c.ueberblick
 
 
 # --- Halten zum Sprechen ---------------------------------------------------------------------------------------
@@ -308,7 +313,7 @@ def test_frage_audio_wird_transkribiert_und_beantwortet(monkeypatch):
     assert web.post("/api/frage/halten", json={"an": True}).status_code == 200
     r = web.post("/api/frage/audio", content=_wav(), headers={"Content-Type": "audio/wav"})
     assert r.status_code == 200 and r.json() == {"ok": True, "frage": "wer bucht die Hotels?"}
-    assert beantwortet == [("wer bucht die Hotels?", "halten")]
+    assert beantwortet == [("wer bucht die Hotels?", "taste")]
     assert web.post("/api/frage/audio", content=b"kurz").status_code == 400
 
 
@@ -319,7 +324,7 @@ def test_gehaltene_frage_zaehlt_nicht_noch_einmal_als_zuruf():
     c.meeting.starten(virtuell=True)
     c.meeting.virtuelle_zeit = 50.0
     gestartet = []
-    c.assistent._starten = lambda coro: (gestartet.append(coro), coro.close())
+    c.assistent.annehmen = lambda frage, quelle, sprecher=None: gestartet.append(frage)
     c.assistent.halten_start()
     c.meeting.virtuelle_zeit = 53.0
     c.assistent.halten_ende()
@@ -382,8 +387,8 @@ def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
     c.letzte_recherche = {"frage": "Messestand", "text": "t", "quellen": [], "zeit": 1.0}
 
     async def lauf():
-        await c.satz(Segment("Person 4", "Nestor, mach uns die visuelle Übersicht.", 120, 123))
-        await c.assistent._aufgabe
+        c.assistent.frage_beantworten("Nestor, mach uns die visuelle Übersicht.", "taste")  # Funkgerät: Sprechtaste
+        await c.assistent.bogen.task
         for _ in range(50):
             if c.ueberblick:
                 break
@@ -398,26 +403,24 @@ def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
     assert c.assistent.letzte["aktion"] == {"typ": "bild", "fokus": "gesamt"}
 
 
-def test_basis_erster_ueberblick_nach_fuenf_minuten_dann_alle_zehn():
+def test_kein_ueberblick_und_kein_bild_mehr_im_takt():
+    """Ticket #27: Überblick (Basis) und Live-Bild (Premium) nur auf Anfrage und am Ende – nicht mehr alle 10 min."""
     from coach.pipeline import Coach
 
-    config.stufe_setzen("basis")
-    c = Coach()
-    c._client = FakeClient(_LEER)
-    c.meeting = _meeting()
-    c.hoerstrom = object()  # nur „Meeting läuft mit Ton“ für den Takt
-    gestartet = []
-
-    def starten(fokus=None, nachholen=False):
-        gestartet.append(c.meeting.jetzt())
-        c._onepager_letzter_start = c.meeting.jetzt()
-        return True
-
-    c.ueberblick_starten = starten
-    for t in (290.0, 299.0, 300.0, 600.0, 899.0, 900.0):
-        c.meeting.virtuelle_zeit = t
-        c.takt()
-    assert gestartet == [300.0, 900.0]
+    for stufe in ("basis", "premium"):
+        config.stufe_setzen(stufe)
+        c = Coach()
+        c._client = FakeClient(_LEER)
+        c.meeting = _meeting()
+        c.hoerstrom = object()  # nur „Meeting läuft mit Ton“ für den Takt
+        gestartet = []
+        c.ueberblick_starten = lambda fokus=None, nachholen=False: gestartet.append(c.meeting.jetzt())
+        c.onepager_starten = lambda fokus=None: gestartet.append(c.meeting.jetzt())
+        for t in (290.0, 299.0, 300.0, 600.0, 899.0, 900.0):
+            c.meeting.virtuelle_zeit = t
+            c.takt()
+        assert gestartet == []
+    config.stufe_setzen("premium")
 
 
 def test_basis_ueberblick_am_ende_wird_nachgeholt():

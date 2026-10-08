@@ -63,7 +63,6 @@ def test_begruessung_bittet_um_agendawechsel():
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}, {"titel": "Urlaub"}], "regel_ids": []})
     _, start = a.begruessungstext(c.meeting)
     assert "zum nächsten Punkt geht" in start and "zusammen" in start
-    assert "zum nächsten Punkt geht" in a.vorstellung_start(c.meeting)
 
 
 def test_begruessung_liest_weitere_regeln_nach_den_gewaehlten_vor():
@@ -185,7 +184,7 @@ def test_frage_antwort_mit_aktion_und_sprachausgabe(monkeypatch):
             gesendet.append(n)
         c.direkt.append(senden)
         await c.satz(Segment("Person 1", "Nestor, wir sind durch, bitte weiter zum nächsten Punkt.", 1, 4))
-        await c.assistent._aufgabe
+        await c.assistent.bogen.task
         return c, gesendet
 
     c, gesendet = asyncio.run(ablauf())
@@ -214,8 +213,8 @@ def test_aktion_keine_wird_nicht_vorgelesen(monkeypatch):
         c = Coach()
         c._client = _attrappe(["AKTION: keine\nIhr seid bei Punkt eins."])
         c.meeting.starten(virtuell=True)
-        await c.satz(Segment("Person 1", "Nestor, wo stehen wir gerade?", 1, 3))
-        await c.assistent._aufgabe
+        await c.satz(Segment("Person 1", "Nestor, wie viel Zeit haben wir noch?", 1, 3))
+        await c.assistent.bogen.task
         return c
 
     assert asyncio.run(ablauf()).assistent.letzte["antwort"] == "Ihr seid bei Punkt eins."
@@ -311,8 +310,9 @@ def test_begruessung_erklaert_ansprache_und_kommentiert_agenda():
                    "regel_ids": []})
     gruss, start = a.begruessungstext(c.meeting)
     assert "Nestor, nein" in gruss and "später" in gruss
-    assert "redet einfach rein" in start and "ohne Namen" in start
-    assert "Zwei Punkte in 10 Minuten – das ist sportlich." in start and start.endswith("Punkt eins: A.")
+    assert "redet einfach rein" in start and "ohne Namen" in start and "Telefon" in start
+    assert "Zwei Punkte in 10 Minuten – das ist sportlich." in start and "Punkt eins: A." in start
+    assert start.endswith(a.NAMEN_BITTE)  # Ticket #27: die Begrüßung endet mit der Bitte um die Namen
 
 
 async def _sprich_nicht(texte, danach="bereit", stil=None):

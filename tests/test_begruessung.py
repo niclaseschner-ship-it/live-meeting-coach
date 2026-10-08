@@ -75,7 +75,9 @@ def test_anweisung_listet_pflichtinhalte_ohne_sie():
     for teil in ("ich höre mit", "„Nein“", "„Nestor, nein“", "löschst du alles", "Punkt eins: Standkonzept",
                  "Zeit einhalten", "niemals mit „Sie“", "reinreden"):
         assert teil in text, teil
-    assert "Namen sagen" in B.anweisung(c.meeting, vorstellung=True)
+    mit_namen = B.anweisung(c.meeting, vorstellung=True)
+    assert A.NAMEN_BITTE in mit_namen and "Punkt eins: Standkonzept" in mit_namen  # Ticket #27: alles, dann Namen
+    assert mit_namen.index("Punkt eins: Standkonzept") < mit_namen.index(A.NAMEN_BITTE)
 
 
 # --- Ablauf mit Attrappe ----------------------------------------------------------------------------------
@@ -292,7 +294,9 @@ def test_basis_spricht_den_freien_text(monkeypatch):
     assert " ".join(gesprochen) == VOLL
 
 
-def test_start_nach_der_vorstellungsrunde_frei_sonst_fest(monkeypatch):
+def test_kein_startsatz_nach_der_vorstellungsrunde():
+    """Ticket #27: Die Begrüßung sagt alles und endet mit der Bitte um die Namen – danach spricht Nestor nicht mehr
+    von sich aus (früher kam nach der Runde ein Startsatz, im Cloudlauf Ton ohne Text)."""
     c = _coach()
     gesprochen = []
 
@@ -300,17 +304,12 @@ def test_start_nach_der_vorstellungsrunde_frei_sonst_fest(monkeypatch):
         gesprochen.extend(texte)
         return 0.0
 
-    monkeypatch.setattr(c.assistent, "_sprechen_texte", sprechen)
-    b = B.Begruessung(c.assistent, vorstellung=True)
-    b._ws, b.offen, b.phase = Verbindung([], c), True, False
-    c.assistent.gespraech = b
-    asyncio.run(c.assistent._start_nach_vorstellung())
-    gesendet = b._ws.gesendet[-1]
-    assert gesendet["type"] == "response.create" and "Punkt eins: Standkonzept" in gesendet["response"]["instructions"]
-    assert gesprochen == [] and b._start_laeuft
-    c.assistent.gespraech = None  # Sitzung inzwischen zu: fester Startsatz
-    asyncio.run(c.assistent._start_nach_vorstellung())
-    assert gesprochen == [A.vorstellung_start(c.meeting)]
+    c.assistent._sprechen_texte = sprechen
+    c.assistent.vorstellung_bis = 20.0
+    c.meeting.virtuelle_zeit = 30.0
+    c.assistent.takt()
+    assert c.assistent.vorstellung_bis is None and gesprochen == []
+    assert not hasattr(B.Begruessung, "start_sagen")
 
 
 def test_ungenutzte_begruessungssitzung_schliesst_trotz_gespraech_im_raum():

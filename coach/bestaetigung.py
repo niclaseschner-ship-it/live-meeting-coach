@@ -1,13 +1,15 @@
-"""Sofort bestätigen und sichtbar arbeiten (Ticket #21 Punkte 3 und 4).
+"""Sofort bestätigen und sichtbar arbeiten (Ticket #21, seit Ticket #27 Teil des Antwortbogens).
 
-Bestätigung: Jeden Auftrag bestätigt Nestor sofort kurz („Okay, kleinen Moment“, „Schau ich mir an“). Bei langen
-Aufgaben (Bild, Folie, Recherche, Überblick) sagt er, dass es dauert und die Runde weitermachen kann. Die Sätze
-sind feste Floskeln, je Stimme einmal erzeugt und auf der Platte zwischengespeichert (Premium: gpt-4o-mini-tts mit
-der gewählten Stimme, Basis: Voxtral mit Thorsten). Abgespielt kosten sie nichts und sind ohne Wartezeit da –
-gemessen in scripts/bestaetigung_messen.py, Ergebnis in docs/sprachassistent.md.
+Bestätigung: Jeden Auftrag bestätigt Nestor sofort kurz – bei Zuruf, Sprechtaste und Knopf gleich, mit zwei bis drei
+Varianten je Art, damit es nicht maschinell klingt („Bin dran.“, „Moment, kommt gleich.“). Lange Aufträge (Bild,
+Recherche) sagen stattdessen, dass es dauert und die Runde weitermachen kann; ein zweiter langer Auftrag wartet
+(„Ich bin noch am Bild, die Recherche mache ich danach.“), ein dritter wird abgewehrt. Die Sätze sind feste Floskeln,
+je Stimme einmal erzeugt und auf der Platte zwischengespeichert (Premium: gpt-4o-mini-tts mit der gewählten Stimme,
+Basis: Voxtral mit Thorsten). Abgespielt kosten sie nichts und sind ohne Wartezeit da – gemessen in
+scripts/bestaetigung_messen.py, Ergebnis in docs/sprachassistent.md.
 
-Aufträge: Was länger dauert, steht als Auftrag in einer Warteschlange („läuft“ / „wartet“) im mittleren Feld des
-Dashboards. Jeder Auftrag lässt sich per ✕ oder per Stimme abbrechen („Nestor, lass die Recherche“).
+Aufträge: Was länger dauert (Bild, Recherche), steht als Auftrag im Arbeitsring oben rechts („1 läuft · 1 wartet“).
+Jeder Auftrag lässt sich per ✕ oder per Stimme abbrechen („Nestor, lass die Recherche“).
 """
 
 from __future__ import annotations
@@ -28,14 +30,26 @@ log = logging.getLogger("coach.bestaetigung")
 RATE = 24000
 
 # --- Floskeln ---------------------------------------------------------------------------------------------
-KURZ = ["Okay, kleinen Moment.", "Schau ich mir an.", "Moment, ich schau kurz.", "Klar, einen Augenblick.",
-        "Alles klar, Moment."]
-LANG = ("Mach ich, braucht ein bisschen. Macht ruhig schon weiter, ich zeig's euch hier gleich. "
-        "Wenn ihr noch was braucht, sprecht mich einfach an.")
+# Ticket #27: zwei bis drei Varianten je Art, für Knopf, Zuruf und Sprechtaste gleich.
+KURZ = ["Bin dran.", "Moment, kommt gleich.", "Schau ich mir an, komme gleich zurück."]
+LANGE = ["Nehme ich mit, dauert ein bisschen. Macht ruhig weiter.",
+         "Mach ich, das dauert einen Moment. Redet ruhig weiter."]
+LANG = LANGE[0]
+# Stau (höchstens zwei lange Aufträge): (läuft, neu) -> Satz; ein dritter wird abgewehrt
+STAU = {("bild", "recherche"): "Ich bin noch am Bild, die Recherche mache ich danach.",
+        ("recherche", "bild"): "Ich bin noch an der Recherche, das Bild mache ich danach.",
+        ("recherche", "recherche"): "Ich bin noch an der Recherche, die nächste mache ich danach.",
+        ("bild", "bild"): "Ich bin noch am Bild, das nächste mache ich danach."}
+ABWEHR = "Ich hab gerade zwei Sachen auf dem Zettel. Fragt mich gleich nochmal."
+NOTIERT = ["Notiert.", "Ist notiert."]
+# Seh-Inhalt (Folie, Überblick, Liste): kein Inhalt gesprochen, nur der Hinweis, dass die Karte da ist
+HIER = {"folie": "Hier ist die Folie.", "ueberblick": "Hier ist der Überblick.", "festgehalten": "Hier ist die Liste.",
+        "karte": "Hier ist sie."}
 JA = "Ja?"
 ABGEBROCHEN = "Okay, lass ich."
 NICHTS_OFFEN = "Da läuft gerade nichts."
-ALLE = KURZ + [LANG, JA, ABGEBROCHEN, NICHTS_OFFEN]
+ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + NOTIERT + list(HIER.values()) + [JA, ABGEBROCHEN,
+                                                                                       NICHTS_OFFEN]
 
 STIL = ("Sprich locker, freundlich und zügig auf Deutsch, wie ein Kollege, der kurz Bescheid gibt. "
         "Natürliches Tempo, keine langen Pausen.")
@@ -80,7 +94,7 @@ class Floskeln:
         self.ordner = Path(ordner or EINST.floskel_ordner)
         self._mem: dict[Path, bytes] = {}
         self._erzeugen: dict[Path, asyncio.Task] = {}
-        self._letzte_kurz: str | None = None
+        self._letzte: dict[int, str] = {}
 
     def pfad(self, text: str) -> Path:
         schluessel = f"{EINST.stufe}|{EINST.stimme_modell}|{EINST.stimme}|{STIL if EINST.stufe != 'basis' else ''}|{text}"
@@ -104,9 +118,14 @@ class Floskeln:
 
     def kurz(self) -> str:
         """Wechselnde kurze Floskel, nie zweimal hintereinander dieselbe."""
-        wahl = [k for k in KURZ if k != self._letzte_kurz]
-        self._letzte_kurz = random.choice(wahl)
-        return self._letzte_kurz
+        return self.variante(KURZ)
+
+    def variante(self, liste: list[str]) -> str:
+        """Eine der Varianten, nie zweimal hintereinander dieselbe (je Liste)."""
+        letzte = self._letzte.get(id(liste))
+        wahl = [k for k in liste if k != letzte] or list(liste)
+        self._letzte[id(liste)] = random.choice(wahl)
+        return self._letzte[id(liste)]
 
     async def erzeugen(self, client, text: str) -> bytes | None:
         """Einmal per Sprachausgabe erzeugen und ablegen. Mehrere gleichzeitige Wünsche teilen sich einen Aufruf."""

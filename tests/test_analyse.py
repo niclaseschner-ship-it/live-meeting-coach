@@ -122,20 +122,35 @@ def test_countdown_nach_wechsel_fuer_neuen_punkt():  # FR-02
 
 def test_fokus_themenfremd_gelb_rueckkehr_gruen():
     m, e = meeting_mit_agenda(), Entscheider(0)
+    m.regel_ids = ["thema"]
     analyse.themen_auswerten(m, e, erg("neu"), karenz_bloecke=1)
     assert ampeln(m)["Fokus"]["farbe"] == "gelb"
-    assert m.hinweise[-1].text == "Bezug zum aktuellen Agendapunkt unklar."
+    assert m.hinweise[-1].text.startswith("Bezug zum aktuellen Agendapunkt unklar.")
     analyse.themen_auswerten(m, e, erg("aktiv", 0), karenz_bloecke=1)
     assert ampeln(m)["Fokus"]["farbe"] == "gruen"
 
 
 def test_fokus_spaeterer_punkt_wird_genannt():
     m, e = meeting_mit_agenda(), Entscheider(0)
+    m.regel_ids = ["thema"]
     analyse.themen_auswerten(m, e, erg("vorgriff", 2), karenz_bloecke=1)
     a = ampeln(m)["Fokus"]
     assert a["farbe"] == "gelb" and "Punkt 3" in a["detail"]
     assert "Agendapunkt 3" in m.hinweise[-1].text
+    assert m.hinweise[-1].punkt == 0  # gilt nur, solange Punkt 1 aktiv ist (Band, Ticket #27)
     assert m.vorschlag["punkt"] == 2
+
+
+def test_fokus_ohne_regel_unsichtbar_agenda_vorschlag_bleibt():
+    """Ticket #27: nicht gewählte Regeln sind unsichtbar – kein Fokus-Hinweis; der Agenda-Vorschlag („Weiter zu …?“
+    als Band mit Knopf) gehört nicht zu einer Regel und bleibt."""
+    m, e = meeting_mit_agenda(), Entscheider(0)
+    m.regel_ids = []
+    analyse.themen_auswerten(m, e, erg("vorgriff", 2), karenz_bloecke=1)
+    assert m.hinweise == []
+    assert m.vorschlag["punkt"] == 2
+    analyse.themen_auswerten(m, e, erg("neu"), karenz_bloecke=1)
+    assert m.hinweise == []
 
 
 def test_fokus_unklare_abschnitte_aendern_nichts():
@@ -357,15 +372,16 @@ def test_rueckwaerts_ansage_wechselt():
     assert angekuendigter_punkt("Lass uns nochmal kurz zu Punkt eins zurück.", titel, 0) is None  # schon dort
 
 
-def test_nachfrage_fasst_offene_aufgaben_zusammen():
-    """Ticket #26 statt der früheren Sammelzeile je Punkt: eine Frage je Artefakt mit konkretem Vorschlag, gebündelt."""
-    from coach.artefakte import Artefakt, nachfrage_text
+def test_luecken_text_fuer_das_band():
+    """Ticket #27: statt einer gesprochenen Nachfrage ein stiller Band-Hinweis mit Sprung zur Karte."""
+    from coach.artefakte import Artefakt
+    from coach.bogen import luecken_text
 
     a = Artefakt(1, "aufgabe", "Validierung bauen", bis="Freitag")
     b = Artefakt(2, "aufgabe", "Import durchführen")
-    assert nachfrage_text("Projektstand", [a, b], weitere=1) == (
-        "Kurz zu „Projektstand“: Ich hab notiert: Validierung bauen, bis Freitag. Wer übernimmt das? "
-        "Ich hab notiert: Import durchführen. Wer übernimmt das, bis wann? Eine weitere Lücke steht im Dashboard.")
+    c = Artefakt(3, "aufgabe", "Text schreiben", wer="Sofie")
+    d = Artefakt(4, "entscheidung", "Variante B", status="vorschlag", wer="Runde")
+    assert luecken_text([a, b, c, d]) == "2 Aufgaben ohne Verantwortliche · 1 ohne Termin · 1 weitere Lücke"
 
 
 def test_rueckwaerts_ansage_im_live_text_wechselt_den_punkt():

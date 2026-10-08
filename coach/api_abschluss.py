@@ -201,5 +201,7 @@ async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
             worker_melden, "/intern/meeting-ende", {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)},
         )
     antwort = JSONResponse({"ok": True}, background=hintergrund)
-    antwort.delete_cookie(_MEETING_COOKIE, path="/")
+    # Mit denselben Attributen wie beim Setzen im Worker (cloudflare/src/index.ts: HttpOnly; Secure; SameSite=Lax) –
+    # sonst kann der Browser es als anderes Cookie werten und das alte behalten (Ticket #27, Cloudlauf 08.10.)
+    antwort.delete_cookie(_MEETING_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     return antwort

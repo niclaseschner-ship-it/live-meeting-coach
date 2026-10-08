@@ -104,7 +104,6 @@ def test_ohne_knopf_kein_ki_aufruf_lokale_signale_laufen(monkeypatch):
         c.simulation_laeuft = True  # wie Coach.abspielen
         await c.hoeren_starten()
         c.assistent.knopf()  # Dashboard-Knopf „fragen“ der Nestor-Leiste
-        c.assistent.ansagen("Das Bild ist fertig.")
         kurz_seen = set()
         with wave.open(str(DEMO)) as w:
             n = 0

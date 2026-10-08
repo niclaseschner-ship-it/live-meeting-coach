@@ -19,26 +19,28 @@ class Entscheider:
         publikum: str,
         text: str,
         schluessel: str | None = None,
+        cooldown: float | None = None,
+        **extra,
     ) -> Hinweis | None:
-        """Hinweis ausgeben, sofern derselbe Schlüssel nicht gerade erst kam."""
+        """Hinweis ausgeben, sofern derselbe Schlüssel nicht gerade erst kam. `extra`: aktion, punkt, dauer (Band)."""
         k = schluessel or art
         t = meeting.jetzt()
-        if k in self._zuletzt and t - self._zuletzt[k] < self.cooldown:
+        if k in self._zuletzt and t - self._zuletzt[k] < (self.cooldown if cooldown is None else cooldown):
             return None
         self._zuletzt[k] = t
-        return self._ausgeben(meeting, art, stufe, publikum, text, t)
+        return self._ausgeben(meeting, art, stufe, publikum, text, t, **extra)
 
     def einmalig(
-        self, meeting: Meeting, schluessel: str, art: str, stufe: str, publikum: str, text: str
+        self, meeting: Meeting, schluessel: str, art: str, stufe: str, publikum: str, text: str, **extra
     ) -> Hinweis | None:
         """Hinweis genau einmal pro Schlüssel (z. B. Ampel eines Agendapunkts)."""
         if schluessel in self._einmal:
             return None
         self._einmal.add(schluessel)
-        return self._ausgeben(meeting, art, stufe, publikum, text, meeting.jetzt())
+        return self._ausgeben(meeting, art, stufe, publikum, text, meeting.jetzt(), **extra)
 
     @staticmethod
-    def _ausgeben(meeting, art, stufe, publikum, text, t) -> Hinweis:
-        h = Hinweis(art, stufe, publikum, text, t, id=len(meeting.hinweise) + 1)
+    def _ausgeben(meeting, art, stufe, publikum, text, t, **extra) -> Hinweis:
+        h = Hinweis(art, stufe, publikum, text, t, id=len(meeting.hinweise) + 1, **extra)
         meeting.hinweise.append(h)
         return h

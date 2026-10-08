@@ -1,5 +1,6 @@
-"""Meeting-Artefakte (Ticket #26): Vollständigkeit, Lücken-Reihenfolge, Nachfrage beim Punktwechsel, Schließen per
-Stimme (Antwort ohne Namen, Basis-Aktion, Premium-Werkzeug), die Fünf-Minuten-Frage und „Nur auf Knopfdruck“."""
+"""Meeting-Artefakte (Ticket #26, Ablauf seit #27): Vollständigkeit, Lücken-Reihenfolge, Erkennung nur bei Bedarf,
+stille Zusammenfassung je Abschnitt, Schließen per Stimme (Basis-Aktion, Premium-Werkzeug) und per Klick, das
+Fünf-Minuten-Band und „Nur auf Knopfdruck“."""
 
 from __future__ import annotations
 
@@ -107,7 +108,8 @@ def test_erkennung_ergaenzt_statt_doppelt_und_kennt_quelle_und_agendapunkt():
         {"was": "Zusammenfassung für die Statusseite erstellen", "wer": "Sofie", "bis": "Freitag"}]
 
 
-def test_erkennung_laeuft_je_minute_sprache_und_nicht_auf_knopfdruck():
+def test_keine_staendige_erkennung_mehr():
+    """Ticket #27: kein Lauf je Minute Sprache – erkannt wird beim Abschnittsende und auf Anfrage."""
     async def lauf(knopfdruck: bool):
         c, _ = _coach({"artefakte": []})
         c.modus = "knopfdruck" if knopfdruck else "live"
@@ -118,92 +120,37 @@ def test_erkennung_laeuft_je_minute_sprache_und_nicht_auf_knopfdruck():
         await asyncio.sleep(0.01)
         return c
 
-    live = asyncio.run(lauf(False))
-    assert len(live._client.anfragen) == 1  # nach 64 s Sprache ein Lauf, nicht je Satz
-    assert asyncio.run(lauf(True))._client.anfragen == []  # Nur auf Knopfdruck: nichts von selbst
+    assert asyncio.run(lauf(False))._client.anfragen == []
+    assert asyncio.run(lauf(True))._client.anfragen == []
 
 
-# --- Prüfung beim Punktwechsel --------------------------------------------------------------------------------
-def test_nachfrage_beim_punktwechsel_gebuendelt_und_einmalig():
-    c, gesagt = _coach({"artefakte": [
-        {"typ": "aufgabe", "was": "Statusseite-Zusammenfassung erstellen", "zeit": "0:30", "konfidenz": 0.9},
-        {"typ": "entscheidung", "was": "Wartungsfenster 30 Minuten", "status": "endgueltig", "wer": "die Runde",
-         "zeit": "0:40", "konfidenz": 0.9}]})
-    _satz(c, "Jonas", "Außerdem muss noch eine Statusseite-Zusammenfassung erstellt werden.", 30, 36)
-    m = c.meeting
-
-    async def lauf():
-        m.punkt_wechseln(1)
-        await c.artefakte.punkt_abgeschlossen(0)
-        erste = list(gesagt)
-        m.punkt_wechseln(0)
-        await c.artefakte.punkt_abgeschlossen(1)
-        m.punkt_wechseln(1)
-        await c.artefakte.punkt_abgeschlossen(0)
-        return erste
-
-    erste = asyncio.run(lauf())
-    assert erste == ["Kurz zu „Ursache“: Ich hab notiert: Statusseite-Zusammenfassung erstellen. "
-                     "Wer übernimmt das, bis wann?"]  # die vollständige Entscheidung: kein Wort dazu
-    assert gesagt == erste  # dieselbe Lücke wird nicht noch einmal erfragt
-    assert c.artefakte.rueckfrage.ids == [1]
-
-
-def test_bei_vollstaendigkeit_und_ohne_regel_10_schweigt_nestor():
-    voll = {"artefakte": [{"typ": "aufgabe", "was": "Alerts anpassen", "wer": "Mara", "bis": "Freitag", "zeit": "0:30"}]}
+# --- Zusammenfassung beim Punktwechsel (still) -----------------------------------------------------------------
+def test_bei_vollstaendigkeit_oder_ohne_regel_10_kein_band():
+    voll = {"artefakte": [{"typ": "aufgabe", "was": "Alerts anpassen", "wer": "Mara", "bis": "Freitag", "zeit": "0:30",
+                           "konfidenz": 0.9}]}
     c, gesagt = _coach(voll)
     _satz(c, "Mara", "Ich passe die Alerts bis Freitag an.", 30, 34)
     c.meeting.punkt_wechseln(1)
-    asyncio.run(c.artefakte.punkt_abgeschlossen(0))
-    assert gesagt == [] and c.artefakte.rueckfrage is None
-    luecke = {"artefakte": [{"typ": "aufgabe", "was": "Alerts anpassen", "zeit": "0:30"}]}
+    karte = asyncio.run(c.artefakte.abschnitt_abschliessen(0, 40, "punkt"))
+    assert gesagt == [] and karte["ids"] == [1] and not [h for h in c.meeting.hinweise if h.art == "luecken"]
+    luecke = {"artefakte": [{"typ": "aufgabe", "was": "Alerts anpassen", "zeit": "0:30", "konfidenz": 0.9}]}
     c, gesagt = _coach(luecke, regel_ids=("zeit",))
     _satz(c, "Mara", "Die Alerts müssen angepasst werden.", 30, 34)
     c.meeting.punkt_wechseln(1)
-    asyncio.run(c.artefakte.punkt_abgeschlossen(0))
-    assert gesagt == [] and len(c.artefakte.liste) == 1  # erkannt wird trotzdem
+    karte = asyncio.run(c.artefakte.abschnitt_abschliessen(0, 40, "punkt"))
+    assert gesagt == [] and len(c.artefakte.liste) == 1 and not karte["luecken_zeigen"]  # erkannt wird trotzdem
+    assert not [h for h in c.meeting.hinweise if h.art == "luecken"]
 
 
-# --- Lücken schließen per Stimme ------------------------------------------------------------------------------
-def test_antwort_ohne_namen_schliesst_die_luecke_mit_kurzer_bestaetigung():
-    c, gesagt = _coach({"artefakte": [{"typ": "aufgabe", "was": "Statusseite-Zusammenfassung erstellen",
-                                       "zeit": "0:30"}]},
-                       {"eintraege": [{"nummer": 1, "wer": "Sofie", "bis": "Freitag"}], "abgelehnt": []})
-    _satz(c, "Jonas", "Außerdem muss noch eine Statusseite-Zusammenfassung erstellt werden.", 30, 36)
-    beantwortet = []
-
-    async def assistent_satz(text, ende):
-        beantwortet.append(text)
-
-    c.assistent.satz = assistent_satz
-
-    async def lauf():
-        c.meeting.punkt_wechseln(1)
-        await c.artefakte.punkt_abgeschlossen(0)
-        await c.satz(Segment("Jonas", "Sofie übernimmt die Statusseite bis Freitag.", 40, 43))
-
-    asyncio.run(lauf())
-    a = c.artefakte.liste[0]
-    assert (a.wer, a.bis, a.bestaetigt, a.herkunft) == ("Sofie", "Freitag", True, "stimme") and a.vollstaendig
-    assert gesagt[-1] == "Eingetragen: Sofie, bis Freitag."
-    assert beantwortet == []  # die Antwort ging nicht zusätzlich an Nestors Ansprache
-    assert c.artefakte.rueckfrage is None
-
-
-def test_abgelehnte_nachfrage_wird_nicht_wiederholt():
-    c, gesagt = _coach({"artefakte": [{"typ": "aufgabe", "was": "Kaffeemaschine entkalken", "zeit": "0:30"}]},
-                       {"eintraege": [], "abgelehnt": [1]})
+def test_abgelehnte_luecke_kommt_nicht_mehr_ins_band():
+    c, _ = _coach({"artefakte": [{"typ": "aufgabe", "was": "Kaffeemaschine entkalken", "zeit": "0:30",
+                                  "konfidenz": 0.9}]})
     _satz(c, "Tarek", "Die Kaffeemaschine müsste man mal entkalken.", 30, 34)
-
-    async def lauf():
-        c.meeting.punkt_wechseln(1)
-        await c.artefakte.punkt_abgeschlossen(0)
-        await c.artefakte.satz(Segment("Tarek", "Nee, brauchen wir nicht.", 40, 42))
-        return c.artefakte.zusammenfassung()
-
-    text, _, luecken = asyncio.run(lauf())
-    assert c.artefakte.liste[0].abgelehnt and gesagt[-1] == "Okay, frag ich nicht mehr."
-    assert luecken == [] and "Kaffeemaschine" not in text  # auch am Ende nicht mehr
+    asyncio.run(c.artefakte.erkennen())
+    assert c.artefakte.ablehnen(1)
+    karte = asyncio.run(c.artefakte.abschnitt_abschliessen(0, 40, "punkt"))
+    assert karte["ids"] == [1] and not [h for h in c.meeting.hinweise if h.art == "luecken"]
+    assert c.artefakte.luecken_liste() == []
 
 
 def test_basis_aktion_eintragen():
@@ -234,12 +181,24 @@ def test_premium_werkzeug_artefakt_eintragen():
         gesendet.append(e)
 
     g._senden = senden
-    asyncio.run(g._werkzeug("artefakt_eintragen", json.dumps({"nummer": 1, "wer": "Sofie", "bis": "Freitag"}), "c1"))
+    gesagt = []
+
+    async def floskel(text, bogen=None):
+        gesagt.append(text)
+        return 0.5
+
+    c.assistent.floskel_sagen = floskel
+
+    async def lauf():
+        await g._werkzeug("artefakt_eintragen", json.dumps({"nummer": 1, "wer": "Sofie", "bis": "Freitag"}), "c1")
+        await asyncio.sleep(0.01)
+
+    asyncio.run(lauf())
     a = c.artefakte.liste[0]
     assert (a.wer, a.bis) == ("Sofie", "Freitag")
     ausgabe = json.loads(gesendet[0]["item"]["output"])
-    assert ausgabe["ok"] and ausgabe["bestaetigung"] == "Eingetragen: Sofie, bis Freitag."
-    assert gesendet[-1] == {"type": "response.create"}  # Nestor bestätigt kurz
+    assert ausgabe["ok"] and gesagt and gesagt[0] in ("Notiert.", "Ist notiert.")  # das System sagt „Notiert“
+    assert not any(e.get("type") == "response.create" for e in gesendet)  # das Modell sagt nichts dazu
 
 
 def test_klick_und_bearbeiten_im_dashboard():
@@ -259,53 +218,43 @@ def test_klick_und_bearbeiten_im_dashboard():
 
 
 # --- Fünf Minuten vor Schluss ---------------------------------------------------------------------------------
-def test_fuenf_minuten_frage_und_zusammenfassung_bei_ja():
-    c, gesagt = _coach({"artefakte": [
+def test_fuenf_minuten_band_einmal_und_ein_ja_in_den_raum_wirkt_nicht():
+    c, gesagt = _coach(minuten=(10, 10))
+    m = c.meeting
+    _satz(c, "Jonas", "Viel Gesprochenes.", 60, 70)
+
+    async def lauf():
+        for t in (800.0, 899.0, 900.0, 901.0):  # 20 min geplant → Band bei 15:00, genau einmal
+            m.virtuelle_zeit = t
+            c.artefakte.takt()
+            await asyncio.sleep(0.01)
+        await c.satz(Segment("Mara", "Ja, gerne.", 905, 906))
+
+    asyncio.run(lauf())
+    band = [h for h in m.hinweise if h.art == "fuenf"]
+    assert len(band) == 1 and band[0].text == "Noch 5 Minuten" and band[0].zeit == 900.0
+    assert band[0].aktion == {"text": "Zusammenfassen", "bogen": "zusammenfassen"}
+    assert gesagt == [] and not c.karten  # ein bloßes „Ja“ löst nichts aus
+
+
+def test_zusammenfassung_aus_den_artefakten_mit_hoechstens_drei_luecken():
+    from coach import bogen as BG
+
+    c, _ = _coach({"artefakte": [
         {"typ": "entscheidung", "was": "Wartungsfenster 30 Minuten", "status": "endgueltig", "wer": "die Runde",
          "zeit": "1:00"},
         {"typ": "aufgabe", "was": "Alerts anpassen", "wer": "Mara", "zeit": "2:00"},
         {"typ": "aufgabe", "was": "Statusseite schreiben", "zeit": "3:00"},
         {"typ": "risiko", "was": "Hänger → alle Pods raus", "wer": "Sofie", "hoch": True, "zeit": "4:00"},
-        {"typ": "aufgabe", "was": "Testdaten bauen", "bis": "Montag", "zeit": "5:00"}]}, minuten=(10, 10))
-    m = c.meeting
+        {"typ": "aufgabe", "was": "Testdaten bauen", "bis": "Montag", "zeit": "5:00"}]})
     _satz(c, "Jonas", "Viel Gesprochenes.", 60, 70)
-    fragen = []
-
-    async def lauf():
-        for t in (800.0, 899.0, 900.0, 901.0):  # 20 min geplant → Frage bei 15:00, genau einmal
-            m.virtuelle_zeit = t
-            c.artefakte.takt()
-            await asyncio.sleep(0.01)
-            fragen.append(c.artefakte.rueckfrage.art if c.artefakte.rueckfrage else None)
-        await c.satz(Segment("Mara", "Ja, gerne.", 905, 906))
-
-    asyncio.run(lauf())
-    assert fragen == [None, None, "fuenf_minuten", "fuenf_minuten"]
-    assert gesagt[0] == "Noch fünf Minuten. Soll ich zusammenfassen und die letzten Aufgaben verteilen?"
-    text = gesagt[1]
-    assert text.startswith("Kurz zusammengefasst: Entschieden habt ihr Wartungsfenster 30 Minuten.")
+    karte, satz = asyncio.run(BG.zusammenfassen(c, None))
+    assert karte["art"] == "zusammenfassung" and karte["luecken_zeigen"]
+    assert karte["punkte"][0].startswith("Entscheidung: Wartungsfenster 30 Minuten")
+    luecken = [a.was for a in c.artefakte.liste if a.nachgefragt]
     # höchstens drei Lücken: ohne Wer (zwei, nach Zeit), dann ohne Termin – das hohe Risiko käme erst danach
-    assert text.index("Statusseite schreiben") < text.index("Testdaten bauen") < text.index("Alerts anpassen")
-    assert "Hänger" not in text
-    karte = c.karten[-1]
-    assert karte["art"] == "zusammenfassung" and "Entschieden: Wartungsfenster 30 Minuten" in karte["punkte"]
-    assert c.artefakte.rueckfrage.art == "nachfrage" and len(c.artefakte.rueckfrage.ids) == 3
-
-
-def test_fuenf_minuten_frage_nein_bleibt_still_und_kommt_nicht_wieder():
-    c, gesagt = _coach(minuten=(10, 10))
-
-    async def lauf():
-        c.meeting.virtuelle_zeit = 900.0
-        c.artefakte.takt()
-        await asyncio.sleep(0.01)
-        await c.artefakte.satz(Segment("Mara", "Nein, danke.", 903, 904))
-        c.meeting.virtuelle_zeit = 950.0
-        c.artefakte.takt()
-        await asyncio.sleep(0.01)
-
-    asyncio.run(lauf())
-    assert len(gesagt) == 1 and c.artefakte.rueckfrage is None
+    assert luecken == ["Alerts anpassen", "Statusseite schreiben", "Testdaten bauen"]
+    assert satz.startswith("Hier ist sie.")
 
 
 def test_standardgliederung_und_aufgaben_fuer_den_export():

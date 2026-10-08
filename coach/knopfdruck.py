@@ -35,9 +35,9 @@ from .config import EINST
 
 log = logging.getLogger("coach.knopfdruck")
 
-ARTEN = ("stand", "regeln", "ueberblick", "protokoll", "bild", "frage")
+ARTEN = ("stand", "regeln", "ueberblick", "protokoll", "bild", "frage", "zusammenfassen", "fehlt")
 NAMEN = {"stand": "Wo stehen wir?", "regeln": "Regeln eingehalten?", "ueberblick": "Überblick", "protokoll": "Protokoll",
-         "bild": "Bild", "frage": "Nestor fragen"}
+         "bild": "Bild", "frage": "Nestor fragen", "zusammenfassen": "Zusammenfassen", "fehlt": "Was fehlt?"}
 KNOPF_REGELN = ("thema", "ton", "ergebnisse")  # Regeln, die den Text brauchen – live nur über KI-Dienste
 INHALT_ARTEN = ("ton", "ergebnis", "assistent", "recherche", "folie", "name", "artefakt_nachfrage",
                 "zusammenfassung")  # Protokolleinträge mit Inhalt
@@ -170,12 +170,15 @@ GRUNDSATZ = ("Neutral: keine Bewertung von Personen, keine Partei, nichts erfind
              "weißt du nicht, dann sag das. Personen heißen im Transkript „Person N“; nenne sie nicht so, sprich von "
              "„jemandem“ oder der Gruppe. „Entschieden“ nur, wenn ausdrücklich beschlossen. Deutsch, per „ihr“.")
 
-STAND = (f"Du bist {{name}}, der Moderationsassistent eines Präsenzmeetings. Die Runde hat den Knopf „Wo stehen "
-         f"wir?“ gedrückt. {KARTE_FORMAT}, \"naechster_punkt\": Nummer oder null}}.\n"
+STAND = (f"Du bist {{name}}, der Moderationsassistent eines Präsenzmeetings. Die Runde hat gefragt „Wo stehen "
+         f"wir?“. {KARTE_FORMAT}, \"naechster_punkt\": Nummer oder null, \"sagen\": \"ein bis zwei kurze gesprochene "
+         f"Sätze, zusammen höchstens 30 Wörter\"}}.\n"
          "Stichpunkte: wo die Runde in der Agenda steht und wie es mit der Zeit aussieht, was festgehalten ist, was "
          "offen ist; der letzte Stichpunkt ist ein Vorschlag für den nächsten Schritt und beginnt mit „Vorschlag:“.\n"
          "naechster_punkt: Nummer des Agendapunkts, zu dem die Runde jetzt wechseln sollte – nur wenn der aktuelle "
-         f"erledigt ist oder das Gespräch schon beim nächsten ist, sonst null.\n{GRUNDSATZ}")
+         "erledigt ist oder das Gespräch schon beim nächsten ist, sonst null.\n"
+         "sagen: was auffällt oder was die Runde jetzt tun sollte – NICHT vorlesen, was auf der Karte steht; beginnt "
+         f"mit „Hier ist sie.“\n{GRUNDSATZ}")
 
 FRAGE = (f"Du bist {{name}}, der Moderationsassistent eines Präsenzmeetings. Die Runde hat dir eine Frage getippt; "
          f"die Antwort erscheint als Karte auf dem Bildschirm. {KARTE_FORMAT}}}.\n"
@@ -252,7 +255,7 @@ def _transkript_text(coach, seit: float) -> str:
     return "\n".join(zeilen)
 
 
-async def _regeln(coach, frage: str) -> dict:
+async def _regeln(coach, frage: str, ablegen: bool = True) -> dict:
     from . import regeln, themen
 
     m, k = coach.meeting, coach.knopf
@@ -262,7 +265,8 @@ async def _regeln(coach, frage: str) -> dict:
                   + (f" – {r['detail']}" if r["detail"] else "") for r in coach.schnappschuss()["regel_status"]]
         karte = {"art": "regeln", "frage": NAMEN["regeln"], "titel": f"Regeln · Stand {mmss(m.jetzt())}",
                  "punkte": punkte or ["Für dieses Meeting sind keine Gesprächsregeln gewählt."]}
-        coach._karte_ablegen(karte)
+        if ablegen:
+            coach._karte_ablegen(karte)
         return karte
     jetzt = m.jetzt()
     ki = [r for r in m.regel_ids if r in KNOPF_REGELN]
@@ -412,7 +416,10 @@ async def _bild(coach, frage: str) -> dict:
 
 
 ANALYSEN = {"stand": _stand, "regeln": _regeln, "ueberblick": _ueberblick, "protokoll": _protokoll, "bild": _bild,
-            "frage": _frage}
+            "frage": _frage, "zusammenfassen": _protokoll, "fehlt": _protokoll}
+# Ticket #27: ohne „Nur auf Knopfdruck“ läuft jeder Knopf als Antwortbogen (coach/assistent.py) – welcher Bogen?
+BOGEN = {"stand": "stand", "regeln": "regeln", "ueberblick": "ueberblick", "protokoll": "festgehalten", "bild": "bild",
+         "zusammenfassen": "zusammenfassen", "fehlt": "fehlt", "folie": "folie"}
 
 
 # --- Verwerfen ------------------------------------------------------------------
