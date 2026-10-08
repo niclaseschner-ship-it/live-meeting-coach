@@ -84,9 +84,9 @@ geht nichts an Mistral. Ihr Ton liegt bis dahin nur auf unserem Server in der EU
 Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir sehen nichts von Ihren Meetingdaten und
 nutzen nichts davon – außer Sie erlauben es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
 gelöscht.“ Unter den Karten ein knapper Satz zum Hosting (Cloudflare, Server in der EU; Einzelheiten in der
-Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hinweis, dass Nestor quelloffen ist und
-sich selbst hosten lässt, mit Link auf das (seit 08.10.2026 öffentliche) GitHub-Repo – solange das Repo privat
-gewesen wäre, hätte dieser Hinweis entfallen.
+Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hinweis: „Nestor ist Open Source
+(AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das (seit 08.10.2026 öffentliche, seit 0da0713 unter
+AGPL-3.0 lizenzierte) GitHub-Repo – solange das Repo privat gewesen wäre, hätte dieser Hinweis entfallen.
 
 Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription auf Knopfdruck
 `voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
