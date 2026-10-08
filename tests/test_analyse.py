@@ -310,6 +310,25 @@ def test_ankuendigung_mit_wechseln_und_ordnungszahl():
     assert not ankuendigung("Das kommt gleich noch, lass uns beim Budget bleiben.")
 
 
+def test_ansage_in_voxtral_schreibweise():
+    """Ticket #15: so kamen die Ansagen im Cloud-Lauf in Nestor Basis (Voxtral) an – keine wurde erkannt."""
+    from coach.analyse import angekuendigter_punkt, ankuendigung
+
+    titel = ["Kassenbericht", "Budget für das Sommerfest", "Anschaffung eines Vereinsbusses"]
+    assert angekuendigter_punkt("Wir wechseln jetzt ausdrücklich zu Agenda Punkt 2, dem Budget für das Sommerfest. "
+                                "Geplant waren dafür sechs Minuten, es ist jetzt 19.10 Uhr.", titel, 0) == 1
+    assert angekuendigter_punkt("Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines "
+                                "Vereinsbusses.", titel, 1) == 2
+    assert angekuendigter_punkt("Dann weiter mit Agenda-Punkt drei.", titel, 1) == 2
+    assert angekuendigter_punkt("Wir kommen nun zum Budget für das Sommerfest.", titel, 0) == 1
+    assert angekuendigter_punkt("Tagesordnungs-Punkt 2 ist dran.", titel, 0) == 1
+    # Subjekt zuerst ohne Zeitwort ist keine Überleitung
+    assert not ankuendigung("Wir kommen zu dem Schluss, dass das Budget reicht.")
+    assert not ankuendigung("Wir gehen zum Sommerfest alle zusammen hin.")
+    assert angekuendigter_punkt("Nestor, fass bitte kurz zusammen, was wir zu Punkt 2 besprochen haben.",
+                                titel, 1) is None
+
+
 def test_ergebnis_hinweis_fasst_offene_aufgaben_zusammen():
     from coach.ergebnisse import hinweise
 

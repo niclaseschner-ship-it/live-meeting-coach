@@ -57,10 +57,10 @@ Erlebnis darauf (Gespräch, Live-Bild). `LMC_KI=codex` und der Claude-Bildweg si
 | Monolog, Redeanteile, Überlappung, Zeit | live, lokal auf dem Server | live, lokal auf dem Server |
 | Nestor ansprechen | „Nestor, …“ per Zuruf und die Knöpfe (auch am Handy) | „Nestor, …“ wie im Gespräch, und die Knöpfe |
 | Nestors Antwort | gesprochen mit der Stimme **Thorsten** (Thorsten-Voice, CC0) und als Karte; keine Rückfragen ohne Namen, kein Ins-Wort-Fallen | Realtime-Gespräch: Rückfragen ohne Namen, Reinreden macht ihn still |
-| Überblick | **Überblick als Text** (Abschnitt 4.7) alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf |
+| Überblick | **Überblick als Text** (Abschnitt 4.7) nach 5 min, dann alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf |
 | Knöpfe | Wo stehen wir? · Regeln eingehalten? · Überblick · Protokoll · Nestor fragen (am Handy: halten) | dieselben |
 | Löschen | „Nein“ in der Begrüßung löscht alles | „Nein“ in der Begrüßung löscht alles |
-| Kosten (Richtwert) | ~0,6 € je Stunde | ~2 € je Stunde |
+| Kosten (Richtwert) | ~0,7 € je Stunde | ~2 € je Stunde |
 
 **Schalter „Nur auf Knopfdruck“ (nur Basis):** der frühere Modus „Auf Knopfdruck“. Ohne Knopf geht nichts an
 Mistral: Der Ton bleibt auf dem Server, Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf
@@ -81,8 +81,10 @@ Thorsten. Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xb
 
 Gemessen ([messung_basis.md](messung_basis.md)): Sprechende → Thorstens erster Ton im Median 2,0–2,1 s, alle zwölf
 Zurufe der Probe lösen die richtige Aktion aus (24/24). Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll
-(`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet (~0,45–0,6 $/h je nach Zahl der Fragen
-und Recherchen), Premium wie bisher ~2 $/h. Der frühere Richtwert für „Auf Knopfdruck“ mit OpenAI (0,4 $/h, Ticket #7,
+(`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet: Grundlast ~0,5 $/h (Live-Text allein 0,36 $/h), dazu
+~0,01 $ je Frage an Nestor und ~0,06 $ je Recherche – mit 10 Fragen und 2 Recherchen ~0,7 $/h (≈ 0,65 €). Der
+Cloud-Lauf vom 08.10. kam auf ~1 $/h, weil das Testmaterial sechs Zurufe mit zwei Recherchen in zehn Minuten
+enthält (Ticket #15, [messung_basis.md](messung_basis.md)). Premium wie bisher ~2 $/h. Der frühere Richtwert für „Auf Knopfdruck“ mit OpenAI (0,4 $/h, Ticket #7,
 [messung_knopfdruck.md](messung_knopfdruck.md)) gilt nicht mehr, seit der Schalter zu Basis gehört.
 
 ## 4. Funktionen
@@ -174,7 +176,10 @@ Regel-Ampeln im Dashboard.
 
 ### 4.4 Paket zum Herunterladen
 
-Ein ZIP mit Protokoll (`protokoll.md`), Abschlussbild, Transkript, Agenda mit Zeitnutzung und Hinweisen.
+Ein ZIP mit Protokoll (`protokoll.md`), Abschlussbild (Basis: `ueberblick.md`, der Überblick als Text),
+Transkript, Agenda mit Zeitnutzung und Hinweisen. In Premium ist das Protokoll die Analyse hinter dem
+Abschlussbild; Basis hat kein Bild und erstellt es am Meetingende wie der Knopf „Protokoll“ (Ergebnisse je
+Agendapunkt). Mit „Nur auf Knopfdruck“ gibt es Protokoll und Überblick nur, wenn vorher gedrückt wurde.
 Die Aufnahme ist nur auf ausdrücklichen Wunsch dabei.
 
 ### 4.5 Unterstützung
@@ -212,7 +217,7 @@ Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (gr�
 📌 Aufgaben (wer, bis wann), ↪ Außerhalb der Agenda (grau) und „Neu seit dem letzten Stand“. Inhalte aus einem
 Textaufruf über Agenda, die festgestellten Ergebnisse je Punkt (Regel 10) und das Transkript. Nichts wird gemalt:
 Jede Zahl muss im Material vorkommen, sonst entfällt der Eintrag; „Person N“ erscheint nicht. In Basis ersetzt der
-Überblick das Live-Bild (alle 10 min, auf Zuruf, am Ende, per Knopf), in Premium ist er neben dem Live-Bild
+Überblick das Live-Bild (nach 5 min, dann alle 10 min, auf Zuruf, am Ende, per Knopf), in Premium ist er neben dem Live-Bild
 umschaltbar. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
 (55.000 € statt 25.000 €, Wortsalat, Bilddatei bei Microsoft Azure) – deshalb in Basis kein Bildmodell.
 

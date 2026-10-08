@@ -124,9 +124,15 @@ ABSEITS = ("neu", "vorgriff", "zurueck")
 
 # Ausdrückliche Überleitung („wir kommen jetzt zu Punkt …“, „Tagesordnungspunkt 6“, „nächstes Thema“):
 # löst die Themen-Zuordnung sofort aus und braucht keine Karenz – der Wechselvorschlag kommt direkt.
+# Voxtral (Nestor Basis) schreibt anders als OpenAI „Agenda Punkt 2“/„Agenda-Punkt“ statt „Agendapunkt zwei“ und
+# lässt die Ansage gern mit „Wir wechseln jetzt …“ beginnen (Cloud-Lauf 08.10., Ticket #15) – beides zählt.
+_PUNKTWORT = r"(?:tagesordnungs|agenda)[\s-]?punkt"
 ANKUENDIGUNG = re.compile(
-    r"tagesordnungspunkt|\btop\s*\d|agendapunkt|"
+    _PUNKTWORT + r"|\btop\s*\d|"
     r"(kommen|gehen|machen|springen|wechseln) wir (?:\w+ ){0,3}?(zu|zum|zur|mit)\b|"
+    # Subjekt zuerst, nur mit Zeitwort („Wir gehen jetzt zu …“) – „wir kommen zu dem Schluss“ bleibt außen vor
+    r"\bwir (kommen|gehen|machen|springen|wechseln) (?:jetzt|nun|dann|gleich|als n(ä|ae)chstes)\b"
+    r"(?: \w+){0,2}? (zu|zum|zur|mit)\b|"
     r"\bzum (zweiten|dritten|vierten|f(ü|ue)nften|sechsten|letzten) (punkt|thema|tagesordnungspunkt)|"
     r"weiter (zu|mit) (punkt|top|thema)|n(ä|ae)chste[nrs]? (punkt|thema|tagesordnungspunkt)|"
     r"zum n(ä|ae)chsten (punkt|thema)|punkt \w+ (der|unserer) (agenda|tagesordnung)",
@@ -142,11 +148,11 @@ ZAHLWORTE = {"eins": 1, "zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "fuenf": 5,
              "neun": 9, "zehn": 10, "elf": 11, "zwölf": 12, "zwoelf": 12}
 ORDNUNG = {"erst": 1, "zweit": 2, "dritt": 3, "viert": 4, "fünft": 5, "fuenft": 5, "sechst": 6, "siebt": 7,
            "acht": 8, "neunt": 9, "zehnt": 10}
-_PUNKT_NR = re.compile(r"\b(?:punkt|top|tagesordnungspunkt|agendapunkt)\s*(?:nummer\s*|nr\.?\s*)?(\d{1,2}|"
+_PUNKT_NR = re.compile(r"\b(?:punkt|top|" + _PUNKTWORT + r")\s*(?:nummer\s*|nr\.?\s*)?(\d{1,2}|"
                        + "|".join(ZAHLWORTE) + r")\b", re.IGNORECASE)
-_PUNKT_ORD = re.compile(r"\b(" + "|".join(ORDNUNG) + r")(?:e|en|er|es)\s+(?:punkt|tagesordnungspunkt|agendapunkt|top)\b",
+_PUNKT_ORD = re.compile(r"\b(" + "|".join(ORDNUNG) + r")(?:e|en|er|es)\s+(?:punkt|" + _PUNKTWORT + r"|top)\b",
                         re.IGNORECASE)
-_NAECHSTER = re.compile(r"n(?:ä|ae)chste[nrs]?\s+(?:punkt|thema|tagesordnungspunkt|agendapunkt|top)\b", re.IGNORECASE)
+_NAECHSTER = re.compile(r"n(?:ä|ae)chste[nrs]?\s+(?:punkt|thema|" + _PUNKTWORT + r"|top)\b", re.IGNORECASE)
 
 
 def angekuendigter_punkt(text: str, titel: list[str], aktiv: int) -> int | None:
