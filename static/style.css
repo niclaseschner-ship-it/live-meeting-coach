@@ -269,7 +269,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .bildflaeche { position: relative; flex: 1; display: grid; place-items: center; background: var(--flaeche-2);
   border-radius: 12px; overflow: hidden; }
 .bildflaeche img { width: 100%; height: 100%; object-fit: contain; background: #F8FAFC; }
-.bild-leer { text-align: center; color: var(--text-2); padding: 30px; display: grid; justify-items: center; gap: 14px; }
+.bild-leer { text-align: center; color: var(--text-2); padding: 30px; display: grid; justify-items: center; gap: 14px; min-width: 0; }
 .bild-leer strong { color: var(--marke); }
 .bl-logo { position: relative; width: 104px; height: 104px; margin-bottom: 8px; }
 .bl-logo svg { position: relative; display: block; border-radius: 28px; box-shadow: 0 12px 30px rgba(55, 48, 163, .35); }
@@ -278,7 +278,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .bl-logo::after { animation-delay: 1.5s; }
 @keyframes welle { 0% { transform: scale(1); opacity: .45; } 100% { transform: scale(1.6); opacity: 0; } }
 .bl-spruch { margin: 0; font-size: 26px; font-weight: 700; color: var(--text); max-width: 560px; line-height: 1.3; }
-.bl-weg { width: 280px; height: 8px; border-radius: 4px; background: var(--marke-weich); overflow: hidden; }
+.bl-weg { width: min(280px, 100%); height: 8px; border-radius: 4px; background: var(--marke-weich); overflow: hidden; }
 .bl-weg span { display: block; height: 100%; width: 0; border-radius: 4px; transition: width 1s linear;
   background: linear-gradient(90deg, var(--marke), var(--gold)); }
 .bl-wann { margin: 0; font-size: 17px; font-weight: 600; color: var(--marke); }
@@ -611,3 +611,50 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   gap: 10px; white-space: normal; }
 .h-halten .i svg { width: 24px; height: 24px; display: block; }
 .h-halten.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }
+
+/* Meeting-Artefakte (Ticket #26): unauffällige Liste in der linken Spalte. Was fehlt, steht als kleines rotes Etikett
+   dabei; Klick öffnet die Bearbeitung an Ort und Stelle. */
+.art-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.art-kopf h2 { margin: 0; }
+.art-kopf .icon { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.art-kopf .icon svg { width: 16px; height: 16px; }
+.artefakte { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 340px; overflow: auto; }
+.art { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; padding: 6px 8px; border-radius: 8px;
+  cursor: pointer; font-size: 14px; line-height: 1.35; }
+.art:hover, .art:focus-visible { background: var(--flaeche-2); outline: none; }
+.art-zeichen { display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 6px;
+  font-size: 12px; font-weight: 800; background: var(--flaeche-2); color: var(--text-2); }
+.art.entscheidung .art-zeichen { background: var(--gruen-weich); color: var(--gruen); }
+.art.aufgabe .art-zeichen { background: var(--marke-weich); color: var(--marke); }
+.art.offen .art-zeichen { background: var(--gelb-weich); color: var(--gelb); }
+.art.risiko .art-zeichen { background: var(--rot-weich); color: var(--rot); }
+.art-inhalt { display: grid; min-width: 0; }
+.art-was { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.art-ok { color: var(--gruen); font-weight: 800; }
+.art-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12.5px; color: var(--text-3); font-weight: 600; }
+.art.unsicher .art-was { color: var(--text-2); font-weight: 500; font-style: italic; }
+.art.erledigt .art-was { color: var(--text-3); text-decoration: line-through; }
+.art-park { color: var(--text-3); border: 1px dashed var(--rand); border-radius: 6px; padding: 0 5px; }
+.luecke { color: var(--rot); background: var(--rot-weich); border-radius: 6px; padding: 0 5px; font-weight: 700;
+  white-space: nowrap; }
+.luecke.still { color: var(--text-3); background: var(--flaeche-2); }
+.art.bearbeiten { display: block; cursor: default; background: var(--flaeche-2); padding: 10px; }
+.art-form { display: grid; gap: 6px; }
+.art-form input, .art-form select { padding: 7px 10px; font-size: 14px; }
+.art-zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.art-knoepfe { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Rückfrage im Nestor-Feld (Ticket #26): bleibt stehen, bis sie beantwortet ist */
+.nf-rueckfrage { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.08);
+  border-left: 4px solid var(--gold); }
+.nf-rueckfrage p { margin: 0; font-size: 19px; line-height: 1.4; font-weight: 600; }
+.nf-rk-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nf-rk-liste li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; }
+.nf-rk-was { flex: 1 1 180px; min-width: 0; }
+.nf-rueckfrage .luecke { margin-left: 4px; font-size: 12.5px; }
+.nf-rk-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; }
+.nf-rueckfrage button:not(.primaer) { background: transparent; color: #fff; border-color: rgba(255,255,255,.4); }
+@media (max-width: 480px) {
+  .nf-rueckfrage p { font-size: 17px; }
+  .art-zwei { grid-template-columns: 1fr; }
+}

@@ -59,12 +59,13 @@ KATALOG = [
     Regel("eingehen", "Zuhören und aufeinander eingehen", "experimentell",
           "Wiederholte Argumente, Beiträge ohne Bezug", False),
     # Rückmeldung Niclas 08.10.2026: zu Unrecht "experimentell" – gemessen 4/5 Beschlüsse richtig im deutschen
-    # Material (docs/gespraechsregeln.md Regel 10, scripts/bench_ergebnisse.py); nur im englischsprachigen
+    # Material (docs/gespraechsregeln.md Regel 10, früher scripts/bench_ergebnisse.py, seit Ticket #26
+    # scripts/bench_artefakte.py); nur im englischsprachigen
     # AMI-Material deutlich schwächer (docs/testlauf_2026-10-06.md) – das bleibt ein Hinweis, kein Grund zur
     # Abstufung, da Nestor für deutsche Präsenzmeetings gebaut ist (Lastenheft 1).
     Regel("ergebnisse", "Ergebnisse festhalten – wer macht was bis wann", "verlaesslich",
-          "Nestor erinnert beim Punktwechsel, wenn kein Ergebnis, keine Zuständigkeit oder kein Termin genannt "
-          "wurde", True),
+          "Aufgaben, Entscheidungen, offene Punkte und Risiken im Gespräch; beim Punktwechsel fragt Nestor gebündelt "
+          "nach, wenn bei einem davon Wer, Termin oder der Beschluss fehlt", True),
 ]
 NACH_ID = {r.id: r for r in KATALOG}
 STANDARD = ["ausreden", "thema", "zeit", "kurz"]

@@ -256,6 +256,15 @@
         <h2>Agenda</h2>
         <ol id="agenda" class="agenda"></ol>
       </section>
+      <!-- Meeting-Artefakte (Ticket #26): live erkannt, unabhängig von der Agenda. Unauffällig; was fehlt, steht rot
+           dabei. Klick öffnet die Bearbeitung – was die Runde hier setzt, gilt als bestätigt. -->
+      <section id="artefakte-karte" class="karte artefakte-karte" hidden>
+        <div class="art-kopf">
+          <h2>Festgehalten <span id="art-zahl" class="leise-text"></span></h2>
+          <button id="art-neu" class="icon klein" data-tip="Von Hand eintragen"></button>
+        </div>
+        <ul id="artefakte" class="artefakte"></ul>
+      </section>
     </aside>
 
     <!-- Mitte: Live-Bild -->
@@ -323,6 +332,14 @@
             <button id="karte-zu" class="icon klein" data-tip="Ausblenden – bleibt im Verlauf unter „Nestor“"></button>
           </div>
           <ol id="nf-auftraege" class="nf-auftraege" hidden></ol>
+          <!-- Rückfrage von Nestor (Ticket #26): Fünf-Minuten-Frage oder Nachfrage nach Lücken – mit Knöpfen, solange
+               sie offen ist; antworten geht auch per Stimme -->
+          <div id="nf-rueckfrage" class="nf-rueckfrage" hidden>
+            <span id="nf-rueckfrage-art" class="nk-art"></span>
+            <p id="nf-rueckfrage-text"></p>
+            <ul id="nf-rueckfrage-liste" class="nf-rk-liste"></ul>
+            <div id="nf-rueckfrage-knoepfe" class="nf-rk-knoepfe"></div>
+          </div>
           <p id="nf-text" class="nf-text" hidden></p>
           <div id="karte" class="nf-karte" hidden>
             <span id="karte-art" class="nk-art"></span>

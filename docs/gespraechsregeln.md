@@ -252,17 +252,26 @@ Beides geht über das Sprachmodell im Kontext-Strom.
 
 ### Regel 10 – Ergebnisse festhalten: wer macht was bis wann
 
-**Verfahren:**
-- Das Sprachmodell zieht je Agendapunkt Entscheidungen und Aufgaben aus dem Transkript. Die
-  Strukturanalyse des Live-Bilds macht das schon in Teilen.
-- Beim Wechsel zum nächsten Punkt prüft der Coach: Wurde ein Ergebnis festgehalten? Hat jede Aufgabe
-  eine verantwortliche Person und einen Termin?
-- Hinweis: „TOP 3 abgeschlossen – kein Ergebnis festgehalten“ oder „Aufgabe ohne Verantwortliche/n“.
+**Verfahren (seit Ticket #26, 08.10.2026):** Die Regel baut auf den Meeting-Artefakten auf
+(`coach/artefakte.py`, Lastenheft 4.9) statt auf einer eigenen Prüfung je Agendapunkt:
+- Live und unabhängig von der Agenda erkennt ein Sprachmodell Aufgaben, Entscheidungen, offene Punkte und Risiken –
+  etwa je Minute Sprache (Basis je zwei), mit den schon festgehaltenen Artefakten als Kontext, damit es ergänzt statt
+  doppelt anlegt. Jedes Artefakt kennt seine Lücken (Aufgabe ohne Wer oder Termin, nur „wir“, Entscheidung nur als
+  Vorschlag, offener Punkt ohne Zuständige und Wiedervorlage, Risiko ohne Beobachter oder hohes Risiko ohne Maßnahme).
+- Ist die Regel gewählt, fragt Nestor beim Punktwechsel kurz und gebündelt nach – eine Frage je unvollständigem
+  Artefakt mit konkretem Vorschlag („Ich hab notiert: Statusseite-Zusammenfassung. Wer übernimmt das, bis wann?“),
+  höchstens zwei gesprochen. Bei Vollständigkeit schweigt er. Kein Hinweis mehr „kein Ergebnis“: Agendapunkte müssen
+  keine Entscheidung haben (Entscheidung Niclas, 08.10.).
+- Je Artefakt nur eine Nachfrage; abgelehnt („brauchen wir nicht“, Knopf „Nicht nötig“) heißt nie wieder.
+- Die Ampel „Ergebnisse festhalten“ wird gelb, sobald nach einer Lücke gefragt wurde und sie noch offen ist.
+- Fünf Minuten vor dem geplanten Ende fragt Nestor immer (auch ohne diese Regel), ob er zusammenfassen soll.
 
 **Test:**
 - `stadtrat` enthält 6 Abstimmungen mit bekanntem Ergebnis (einstimmig, mehrheitlich mit 1 Enthaltung …).
-  Gemessen wird, wie viele davon mit richtigem Ergebnis gefunden werden.
-- Für Aufgaben fehlt noch eine Probe. Ein Rollenspiel mit Drehbuch liefert sie, siehe 5.
+  Gemessen wurde (alte Prüfung), wie viele davon mit richtigem Ergebnis gefunden werden.
+- `scripts/bench_artefakte.py` lässt die Erkennung mit echten Modellaufrufen über ein Live-Transkript aus den
+  Cloudläufen laufen – wie im Meeting: je Minute Sprache, Punktwechsel an den Ansagen, Fünf-Minuten-Zusammenfassung,
+  dazu eine gesprochene Antwort auf die Nachfrage. Messung 08.10. siehe Abschnitt 6.
 
 ## 4. Konsequenz für das Dashboard
 
@@ -312,7 +321,11 @@ seit der Rückmeldung vom 08.10.2026 nicht mehr zur Auswahl (vorher sichtbar mit
 | 6 stille Person | gleicher Lauf, eine angemeldete Person spricht nie | in allen drei Proben nach 10 min gemeldet, Anzahl zum Zeitpunkt korrekt |
 | 7 Ton, Text | `scripts/bench_ton.py`, 100 Sätze (`testbibliothek/texte/ton.json`), davon 17 Grenzfälle | eindeutige Sätze: **31/32 erkannt, 2/51 Fehlalarme**; neutral 0/26, Sachkritik 1/18, Zitate 1/7 (Mozart-Liedtitel); unter 1 Cent je Lauf |
 | 7 Ton, Ende zu Ende | `scripts/tts_probe.py`: 14 Sätze mit 4 synthetischen Stimmen durch die komplette Live-Pipeline | Live-Texterkennung schreibt Kraftausdrücke **wörtlich** („Scheiße“, „Bullshit“, „im Arsch“; nur „Vollpfosten“ → „Pfeilpfosten“); **8/8 erkannt, Zitat und Kontrollsätze ohne Hinweis** |
-| 10 Ergebnisse | `scripts/bench_ergebnisse.py`, Stadtrat je TOP | **4/5 Beschlüsse mit richtigem Ergebnis** (auch „mehrheitlich, 1 Enthaltung“); TOP 6 verpasst (Äußerung mischt Abstimmung TOP 6 und Einleitung TOP 7); TOP 1 und 7 richtig „kein Ergebnis“ |
+| 10 Ergebnisse | `scripts/bench_ergebnisse.py` (bis Ticket #26), Stadtrat je TOP | **4/5 Beschlüsse mit richtigem Ergebnis** (auch „mehrheitlich, 1 Enthaltung“); TOP 6 verpasst (Äußerung mischt Abstimmung TOP 6 und Einleitung TOP 7); TOP 1 und 7 richtig „kein Ergebnis“ |
+| 10 Artefakte, Incident-Review (08.10.) | `scripts/bench_artefakte.py incident`, Live-Transkript aus `cloud_premium_grenz2` (11:21 min, 6:12 min Sprache), Referenz 16 Artefakte von Hand aus dem Transkript | **Premium 12/16**, fehlend: Sofies Alerts als Aufgabe (in eine Entscheidung gefasst), Root Cause, Prüfergebnisse liefern, Formulierung „Datenintegrität erhalten“; falsch/doppelt: Kundenmail doppelt, Kaffeemaschine als Aufgabe (echt, aber Scherz außerhalb der Agenda). **Basis 15/16** (mistral-medium), dafür ~5 Fehlalarme (vergangene Ursache als Risiko, beantwortete Fragen als offen, „Nest von Abhängigkeiten“). **Erwartete Lücke** – Postmortem-Zusammenfassung ohne Zuständige – in allen Läufen gefunden; „Sofie übernimmt die Statusseite bis Freitag“ als Antwort trägt Sofie und Freitag genau dort ein |
+| 10 Artefakte, Vereinsrunde (08.10.) | `scripts/bench_artefakte.py verein`, Live-Transkript aus `cloud_basis_1` (9:42 min; Beschlusssatz zum Sommerfest fehlt im Live-Text, nur die Schlusszusammenfassung), Referenz 11 | **Premium 10/11** (fehlend: „Zusagen einsammeln, bevor gebucht wird“; Sabines und Jörgs Aufgabe einmal zu einer zusammengefasst), 0 Fehlalarme. **Basis 9/11**, 1 Fehlalarm (Wetter als Risiko). **Erwartete Lücke** – Zusatzversicherung ohne Zuständige – in allen Läufen; „Das macht Jörg, bis zur nächsten Sitzung“ landet bei der Bus-Übersicht. Streuung zwischen zwei Läufen desselben Modells: ±2 Artefakte |
+| 10 Modellwahl Basis | dieselben Läufe mit `mistral-small-latest` | ein Zehntel der Kosten, aber unbrauchbar: Aufgaben für Nestor („SLA-Zahl notieren“), Sprecher als Zuständige geraten, die Antwort „Sofie … Statusseite“ landete bei der Kundenmail – deshalb mistral-medium |
+| 10 Kosten | Nutzungsprotokoll der Läufe | Premium 0,0027–0,0035 $ je Aufruf, Basis 0,0044–0,0057 $; auf das Material 0,13–0,17 $/h (Premium) und 0,14–0,24 $/h (Basis, je zwei Minuten Sprache). Hochgerechnet auf eine Stunde mit ~40 min Sprache: Premium ≈ 50 Aufrufe ≈ **+0,2 $/h**, Basis ≈ 27 Aufrufe ≈ **+0,15 $/h** |
 | 1 Ausreden lassen (umgesetzt, `coach/unterbrechung.py`, Bericht `docs/messung_unterbrechung.md`) | Wechsel ohne Pause, neue Person behält das Wort ≥ 3 s, kein Pegel-Einbruch | Talkshow 13,3 je 10 min, geordnete Proben 0–0,8; Hinweis ab 3 Stellen in 5 min (Talkshow: 3 Hinweise in 12 min, Stadtrat: keiner) |
 | 1 Ausreden lassen (Ausgangswert) | `bundestag_ordnungsrufe`: Stimmen-Mischung gegen 31 protokollierte Zwischenrufe | nur **12/31** Zwischenrufe mit Mischung, dazu 70 Mischungen ohne Zwischenruf – als Unterbrechungs-Erkennung so nicht brauchbar |
 

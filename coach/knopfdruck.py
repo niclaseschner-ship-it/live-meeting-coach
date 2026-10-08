@@ -9,7 +9,7 @@ lokal weiter (die Weichen dafür stehen in hoeren.py, pipeline.py und assistent.
    stand     Wo stehen wir? Kontext wie bei Nestors Antworten (Assistent.kontext), Antwort als Karte
    regeln    vereinbarte Regeln: lokale aus regel_status, Fokus/Ton/Ergebnisse in einem Aufruf (Ton-Definition aus
              themen.py), Ergebnis als Karte und in den Regel-Ampeln
-   protokoll Ergebnisprüfung je Agendapunkt (Regel 10, ergebnisse.py), daraus protokoll.md und eine Karte
+   protokoll Meeting-Artefakte erkennen (coach/artefakte.py, Ticket #26), daraus protokoll.md und eine Karte
    bild      das vorhandene Live-Bild (onepager_starten)
    frage     freie Frage, Antwort als Text-Karte über den vorhandenen Karten-Weg
 
@@ -39,8 +39,8 @@ ARTEN = ("stand", "regeln", "ueberblick", "protokoll", "bild", "frage")
 NAMEN = {"stand": "Wo stehen wir?", "regeln": "Regeln eingehalten?", "ueberblick": "Überblick", "protokoll": "Protokoll",
          "bild": "Bild", "frage": "Nestor fragen"}
 KNOPF_REGELN = ("thema", "ton", "ergebnisse")  # Regeln, die den Text brauchen – live nur über KI-Dienste
-INHALT_ARTEN = ("ton", "ergebnis", "assistent", "recherche", "folie", "name")  # Protokolleinträge mit Inhalt
-MIN_PUNKT_SEKUNDEN = 20  # wie Regel 10: kürzer Besprochenes wird nicht geprüft
+INHALT_ARTEN = ("ton", "ergebnis", "assistent", "recherche", "folie", "name", "artefakt_nachfrage",
+                "zusammenfassung")  # Protokolleinträge mit Inhalt
 
 EINVERSTAENDNIS = ("Ich bin Nestor und höre mit – der Ton bleibt auf diesem Server. Zeit, Redeanteile und Monolog "
                    "laufen ohne KI. An einen KI-Dienst geht erst etwas, wenn ihr einen Knopf drückt. Ist jemand nicht "
@@ -90,7 +90,6 @@ class Knopfstand:
         self.regeln_bis = 0.0  # Meetingzeit, bis zu der das Transkript auf Regeln geprüft ist
         self.protokoll: str | None = None  # Markdown vom Protokoll-Knopf (geht als protokoll.md in die Ablage)
         self.protokoll_zeit: float | None = None
-        self.geprueft: dict[int, int] = {}  # Agendapunkt -> Zahl der Sätze bei der letzten Ergebnisprüfung
 
     def schnappschuss(self, hoerstrom) -> dict:
         offen = hoerstrom.offen() if hoerstrom else {"aeusserungen": 0, "sprache_sekunden": 0.0, "seit_sekunden": 0.0}
@@ -315,69 +314,74 @@ async def _regeln(coach, frage: str) -> dict:
     return karte
 
 
-def _protokoll_md(coach, gesamt: dict | None, am_ende: bool = False) -> str:
-    m = coach.meeting
+def _protokoll_md(coach, am_ende: bool = False) -> str:
+    """Protokoll aus den Meeting-Artefakten (Ticket #26): je Agendapunkt Entscheidungen, Aufgaben, offene Punkte und
+    Risiken, danach was außerhalb der Agenda festgehalten wurde. Lücken stehen als „fehlt“ dabei."""
+    from .artefakte import FELD_NAME
+
+    m, art = coach.meeting, coach.artefakte
     wie = "am Meetingende" if am_ende else "auf Knopfdruck"
     z = [f"# Protokoll: {m.titel or 'Meeting'}", "",
          f"{datetime.now():%d.%m.%Y} · Laufzeit {mmss(m.jetzt())} min · erstellt von Nestor {wie}"]
     if m.ziel:
         z.append(f"Ziel: {m.ziel}")
 
-    def block(erg: dict | None) -> list[str]:
-        if erg is None:
-            return ["_Noch nicht besprochen oder zu kurz für eine Auswertung._"]
-        aus = [f"**Ergebnis:** {erg['ergebnis']}" if erg["ergebnis"] else "_Kein Ergebnis ausgesprochen._"]
-        if erg["entscheidungen"]:
-            aus += ["", "**Entscheidungen**"] + [f"- {e['was']}" + (f" – {e['ergebnis']}" if e["ergebnis"] else "")
-                                                for e in erg["entscheidungen"]]
-        if erg["aufgaben"]:
-            aus += ["", "**Aufgaben**"] + [f"- {a['was']} (wer: {a['wer'] or 'offen'}, bis: {a['bis'] or 'offen'})"
-                                          for a in erg["aufgaben"]]
+    def zeile(a) -> str:
+        teile = [a.was]
+        if a.typ == "entscheidung":
+            teile.append({"endgueltig": "beschlossen", "vorlaeufig": "vorläufig"}.get(a.status, "nur Vorschlag"))
+        if a.typ != "entscheidung" or a.wer:
+            teile.append(f"wer: {a.wer or 'offen'}")
+        if a.typ in ("aufgabe", "offen") or a.bis:
+            teile.append(f"bis: {a.bis or 'offen'}")
+        if a.typ == "risiko":
+            teile.append(f"Reaktion: {a.reaktion or 'offen'}")
+        luecken = a.luecken()
+        return "- " + " · ".join(teile) + (f" – **fehlt: {', '.join(FELD_NAME[x] for x in luecken)}**" if luecken else "")
+
+    def block(liste) -> list[str]:
+        if not liste:
+            return ["_Nichts festgehalten._"]
+        aus = []
+        for typ, titel in (("entscheidung", "Entscheidungen"), ("aufgabe", "Aufgaben"), ("offen", "Offene Punkte"),
+                           ("risiko", "Risiken")):
+            teil = [a for a in liste if a.typ == typ]
+            if teil:
+                aus += (["", f"**{titel}**"] if aus else [f"**{titel}**"]) + [zeile(a) for a in teil]
         return aus
 
     if m.agenda:
         for i, p in enumerate(m.agenda):
             z += ["", f"## {i + 1}. {p.titel}",
                   f"_{m.status(i)} · {mmss(m.genutzt(i))} von {p.minuten:.0f} min_" + (f" · Ziel: {p.ziel}" if p.ziel else ""),
-                  ""] + block(m.ergebnisse.get(i))
+                  ""] + block([a for a in art.liste if a.punkt == i and not a.ausserhalb])
+        rest = [a for a in art.liste if a.punkt is None or a.ausserhalb]
+        if rest:
+            z += ["", "## Außerhalb der Agenda (Parkplatz)", ""] + block(rest)
     else:
-        z += ["", "## Ergebnisse", ""] + block(gesamt)
+        z += ["", "## Ergebnisse", ""] + block(art.liste)
     return "\n".join(z) + "\n"
 
 
 async def _protokoll(coach, frage: str, am_ende: bool = False) -> dict | None:
     """Protokoll-Knopf; `am_ende`: dasselbe automatisch am Meetingende in Basis (Paket mit protokoll.md, Ticket #15),
-    dann ohne Karte."""
-    from . import ergebnisse
-
-    m, k = coach.meeting, coach.knopf
-    gesamt = None
-    if m.agenda:
-        # Regel 10 je Punkt (vorhandener Baustein), nur wo es seit dem letzten Mal Neues gibt
-        pruefen = []
-        for i in range(len(m.agenda)):
-            saetze = m.punkt_transkript(i)
-            if sum(s.dauer for s in saetze) >= MIN_PUNKT_SEKUNDEN and k.geprueft.get(i) != len(saetze):
-                k.geprueft[i] = len(saetze)
-                pruefen.append(coach._ergebnis_pruefen(i, mit_hinweisen="ergebnisse" in m.regel_ids))
-        await asyncio.gather(*pruefen)
-    elif sum(s.dauer for s in m.transkript) >= MIN_PUNKT_SEKUNDEN:
-        from .pipeline import nutzung_loggen
-
-        text = "\n".join(f"{s.sprecher}: {s.text}" for s in m.transkript)
-        gesamt, nutzung = await ergebnisse.pruefen(coach._client, EINST.analyse_modell, m.titel or "Meeting", m.ziel,
-                                                   text, EINST.analyse_aufwand)
-        nutzung_loggen({"art": "ergebnisse", "modell": EINST.analyse_modell, "knopf": "protokoll", **nutzung})
-    k.protokoll = _protokoll_md(coach, gesamt, am_ende)
+    dann ohne Karte. Erkennt die Artefakte aus allem, was noch nicht ausgewertet ist (im Modus „Nur auf Knopfdruck“
+    der einzige Weg dorthin, Ticket #26)."""
+    m, k, art = coach.meeting, coach.knopf, coach.artefakte
+    await art.erkennen()
+    k.protokoll = _protokoll_md(coach, am_ende)
     k.protokoll_zeit = m.jetzt()
     if am_ende:
         return None
     if m.agenda:
-        punkte = [f"{i + 1}. {p.titel}: " + ((m.ergebnisse[i]["ergebnis"] or "kein Ergebnis ausgesprochen")
-                                              if i in m.ergebnisse else "noch nicht ausgewertet")
+        punkte = [f"{i + 1}. {p.titel}: " + ((m.ergebnisse[i]["ergebnis"] or "kein Beschluss")
+                                              if i in m.ergebnisse else "nichts festgehalten")
                   for i, p in enumerate(m.agenda)]
     else:
-        punkte = [gesamt["ergebnis"] or "kein Ergebnis ausgesprochen"] if gesamt else ["Noch zu wenig gesagt."]
+        punkte = [a.kurz().split(". ", 1)[-1] for a in art.liste[-6:]] or ["Noch nichts festgehalten."]
+    luecken = sum(1 for a in art.liste if a.luecken() and not a.abgelehnt)
+    if luecken:
+        punkte.append(f"{luecken} Lücke{'n' if luecken > 1 else ''} – im Dashboard rot markiert")
     karte = {"art": "protokoll", "frage": NAMEN["protokoll"], "titel": "Protokoll", "punkte": punkte[:8]}
     coach._karte_ablegen(karte)
     return karte
@@ -436,9 +440,7 @@ async def verwerfen(coach, minuten: float | None) -> dict:
             coach.onepager_svg = coach.onepager_png = coach.onepager_analyse = coach.onepager_stand = None
             coach._onepager_voll = None
             coach.onepager_version = 0  # das Dashboard nimmt das Bild dann heraus
-        for e in [e for e in coach.protokoll if e["art"] == "ergebnis" and e["zeit"] >= seit]:
-            m.ergebnisse.pop(e["punkt"], None)
-            k.geprueft.pop(e["punkt"], None)
+        coach.artefakte.verwerfen(seit)  # Artefakte aus dem Zeitraum; das Transkript davor bleibt ausgewertet
         coach.protokoll = [e for e in coach.protokoll if not (e["art"] in INHALT_ARTEN and e["zeit"] >= seit)]
         hinweise = [h for h in m.hinweise if not (h.art in ("ton", "ergebnisse") and h.zeit >= seit)]  # mit Zitaten
         for i, h in enumerate(hinweise, start=1):

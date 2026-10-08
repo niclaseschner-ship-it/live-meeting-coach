@@ -49,6 +49,17 @@ WERKZEUGE = [
                     "gezeichnet wird oder fertig ist, Ergebnisse, letzte Hinweise. Immer nutzen, bevor du etwas "
                     "sagst, das sich seit Gesprächsbeginn geändert haben kann – nie raten.",
      "parameters": {"type": "object", "properties": {}}},
+    {"type": "function", "name": "artefakt_eintragen",
+     "description": "Eine Aufgabe, Entscheidung, einen offenen Punkt oder ein Risiko eintragen oder ergänzen, wenn die "
+                    "Gruppe es dir sagt („Sofie übernimmt die Statusseite bis Freitag“, „halt fest: wir nehmen Variante "
+                    "B“). Nummer aus „Festgehaltene Artefakte“ bzw. status_abfragen, für Neues weglassen. Nur Felder, "
+                    "die gesagt wurden. Bestätige danach in einem kurzen Satz.",
+     "parameters": {"type": "object", "properties": {
+         "nummer": {"type": "integer", "description": "Nummer eines festgehaltenen Artefakts; weglassen für Neues"},
+         "typ": {"type": "string", "enum": ["aufgabe", "entscheidung", "offen", "risiko"]},
+         "was": {"type": "string"}, "wer": {"type": "string"}, "bis": {"type": "string"},
+         "status": {"type": "string", "enum": ["endgueltig", "vorlaeufig"]},
+         "reaktion": {"type": "string"}}}},
     {"type": "function", "name": "zuhoeren_pausieren",
      "description": "Die Gruppe möchte, dass du nicht mehr zuhörst. Wieder an nur über den Knopf im Dashboard.",
      "parameters": {"type": "object", "properties": {}}},
@@ -317,6 +328,17 @@ class Gespraech:
                 "output": json.dumps(self.coach.status_kurz(), ensure_ascii=False)}})
             await self._antworten_lassen()
             return
+        if name == "artefakt_eintragen":  # Ticket #26: Lücke per Stimme schließen, dann kurz bestätigen
+            a, kurz = self.coach.artefakte.eintragen(arg if isinstance(arg, dict) else {})
+            if a is not None:
+                self.coach.protokoll.append({"zeit": self.coach.meeting.jetzt(), "art": "artefakt_eingetragen",
+                                             "id": a.id, "durch": "stimme"})
+                await self.coach.melden()
+            ausgabe = {"ok": a is not None, "eingetragen": a.kurz() if a else None, "bestaetigung": kurz}
+            await self._senden({"type": "conversation.item.create", "item": {
+                "type": "function_call_output", "call_id": call_id, "output": json.dumps(ausgabe, ensure_ascii=False)}})
+            await self._antworten_lassen()
+            return
         lang = name in ("recherchieren", "bild_zeichnen", "folie_erstellen")
         if lang:
             await self.a.lang_ansagen()  # Ticket #21: „Mach ich, braucht ein bisschen …“, falls noch nicht gesagt
@@ -341,8 +363,9 @@ class Gespraech:
         if name != "gespraech_beenden":
             await self._antworten_lassen()  # nach dem Werkzeug weitersprechen
 
-    async def ansagen(self, text: str) -> None:
-        """Ansage des Coaches (z. B. Bild fertig) im laufenden Gespräch – wartet, bis Nestor ausgeredet hat."""
+    async def ansagen(self, text: str, woertlich: bool = False) -> None:
+        """Ansage des Coaches (z. B. Bild fertig) im laufenden Gespräch – wartet, bis Nestor ausgeredet hat.
+        `woertlich`: Nachfrage und Zusammenfassung (Ticket #26) – genau dieser Text, nicht in einem Satz verdichtet."""
         for _ in range(60):
             if not self._antwort_laeuft:
                 break
@@ -355,7 +378,9 @@ class Gespraech:
             "type": "message", "role": "system", "content": [{"type": "input_text", "text": f"Neu: {text}"}]}})
         self._antwort_laeuft = True
         await self._senden({"type": "response.create", "response": {
-            "instructions": f"Sag der Runde kurz und natürlich, in einem Satz: {text}"}})
+            "instructions": (f"Sag der Runde genau diesen Text, natürlich gesprochen, ohne etwas wegzulassen oder "
+                             f"hinzuzufügen: {text}") if woertlich
+            else f"Sag der Runde kurz und natürlich, in einem Satz: {text}"}})
 
     async def _recherche(self, frage: str, call_id: str | None) -> None:
         from .recherche import recherchieren

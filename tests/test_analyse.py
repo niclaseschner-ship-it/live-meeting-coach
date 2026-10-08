@@ -357,15 +357,15 @@ def test_rueckwaerts_ansage_wechselt():
     assert angekuendigter_punkt("Lass uns nochmal kurz zu Punkt eins zurück.", titel, 0) is None  # schon dort
 
 
-def test_ergebnis_hinweis_fasst_offene_aufgaben_zusammen():
-    from coach.ergebnisse import hinweise
+def test_nachfrage_fasst_offene_aufgaben_zusammen():
+    """Ticket #26 statt der früheren Sammelzeile je Punkt: eine Frage je Artefakt mit konkretem Vorschlag, gebündelt."""
+    from coach.artefakte import Artefakt, nachfrage_text
 
-    erg = {"ergebnis": "Import wird bereinigt.", "entscheidungen": [{"was": "x", "ergebnis": "y"}],
-           "aufgaben": [{"was": "Validierung bauen", "wer": None, "bis": "Freitag"},
-                        {"was": "Import durchführen", "wer": None, "bis": None},
-                        {"was": "Liste schreiben", "wer": "Lea", "bis": "Montag"}]}
-    assert hinweise("Projektstand", erg) == [
-        "„Projektstand“: 2 Aufgaben ohne Verantwortliche/n und Termin, z. B. „Validierung bauen“."]
+    a = Artefakt(1, "aufgabe", "Validierung bauen", bis="Freitag")
+    b = Artefakt(2, "aufgabe", "Import durchführen")
+    assert nachfrage_text("Projektstand", [a, b], weitere=1) == (
+        "Kurz zu „Projektstand“: Ich hab notiert: Validierung bauen, bis Freitag. Wer übernimmt das? "
+        "Ich hab notiert: Import durchführen. Wer übernimmt das, bis wann? Eine weitere Lücke steht im Dashboard.")
 
 
 def test_rueckwaerts_ansage_im_live_text_wechselt_den_punkt():

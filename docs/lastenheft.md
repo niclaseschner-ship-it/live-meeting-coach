@@ -1,6 +1,6 @@
 # Nestor – Lastenheft
 
-**Stand:** 08.10.2026 (Ticket #13: zwei Stufen) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
+**Stand:** 08.10.2026 (Ticket #13: zwei Stufen; Ticket #26: Meeting-Artefakte) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
 **Vorgänger:** [archiv/spezifikation_v2.md](archiv/spezifikation_v2.md) (Laptop-Fassung, Messungen bis 05.10.)
 
 Diese Datei beschreibt verbindlich, was Nestor tut. Wer etwas Nennenswertes ändert, trägt es hier im selben
@@ -136,7 +136,8 @@ Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leis
 - **Wo stehen wir?** Stand der Agenda und Vorschlag für den nächsten Schritt (Karte)
 - **Regeln eingehalten?** Prüfung der vereinbarten Gesprächsregeln (Karte)
 - **Überblick:** Überblick als Text (Abschnitt 4.7)
-- **Protokoll**
+- **Protokoll:** wertet aus, was noch nicht auf Meeting-Artefakte geprüft ist (Abschnitt 4.9), und zeigt das
+  Protokoll je Agendapunkt mit Entscheidungen, Aufgaben, offenen Punkten und Risiken; Lücken stehen als „fehlt“ dabei.
 - **Nestor fragen:** im Dashboard getippt, am Handy **gehalten**: halten, fragen, loslassen – der Ton der Frage wird
   transkribiert und wie „Nestor, …“ beantwortet, gesprochen und als Karte. Freie Fragen schließen Recherche („gib uns
   einen Überblick zu …“) und das Arbeiten mit dem Transkript ein („such mir raus, was zum Budget gesagt wurde“).
@@ -191,7 +192,7 @@ Regel-Ampeln im Dashboard.
 | Agendawechsel mit Ansage | verlässlich | sofort, 5–13 s | – |
 | Agendawechsel ohne Ansage | experimentell | 15–60 s Verzug, kurze Punkte werden verpasst | „Experimentell: meldet einen stillen Themenwechsel meist erst nach 15 bis 60 Sekunden, kurze Punkte werden dabei manchmal verpasst.“ |
 | Fokus (klares Fremdthema) | verlässlich | 3/3 erkannt nach 26–28 s, 0 Fehlalarme; eigene Tests mit Urlaub und Fußball. Fließende Übergänge zwischen Punkten: siehe Agendawechsel ohne Ansage | |
-| Ergebnisse festhalten | verlässlich | 4/5 Beschlüsse richtig im deutschen Material ([gespraechsregeln.md](gespraechsregeln.md) §10); Hinweis: im englischsprachigen AMI-Material deutlich schwächer (0/8, 1/9, 3/8, [testlauf_2026-10-06.md](testlauf_2026-10-06.md)) | – |
+| Ergebnisse festhalten (Meeting-Artefakte, 4.9) | verlässlich | 4/5 Beschlüsse richtig im deutschen Material ([gespraechsregeln.md](gespraechsregeln.md) §10); Artefakte auf zwei Cloudlauf-Transkripten 12/16 und 10/11 (Premium), 15/16 und 9/11 (Basis, mehr Fehlalarme), die erwartete Lücke jedes Mal gefunden ([gespraechsregeln.md](gespraechsregeln.md) §10); im englischsprachigen AMI-Material deutlich schwächer (0/8, 1/9, 3/8, [testlauf_2026-10-06.md](testlauf_2026-10-06.md)) | – |
 | Gleichzeitiges Sprechen | experimentell | findet 41–68 % der echten, 84–86 % der Meldungen stimmen | „Experimentell: findet 41 bis 68 % der echten Stellen; was gemeldet wird, stimmt in 84 bis 86 % der Fälle.“ |
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
@@ -200,7 +201,8 @@ Regel-Ampeln im Dashboard.
 ### 4.4 Paket zum Herunterladen
 
 Ein ZIP mit Protokoll (`protokoll.md`), Abschlussbild (Basis: `ueberblick.md`, der Überblick als Text),
-Transkript, Agenda mit Zeitnutzung und Hinweisen. In Premium ist das Protokoll die Analyse hinter dem
+Transkript, Agenda mit Zeitnutzung und Hinweisen, dazu `meeting.json` (Standardgliederung, Abschnitt 4.9) und
+`tasks.json` (nur die Aufgaben: was, wer, bis wann, Lücken, bestätigt) als Grundlage für das Export-Dokument (#22). In Premium ist das Protokoll die Analyse hinter dem
 Abschlussbild; Basis hat kein Bild und erstellt es am Meetingende wie der Knopf „Protokoll“ (Ergebnisse je
 Agendapunkt). Mit „Nur auf Knopfdruck“ gibt es Protokoll und Überblick nur, wenn vorher gedrückt wurde.
 Die Aufnahme ist nur auf ausdrücklichen Wunsch dabei.
@@ -249,11 +251,59 @@ Jede Zahl muss im Material vorkommen, sonst entfällt der Eintrag; „Person N�
 umschaltbar. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
 (55.000 € statt 25.000 €, Wortsalat, Bilddatei bei Microsoft Azure) – deshalb in Basis kein Bildmodell.
 
+### 4.9 Meeting-Artefakte (Ticket #26)
+
+Nestor erkennt **unabhängig von der Agenda** im Live-Text vier Artefakte und führt sie über das ganze Meeting
+(`coach/artefakte.py`, Grundlage [meeting_artefakte_2026-10-08.md](meeting_artefakte_2026-10-08.md)).
+Agendapunkte müssen keine Entscheidung haben.
+
+| Artefakt | Pflichtfelder | Lücke, wenn |
+|---|---|---|
+| **Aufgabe** | Was (Handlung), Wer (genau eine Person), Bis wann | eins fehlt; nur „wir/alle/jemand“; „prüfen/anschauen“ ohne Ergebnis |
+| **Entscheidung** | Was gilt, endgültig/vorläufig, wer hat entschieden | nur Vorschlag; vorläufig ohne Wiedervorlage |
+| **Offener Punkt** | präzise Frage, wer klärt, bis wann/Termin | weder Zuständige noch Wiedervorlage (außerhalb der Agenda: Parkplatz) |
+| **Risiko** | Ursache → Auswirkung, wer beobachtet, Reaktion | diffuse Sorge; niemand beobachtet; hohes Risiko ohne Maßnahme |
+
+- **Datenmodell:** je Artefakt Typ, Felder, Lücken (daraus „vollständig“), Konfidenz, Quelle (Zeit, Satz, Sprecher),
+  Agendapunkt zur Zeit der Quelle, bestätigt ja/nein (Stimme oder Klick), nachgefragt, abgelehnt. Daraus abgeleitet:
+  die Ergebnisse je Agendapunkt (Nestors Kontext, Überblick, Protokoll, Abschluss-Kopf) und die Standardgliederung.
+- **Erkennung live:** etwa je Minute Sprache (Basis je zwei Minuten) ein Aufruf mit den neuen Sätzen, etwas Kontext
+  und den schon festgehaltenen Artefakten mit Nummer – das Modell ergänzt, statt doppelt anzulegen. Zusätzlich beim
+  Punktwechsel, vor der Zusammenfassung, auf den Protokoll-Knopf und am Ende. Premium `gpt-5.4-mini`, Basis
+  `mistral-medium-latest` (`mistral-small` war im Vergleich deutlich schlechter: Aufgaben für Nestor, falsche
+  Zuständige). Unter Konfidenz 0,4 wird nichts festgehalten, unter 0,5 nicht nachgefragt.
+- **Anzeige:** linke Spalte unter der Agenda, „Festgehalten“ – unauffällig, je Eintrag Typ-Zeichen, Inhalt, wer · bis;
+  was fehlt, steht als kleines rotes Etikett dabei („wer?“, „bis wann?“). Klick öffnet die Bearbeitung (Typ, Was, Wer,
+  Bis wann, bei Entscheidungen der Status, bei Risiken die Reaktion), „+“ trägt von Hand ein. Was die Runde setzt, gilt
+  als bestätigt und wird von der Erkennung nicht überschrieben.
+- **Prüfung beim Punktwechsel** (nur mit der Regel „Ergebnisse festhalten“): Nestor fragt kurz und gebündelt, eine
+  Frage je unvollständigem Artefakt mit konkretem Vorschlag („Ich hab notiert: Statusseite-Zusammenfassung. Wer
+  übernimmt das, bis wann?“), höchstens zwei gesprochen, der Rest steht im Dashboard. Ist alles vollständig, schweigt er.
+  Nach jedem Artefakt fragt er nur einmal; eine abgelehnte Nachfrage („brauchen wir nicht“, Knopf „Nicht nötig“)
+  kommt nie wieder, auch nicht am Ende.
+- **Fünf Minuten vor dem geplanten Ende** (immer, auch ohne Regel; geplantes Ende = Summe der Agendaminuten, bei
+  Meetings unter zehn Minuten zur Hälfte): Rückfrage im Nestor-Feld mit „Ja, zusammenfassen“ / „Nein, danke“ und
+  gesprochen: „Noch fünf Minuten. Soll ich zusammenfassen und die letzten Aufgaben verteilen?“. Bei Ja (Stimme oder
+  Knopf): Zusammenfassung aus den Artefakten (nichts frei Formuliertes) plus höchstens drei Lücken – zuerst Aufgaben
+  ohne Wer, dann ohne Termin, dann unklare Entscheidungen bzw. hohe Risiken; dazu eine Karte im Nestor-Feld.
+- **Lücken schließen:** Nach einer Nachfrage gilt ein Satz ohne Namen 30 s lang als Antwort („Sofie übernimmt die
+  Statusseite bis Freitag“) – ein kleiner Aufruf trägt ein, Nestor bestätigt kurz („Eingetragen: Sofie, bis Freitag.“).
+  Mit Namen geht es jederzeit: Premium über das Realtime-Werkzeug `artefakt_eintragen`, Basis über
+  `AKTION: eintragen`. Dazu Klick und Bearbeiten im Dashboard.
+- **Nur auf Knopfdruck:** keine automatische Erkennung; Artefakte entstehen nur über den Protokoll-Knopf. Die
+  Fünf-Minuten-Rückfrage erscheint still im Nestor-Feld; ihr Ja wirkt wie der Protokoll-Knopf.
+- **Standardgliederung** (`meeting.json`, für Abschluss und Export #22): Kopf (Titel, Datum, Dauer, Ziel, „Ziel
+  erreicht?“ – offen, bis die Korrekturansicht aus #22 es abfragt), Entscheidungen, Aufgaben (Was/Wer/Bis wann, Lücken),
+  offene Punkte, Risiken, Parkplatz, Agenda Soll/Ist. Das Dokument selbst (Grafik, Regelanalyse, Anhang) kommt mit #22.
+- **Kosten:** Premium etwa +0,2 $ je Stunde (≈ 50 Aufrufe à ~1 600 Tokens rein, ~450 raus), Basis etwa +0,15 $ je
+  Stunde (≈ 27 Aufrufe à ~1 800/350 mit mistral-medium); gemessen auf zwei dichten 10-Minuten-Transkripten 0,13–0,17 $/h
+  (Premium) und 0,14–0,24 $/h (Basis). Die frühere Ergebnisprüfung je Punkt entfällt dafür.
+
 ## 5. Rahmenbedingungen
 
 | | |
 |---|---|
-| Kosten | Premium ≤ 2 $ je Stunde, Basis ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll |
+| Kosten | Premium ≤ 2 $ je Stunde, Basis ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll. Mit den Meeting-Artefakten (4.9) Premium etwa 2,2 $, Basis etwa 0,85 $ je Stunde (Richtwert mit 10 Fragen und 2 Recherchen) – Basis liegt damit über dem Ziel; ob seltener erkannt oder das Ziel angehoben wird, ist offen (Entscheidung Niclas) |
 | Datenschutz Basis | In Basis geht kein einziger Aufruf an OpenAI (nachgewiesen über das Nutzungsprotokoll) |
 | Parallele Meetings | gemessen ohne 429: Basis bis 24, Premium bis 8 gleichzeitig ([messung_basis.md](messung_basis.md)); bei Überlast wiederholt Nestor mit Wartezeit und sagt sonst „Ich komme gerade nicht durch, versucht es gleich nochmal.“ |
 | Datenhaltung | Ton und Transkript nur bis zum Abschluss; danach bleibt nur, was heruntergeladen oder gespendet wurde. Nutzungsprotokoll ohne Inhalte. |

@@ -369,8 +369,10 @@ const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueb
   protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage" };
 const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
   bild: "Bild", frage: "Nestor fragen" };
-Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick" });
-Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse", ueberblick: "bild" });
+Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick",
+  zusammenfassung: "Zusammenfassung" });
+Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse", ueberblick: "bild",
+  zusammenfassung: "ergebnisse" });
 const knopfdruck = (z) => z?.modus === "knopfdruck";
 function knopfDruecken(art, daten = {}) {
   if (zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
@@ -495,7 +497,8 @@ function feldRendern() {
   const redet = spricht();
   const frisch = feld.fest || redet || jetztS() - feld.seit < 60;  // automatisch Gezeigtes tritt nach 1 min zurück
   const inhalt = !feld.zu && frisch && !!(feld.text || feld.karte);
-  const zeigen = !!aktiv && (arbeitet || auftraege.length > 0 || inhalt);
+  const rueckfrage = rueckfrageRendern(z);  // Ticket #26: bleibt stehen, bis sie beantwortet ist
+  const zeigen = !!aktiv && (arbeitet || auftraege.length > 0 || inhalt || rueckfrage);
   $("nestor-feld").hidden = !zeigen;
   if (!zeigen) return;
   const laeuft = auftraege.some((x) => x.zustand === "laeuft");
@@ -531,6 +534,103 @@ function kartenRendern(z) {
     if (!["folie", "ueberblick"].includes(neueste.art)) karteZeigen(neueste, true);
   }
   if (!karten.length && feld.karte) { feld.karte = null; feld.zu = true; } // neues Meeting
+}
+
+// ---------- Meeting-Artefakte (Ticket #26) ----------
+// Live erkannt (coach/artefakte.py), unauffällig in der linken Spalte: je Eintrag Typ, Inhalt, wer · bis; was fehlt,
+// steht rot dabei. Klick öffnet die Bearbeitung an Ort und Stelle – gespeichert gilt als bestätigt.
+const ART_ZEICHEN = { aufgabe: "☐", entscheidung: "✓", offen: "?", risiko: "!" };
+const ART_TYP = { aufgabe: "Aufgabe", entscheidung: "Entscheidung", offen: "Offener Punkt", risiko: "Risiko" };
+const ART_LUECKE = { was: "was genau?", wer: "wer?", bis: "bis wann?", status: "beschlossen?", reaktion: "Reaktion?" };
+let artEdit = null;  // id des Eintrags in Bearbeitung, "neu" für einen neuen
+function artFeld(name, wert, platzhalter) {
+  return el("input", { name, value: wert ?? "", placeholder: platzhalter, autocomplete: "off" });
+}
+function artFormular(a) {
+  const typ = el("select", { name: "typ" }, ...Object.entries(ART_TYP).map(([k, t]) =>
+    el("option", { value: k, ...(k === (a?.typ ?? "aufgabe") ? { selected: "" } : {}) }, t)));
+  const status = el("select", { name: "status" }, ...[["endgueltig", "beschlossen"], ["vorlaeufig", "vorläufig"],
+    ["vorschlag", "nur Vorschlag"]].map(([k, t]) => el("option", { value: k, ...(k === (a?.status ?? "endgueltig") ? { selected: "" } : {}) }, t)));
+  const f = el("form", { class: "art-form" }, typ, artFeld("was", a?.was, "Was?"),
+    el("div", { class: "art-zwei" }, artFeld("wer", a?.wer, "Wer?"), artFeld("bis", a?.bis, "Bis wann?")),
+    status, artFeld("reaktion", a?.reaktion, "Reaktion (vermeiden, verringern, in Kauf nehmen)"),
+    el("div", { class: "art-knoepfe" },
+      el("button", { class: "primaer klein", type: "submit" }, "Speichern"),
+      ...(a ? [el("button", { class: "klein", type: "button", onclick: async () => {
+        artEdit = null; await api("/api/artefakte/loeschen", { id: a.id }); } }, "Löschen")] : []),
+      el("button", { class: "klein leise", type: "button", onclick: () => { artEdit = null; artefakteRendern(zustand, true); } }, "Abbrechen")));
+  const sichtbar = () => {  // Status nur bei Entscheidungen, Reaktion nur bei Risiken
+    status.hidden = typ.value !== "entscheidung"; f.reaktion.hidden = typ.value !== "risiko";
+  };
+  typ.onchange = sichtbar; sichtbar();
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const d = { typ: typ.value, was: f.was.value.trim(), wer: f.wer.value.trim(), bis: f.bis.value.trim() };
+    if (typ.value === "entscheidung") d.status = status.value;
+    if (typ.value === "risiko") d.reaktion = f.reaktion.value.trim();
+    if (!d.was) { f.was.focus(); return; }
+    artEdit = null;
+    await api(a ? "/api/artefakte/bearbeiten" : "/api/artefakte/neu", a ? { id: a.id, ...d } : d);
+  };
+  return f;
+}
+function artZeile(a) {
+  const luecken = a.luecken ?? [];
+  const meta = [];
+  if (a.typ !== "entscheidung" || a.wer) meta.push(a.wer && !luecken.includes("wer") ? el("span", {}, a.wer) : null);
+  if (a.bis) meta.push(el("span", {}, `bis ${a.bis}`));
+  if (a.typ === "entscheidung" && a.status === "vorlaeufig") meta.push(el("span", {}, "vorläufig"));
+  if (a.typ === "risiko" && a.reaktion) meta.push(el("span", {}, a.reaktion));
+  if (a.ausserhalb) meta.push(el("span", { class: "art-park" }, "Parkplatz"));
+  const fehlt = luecken.map((l) => el("span", { class: `luecke${a.abgelehnt ? " still" : ""}`,
+    "data-tip": a.abgelehnt ? "Die Runde wollte das offen lassen" : "Fehlt noch – klicken zum Eintragen" }, ART_LUECKE[l] ?? l));
+  const unsicher = a.konfidenz < 0.6 && !a.bestaetigt;
+  return el("li", { class: `art ${a.typ}${luecken.length ? " unvollstaendig" : ""}${unsicher ? " unsicher" : ""}${a.erledigt ? " erledigt" : ""}`,
+      tabindex: "0", "data-tip": `${ART_TYP[a.typ]} · ${a.zeit_text}${a.zitat ? ` · „${a.zitat}“` : ""}${unsicher ? " · unsicher erkannt" : ""}`,
+      onclick: () => { artEdit = a.id; artefakteRendern(zustand, true); },
+      onkeydown: (e) => { if (e.key === "Enter") { artEdit = a.id; artefakteRendern(zustand, true); } } },
+    el("span", { class: "art-zeichen", "aria-label": ART_TYP[a.typ] }, ART_ZEICHEN[a.typ]),
+    el("span", { class: "art-inhalt" }, el("span", { class: "art-was" }, a.was, ...(a.bestaetigt ? [el("span", { class: "art-ok", "data-tip": "von der Runde bestätigt" }, " ✓")] : [])),
+      el("span", { class: "art-meta" }, ...meta.filter(Boolean), ...fehlt)));
+}
+function artefakteRendern(z, erzwingen = false) {
+  const art = z.artefakte ?? { liste: [] };
+  const liste = art.liste ?? [];
+  $("artefakte-karte").hidden = !liste.length && artEdit === null;
+  $("art-zahl").textContent = liste.length ? `${liste.length}${art.luecken ? ` · ${art.luecken} Lücke${art.luecken > 1 ? "n" : ""}` : ""}` : "";
+  // Nicht neu zeichnen, während jemand tippt – sonst verschwindet die Eingabe beim nächsten Stand
+  if (!erzwingen && artEdit !== null && $("artefakte").contains(document.activeElement)) return;
+  const zeilen = liste.map((a) => (a.id === artEdit ? el("li", { class: "art bearbeiten" }, artFormular(a)) : artZeile(a)));
+  if (artEdit === "neu") zeilen.unshift(el("li", { class: "art bearbeiten" }, artFormular(null)));
+  if (artEdit !== null && artEdit !== "neu" && !liste.some((a) => a.id === artEdit)) artEdit = null;
+  $("artefakte").replaceChildren(...zeilen);
+  if (erzwingen) $("artefakte").querySelector(".art-form input[name=was]")?.focus();
+}
+$("art-neu").onclick = () => { artEdit = "neu"; if (zustand) artefakteRendern(zustand, true); };
+function artBearbeiten(id) {  // aus Nestors Rückfrage: den Eintrag in der linken Spalte öffnen
+  artEdit = id; if (!zustand) return;
+  artefakteRendern(zustand, true);
+  $("artefakte-karte").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+// Rückfrage im Nestor-Feld: Fünf-Minuten-Frage (Ja/Nein) oder Nachfrage nach Lücken (Eintragen/Nicht nötig)
+function rueckfrageRendern(z) {
+  const r = z.artefakte?.rueckfrage;
+  $("nf-rueckfrage").hidden = !r;
+  if (!r) return false;
+  const fuenf = r.art === "fuenf_minuten";
+  $("nf-rueckfrage-art").textContent = fuenf ? "Gleich Schluss" : "Kurz nachgefragt";
+  $("nf-rueckfrage-text").textContent = fuenf ? r.text : "Was fehlt noch?";
+  const liste = (z.artefakte.liste ?? []).filter((a) => r.ids.includes(a.id));
+  $("nf-rueckfrage-liste").hidden = fuenf || !liste.length;
+  $("nf-rueckfrage-liste").replaceChildren(...liste.map((a) => el("li", {},
+    el("span", { class: "nf-rk-was" }, a.was, " ", ...(a.luecken ?? []).map((l) => el("span", { class: "luecke" }, ART_LUECKE[l] ?? l))),
+    el("button", { class: "klein", onclick: () => artBearbeiten(a.id) }, "Eintragen"),
+    el("button", { class: "klein leise", onclick: () => api("/api/artefakte/ablehnen", { id: a.id }) }, "Nicht nötig"))));
+  $("nf-rueckfrage-knoepfe").replaceChildren(...(fuenf
+    ? [el("button", { class: "primaer klein", onclick: () => api("/api/artefakte/antwort", { antwort: "ja" }) }, "Ja, zusammenfassen"),
+      el("button", { class: "klein", onclick: () => api("/api/artefakte/antwort", { antwort: "nein" }) }, "Nein, danke")]
+    : [el("button", { class: "klein", onclick: () => api("/api/artefakte/antwort", { antwort: "nein" }) }, "Später")]));
+  return true;
 }
 
 // ---------- Darstellung ----------
@@ -691,6 +791,7 @@ function liveRendern(z) {
 
   dynamikRendern(z);
   bildRendern(z);
+  artefakteRendern(z);
 }
 
 const KLIMA_HOEHE = { ruhig: 30, lebhaft: 65, hitzig: 100 };
@@ -813,6 +914,7 @@ function verbinden() {
   iconSetzen("kosten-icon", "muenze"); iconSetzen("btn-folie", "folie");
   document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
   iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("karte-zu", "zu");
+  iconSetzen("art-neu", "plus");
   $("f-titel").value = "Testmeeting";
   agendaPunkte = [
     { titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 },

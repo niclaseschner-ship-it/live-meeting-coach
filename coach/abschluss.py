@@ -61,8 +61,8 @@ def _bericht(ordner: Path) -> dict:
 
 
 def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
-    """ZIP für die Runde: Protokoll, Abschlussbild bzw. Überblick, Transkript, Agenda, Hinweise – ohne debug/ und
-    bericht.json."""
+    """ZIP für die Runde: Protokoll, Abschlussbild bzw. Überblick, Transkript, Agenda, Hinweise, meeting.json und
+    tasks.json (Ticket #26) – ohne debug/ und bericht.json."""
     ordner = Path(ordner)
     bericht = _bericht(ordner)
     puffer = io.BytesIO()
@@ -71,7 +71,7 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
         if protokoll.exists():
             z.write(protokoll, "protokoll.md")
         # Abschlussbild (Premium) bzw. Überblick als Text (Basis: steht an der Stelle des Bilds, Lastenheft 4.7)
-        for bild in ("zusammenfassung.png", "zusammenfassung.svg", "ueberblick.md"):
+        for bild in ("zusammenfassung.png", "zusammenfassung.svg", "ueberblick.md", "meeting.json", "tasks.json"):
             if (ordner / bild).exists():
                 z.write(ordner / bild, bild)
         z.writestr("transkript.md", _transkript_md(bericht.get("transkript", [])))

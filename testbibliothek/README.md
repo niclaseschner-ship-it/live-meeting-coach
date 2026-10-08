@@ -52,7 +52,7 @@ weitergegeben; deshalb liegt es nicht im Repository.
 | `scripts/bench_regeln.py [probe …]` | Regel 5 (Monologe) und 6 (Redeanteile, stille Person) gegen die Sprecher-Referenz, ohne KI-Kosten |
 | `scripts/bench_fokus.py` | Regel 3: Fremdthemen-Einschübe auf Satzebene, ~5 Cent je Aufruf |
 | `scripts/bench_ton.py` | Regel 7 auf dem Text-Testset, unter 1 Cent |
-| `scripts/bench_ergebnisse.py` | Regel 10: Ergebnis je TOP im Stadtrat gegen bekannte Beschlüsse, unter 1 Cent |
+| `scripts/bench_artefakte.py` | Regel 10 / Ticket #26: Artefakte (Aufgabe, Entscheidung, offener Punkt, Risiko), Nachfragen, Fünf-Minuten-Zusammenfassung und Schließen per Stimme auf einem Cloudlauf-Transkript, je Lauf 2–5 Cent |
 | `scripts/tts_probe.py` | erzeugt die synthetische Probe `ton_tts` (wenige Cent) |
 | `scripts/abspielen.py <wav> --tempo N` | ganze Pipeline, Bericht in `logs/bericht_<name>.json` (`LMC_OFFLINE=1` ohne KI-Kosten) |
 | `scripts/themen_vergleich.py` | Agenda-Wechsel und Fokus-Hinweise auf einem gespeicherten Transkript |
