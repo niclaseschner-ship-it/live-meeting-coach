@@ -108,7 +108,12 @@ geraet: dict[WebSocket, str] = {}       # Verbindung -> "laptop" | "handy", dami
 
 
 async def senden_direkt(nachricht: dict) -> None:
-    """Sprachausgabe nur an den Lautsprecher-Tab – mehrere offene Dashboards sprachen sonst doppelt (Test 05.10.)."""
+    """Sprachausgabe nur an den Lautsprecher-Tab – mehrere offene Dashboards sprachen sonst doppelt (Test 05.10.).
+    Was Nestor sagt (Text) und das Verstummen gehen an alle: der Beamer zeigt den Text auch, wenn das Handy spricht
+    (Ticket #21)."""
+    if nachricht.get("typ") in ("nestor_text", "stimme_stopp"):
+        await _an_alle(json.dumps(nachricht, ensure_ascii=False))
+        return
     if lautsprecher in verbindungen:
         try:
             await asyncio.wait_for(lautsprecher.send_text(json.dumps(nachricht, ensure_ascii=False)), 2.0)
@@ -266,6 +271,18 @@ async def assistent_stopp():
     await coach.direkt_senden({"typ": "stimme_stopp"})
     await coach.melden()
     return {"ok": True}
+
+
+@app.post("/api/assistent/abbrechen")
+async def assistent_abbrechen(daten: dict):
+    """✕ an einem Auftrag in der Warteschlange (Ticket #21): Recherche, Bild, Folie oder Überblick abbrechen."""
+    try:
+        nr = int(daten.get("id"))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, "Ungültiger Auftrag") from e
+    ok = coach.assistent.auftrag_abbrechen(nr)
+    await coach.melden()
+    return {"ok": ok}
 
 
 @app.post("/api/assistent/fortsetzen")

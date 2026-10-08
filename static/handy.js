@@ -37,6 +37,7 @@ function verbinden() {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return lautsprecher && stimme.abspielen(d.pcm);
     if (d.typ === "stimme_stopp") return stimme.stopp();
+    if (d.typ === "nestor_text") return; // Nestors Text läuft im Dashboard mit (Ticket #21), nicht am Handy
     if (d.typ === "pong") { laufzeit = Math.round(performance.now() - d.t); return chipsRendern(); }
     zustand = d; rendern();
   };
