@@ -355,7 +355,7 @@ async def regeln_anwaehlen(seite: Page, bericht: Bericht) -> None:
             if await kasten.is_disabled():
                 fehlend.append(f"{regel_id} (deaktiviert – noch nicht umgesetzt?)")
                 continue
-            await kasten.check()
+            await kasten.check(force=True)  # Kachel-Label liegt über dem Kästchen (b0e158f)
         except Exception as e:  # noqa: BLE001
             fehlend.append(f"{regel_id} ({type(e).__name__}: {e})")
     if fehlend:
@@ -648,20 +648,23 @@ async def abschluss(seite: Page, bericht: Bericht, offline: bool, url: str, clou
         except Exception as e:  # noqa: BLE001
             bericht.pruefen("Paket-Inhalt", "fehlt", f"ZIP nicht lesbar: {e}")
 
+    # Feedback läuft seit #18 über den schwebenden Knopf (static/feedback.js), auf jeder Seite gleich;
+    # #fb-text auf der Abschlussseite ist nur noch die Anmerkung zur Datenspende.
     await seite.locator("#fb-text").fill("Cloud-Testlauf (automatisiert) – nur zur Prüfung des Ablaufs.")
-    wert_vor_klick = await seite.locator("#fb-text").input_value()
-    await seite.locator("#btn-feedback").click()
-    ok = await warten_auf(seite, "() => !document.getElementById('fb-danke').hidden", 20.0)
+    try:
+        await seite.locator("#fb-schwebend").click()
+        await seite.locator("#fb-nachricht").fill("Cloud-Testlauf (automatisiert) – nur zur Prüfung des Ablaufs.")
+        await seite.locator("#fb-senden").click()
+        ok = await warten_auf(seite, "() => !document.getElementById('fb-dank').hidden", 20.0)
+        detail = ""
+    except Exception as e:  # noqa: BLE001
+        ok, detail = False, f"{type(e).__name__}: {e}"[:300]
     if ok:
         bericht.pruefen("Feedback senden", "ok")
     else:
         await bericht.screenshot(seite, "fehler_feedback")
-        # Konsole/Netzfehler fangen pageerror/console/requestfailed schon global auf (siehe lauf()); hier
-        # zusätzlich den sichtbaren Feldzustand, um zwischen "nicht geklickt" und "Server antwortet nicht" zu
-        # unterscheiden (Nachtrag des Koordinators: "ohne Detail" im ersten Cloud-Lauf).
-        bericht.pruefen("Feedback senden", "fehlt",
-                        f"Feldwert vor Klick: {wert_vor_klick!r}, Knopf deaktiviert danach: "
-                        f"{await seite.locator('#btn-feedback').is_disabled()}")
+        bericht.pruefen("Feedback senden", "fehlt", detail)
+    await seite.keyboard.press("Escape")
 
     await seite.locator("#sp-einverstanden").check()
     if not await seite.locator("#btn-spende").is_disabled():
