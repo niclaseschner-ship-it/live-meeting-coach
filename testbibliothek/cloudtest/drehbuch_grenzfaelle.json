@@ -1,0 +1,143 @@
+{
+ "titel": "Incident-Review: Ausfall des Kundenportals am Montag",
+ "ziel": "Den Ausfall nachvollziehen, die technische Ursache klären und verbindliche Maßnahmen sowie die Kundenkommunikation festlegen.",
+ "agenda": [
+  {
+   "titel": "Ablauf des Ausfalls",
+   "ziel": "Zeitlinie rekonstruieren und klären, wer den Ausfall wann bemerkt und bearbeitet hat.",
+   "minuten": 2
+  },
+  {
+   "titel": "Ursache",
+   "ziel": "Zusammenhang zwischen Datenbank-Migration, Kubernetes-Deployment und fehlendem Rollback klären.",
+   "minuten": 2
+  },
+  {
+   "titel": "Maßnahmen",
+   "ziel": "Sofort- und Folgemaßnahmen mit konkreten Fristen festlegen.",
+   "minuten": 1
+  },
+  {
+   "titel": "Kommunikation an Kunden",
+   "ziel": "Inhalt und Zeitpunkt der Kundeninformation abstimmen.",
+   "minuten": 1
+  }
+ ],
+ "personen": [
+  {
+   "name": "Mara",
+   "rolle": "Incident Commander"
+  },
+  {
+   "name": "Jonas",
+   "rolle": "Backend und Datenbank"
+  },
+  {
+   "name": "Sofie",
+   "rolle": "SRE und Monitoring"
+  },
+  {
+   "name": "Tarek",
+   "rolle": "Support und Kommunikation"
+  }
+ ],
+ "aeusserungen": [
+  {
+   "person": 0,
+   "text": "Okay, dann rekonstruiere ich zuerst einmal die Zeitlinie, möglichst vollständig. Die geplante Migration ist Montag um 8:45 Uhr gestartet. Jonas hat das Migrationsskript gegen die produktive Postgres-Datenbank ausgeführt, während das Kubernetes-Deployment der neuen Backend-Version bereits lief. Um 8:52 Uhr waren die neuen Pods laut Deployment zunächst ready. Der erste technische Hinweis kam um 9:03 Uhr: Unser Monitoring zeigte steigende Antwortzeiten beim Kundenportal, aber noch keinen kritischen Alert, weil der Schwellenwert auf fünf Minuten Mittelwert stand. Um 9:07 Uhr hat sich dann der erste Kunde beim Support gemeldet, weil der Login nur noch einen Spinner gezeigt hat. Tarek hat das um 9:09 Uhr in den Incident-Kanal geschrieben. Ich habe die Meldung um 9:11 Uhr gesehen und um 9:13 Uhr den Incident eröffnet. Zu dem Zeitpunkt lag die Fehlerrate schon bei ungefähr 38 Prozent. Sofie hat um 9:15 Uhr erkannt, dass die Backend-Pods zwar liefen, aber ihre Postgres-Verbindungen blockierten. Um 9:18 Uhr haben wir das Deployment skaliert, was kurzfristig eher mehr offene Connections erzeugt hat. Um 9:22 Uhr war das Portal praktisch nicht mehr nutzbar, also vollständige Downtime aus Kundensicht. Jonas hat um 9:26 Uhr die Migration geprüft und festgestellt, dass der neue Index noch gebaut wurde und dabei mehrere Tabellenzugriffe blockierte. Um 9:31 Uhr haben wir versucht, die Anwendung per Kubernetes-Rollback auf das vorherige Image zu setzen. Das hat zwar die Pods zurückgesetzt, aber nicht das Datenbankschema. Um 9:38 Uhr wurde der Index-Build abgebrochen. Danach mussten wir offene Transaktionen beenden und den Connection-Pool neu starten. Ab 9:47 Uhr gingen die ersten Requests wieder durch, um 9:53 Uhr war die Fehlerrate unter fünf Prozent, und um 10:02 Uhr haben wir den Incident als stabil markiert. Damit hatten wir rund vierzig Minuten echte Downtime und insgesamt knapp eine Stunde mit deutlicher Beeinträchtigung. Unser monatliches SLA ist dadurch zumindest gefährdet; die genaue Berechnung fehlt noch.",
+   "punkt": 0,
+   "ereignisse": [
+    "monolog"
+   ]
+  },
+  {
+   "person": 2,
+   "text": "Eine Ergänzung: Der Warning-Alert kam tatsächlich um 9:03 Uhr, aber der Pager erst um 9:14 Uhr. Da war die Latenz schon massiv hoch. Mara, die Incident-Eröffnung um 9:13 Uhr kam also eine Minute vor meinem Pager. Das zeigt ziemlich klar, dass unsere Alarmierung bei schleichenden Datenbankproblemen zu träge ist.",
+   "punkt": 0,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Gut, die Zeitlinie ist damit belastbar. Kommen wir zur Ursache: Wir müssen klären, warum die Migration den Ausfall ausgelöst hat und weshalb kein vollständiger Rollback möglich war.",
+   "punkt": 1,
+   "ereignisse": [
+    "wechsel_ansage"
+   ]
+  },
+  {
+   "person": 2,
+   "text": "Heißt das, selbst ein schneller Application-Rollback hätte uns nicht gerettet? Denn das alte Image konnte ja ebenfalls nicht sinnvoll mit den blockierten Tabellen arbeiten. Ich frage wegen des Postmortems: Wir sollten nicht so formulieren, als sei nur das Kubernetes-Rollback zu spät gekommen.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Genau. Der eigentliche Fehler war, dass es für die Schemaänderung keinen getesteten Down-Pfad gab. Das Runbook sagte nur: Deployment zurückrollen. Für Postgres stand da nichts. Ich hatte zwar ein Gegen-Skript vorbereitet, aber nicht im Repository eingecheckt und während des Incidents wollte ich nichts Ungeprüftes ausführen.",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 3,
+   "text": "Ganz kurz, weil wir gerade bei Montagmorgen und ungeprüften Dingen sind: Die Kaffeemaschine war ja ebenfalls kaputt. Ich stand um halb neun davor, sie blinkte dreimal, dann kam nur lauwarmes Wasser. Jonas meinte noch, man müsse den Tank einmal herausnehmen, aber danach lief das verdammte Ding komplett aus. Der halbe Küchenboden war nass, und gleichzeitig kamen die ersten Kundentickets rein. Das war, äh, wirklich ein beschissener Start. Vielleicht schreiben wir dafür aber kein Postmortem, sondern kleben einfach einen Zettel dran und bestellen Entkalker. Gut, zurück zur Datenbank.",
+   "punkt": -1,
+   "ereignisse": [
+    "abschweifung",
+    "kraftausdruck"
+   ]
+  },
+  {
+   "person": 0,
+   "text": "Ja, zurück zum Incident. Als Root Cause halten wir fest: blockierende Postgres-Migration ohne Concurrent-Option, unrealistische Testdatenmenge und kein getesteter Datenbank-Rollback. Verstärkend kamen unzureichende Readiness-Probes und die verspätete Alarmierung hinzu. Gibt es dagegen fachlich Einwände?",
+   "punkt": 1,
+   "ereignisse": []
+  },
+  {
+   "person": 2,
+   "text": "Nein. Als Sofortmaßnahme passe ich die Alerts auf Connection-Pool-Auslastung, Lock-Wartezeit und Fehlerquote an. Außerdem soll die Readiness-Probe künftig eine echte, leichte Datenbankabfrage enthalten. Wir müssen dabei nur aufpassen, dass ein kurzer Postgres-Hänger nicht sofort alle Pods aus dem Service nimmt.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Für Folgemaßnahmen schlage ich vor: Migrationen mit erwartbaren Locks nur noch separat vom Application-Deployment, immer mit Review durch eine zweite Person und mit getesteter Vorwärts- und Rückwärtsstrategie. Zusätzlich bauen wir einen Produktionsdatensatz in realistischer Größenordnung für den Staging-Test auf, natürlich anonymisiert.",
+   "punkt": 2,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Dann ist der Beschluss: Sofie richtet drei zusätzliche Monitoring-Alerts ein, und die nächste produktive Migration bekommt ein Wartungsfenster von 30 Minuten. Rollback-Skript und Runbook müssen spätestens 24 Stunden vorher geprüft sein. Das kommt genauso ins Postmortem.",
+   "punkt": 2,
+   "ereignisse": [
+    "beschluss"
+   ]
+  },
+  {
+   "person": 0,
+   "text": "Kommen wir zum vierten Punkt, der Kommunikation an die Kunden. Tarek, was ist bereits raus, und was sollten wir noch nachliefern?",
+   "punkt": 3,
+   "ereignisse": [
+    "wechsel_ansage"
+   ]
+  },
+  {
+   "person": 3,
+   "text": "Bisher ging nur die Meldung auf der Statusseite raus: eingeschränkte Verfügbarkeit, später Entwarnung. Heute Nachmittag würde ich eine kurze Kundeninformation senden. Darin nennen wir den Zeitraum, die betroffenen Funktionen und dass eine fehlerhafte Datenbank-Migration die Ursache war. Keine unnötigen Interna, aber transparent genug. Kunden mit SLA-Vertrag bekommen zusätzlich morgen früh ihre individuelle Downtime-Auswertung.",
+   "punkt": 3,
+   "ereignisse": []
+  },
+  {
+   "person": 1,
+   "text": "Bitte schreibt nicht, Daten seien beschädigt worden. Dafür gibt es nach den Checks keinen Hinweis. Korrekt wäre: Zugriffe waren zeitweise blockiert, die Datenintegrität blieb erhalten. Ich liefere dafür noch die bestätigten Postgres-Prüfergebnisse.",
+   "punkt": 3,
+   "ereignisse": []
+  },
+  {
+   "person": 0,
+   "text": "Einverstanden. Die allgemeine Kundenmail geht heute bis 16 Uhr raus, die SLA-Auswertungen morgen bis 10 Uhr. Außerdem muss noch eine verständliche Zusammenfassung des Postmortems für die Statusseite erstellt werden, ohne technische Schuldzuweisung und mit den beschlossenen Maßnahmen. Damit schließen wir das Review.",
+   "punkt": 3,
+   "ereignisse": [
+    "aufgabe_ohne_zustaendig"
+   ]
+  }
+ ]
+}

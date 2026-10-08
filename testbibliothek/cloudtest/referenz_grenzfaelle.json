@@ -1,0 +1,329 @@
+{
+ "titel": "Incident-Review: Ausfall des Kundenportals am Montag",
+ "ziel": "Den Ausfall nachvollziehen, die technische Ursache klären und verbindliche Maßnahmen sowie die Kundenkommunikation festlegen.",
+ "agenda": [
+  {
+   "titel": "Ablauf des Ausfalls",
+   "ziel": "Zeitlinie rekonstruieren und klären, wer den Ausfall wann bemerkt und bearbeitet hat.",
+   "minuten": 2
+  },
+  {
+   "titel": "Ursache",
+   "ziel": "Zusammenhang zwischen Datenbank-Migration, Kubernetes-Deployment und fehlendem Rollback klären.",
+   "minuten": 2
+  },
+  {
+   "titel": "Maßnahmen",
+   "ziel": "Sofort- und Folgemaßnahmen mit konkreten Fristen festlegen.",
+   "minuten": 1
+  },
+  {
+   "titel": "Kommunikation an Kunden",
+   "ziel": "Inhalt und Zeitpunkt der Kundeninformation abstimmen.",
+   "minuten": 1
+  }
+ ],
+ "dauer_s": 680.0,
+ "vorlauf_s": 25.0,
+ "ereignisse": [
+  {
+   "ereignis": "monolog",
+   "zeit_s": 25.0,
+   "person": 0,
+   "punkt": 0,
+   "text": "Okay, dann rekonstruiere ich zuerst einmal die Zeitlinie, möglichst vollständig. Die geplante Migration ist Montag um 8:45 Uhr gestartet. Jonas hat das Migrationsskript gegen die produktive Postgres-Datenbank ausgeführt, während das Kubernetes-Deployment der neuen Backend-Version bereits lief. Um 8:52 Uhr waren die neuen Pods laut Deployment zunächst ready. Der erste technische Hinweis kam um 9:03 Uhr: Unser Monitoring zeigte steigende Antwortzeiten beim Kundenportal, aber noch keinen kritischen Alert, weil der Schwellenwert auf fünf Minuten Mittelwert stand. Um 9:07 Uhr hat sich dann der erste Kunde beim Support gemeldet, weil der Login nur noch einen Spinner gezeigt hat. Tarek hat das um 9:09 Uhr in den Incident-Kanal geschrieben. Ich habe die Meldung um 9:11 Uhr gesehen und um 9:13 Uhr den Incident eröffnet. Zu dem Zeitpunkt lag die Fehlerrate schon bei ungefähr 38 Prozent. Sofie hat um 9:15 Uhr erkannt, dass die Backend-Pods zwar liefen, aber ihre Postgres-Verbindungen blockierten. Um 9:18 Uhr haben wir das Deployment skaliert, was kurzfristig eher mehr offene Connections erzeugt hat. Um 9:22 Uhr war das Portal praktisch nicht mehr nutzbar, also vollständige Downtime aus Kundensicht. Jonas hat um 9:26 Uhr die Migration geprüft und festgestellt, dass der neue Index noch gebaut wurde und dabei mehrere Tabellenzugriffe blockierte. Um 9:31 Uhr haben wir versucht, die Anwendung per Kubernetes-Rollback auf das vorherige Image zu setzen. Das hat zwar die Pods zurückgesetzt, aber nicht das Datenbankschema. Um 9:38 Uhr wurde der Index-Build abgebrochen. Danach mussten wir offene Transaktionen beenden und den Connection-Pool neu starten. Ab 9:47 Uhr gingen die ersten Requests wieder durch, um 9:53 Uhr war die Fehlerrate unter fünf Prozent, und um 10:02 Uhr haben wir den Incident als stabil markiert. Damit hatten wir rund vierzig Minuten echte Downtime und insgesamt knapp eine Stunde mit deutlicher Beeinträchtigung. Unser monatliches SLA ist dadurch zumindest gefährdet; die genaue Berechnung fehlt noch."
+  },
+  {
+   "ereignis": "wechsel_ansage",
+   "zeit_s": 162.93,
+   "person": 0,
+   "punkt": 1,
+   "text": "Gut, die Zeitlinie ist damit belastbar. Kommen wir zur Ursache: Wir müssen klären, warum die Migration den Ausfall ausgelöst hat und weshalb kein vollständiger Rollback möglich war."
+  },
+  {
+   "ereignis": "abschweifung",
+   "zeit_s": 330.86,
+   "person": 3,
+   "punkt": -1,
+   "text": "Ganz kurz, weil wir gerade bei Montagmorgen und ungeprüften Dingen sind: Die Kaffeemaschine war ja ebenfalls kaputt. Ich stand um halb neun davor, sie blinkte dreimal, dann kam nur lauwarmes Wasser. Jonas meinte noch, man müsse den Tank einmal herausnehmen, aber danach lief das verdammte Ding komplett aus. Der halbe Küchenboden war nass, und gleichzeitig kamen die ersten Kundentickets rein. Das war, äh, wirklich ein beschissener Start. Vielleicht schreiben wir dafür aber kein Postmortem, sondern kleben einfach einen Zettel dran und bestellen Entkalker. Gut, zurück zur Datenbank."
+  },
+  {
+   "ereignis": "kraftausdruck",
+   "zeit_s": 330.86,
+   "person": 3,
+   "punkt": -1,
+   "text": "Ganz kurz, weil wir gerade bei Montagmorgen und ungeprüften Dingen sind: Die Kaffeemaschine war ja ebenfalls kaputt. Ich stand um halb neun davor, sie blinkte dreimal, dann kam nur lauwarmes Wasser. Jonas meinte noch, man müsse den Tank einmal herausnehmen, aber danach lief das verdammte Ding komplett aus. Der halbe Küchenboden war nass, und gleichzeitig kamen die ersten Kundentickets rein. Das war, äh, wirklich ein beschissener Start. Vielleicht schreiben wir dafür aber kein Postmortem, sondern kleben einfach einen Zettel dran und bestellen Entkalker. Gut, zurück zur Datenbank."
+  },
+  {
+   "ereignis": "beschluss",
+   "zeit_s": 549.31,
+   "person": 0,
+   "punkt": 2,
+   "text": "Dann ist der Beschluss: Sofie richtet drei zusätzliche Monitoring-Alerts ein, und die nächste produktive Migration bekommt ein Wartungsfenster von 30 Minuten. Rollback-Skript und Runbook müssen spätestens 24 Stunden vorher geprüft sein. Das kommt genauso ins Postmortem."
+  },
+  {
+   "ereignis": "wechsel_ansage",
+   "zeit_s": 616.44,
+   "person": 0,
+   "punkt": 3,
+   "text": "Kommen wir zum vierten Punkt, der Kommunikation an die Kunden. Tarek, was ist bereits raus, und was sollten wir noch nachliefern?"
+  },
+  {
+   "ereignis": "aufgabe_ohne_zustaendig",
+   "zeit_s": 661.98,
+   "person": 0,
+   "punkt": 3,
+   "text": "Einverstanden. Die allgemeine Kundenmail geht heute bis 16 Uhr raus, die SLA-Auswertungen morgen bis 10 Uhr. Außerdem muss noch eine verständliche Zusammenfassung des Postmortems für die Statusseite erstellt werden, ohne technische Schuldzuweisung und mit den beschlossenen Maßnahmen. Damit schließen wir das Review."
+  }
+ ],
+ "grenzfaelle": [
+  {
+   "id": "1_name_satzende",
+   "ziel_s": 150,
+   "erwartet": "antwort",
+   "start": 173.82,
+   "ende": 175.21,
+   "teile": [
+    {
+     "text": "Wie viel Zeit haben wir noch, Nestor?",
+     "start": 173.82,
+     "ende": 175.21
+    }
+   ]
+  },
+  {
+   "id": "2_name_dann_frage",
+   "ziel_s": 190,
+   "erwartet": "ja_dann_antwort",
+   "start": 214.12,
+   "ende": 219.39,
+   "teile": [
+    {
+     "text": "Nestor?",
+     "start": 214.12,
+     "ende": 215.15
+    },
+    {
+     "text": "Was haben wir zu Punkt eins beschlossen?",
+     "start": 217.15,
+     "ende": 219.39
+    }
+   ]
+  },
+  {
+   "id": "3a_nuschel_nester",
+   "ziel_s": 230,
+   "erwartet": "antwort_erwuenscht_dokumentieren",
+   "start": 259.23,
+   "ende": 260.6,
+   "teile": [
+    {
+     "text": "Nester, fass mal zusammen.",
+     "start": 259.23,
+     "ende": 260.6
+    }
+   ]
+  },
+  {
+   "id": "3b_nuschel_nestro",
+   "ziel_s": 260,
+   "erwartet": "antwort_erwuenscht_dokumentieren",
+   "start": 283.5,
+   "ende": 285.04,
+   "teile": [
+    {
+     "text": "Nestro, wo stehen wir gerade?",
+     "start": 283.5,
+     "ende": 285.04
+    }
+   ]
+  },
+  {
+   "id": "4_rueckfrage_direkt",
+   "ziel_s": 285,
+   "erwartet": "antwort",
+   "start": 307.34,
+   "ende": 308.86,
+   "teile": [
+    {
+     "text": "Und wer kümmert sich darum?",
+     "start": 307.34,
+     "ende": 308.86
+    }
+   ]
+  },
+  {
+   "id": "6c_eigentor",
+   "ziel_s": 370,
+   "erwartet": "kein_fehlausloeser",
+   "start": 395.37,
+   "ende": 397.41,
+   "teile": [
+    {
+     "text": "Das war ein echtes Eigentor von uns.",
+     "start": 395.37,
+     "ende": 397.41
+    }
+   ]
+  },
+  {
+   "id": "6b_next_week",
+   "ziel_s": 365,
+   "erwartet": "kein_fehlausloeser",
+   "start": 398.91,
+   "ende": 400.61,
+   "teile": [
+    {
+     "text": "Das schieben wir auf next week.",
+     "start": 398.91,
+     "ende": 400.61
+    }
+   ]
+  },
+  {
+   "id": "6d_nest",
+   "ziel_s": 375,
+   "erwartet": "kein_fehlausloeser",
+   "start": 400.91,
+   "ende": 404.49,
+   "teile": [
+    {
+     "text": "Das ist ein Nest von Abhängigkeiten, da müssen wir vorsichtig sein.",
+     "start": 400.91,
+     "ende": 404.49
+    }
+   ]
+  },
+  {
+   "id": "6a_viktor",
+   "ziel_s": 360,
+   "erwartet": "kein_fehlausloeser",
+   "start": 408.29,
+   "ende": 410.09,
+   "teile": [
+    {
+     "text": "Viktor, kannst du das übernehmen?",
+     "start": 408.29,
+     "ende": 410.09
+    }
+   ]
+  },
+  {
+   "id": "5_rueckfrage_spaet",
+   "ziel_s": 330,
+   "erwartet": "keine_antwort",
+   "start": 411.59,
+   "ende": 412.77,
+   "teile": [
+    {
+     "text": "Und bis wann ungefähr?",
+     "start": 411.59,
+     "ende": 412.77
+    }
+   ]
+  },
+  {
+   "id": "7_unklare_anweisung",
+   "ziel_s": 400,
+   "erwartet": "nachfrage_oder_bild_mit_fokus",
+   "start": 421.67,
+   "ende": 425.15,
+   "teile": [
+    {
+     "text": "Nestor, mach mal das mit dem Bild, aber nur für den Teil vorhin.",
+     "start": 421.67,
+     "ende": 425.15
+    }
+   ]
+  },
+  {
+   "id": "8_hineinreden",
+   "ziel_s": 430,
+   "erwartet": "nestor_verstummt",
+   "start": 460.02,
+   "ende": 466.58,
+   "teile": [
+    {
+     "text": "Nestor, kannst du uns das Postmortem-Template schicken?",
+     "start": 460.02,
+     "ende": 463.02
+    },
+    {
+     "text": "Moment, warte, ich hab noch was.",
+     "start": 465.02,
+     "ende": 466.58
+    }
+   ]
+  },
+  {
+   "id": "9_leise_schnell",
+   "ziel_s": 460,
+   "erwartet": "antwort",
+   "start": 477.48,
+   "ende": 479.36,
+   "teile": [
+    {
+     "text": "Nestor, notier kurz die SLA-Zahl von eben.",
+     "start": 477.48,
+     "ende": 479.36
+    }
+   ]
+  },
+  {
+   "id": "10_nein_normalsatz",
+   "ziel_s": 490,
+   "erwartet": "kein_abbruch",
+   "start": 518.75,
+   "ende": 520.14,
+   "teile": [
+    {
+     "text": "Nein, das sehe ich anders.",
+     "start": 518.75,
+     "ende": 520.14
+    }
+   ]
+  },
+  {
+   "id": "11_agenda_rueckwaerts",
+   "ziel_s": 510,
+   "erwartet": "agendawechsel",
+   "start": 541.47,
+   "ende": 543.71,
+   "teile": [
+    {
+     "text": "Lass uns nochmal kurz zu Punkt eins zurück.",
+     "start": 541.47,
+     "ende": 543.71
+    }
+   ]
+  },
+  {
+   "id": "12a_recherche",
+   "ziel_s": 540,
+   "erwartet": "antwort_mit_quellen",
+   "start": 565.11,
+   "ende": 569.51,
+   "teile": [
+    {
+     "text": "Nestor, wie ist der aktuelle Stand bei der Umsetzung von NIS2 in Deutschland?",
+     "start": 565.11,
+     "ende": 569.51
+    }
+   ]
+  },
+  {
+   "id": "12b_folie",
+   "ziel_s": 578,
+   "erwartet": "folie",
+   "start": 604.81,
+   "ende": 605.84,
+   "teile": [
+    {
+     "text": "Ja, mach eine Folie.",
+     "start": 604.81,
+     "ende": 605.84
+    }
+   ]
+  }
+ ]
+}
