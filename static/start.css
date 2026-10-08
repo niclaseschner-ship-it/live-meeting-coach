@@ -51,6 +51,7 @@ body { background: var(--bg); }
   background: var(--flaeche); border: 1px solid var(--rand); font-size: 13.5px; line-height: 1.45; color: var(--text-2);
   cursor: pointer; }
 .s-schalter input { margin-top: 3px; flex: none; width: auto; }
+.s-schalter[hidden] { display: none !important; }
 .s-schalter strong { color: var(--text); }
 
 .s-schluessel { margin: -6px 0 0; }

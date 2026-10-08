@@ -54,6 +54,13 @@ async function schluesselPruefen() {
   }
 }
 
+// Sofort anhängen, nicht erst nach /api/start: beim Kaltstart des Containers dauert das Sekunden, und ein Klick in
+// dieser Zeit verpuffte (Cloudtest 08.10. abends).
+$("karte-basis").onclick = () => stufeWaehlen("basis");
+$("karte-premium").onclick = () => stufeWaehlen("premium");
+$("sk-pruefen").onclick = schluesselPruefen;
+$("sk-eingabe").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); schluesselPruefen(); } };
+
 (async () => {
   const d = await richtwerteHolen();
   if (d.richtwert_basis_eur != null) $("kosten-basis").textContent = euro(d.richtwert_basis_eur);
@@ -68,8 +75,4 @@ async function schluesselPruefen() {
   }
   // „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (Ticket #27) – der Schalter bleibt ausgeblendet und aus
   $("nur-knopfdruck").checked = false;
-  $("karte-basis").onclick = () => stufeWaehlen("basis");
-  $("karte-premium").onclick = () => stufeWaehlen("premium");
-  $("sk-pruefen").onclick = schluesselPruefen;
-  $("sk-eingabe").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); schluesselPruefen(); } };
 })();
