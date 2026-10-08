@@ -414,10 +414,13 @@ async def abschluss(seite: Page, bericht: Bericht, offline: bool) -> None:
         try:
             with zipfile.ZipFile(pfad) as z:
                 namen = z.namelist()
-            erwartet = ["protokoll.md"]
+            # protokoll.md kommt nur, wenn es eine echte Ergebnisprüfung gab (Regel 10, braucht KI,
+            # coach/abschluss.py: paket() nimmt die Datei nur mit, wenn sie existiert) - mit LMC_OFFLINE
+            # also erwartbar nicht dabei. Sonst (transkript.md, agenda.md, hinweise.md) immer Pflicht.
+            erwartet = ["transkript.md", "agenda.md", "hinweise.md"] + ([] if offline else ["protokoll.md"])
             fehlend = [n for n in erwartet if not any(n in x for x in namen)]
             bericht.pruefen("Paket-Inhalt", "ok" if not fehlend else "fehlt",
-                            f"{len(namen)} Dateien: {', '.join(namen)}")
+                            f"{len(namen)} Dateien: {', '.join(namen)}" + (f" (fehlt: {fehlend})" if fehlend else ""))
         except Exception as e:  # noqa: BLE001
             bericht.pruefen("Paket-Inhalt", "fehlt", f"ZIP nicht lesbar: {e}")
 
