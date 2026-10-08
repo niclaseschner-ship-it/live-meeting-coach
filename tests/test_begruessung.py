@@ -345,3 +345,20 @@ def test_nein_ueber_das_werkzeug_des_modells(monkeypatch):
     c, ws, gesprochen, _ = _ablauf(monkeypatch, ereignisse)
     assert [e for e in c.protokoll if e["art"] == "einwand"]
     assert c.assistent.pausiert and len(gesprochen) == 1 and "gelöscht" in gesprochen[0]
+
+
+def test_runde_legt_nach_der_begruessung_los_ohne_dass_nestor_antwortet(monkeypatch):
+    """Begrüßung fertig gespielt, dann redet die Runde (kein Zwischenruf an Nestor): sofort normales Gespräch
+    (create_response aus), kein Stummschalten, keine Kürzung – Cloudtest-Probe 08.10.: das offene
+    Begrüßungsgespräch antwortete sonst mitten in den Monolog."""
+    def zeit(t):
+        return lambda c: setattr(c.meeting, "virtuelle_zeit", t)
+
+    ereignisse = (_antwort(VOLL, 2.0)
+                  + [zeit(13.0), {"type": "input_audio_buffer.speech_started"}])
+    c, ws, gesprochen, dashboard = _ablauf(monkeypatch, ereignisse)
+    assert {"typ": "stimme_stopp"} not in dashboard
+    assert not [e for e in ws.gesendet if e["type"] == "conversation.item.truncate"]
+    updates = [e for e in ws.gesendet if e["type"] == "session.update"]
+    assert updates[-1]["session"]["audio"]["input"]["turn_detection"]["create_response"] is False
+    assert c.assistent.gespraech is None or not c.assistent.gespraech.phase

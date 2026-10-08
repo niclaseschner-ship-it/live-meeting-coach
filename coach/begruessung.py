@@ -408,9 +408,16 @@ class Begruessung(Gespraech):
         dem Modell sagen, wie weit es zu hören war (conversation.item.truncate), und auf seine Reaktion warten."""
         c, a = self.coach, self.a
         jetzt = c.meeting.jetzt()
+        laufend = self._akt or (self.antworten[-1] if self.antworten else None)
+        spielt = bool(laufend and laufend.get("beginn") is not None
+                      and jetzt - laufend["beginn"] < laufend["bytes"] / 2 / RATE)
+        if not spielt and not self._antwort_laeuft and self.antworten:
+            # Begrüßung ist fertig gesprochen und die Runde legt los: das ist kein Zwischenruf an Nestor.
+            # Sonst antwortet das Modell (create_response) mitten ins Meeting (Cloudtest-Probe 08.10., ~80 s).
+            await self._phase_beenden()
+            return
         if self._ende_aufgabe:
             self._ende_aufgabe.cancel()
-        laufend = self._akt or (self.antworten[-1] if self.antworten else None)
         if laufend and laufend.get("beginn") is not None and "gekuerzt" not in laufend:
             dauer = laufend["bytes"] / 2 / RATE
             gespielt = jetzt - laufend["beginn"]
