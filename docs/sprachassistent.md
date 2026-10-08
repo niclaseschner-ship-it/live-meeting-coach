@@ -4,8 +4,32 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 
 ## Ablauf im Meeting
 
-1. **Begrüßung mit Einverständnis, ohne Wartepause** (Stand 08.10.2026). Fest formuliert, weil sie die Einwilligung trägt:
-   „Hallo zusammen, ich bin Nestor und begleite heute euer Meeting. Ihr habt euch diese Regeln vorgenommen: …
+1. **Begrüßung mit Einverständnis, ohne Wartepause.** Seit Ticket #23 (08.10.2026) in Premium **frei formuliert**
+   im Realtime-Gespräch (`coach/begruessung.py`, gpt-realtime wie im ChatGPT-Sprachmodus): Das Modell bekommt die
+   Pflichtinhalte als Liste, nicht als Wortlaut – Name und Rolle, die Regeln kurz, „ich höre mit“, Nein jetzt oder
+   später als „Nestor, nein“ (dann wird gelöscht), wie man Nestor anspricht, die Bitte um Agenda-Ansage mit einem
+   Halbsatz zur Agenda, Start mit Punkt eins. Jedes Mal etwas anders, Ziel ~30–40 s.
+   - **Unterbrechbar:** semantic VAD mit `interrupt_response` und `create_response` (nur während der Begrüßung).
+     „Passt, leg los“ stoppt den Ton sofort, auch wenn die Antwort schon fertig erzeugt ist; das Modell erfährt per
+     `conversation.item.truncate`, wie weit es zu hören war, und reagiert selbst. Danach wird die Sitzung zum normalen
+     Gespräch (der Coach entscheidet wieder, wann Nestor spricht). Fragt niemand etwas, schließt sie 20 s nach der
+     Begrüßung, auch wenn die Runde weiterredet (sonst trüge die nächste Antwort Minuten mitgehörten Tons als Eingabe);
+     nach einer Frage gilt das Leerlauf-Ende wie bisher.
+   - **Prüfung:** Geprüft wird das Ausgabe-Transkript, und nur der Teil, der wirklich zu hören war. Fehlen „ich höre
+     mit“, das Nein, „Nestor, nein“ oder das Löschen, sagt Nestor per Sprachausgabe einen festen Nachsatz.
+   - **Rückfall:** feste Fassung (unten), wenn keine Sitzung zustande kommt oder binnen 8 s kein Ton kommt
+     (`LMC_BEGRUESSUNG_FRIST_TON`); `LMC_BEGRUESSUNG=fest` schaltet die freie Begrüßung ab.
+   - **Nein während der Begrüßung:** wie bisher über den Live-Text, dazu über die Transkription des Mikrofons in der
+     Sitzung (ein kurzes „Nein“, auch als „Neun“ oder „Nee“ verstanden) und über das Werkzeug
+     `nicht_einverstanden`, falls das Modell das Nein versteht. Jeder Weg führt in dieselbe Einwand-Logik; eine offene
+     Realtime-Sitzung wird dabei sofort geschlossen.
+   - Probelauf 08.10. (`scripts/begruessung_probe.py`): drei Begrüßungen 38–40 s, je ~5,5 Cent; „Passt, leg los“ nach
+     10 s → Ton nach 0,6 s still, Reaktion mit Einwilligung, gesamt 25 s; „Nein“ nach 8 s → nach 3,4 s gelöscht.
+   - **Basis:** Sprachausgabe der festen Fassung. Optional (`LMC_BASIS_BEGRUESSUNG_FREI=1`, noch nicht gemessen)
+     formuliert mistral-small den Text vorher frei, mit derselben Prüfung; kommt er nicht binnen 2 s oder fehlt ein
+     Pflichtpunkt, gilt die feste Fassung.
+
+   Feste Fassung: „Hallo zusammen, ich bin Nestor und begleite heute euer Meeting. Ihr habt euch diese Regeln vorgenommen: …
    (Außerdem habt ihr euch vorgenommen: … – die weiteren Regeln.) Dafür höre ich mit. Wer nicht einverstanden ist,
    sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: ‚Nestor, nein‘. Dann lösche ich alles.“
    Direkt danach, in lockerem Ton (eigene Stimm-Anweisung `STIL_START`): wie man mit Nestor arbeitet (Name + Frage,
@@ -15,6 +39,8 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
      „Nestor, nein“ als ganzer Satz – „Nestor, nein, ich meinte Punkt zwei“ löscht nichts. Bei einem Nein werden
      Transkript und Stimmprofile gelöscht, ab dann geht kein Ton mehr an OpenAI; wieder einschalten nur per Knopf.
    - Mit Vorstellungsrunde (`LMC_VORSTELLUNG_SEKUNDEN` > 0) kommt nach der Begrüßung zuerst die Bitte um die Namen.
+     Frei formuliert endet die Begrüßung dann mit dieser Bitte; den Rest sagt Nestor nach der Runde im noch offenen
+     Gespräch (sonst fest).
 2. **Zuhören ohne Einmischen.** Ampeln und Hinweise laufen wie bisher still im Dashboard. Gesprochen wird
    nur auf Ansprache.
 3. **Ansprache:** „Nestor, …“ irgendwo im Satz, oder Knopf „Nestor fragen“ (dann ohne Namen). Kommt nur
@@ -105,7 +131,8 @@ bleiben. Gemessen 05.10.: 2,8 s, unter 1 Cent.
   nichts zusätzlich. Der Name steht in der Stichwortliste und im Prompt der Texterkennung. Abspieltest:
   Ohne diese Hilfe kam „Nestor“ am Satzanfang 3 von 4 Mal als „Mestor“ an, mit ihr 4 von 4 richtig.
   Ähnliche Schreibweisen werden zusätzlich akzeptiert.
-- **Begrüßung und Startsatz** sind feste Texte über die Sprachausgabe: schnell und verlässlich.
+- **Begrüßung:** in Premium frei im Realtime-Gespräch mit geprüften Pflichtinhalten, sonst feste Texte über die
+  Sprachausgabe (siehe oben).
 - **Eigene Stimme:** Mit Assistent nutzt das Mikrofon die Echo-Unterdrückung des Browsers. Zusätzlich
   verwirft der Server Sätze und Sprecherabschnitte aus den Zeitfenstern, in denen Nestor spricht. So zählt
   er weder im Transkript noch bei den Redeanteilen als Person.

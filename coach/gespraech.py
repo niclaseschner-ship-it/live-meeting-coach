@@ -103,8 +103,19 @@ class Gespraech:
         kopf = {"Authorization": f"Bearer {openai_schluessel()}"}
         self._ws = await websockets.connect(URL.format(modell=EINST.realtime_modell), additional_headers=kopf,
                                             max_size=None)
+        await self._senden({"type": "session.update", "session": self.sitzung()})
+        self.offen = True
+        self._empfang = asyncio.create_task(self._empfangen())
+        self._frage = frage or ""
+        text = frage or "(Jemand hat dich gerade angesprochen; die eigentliche Frage folgt gleich. Sag nur kurz „Ja?“.)"
+        await self._senden({"type": "conversation.item.create", "item": {
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}})
+        await self._antworten_lassen()
+
+    def sitzung(self) -> dict:
+        """Einstellungen des Gesprächs: der Coach entscheidet, wann Nestor antwortet (create_response aus)."""
         kontext = self.a.kontext("").rsplit("\n\nFrage an dich:", 1)[0]
-        await self._senden({"type": "session.update", "session": {
+        return {
             "type": "realtime",
             "instructions": ANWEISUNG.format(name=EINST.assistent_name, kontext=kontext),
             "output_modalities": ["audio"],
@@ -115,14 +126,7 @@ class Gespraech:
                 "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": EINST.stimme},
             },
             "tools": WERKZEUGE, "tool_choice": "auto",
-        }})
-        self.offen = True
-        self._empfang = asyncio.create_task(self._empfangen())
-        self._frage = frage or ""
-        text = frage or "(Jemand hat dich gerade angesprochen; die eigentliche Frage folgt gleich. Sag nur kurz „Ja?“.)"
-        await self._senden({"type": "conversation.item.create", "item": {
-            "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}})
-        await self._antworten_lassen()
+        }
 
     async def _antworten_lassen(self) -> None:
         self._antwort_laeuft = True
@@ -179,6 +183,8 @@ class Gespraech:
             async for roh in self._ws:
                 e = json.loads(roh)
                 typ = e.get("type", "")
+                if await self._ereignis(typ, e):
+                    continue  # von einer Unterklasse ganz übernommen (Begrüßung, coach/begruessung.py)
                 if typ in ("response.output_audio.delta", "response.audio.delta"):
                     await self._ton(e["delta"])
                 elif typ in ("response.output_audio_transcript.delta", "response.audio_transcript.delta"):
@@ -215,6 +221,10 @@ class Gespraech:
         finally:
             if self.offen:
                 await self.schliessen()
+
+    async def _ereignis(self, typ: str, e: dict) -> bool:
+        """Haken für Unterklassen: True heißt, das Ereignis ist erledigt und der Standardweg entfällt."""
+        return False
 
     async def _ton(self, b64: str) -> None:
         c, m = self.coach, self.coach.meeting

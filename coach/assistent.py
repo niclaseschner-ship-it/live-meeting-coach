@@ -206,7 +206,7 @@ def agenda_kommentar(meeting) -> str:
 def begruessungstext(meeting, basis: bool | None = None) -> tuple[str, str]:
     """(Begrüßung mit Einwilligung, Startsatz).
 
-    Die Begrüßung ist fest formuliert – sie trägt die Einwilligung, da darf nichts frei formuliert sein. Danach geht
+    Feste Fassung: Rückfall der freien Begrüßung (coach/begruessung.py, Ticket #23) und Standard in Basis. Danach geht
     es ohne Wartepause weiter (Niclas, 07.10.: das Warten auf ein Nein war ein toter Moment); ein Nein ist kurz nach
     der Begrüßung als einfaches „Nein“ möglich und später jederzeit als „Nestor, nein“ (`spaetes_nein`).
     """
@@ -340,20 +340,92 @@ class Assistent:
     async def begruessen(self) -> None:
         if not self.aktiv or self.coach._client is None or self.ansprache_aus:
             return
-        gruss, start = begruessungstext(self.coach.meeting)
         self.zustand = "begruessung"
         await self.coach.melden()
-        await self._sprechen_texte([gruss], danach="begruessung")
+        if await self._begruessen_frei():
+            return
+        if self.pausiert:
+            return  # Nein schon während des Versuchs – nichts mehr sagen außer der Bestätigung
+        self.zustand = "begruessung"
+        vorstellung = EINST.vorstellung_sekunden > 0
+        gruss, start = begruessungstext(self.coach.meeting)
+        frei = None
+        if EINST.stufe == "basis" and EINST.basis_begruessung_frei:  # Ticket #23: Mistral formuliert, sonst fest
+            from .begruessung import basis_formulieren, in_stuecke
+
+            text = await basis_formulieren(self.coach._client, self.coach.meeting, vorstellung)
+            frei = in_stuecke(text) if text else None
+        await self._sprechen_texte(frei or [gruss], danach="begruessung")
         # Kein Warten auf das Nein: es geht gleich weiter, ein einfaches „Nein“ zählt aber noch eine Weile
         ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()
         self._einwand_bis = ende + EINST.einwand_sekunden
-        if EINST.vorstellung_sekunden > 0:  # Vorstellungsrunde: Namen und Stimmen kennenlernen
-            await self._sprechen_texte([VORSTELLUNG_BITTE])
+        if vorstellung:  # Vorstellungsrunde: Namen und Stimmen kennenlernen
+            if not frei:  # der freie Text enthält die Bitte schon
+                await self._sprechen_texte([VORSTELLUNG_BITTE])
             ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()
             self.vorstellung_bis = ende + EINST.vorstellung_sekunden
             self._einwand_bis = max(self._einwand_bis, ende + EINST.einwand_sekunden)
-        else:
+        elif not frei:
             await self._sprechen_texte([start], stil=STIL_START)
+
+    async def _begruessen_frei(self) -> bool:
+        """Premium (Ticket #23): Begrüßung frei im Realtime-Gespräch. False = nicht zustande gekommen, dann spricht
+        der Aufrufer die feste Fassung. Fehlt im hörbar Gesagten ein Teil der Einwilligung, folgt der feste Nachsatz."""
+        if EINST.stufe == "basis" or EINST.begruessung != "frei" or EINST.assistent_modus != "gespraech":
+            return False
+        from .begruessung import PUNKT_EINS_RE, Begruessung, nachsatz, pflicht_fehlt
+
+        vorstellung = EINST.vorstellung_sekunden > 0
+        b = Begruessung(self, vorstellung)
+        self._einwand_bis = self.coach.meeting.jetzt() + 3600  # ein einfaches „Nein“ zählt während der Begrüßung
+        self.gespraech = b
+        try:
+            await b.starten()
+            warten = [asyncio.ensure_future(b.ton_da.wait()), asyncio.ensure_future(b.fertig.wait())]
+            _, offen = await asyncio.wait(warten, timeout=EINST.begruessung_frist_ton,
+                                          return_when=asyncio.FIRST_COMPLETED)
+            for w in offen:
+                w.cancel()
+            if not b.ton_da.is_set():
+                raise TimeoutError("kein Ton")
+        except Exception as e:  # noqa: BLE001 – auch Zeitüberschreitung: feste Fassung
+            log.warning("Begrüßung frei nicht gestartet (%s) – feste Fassung", type(e).__name__)
+            await b.schliessen()
+            if self.gespraech is b:
+                self.gespraech = None
+            if not self.pausiert:
+                self._einwand_bis = None
+            return self.pausiert or not self.coach.meeting.laeuft
+        try:
+            await asyncio.wait_for(b.fertig.wait(), EINST.begruessung_max_sekunden)
+        except asyncio.TimeoutError:
+            log.warning("Begrüßung frei: kein Ende nach %.0f s", EINST.begruessung_max_sekunden)
+            await b._phase_beenden()
+        if b.ergebnis == "einwand" or self.pausiert or not self.coach.meeting.laeuft:
+            return True  # Nein, oder das Meeting wurde während der Begrüßung beendet: nichts nachschieben
+        gesagt = b.gesagt()
+        fehlt = pflicht_fehlt(gesagt)
+        self.coach.protokoll.append({"zeit": self.coach.meeting.jetzt(), "art": "begruessung_pruefung",
+                                     "ergebnis": b.ergebnis, "fehlt": fehlt})
+        if b.ergebnis == "fehler" and not gesagt:
+            return False
+        danach = "gespraech" if b.offen else "bereit"
+        if fehlt:
+            log.info("Begrüßung frei: Nachsatz (fehlt: %s)", ", ".join(fehlt))
+            await self._sprechen_texte([nachsatz()], danach=danach)
+        if vorstellung and not re.search(r"\bnamen?\b", gesagt, re.IGNORECASE):
+            await self._sprechen_texte([VORSTELLUNG_BITTE], danach=danach)
+        elif not vorstellung and b.ergebnis == "abgebrochen" and not PUNKT_EINS_RE.search(gesagt):
+            _, start = begruessungstext(self.coach.meeting)  # Verbindung weg vor dem Start: fest zu Ende sagen
+            await self._sprechen_texte([start], danach="bereit", stil=STIL_START)
+        ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()
+        self._einwand_bis = ende + EINST.einwand_sekunden
+        if vorstellung:
+            self.vorstellung_bis = ende + EINST.vorstellung_sekunden
+        if self.zustand == "begruessung":
+            self.zustand = danach
+            await self.coach.melden()
+        return True
 
     def takt(self) -> None:
         """Vom Coach-Takt: Ende der Vorstellungsrunde → Start ansagen; Ende des Fensters für ein einfaches Nein."""
@@ -362,7 +434,14 @@ class Assistent:
             self._einwand_bis = None
         if self.vorstellung_bis is not None and jetzt > self.vorstellung_bis:
             self.vorstellung_bis = None
-            self._starten(self._sprechen_texte([vorstellung_start(self.coach.meeting)], stil=STIL_START))
+            self._starten(self._start_nach_vorstellung())
+
+    async def _start_nach_vorstellung(self) -> None:
+        """Nach der Vorstellungsrunde: frei im noch offenen Begrüßungsgespräch, sonst der feste Startsatz."""
+        g = self.gespraech
+        if g is not None and g.offen and hasattr(g, "start_sagen") and await g.start_sagen():
+            return
+        await self._sprechen_texte([vorstellung_start(self.coach.meeting)], stil=STIL_START)
 
     # --- Eingang: fertige Sätze und Teiltext --------------------------------
     def teiltext(self, text: str) -> None:
@@ -451,6 +530,9 @@ class Assistent:
 
     async def _einwand_erhalten(self) -> None:
         self._einwand_bis = None
+        if self.gespraech is not None:  # offene Realtime-Sitzung (auch die Begrüßung): sofort still und zu,
+            await self.coach.direkt_senden({"typ": "stimme_stopp"})  # ab jetzt geht kein Ton mehr an OpenAI
+            await self.gespraech.schliessen()
         await self.coach.einwand_umsetzen()
         self.zustand = "pausiert"
         self._starten(self._sprechen_texte([
