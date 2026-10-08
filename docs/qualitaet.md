@@ -15,6 +15,12 @@ ChatGPT-Abo, `codex exec -i <Screenshot>`, keine API-Kosten) nach dieser Rubrik 
 | Ruhe | Hinweise je 10 Minuten, davon unnötig (kein passendes Ereignis in der Nähe) | Hinweise in `ws.jsonl` gegen `referenz.json` |
 | Kosten | gesamt, je Stunde hochgerechnet | `zustand.kosten` am Laufende |
 
+**Im Modus „nur auf Knopfdruck“** (`--nur-knopfdruck`, nur Basis) reagiert Nestor grundsätzlich nicht auf
+spontane Ansprache – kein KI-Aufruf ohne Knopf. Eine Nestor-Anweisung/ein Grenzfall, der eine Antwort
+erwartet, zählt dort nicht als „Verpasst“, sondern als „Dokumentiert (kein klares Richtig/Falsch)“: eine
+Eigenschaft des Modus, kein Mangel (Ticket #17 Punkt 7). Grenzfälle, die ausdrücklich KEINE Reaktion
+erwarten, bleiben normal in Treffer/Fehlauslöser gezählt.
+
 ## Urteilskriterien (1–5, mit Begründung)
 
 Vom Sprachmodell nach dieser Rubrik vergeben, mit Bild-Eingabe wo es um Screenshots geht. 1 = nicht brauchbar,

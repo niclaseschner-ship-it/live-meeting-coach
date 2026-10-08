@@ -325,10 +325,47 @@ async def agenda_eingabe_finden(seite: Page):
     return feld, None
 
 
+# Ticket #17 Punkt 7 / #19: ohne diese beiden angewählten Regeln kann die Prüfliste Kraftausdruck/Beschluss
+# gar nicht erkennen (coach/regeln.py STANDARD enthält beide nicht) - der Lauf testet sie aber (referenz_
+# grenzfaelle.json: "kraftausdruck", "beschluss", "aufgabe_ohne_zustaendig"). Checkbox-Wert = Regel-ID
+# (static/app.js regelKachel(): value: r.id), unabhängig davon, in welcher Gruppe (verlässlich/Beta) sie steht.
+REGELN_PFLICHT = ("ton", "ergebnisse")
+
+
+async def regeln_anwaehlen(seite: Page, bericht: Bericht) -> None:
+    """Respektvoller Ton + Ergebnisse festhalten anwählen, falls noch nicht Standard (coach/regeln.py:
+    STANDARD = ["ausreden", "thema", "zeit", "kurz"] - beide fehlen dort)."""
+    fehlend = []
+    for regel_id in REGELN_PFLICHT:
+        kasten = seite.locator(f'#einrichtung input[type="checkbox"][value="{regel_id}"]')
+        # Die Regel-Kacheln füllt app.js erst, nachdem /api/regeln geantwortet hat (regelwahl()) - kurz
+        # mehrfach probieren statt einmalig, sonst ein falsches "nicht gefunden" durch reine Zeitlupe
+        # (dasselbe Muster wie agenda_eingabe_finden()).
+        if not await warten_auf(seite, f'() => document.querySelector(\'#einrichtung input[value="{regel_id}"]\') '
+                                       '!== null', timeout_s=8.0):
+            fehlend.append(f"{regel_id} (Kästchen nicht gefunden)")
+            continue
+        try:
+            if await kasten.is_checked():
+                continue
+            if await kasten.is_disabled():
+                fehlend.append(f"{regel_id} (deaktiviert – noch nicht umgesetzt?)")
+                continue
+            await kasten.check()
+        except Exception as e:  # noqa: BLE001
+            fehlend.append(f"{regel_id} ({type(e).__name__}: {e})")
+    if fehlend:
+        bericht.pruefen("Regeln „Respektvoller Ton“ + „Ergebnisse festhalten“ angewählt", "fehlt",
+                        f"nicht gesetzt: {', '.join(fehlend)}")
+    else:
+        bericht.pruefen("Regeln „Respektvoller Ton“ + „Ergebnisse festhalten“ angewählt", "ok")
+
+
 async def einrichten(seite: Page, agenda_text: str, bericht: Bericht) -> None:
     # In der Cloud kommt der erste Stand über die WebSocket spürbar später als lokal – erst darauf warten
     if not await warten_auf(seite, "() => !!zustand", timeout_s=60.0):
         bericht.pruefen("Erster Stand vom Server", "fehlt", "nach 60 s kein Zustand über die WebSocket")
+    await regeln_anwaehlen(seite, bericht)
     feld, knopf = await agenda_eingabe_finden(seite)
     if feld is None:
         bericht.pruefen("Agenda-Eingabefeld gefunden", "fehlt",
@@ -531,8 +568,46 @@ async def verwerfen_5(seite: Page, bericht: Bericht) -> None:
                     f"Segmente vorher {vorher_segmente}, nachher {len(nach.get('segmente', []))}")
 
 
+_MEETING_COOKIE = "nestor_meeting"  # coach/api_abschluss.py – fällt mit "Fertig" weg (nur Cloud, --passwort)
+
+
+async def fertig_und_neues_meeting(seite: Page, url: str, cloud: bool, bericht: Bericht) -> None:
+    """Ticket #17 Punkt 7 / #19: „Fertig“ drücken und prüfen, dass ein neuer Aufruf ein neues Meeting bekommt,
+    statt das gerade beendete (fortgeschriebenes Protokoll, altes Thema) wiederzuverwenden. Kein neuer
+    Meeting-Lauf dafür nötig: `coach/api_abschluss.py` setzt bei "Fertig" zurück auf ein leeres Meeting
+    (`coach.einrichten({})`) und löscht in der Cloud das Meeting-Cookie - beides lässt sich ohne zehn weitere
+    Minuten Mikrofon-Mitschnitt prüfen, indem man die Seite einfach neu lädt."""
+    await seite.locator("#btn-fertig").click()
+    zurueck = await warten_auf(seite, "() => location.pathname === '/'", 15.0)
+    if not zurueck:
+        bericht.pruefen("„Fertig“ führt zurück zur Startseite", "fehlt",
+                        f"Pfad blieb {await seite.evaluate('() => location.pathname')}")
+        return
+    bericht.pruefen("„Fertig“ führt zurück zur Startseite", "ok")
+
+    if cloud:
+        cookies = await seite.context.cookies()
+        noch_da = any(c["name"] == _MEETING_COOKIE for c in cookies)
+        bericht.pruefen("Meeting-Cookie nach „Fertig“ entfernt (Cloud)", "fehlt" if noch_da else "ok",
+                        f"Cookie „{_MEETING_COOKIE}“ " + ("noch gesetzt" if noch_da else "weg"))
+
+    # "Ein neuer Aufruf bekommt ein neues Meeting": erneut auf die Seite gehen (kein Meeting starten, keine
+    # KI-Kosten) und prüfen, dass der Server-Zustand leer ist statt das gerade beendete Meeting zu zeigen.
+    await seite.goto(url)
+    frisch = await warten_auf(
+        seite, "() => !!zustand && !zustand.titel && !(zustand.agenda && zustand.agenda.length) && !zustand.hoeren",
+        20.0)
+    if frisch:
+        bericht.pruefen("Neuer Aufruf bekommt ein neues (leeres) Meeting", "ok")
+    else:
+        z = await zustand(seite)
+        bericht.pruefen("Neuer Aufruf bekommt ein neues (leeres) Meeting", "fehlt",
+                        f"zustand.titel={z.get('titel')!r}, hoeren={z.get('hoeren')}, "
+                        f"Agendapunkte={len(z.get('agenda') or [])}")
+
+
 # ---------- Abschluss ----------
-async def abschluss(seite: Page, bericht: Bericht, offline: bool) -> None:
+async def abschluss(seite: Page, bericht: Bericht, offline: bool, url: str, cloud: bool) -> None:
     da = await warten_auf(seite, "() => !document.getElementById('ab-inhalt').hidden", 40.0)
     if not da:
         bericht.pruefen("Abschlussseite geladen", "fehlt")
@@ -591,6 +666,8 @@ async def abschluss(seite: Page, bericht: Bericht, offline: bool) -> None:
         bericht.pruefen("Datenspende mit Häkchen senden", "ok" if ok else "fehlt")
     else:
         bericht.pruefen("Datenspende mit Häkchen senden", "fehlt", "Knopf blieb deaktiviert (Ablage nicht fertig?)")
+
+    await fertig_und_neues_meeting(seite, url, cloud, bericht)
 
 
 # ---------- Auswertungshelfer auf dem WS-Mitschnitt (ws.jsonl) – die einzige verlässliche Quelle ----------
@@ -805,7 +882,14 @@ def nestor_reaktion(start: float, ende_fenster: float, zustaende: list[dict], hi
 # So verwendet scripts/cloudtest_bewerten.py beim nachträglichen Auswerten (z. B. mit korrigiertem Versatz)
 # exakt dieselbe Logik wie der Live-Lauf hier, statt sie zu verdoppeln.
 def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: list[dict], karten: list[dict],
-                          stimme_frames: list[dict], offline_lauf: bool) -> tuple[list[dict], float | None]:
+                          stimme_frames: list[dict], offline_lauf: bool,
+                          nur_knopfdruck: bool = False) -> tuple[list[dict], float | None]:
+    """`nur_knopfdruck` (Ticket #17 Punkt 7): in diesem Modus reagiert Nestor grundsätzlich nicht auf
+    spontane Ansprache (kein KI-Aufruf ohne Knopf, siehe scripts/cloudtest.py aufzeichnen()/kein_ki_vor_
+    erstem_knopf) - ein "fehlt" bei einer Nestor-Anweisung/einem Grenzfall, der eine Antwort erwartet, wäre
+    also kein echter Mangel, sondern eine Eigenschaft des Modus. Solche Punkte werden "beobachtet" (📝)
+    statt "fehlt"/"ok" gewertet; Grenzfälle, die ausdrücklich KEINE Reaktion erwarten ("keine_antwort",
+    "kein_fehlausloeser", "kein_abbruch"), bleiben normal geprüft - da stimmt die Erwartung auch hier."""
     segmente = _segmente_dedup(zustaende)  # einmal statt bei jedem Textabgleich neu (sonst zu langsam)
     versatz = versatz_schaetzen(referenz_roh, segmente)
     referenz = referenz_verschieben(referenz_roh, versatz or 0.0)
@@ -826,6 +910,9 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
     for n in referenz.get("nestor", []):
         kurz = n["text"][:40] + "…" if len(n["text"]) > 40 else n["text"]
         name = f"Nestor-Anweisung „{kurz}“"
+        if nur_knopfdruck:
+            pruefen(name, "beobachtet", "nur auf Knopfdruck: spontane Ansprache nicht vorgesehen (#17 Punkt 7)")
+            continue
         if offline_lauf:
             pruefen(name, "offline", "ohne Schlüssel keine Antwort möglich")
             continue
@@ -840,15 +927,22 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
     grenzfaelle = referenz.get("grenzfaelle", [])
     for i, g in enumerate(grenzfaelle):
         name = f"Grenzfall {g['id']}"
+        erwartet = g["erwartet"]
         if offline_lauf:
-            pruefen(name, "offline", f"erwartet: {g['erwartet']} – ohne Schlüssel nicht prüfbar")
+            pruefen(name, "offline", f"erwartet: {erwartet} – ohne Schlüssel nicht prüfbar")
+            continue
+        # "Ansprache nicht vorgesehen" gilt nur für Fälle, die überhaupt eine Reaktion erwarten (inkl.
+        # Agendawechsel per Ansage) - "keine_antwort"/"kein_fehlausloeser"/"kein_abbruch" bleiben unten
+        # normal geprüft, weil "keine Reaktion" im Modus "nur auf Knopfdruck" ohnehin zutrifft.
+        if nur_knopfdruck and erwartet not in ("keine_antwort", "kein_fehlausloeser", "kein_abbruch"):
+            pruefen(name, "beobachtet",
+                    f"erwartet: {erwartet} – nur auf Knopfdruck: spontane Ansprache nicht vorgesehen (#17 Punkt 7)")
             continue
         fenster_start = antwortfenster_start(segmente, g["teile"][-1]["text"], g["ende"])
         fenster_ende = (grenzfaelle[i + 1]["start"] if i + 1 < len(grenzfaelle) else g["ende"] + 60)
-        bild = g["erwartet"] in ("folie",) or "bild" in g["erwartet"] or "übersicht" in g["teile"][0]["text"].lower()
+        bild = erwartet in ("folie",) or "bild" in erwartet or "übersicht" in g["teile"][0]["text"].lower()
         reagiert, begruendung = nestor_reaktion(fenster_start, fenster_ende, zustaende, hinweise, karten,
                                                 stimme_frames, bild)
-        erwartet = g["erwartet"]
         if erwartet in ("antwort", "ja_dann_antwort", "antwort_mit_quellen", "nachfrage_oder_bild_mit_fokus", "folie"):
             pruefen(name, "ok" if reagiert else "fehlt", f"erwartet: {erwartet} – {begruendung}")
         elif erwartet in ("keine_antwort", "kein_fehlausloeser", "kein_abbruch"):
@@ -876,7 +970,8 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
     return aus, versatz
 
 
-def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht) -> None:
+def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht,
+                     nur_knopfdruck: bool = False) -> None:
     """Live-Lauf: berechnet (pruefpunkte_berechnen) und schreibt jeden Punkt in den Bericht."""
     offline_lauf = bool(verlauf) and bool((verlauf[-1].get("schluessel") or {}).get("offline"))
     zustaende = spur.zustaende()
@@ -884,9 +979,10 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
     karten = _karten_dedup(zustaende)
     stimme_frames = spur.nachrichten("stimme")
     bericht.messwerte["ws_zustandsmeldungen"] = len(zustaende)
+    bericht.messwerte["nur_knopfdruck"] = nur_knopfdruck  # Ticket #17 Punkt 7 - für cloudtest_bewerten.py
 
     pruefpunkte, versatz = pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme_frames,
-                                                 offline_lauf)
+                                                 offline_lauf, nur_knopfdruck)
     bericht.messwerte["versatz_s"] = round(versatz, 1) if versatz is not None else None
     bericht.notieren(f"Versatz Referenzzeit↔Meetinguhr: {versatz:+.1f}s (aus Segment-Abgleich)" if versatz is not None
                      else "Versatz Referenzzeit↔Meetinguhr: nicht schätzbar (kein passendes Segment im Mitschnitt)")
@@ -971,13 +1067,13 @@ async def lauf(args: argparse.Namespace) -> Bericht:
             verlauf = await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start)
             z_letzt = verlauf[-1] if verlauf else {}
             offline = bool((z_letzt.get("schluessel") or {}).get("offline"))
-            await abschluss(seite, bericht, offline)
-            pruefliste_bauen(referenz, verlauf, spur, bericht)
+            await abschluss(seite, bericht, offline, args.url, bool(args.passwort))
+            pruefliste_bauen(referenz, verlauf, spur, bericht, args.nur_knopfdruck)
         except SchrittFehler as e:
             bericht.fehler.append(f"Lauf abgebrochen: {e}")
             bericht.notieren(f"Abgebrochen: {e}")
             if verlauf:  # trotz Abbruch die bis dahin gesammelten Prüfpunkte gegen die Referenz auswerten
-                pruefliste_bauen(referenz, verlauf, spur, bericht)
+                pruefliste_bauen(referenz, verlauf, spur, bericht, args.nur_knopfdruck)
         finally:
             dauer_stimme = spur.nestor_wav_schreiben(bericht.ordner / "nestor_stimme.wav")
             if dauer_stimme:

@@ -227,8 +227,13 @@ class Gespraech:
         self.a.sprechzeiten[-1] = (self._ton_beginn, self._ton_beginn + self._ton_bytes / 2 / RATE + 0.8)
         await c.direkt_senden({"typ": "stimme", "pcm": b64})
 
-    def _ton_ende(self) -> None:
-        if self._ton_beginn is not None:
+    def _ton_ende(self, abgebrochen: bool = True) -> None:
+        """Antwort-Ton abschließen. Nur beim Abbruch (Ins-Wort-Fallen) endet die Sprechzeit jetzt. Ist die Antwort
+        fertig erzeugt (response.done), läuft sie im Dashboard noch: Das Modell liefert den Ton schneller als
+        Echtzeit, response.done kam in den Cloud-Läufen 08.10. 6–9 s vor dem Ende der Wiedergabe. Wurde die
+        Sprechzeit dort abgeschnitten, begann das Rückfrage-Fenster zu früh – „Und wer kümmert sich darum?“ lag
+        10–11 s nach Nestors letztem Wort, aber 16–20 s nach response.done (Ticket #17, Grenzfall 4)."""
+        if abgebrochen and self._ton_beginn is not None:
             jetzt = self.coach.meeting.jetzt()
             a, b = self.a.sprechzeiten[-1]
             self.a.sprechzeiten[-1] = (a, min(b, jetzt + 0.5))
@@ -313,12 +318,16 @@ class Gespraech:
         c = self.coach
         text = self._antwort_text.strip()
         self._antwort_text = ""
-        self._ton_ende()
+        self._ton_ende(abgebrochen=False)
         if self._recherche_laeuft:  # „ich schau kurz nach“ ist fertig, das Ergebnis folgt noch
             self._antwort_text = text + " "
             return
         self._antwort_laeuft = False
         self._antwort_ende = self.a.sprechzeiten[-1][1] if text and self.a.sprechzeiten else c.meeting.jetzt()
+        if text and self.a.sprechzeiten:
+            # Die Sprechzeit reicht jetzt bis zum Ende der Wiedergabe – mit dem Text entscheidet der Echo-Filter nach
+            # dem Inhalt, sonst ginge wer Nestor ins Wort fällt als „eigene Sprache“ verloren (eigene_sprache)
+            self.a.sprechtexte.append((*self.a.sprechzeiten[-1], text))
         nutzung = antwort.get("usage") or {}
         if nutzung:
             from .pipeline import nutzung_loggen

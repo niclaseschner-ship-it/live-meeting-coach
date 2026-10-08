@@ -87,6 +87,18 @@ pauschal „ein Hinweis irgendwo in der Nähe“:
 - mit `--nur-knopfdruck`: kein KI-Aufruf vor dem ersten Knopf, Wartezeit je Knopf
 - Zeit bis die Startseite steht (Kaltstart), Wartezeit bis das Abschlusspaket fertig ist (bis zu 4 min,
   selbst ein Nutzer-Erlebnis-Wert)
+- „Fertig“ am Ende führt zurück zur Startseite und setzt den Server-Zustand zurück (Cloud: das
+  Meeting-Cookie `nestor_meeting` fällt weg) – ein neuer Aufruf bekommt ein neues (leeres) Meeting statt das
+  gerade beendete wiederzuverwenden (Ticket #17 Punkt 7/#12)
+
+Vor „Meeting starten“ wählt der Lauf die Regeln **„Respektvoller Ton“** und **„Ergebnisse festhalten“** an
+(`coach/regeln.py: STANDARD` enthält beide nicht) – ohne das kann die Prüfliste Kraftausdruck/Beschluss gar
+nicht erkennen (Ticket #17 Punkt 7).
+
+**Mit `--nur-knopfdruck`** reagiert Nestor grundsätzlich nicht auf spontane Ansprache (kein KI-Aufruf ohne
+Knopf). Eine Nestor-Anweisung/ein Grenzfall, der eine Antwort erwartet, zählt dort deshalb nicht als „fehlt“,
+sondern als „beobachtet“ (📝) – eine Eigenschaft des Modus, kein Mangel (Ticket #17 Punkt 7). Grenzfälle, die
+ausdrücklich KEINE Reaktion erwarten, bleiben normal geprüft.
 
 Manche Grenzfälle lassen sich offline bzw. ohne echte Nestor-Stimme nicht eindeutig werten (z. B.
 Nuschelvarianten „Ergebnis dokumentieren“, Hineinreden) – die stehen als „beobachtet“ (📝) im Bericht, ohne
@@ -104,6 +116,35 @@ Ergebnis je Lauf: `logs/cloudtest/<datum_uhrzeit>_<modus>/bericht.md` (+ `berich
 `nestor_stimme.wav`) mit Prüfliste, Messwerten, Kosten und verlinkten Screenshots (Startseite,
 Agenda-Tabelle, Abschlussseite, Dashboard alle 30 s plus an jedem Ereignis/jeder Anweisung/jedem
 Grenzfall).
+
+## HTML-Testbericht zum Präsentieren (Ticket #19)
+
+```
+~/.venvs/lmc/bin/python scripts/cloudtest_bericht.py logs/cloudtest/<lauf>
+```
+
+Baut aus `bericht.json` + `ws.jsonl` (dieselbe Prüflisten-/Versatz-Logik wie `cloudtest_bewerten.py`, nicht
+zweimal gerechnet) und – wenn vorhanden – `bewertung.md` eine einzige, eigenständige `<lauf>/bericht.html`:
+
+- **Audiospieler** mit dem Meeting-Ton (`testbibliothek/cloudtest/meeting[_grenzfaelle].wav`, aus dem
+  `referenz_datei`-Namen abgeleitet) gemischt mit Nestors Stimme (`<lauf>/nestor_stimme.wav`, falls
+  vorhanden – mit `--nur-knopfdruck` gibt es keine, siehe oben). Beide Spuren werden um ihren jeweils
+  gemessenen Versatz auf die Meetinguhr verschoben: der Meeting-Ton um den Versatz Referenzzeit↔Meetinguhr
+  (Segment-Abgleich, wie in `cloudtest_bewerten.py`), Nestors Stimme separat über die Zustandsmeldung, die
+  einer `stimme`-Nachricht am nächsten liegt (robuster als `seite_bis_meeting_start_s`, das in älteren
+  Berichten fehlt) – Nestor klingt dadurch etwas lauter (+4 dB) und beginnt seine Begrüßung bei ~0 s auf der
+  Meetinguhr. Export als MP3 ~96 kbit/s (ffmpeg).
+- **Zeitstrahl** darunter: eine Marke je Dashboard-Screenshot (Vorschaubild beim Überfahren, Klick springt
+  im Audio dorthin) und eine farbige Marke je Ereignis/Nestor-Anweisung/Grenzfall aus der Prüfliste
+  (✅ ok/❌ fehlt/📝 beobachtet/⏭️ offline, Klick springt ebenfalls dorthin).
+- Beim Abspielen wechselt der große Screenshot automatisch zum zuletzt erreichten Zeitpunkt.
+- **Kopf** mit den Kennzahlen und Urteilen aus `bewertung.md` (muss vorher mit `cloudtest_bewerten.py`
+  erzeugt worden sein, sonst nur Ablauf/Screenshots ohne Kennzahlen-Kopf).
+- Eine Datei, alles eingebettet als Base64 (Audio als MP3, Screenshots als WebP, 640 px breit) – funktioniert
+  offline und am Handy, hell/dunkel (`prefers-color-scheme`). Rund 10–13 MB, meist Audio.
+
+`cloudtest_bewerten.py` ruft das selbst am Ende auf (Fehler dabei brechen den Lauf nicht ab, nur ein
+Hinweis) – ein `bericht.html` ist seitdem **Standard für jeden Lauf**, kein separater Schritt mehr nötig.
 
 ## Bewertung nach der Qualitätsrubrik (Ticket #11)
 
