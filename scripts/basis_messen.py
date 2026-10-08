@@ -320,6 +320,56 @@ async def pipeline(stufe: str, n: int) -> None:
               f"min {min(gesamt):.2f}, max {max(gesamt):.2f}, n={len(gesamt)}; Modelle {erg['modelle']}; {erg['usd']} $")
 
 
+# --- Nur auf Knopfdruck: Demo abspielen, unterwegs die Knöpfe drücken -------------------------------------------------
+async def knopfdruck_lauf() -> None:
+    """Basis mit „Nur auf Knopfdruck“: die Messe-Demo läuft durch, bei 1:40 / 2:30 / 3:05 werden Knöpfe gedrückt.
+    Prüft: ohne Knopf kein KI-Aufruf (Nutzungsprotokoll), mit Knopf Voxtral-Batch + Analyse, Karten entstehen."""
+    from coach import knopfdruck
+    from coach.pipeline import NUTZUNG, Coach
+
+    vorher_n = NUTZUNG.read_text(encoding="utf-8").count("\n") if NUTZUNG.exists() else 0
+    coach = Coach()
+    coach.stufe_setzen("basis", nur_knopfdruck=True)
+    coach.onepager_am_ende = False
+    plan = [(100, "stand", ""), (150, "regeln", ""), (185, "ueberblick", ""), (186, "protokoll", ""),
+            (187, "frage", "Wer übernimmt die Flyer?")]
+    zeiten: list[dict] = []
+    aufrufe_vor_knopf: list[dict] = []
+
+    async def druecken() -> None:
+        while coach.hoerstrom is None:
+            await asyncio.sleep(0.2)
+        for t, art, frage in plan:
+            while coach.hoerstrom is not None and coach.meeting.jetzt() < t:
+                await asyncio.sleep(0.2)
+            if coach.hoerstrom is None:
+                break
+            if not zeiten:  # bis zum ersten Knopf darf nichts an Mistral gegangen sein
+                aufrufe_vor_knopf.extend(json.loads(z) for z in NUTZUNG.read_text(encoding="utf-8").splitlines()[vorher_n:])
+            while coach.knopf.laeuft:
+                await asyncio.sleep(0.2)
+            t0 = time.monotonic()
+            erg = await knopfdruck.ausfuehren(coach, art, frage)
+            zeiten.append({"art": art, "meeting_s": t, "sekunden": round(time.monotonic() - t0, 2), "fehler": coach.knopf.fehler,
+                           "ergebnis": erg})
+
+    aufgabe = asyncio.ensure_future(druecken())
+    await coach.abspielen(WURZEL / "demo" / "messeplanung.wav", tempo=1.0, auto_wechsel=True)
+    await asyncio.wait([aufgabe], timeout=60)
+    nutzung = [json.loads(z) for z in NUTZUNG.read_text(encoding="utf-8").splitlines()[vorher_n:]]
+    erg = {"aufrufe_vor_erstem_knopf": len(aufrufe_vor_knopf), "knoepfe": zeiten,
+           "karten": [{k: c.get(k) for k in ("art", "titel", "punkte")} for c in coach.karten],
+           "modelle": sorted({e.get("modell", "") for e in nutzung}), "usd": round(sum(e.get("usd", 0) for e in nutzung), 4),
+           "ueberblick": coach.ueberblick, "protokoll_md": coach.knopf.protokoll}
+    (AUSGABE / "knopfdruck_basis.json").write_text(json.dumps(erg, ensure_ascii=False, indent=1, default=str),
+                                                    encoding="utf-8")
+    print(json.dumps({k: erg[k] for k in ("aufrufe_vor_erstem_knopf", "modelle", "usd")}, ensure_ascii=False))
+    for z in zeiten:
+        print(z["art"], z["sekunden"], "s", z["fehler"] or "")
+    for k in erg["karten"]:
+        print("KARTE", k["art"], "|", k["titel"], "|", " / ".join(k["punkte"] or [])[:300])
+
+
 # --- Aktionen ------------------------------------------------------------------------------------------------------------
 async def aktionen(stufe: str, laeufe: int) -> None:
     c = client_fuer(stufe)
@@ -387,7 +437,7 @@ def main() -> None:
     for laut in ("httpx", "httpx2", "httpcore", "httpcore2", "openai", "websockets"):
         logging.getLogger(laut).setLevel(logging.WARNING)
     ap = argparse.ArgumentParser()
-    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben", "pipeline"])
+    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben", "pipeline", "knopfdruck"])
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--stufe", default="basis", choices=["basis", "premium"])
     ap.add_argument("--laeufe", type=int, default=1)
@@ -397,6 +447,8 @@ def main() -> None:
         asyncio.run(zurufe())
     elif a.was == "kette":
         asyncio.run(kette(a.n))
+    elif a.was == "knopfdruck":
+        asyncio.run(knopfdruck_lauf())
     elif a.was == "pipeline":
         asyncio.run(pipeline(a.stufe, a.n))
     elif a.was == "aktionen":

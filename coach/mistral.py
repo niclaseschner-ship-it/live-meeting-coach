@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from types import SimpleNamespace
 
@@ -104,6 +105,18 @@ class _Completions:
 
 
 # --- Transkription (Batch) ------------------------------------------------------------------------------------
+def kontextwoerter(stichwoerter: list[str], n: int = 100) -> list[str]:
+    """context_bias nimmt nur einzelne Wörter ohne Leerzeichen und Kommas (API-Fehler sonst, geprüft 08.10.):
+    Agendatitel und Namen in Wörter zerlegen, kurze Füllwörter weglassen, Reihenfolge behalten."""
+    aus: list[str] = []
+    for s in stichwoerter:
+        for w in re.split(r"[\s,;:/()]+", s or ""):
+            w = w.strip(".!?\"'„“–-")
+            if (len(w) >= 4 or (len(w) == 3 and w[0].isupper())) and w not in aus:  # „Lea“ ja, „und“ nein
+                aus.append(w)
+    return aus[:n]
+
+
 class _Transkriptionen:
     def __init__(self, client: "MistralClient") -> None:
         self._c = client
@@ -112,11 +125,12 @@ class _Transkriptionen:
         """`file` wie bei OpenAI: (name, bytes, mime). Der OpenAI-„prompt“ (ein Satz Kontext) hat bei Voxtral kein
         Gegenstück; dafür gibt es `context_bias` (Wörter) – die setzt der Coach als `stichwoerter`."""
         name, daten, mime = file
-        felder = [("model", model)]
+        felder: dict = {"model": model}
         if language:
-            felder.append(("language", language))
-        for w in self._c.stichwoerter[:100]:
-            felder.append(("context_bias", w))
+            felder["language"] = language
+        woerter = kontextwoerter(self._c.stichwoerter)
+        if woerter:
+            felder["context_bias"] = woerter
 
         async def senden():
             r = await self._c.http.post(f"{BASIS_URL}/audio/transcriptions", headers=self._c.kopf,

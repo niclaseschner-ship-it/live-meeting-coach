@@ -45,6 +45,7 @@ async function schluesselPruefen() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { m.textContent = d.detail ?? `Fehler ${r.status}`; return; }
     m.className = "s-meldung ok";
+    $("karte-premium").disabled = false; // mit eigenem Schlüssel ist Premium auch ohne Niclas' Schlüssel wählbar
     m.textContent = d.ende ? `Schlüssel …${d.ende} wird verwendet.` : "Schlüssel wird verwendet.";
   } catch {
     m.textContent = "Server gerade nicht erreichbar.";

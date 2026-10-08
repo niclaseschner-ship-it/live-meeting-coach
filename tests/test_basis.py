@@ -181,6 +181,11 @@ def test_chat_ohne_openai_eigenheiten():
     assert "reasoning_effort" not in gesehen
 
 
+def test_kontextwoerter_einzeln_ohne_leerzeichen():
+    assert mistral.kontextwoerter(["Nestor", "Termin und Messestand", "Budget", "Lea Kramer", "Budget"]) == [
+        "Nestor", "Termin", "Messestand", "Budget", "Lea", "Kramer"]
+
+
 def test_websuche_lesen():
     roh = {"outputs": [{"type": "tool.execution", "name": "web_search"},
                        {"type": "message.output", "content": [

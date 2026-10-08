@@ -608,14 +608,15 @@ class Coach:
             )
             return
         try:
+            modell = EINST.zuordnung_modell or EINST.analyse_modell
             ergebnis, nutzung = await themen.zuordnen(
-                self._client, EINST.analyse_modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids
+                self._client, modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids
             )
         except Exception as e:  # noqa: BLE001
             log.warning("Themen-Zuordnung fehlgeschlagen: %s", fehlertext(e))
             self.fehler = f"Themen-Zuordnung fehlgeschlagen: {fehlertext(e)}"
             return
-        nutzung_loggen({"art": "themen", "modell": EINST.analyse_modell, **nutzung})
+        nutzung_loggen({"art": "themen", "modell": modell, **nutzung})
         analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke)
         self._ton_melden(ergebnis.get("ton", []))
 

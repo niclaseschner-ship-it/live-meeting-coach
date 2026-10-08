@@ -28,10 +28,11 @@ body { background: var(--bg); }
 .moduskarte:disabled { opacity: .5; cursor: not-allowed; }
 .s-stufe { display: grid; gap: 10px; align-content: start; }
 .s-stufe .moduskarte { height: 100%; }
-.s-schalter { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius);
+.s-schalter { display: flex !important; flex-direction: row; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  border-radius: var(--radius); font-weight: 400;
   background: var(--flaeche); border: 1px solid var(--rand); font-size: 13.5px; line-height: 1.45; color: var(--text-2);
   cursor: pointer; }
-.s-schalter input { margin-top: 3px; flex: none; }
+.s-schalter input { margin-top: 3px; flex: none; width: auto; }
 .s-schalter strong { color: var(--text); }
 
 .s-schluessel { margin: -6px 0 0; }

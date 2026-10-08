@@ -66,10 +66,27 @@ Text) ─► Satz für Satz Sprachausgabe gpt-4o-mini-tts ─► Dashboard. Geme
 erster Ton ~0,5 s später, ~1 Cent je Frage. Nicht unterbrechbar, Rückfragen nur als Frage mit „?“. Der
 Coach nutzt diesen Weg automatisch, wenn keine Realtime-Sitzung zustande kommt.
 
+**Nestor Basis (Ticket #13, nur Mistral):** immer der Weg „text“ – Satz mit Namen ─► `mistral-medium-latest`
+gestreamt (dieselbe `AKTION:`-Zeile, kein Tool-Call) ─► Satz für Satz Voxtral TTS mit der gespeicherten Stimme
+**Thorsten** (`voice_id`, Thorsten-Voice CC0, Referenz in `coach/stimmen/`) ─► Dashboard. Live-Text über Voxtral
+Realtime. Gemessen 08.10. ([messung_basis.md](messung_basis.md)): Sprechende → erster Ton im Median ~2,0–2,1 s,
+24/24 Zurufe mit richtiger Aktion. Keine Rückfragen ohne Namen, kein Ins-Wort-Fallen; die Begrüßung sagt deshalb
+„jedes Mal mit meinem Namen – oder ihr nehmt die Knöpfe“. „Zeig uns die Übersicht“ (`AKTION: bild`) stellt in Basis
+den **Überblick als Text** ins Dashboard (`coach/ueberblick.py`), nach wenigen Sekunden. Kommt Mistral auch nach
+Wiederholungen nicht durch (HTTP 429), sagt Nestor: „Ich komme gerade nicht durch, versucht es gleich nochmal.“
+Die Stil-Anweisung für die Stimme (`STIL_START`) gibt es bei Voxtral nicht; sie entfällt in Basis.
+
+**Nestor fragen per Knopf, auch am Handy:** Am Handy wird „Nestor fragen“ gehalten: halten, fragen, loslassen. Der
+Ton der Frage geht als WAV an `/api/frage/audio`, wird mit dem Transkriptionsmodell der Stufe zu Text und dann wie
+eine gesprochene Frage beantwortet (Stimme + Karte); mit „Nur auf Knopfdruck“ als Karte. Was während des Haltens
+gesagt wurde, wertet der Live-Text nicht noch einmal als Zuruf aus.
+
 **Recherche** (`coach/recherche.py`): Websuche über die OpenAI-Responses-API (GPT-5.4-mini mit
 `web_search`). In die Suche geht nur das vom Modell formulierte Thema und der Meetingtitel, kein
 Transkript. Eingebettete Quellenverweise werden vor dem Vorlesen entfernt. Gemessen 05.10.: Suche 5–8 s,
-gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche.
+gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche. In Basis: Mistral Conversations-API mit dem
+Werkzeug `web_search` (`store: false`), gemessen ~5 s mit 2 Quellen; kommt eine Antwort ohne Quellen, wird die Suche
+einmal erzwungen. Kosten ~3 Cent (Suchergebnisse zählen bei Mistral als Eingabe-Tokens).
 
 **Nestor-Karten** (`coach/karten.py`): Was Nestor sagt, erscheint zusätzlich als Pop-up über dem Bildbereich –
 Titel, die Frage, 2–4 Stichpunkte, bei Recherchen die Quellen. GPT-5.4-mini verdichtet die gesprochene Antwort

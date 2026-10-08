@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import base64
 import json
+import os
 import subprocess
 import tempfile
 import urllib.request
@@ -19,7 +20,8 @@ from pathlib import Path
 
 import websockets
 
-EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+# LMC_BROWSER: anderer Chromium-Browser, z. B. /usr/bin/chromium auf dem Pi
+EDGE = Path(os.getenv("LMC_BROWSER", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"))
 PORT = 9333
 
 

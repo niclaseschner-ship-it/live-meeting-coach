@@ -76,6 +76,9 @@ def demo_einrichtung() -> Meeting:
     return m
 
 
+NUR_API = False  # --nur-api: keine lokale Pausenerkennung (Commit alle 4 s) – trennt API-Grenzen von der Rechnerlast
+
+
 async def ein_meeting(nr: int, stufe: str, client, audio: np.ndarray, sekunden: float, erg: dict) -> None:
     from coach.hoeren import nach_16k
     from coach.livetext import LiveText, LiveTextMistral
@@ -144,8 +147,9 @@ async def ein_meeting(nr: int, stufe: str, client, audio: np.ndarray, sekunden: 
     except Exception as e:  # noqa: BLE001
         ich["fehler"].append(("live-verbinden", f"{type(e).__name__}: {str(e)[:80]}"))
         return
-    vad = Pausenerkennung()
+    vad = None if NUR_API else Pausenerkennung()
     rest = np.zeros(0, np.float32)
+    naechster_commit = 4.0
     t0 = time.monotonic()
     naechste_zuordnung, naechste_frage = 15.0, 25.0 + 5 * nr % 20  # Fragen versetzt, eine pro Minute
     for i in range(0, int(sekunden * 24000), 2400):
@@ -153,11 +157,16 @@ async def ein_meeting(nr: int, stufe: str, client, audio: np.ndarray, sekunden: 
         pos = (i + 2400) / 24000
         stueck = audio[i % len(audio):i % len(audio) + 2400]
         await live.audio(stueck.tobytes())
-        a24 = np.concatenate([rest, stueck.astype(np.float32) / 32768])
-        k = len(a24) // 3 * 3
-        rest = a24[k:]
-        for _s, ende, _p in vad.zufuehren(nach_16k(a24[:k])):
-            await live.commit({"id": i, "ende": ende})
+        if vad is None:
+            if pos >= naechster_commit:
+                naechster_commit += 4.0
+                await live.commit({"id": i, "ende": pos})
+        else:
+            a24 = np.concatenate([rest, stueck.astype(np.float32) / 32768])
+            k = len(a24) // 3 * 3
+            rest = a24[k:]
+            for _s, ende, _p in vad.zufuehren(nach_16k(a24[:k])):
+                await live.commit({"id": i, "ende": ende})
         m.virtuelle_zeit = pos
         if pos >= naechste_zuordnung and abschnitt:
             naechste_zuordnung = pos + 15
@@ -185,9 +194,24 @@ async def lauf(stufe: str, n: int, sekunden: float) -> dict:
     else:
         client = OpenAIMitZaehler(config.openai_schluessel())
     vorher = ZAEHLER.n429
-    erg: dict = {"stufe": stufe, "meetings_gleichzeitig": n, "meetings": []}
+    erg: dict = {"stufe": stufe, "meetings_gleichzeitig": n, "meetings": [], "nur_api": NUR_API}
     t0 = time.monotonic()
+    verzug: list[float] = []  # Verzug der Ereignisschleife: misst, ob der Rechner selbst der Engpass ist
+    fertig = False
+
+    async def schleife_messen() -> None:
+        while not fertig:
+            t = time.monotonic()
+            await asyncio.sleep(0.1)
+            verzug.append(time.monotonic() - t - 0.1)
+
+    messer = asyncio.ensure_future(schleife_messen())
     await asyncio.gather(*(ein_meeting(k, stufe, client, np.roll(demo, -k * 24000 * 7), sekunden, erg) for k in range(n)))
+    fertig = True
+    await messer
+    verzug.sort()
+    erg["schleife_verzug_p50"] = round(verzug[len(verzug) // 2], 3) if verzug else None
+    erg["schleife_verzug_p95"] = round(verzug[int(len(verzug) * 0.95)], 3) if verzug else None
     erg["dauer"] = round(time.monotonic() - t0, 1)
     erg["n429"] = ZAEHLER.n429 - vorher
     zu = [x for mm in erg["meetings"] for x in mm["zuordnung"]]
@@ -212,7 +236,11 @@ async def main() -> None:
     ap.add_argument("--stufe", choices=["basis", "premium"], required=True)
     ap.add_argument("--anzahl", type=int, nargs="+", default=[1, 2, 4, 8])
     ap.add_argument("--sekunden", type=float, default=120)
+    ap.add_argument("--nur-api", action="store_true")
+    ap.add_argument("--datei", default="")
     a = ap.parse_args()
+    global NUR_API
+    NUR_API = a.nur_api
     config.stufe_setzen(a.stufe)
     if a.stufe == "premium":
         object.__setattr__(EINST, "assistent_modus", "text")
@@ -220,10 +248,11 @@ async def main() -> None:
     for n in a.anzahl:
         erg = await lauf(a.stufe, n, a.sekunden)
         alle.append(erg)
-        print(json.dumps({k: erg[k] for k in ("stufe", "meetings_gleichzeitig", "n429", "zuordnung_median", "zuordnung_max",
+        print(json.dumps({k: erg[k] for k in ("stufe", "meetings_gleichzeitig", "nur_api", "schleife_verzug_p50",
+                                                "schleife_verzug_p95", "n429", "zuordnung_median", "zuordnung_max",
                                                 "frage_ton_median", "frage_ton_max", "ausfaelle", "saetze")},
                          ensure_ascii=False), flush=True)
-        (AUSGABE / f"parallel_{a.stufe}.json").write_text(json.dumps(alle, ensure_ascii=False, indent=1), encoding="utf-8")
+        (AUSGABE / (a.datei or f"parallel_{a.stufe}.json")).write_text(json.dumps(alle, ensure_ascii=False, indent=1), encoding="utf-8")
         await asyncio.sleep(10)
 
 

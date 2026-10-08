@@ -157,6 +157,9 @@ class Einstellungen:
     # Die Startseite wählt die Stufe je Meeting (POST /api/stufe); lokal gilt LMC_STUFE als Vorgabe.
     stufe: str = os.getenv("LMC_STUFE", "premium")
     basis_text_modell: str = os.getenv("LMC_BASIS_TEXT_MODELL", "mistral-medium-latest")  # Probe 08.10.: 12/12 Aktionen
+    # Zuordnung alle ~15 s (größter Posten der Textaufrufe): eigenes Modell möglich, Vergleich in docs/messung_basis.md
+    basis_zuordnung_modell: str = os.getenv("LMC_BASIS_ZUORDNUNG_MODELL", "mistral-medium-latest")
+    zuordnung_modell: str = os.getenv("LMC_ZUORDNUNG_MODELL", "")  # leer = analyse_modell
     basis_live_modell: str = os.getenv("LMC_BASIS_LIVE_MODELL", "voxtral-mini-transcribe-realtime-2602")
     basis_live_delay_ms: int = int(_zahl("LMC_BASIS_LIVE_DELAY_MS", 240))  # Text der Frage ~0,6 s nach Sprechende
     basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch (Knopfdruck)
@@ -183,6 +186,7 @@ EINST = Einstellungen()
 # jedes Modell gegen sein Mistral-Gegenstück. Der Coach baut danach seinen Client neu (pipeline.Coach.stufe_setzen).
 STUFEN = ("basis", "premium")
 _STUFEN_FELDER = ("live_modell", "text_modell", "transkriptions_modell", "analyse_modell", "analyse_aufwand",
+                  "zuordnung_modell",
                   "assistent_modell", "assistent_aufwand", "recherche_modell", "recherche_aufwand", "stimme_modell",
                   "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden")
 _PREMIUM = {f: getattr(EINST, f) for f in _STUFEN_FELDER}
@@ -194,7 +198,7 @@ def basis_werte() -> dict:
         "live_modell": e.basis_live_modell, "text_modell": e.basis_transkription,
         "transkriptions_modell": e.basis_transkription,
         "analyse_modell": e.basis_text_modell, "assistent_modell": e.basis_text_modell,
-        "recherche_modell": e.basis_text_modell,
+        "recherche_modell": e.basis_text_modell, "zuordnung_modell": e.basis_zuordnung_modell,
         "analyse_aufwand": "", "assistent_aufwand": "", "recherche_aufwand": "",  # Mistral kennt „low“ nicht
         "stimme_modell": e.basis_stimme_modell, "stimme": e.basis_stimme,
         # Nestor antwortet über Text + Sprachausgabe (kein Realtime-Gespräch): keine Rückfragen ohne Namen,
