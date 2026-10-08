@@ -1157,10 +1157,10 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
 
     if zustaende:
         bericht.messwerte["kosten_usd"] = meeting_kosten(zustaende)
-        bericht.messwerte["meeting_s"] = round(zustaende[-1].get("zeit", 0.0), 1)
+        bericht.messwerte["meeting_s"] = round(max(z.get("zeit", 0.0) for z in zustaende), 1)  # nicht das leere Meeting nach „Fertig“
     elif verlauf:
         bericht.messwerte["kosten_usd"] = verlauf[-1].get("kosten", {}).get("meeting", 0.0)
-        bericht.messwerte["meeting_s"] = round(verlauf[-1].get("zeit", 0.0), 1)
+        bericht.messwerte["meeting_s"] = round(max(v.get("zeit", 0.0) for v in verlauf), 1)
 
 
 async def chromium_starten(pw, args: argparse.Namespace, bericht: Bericht, versuche: int = 5):
