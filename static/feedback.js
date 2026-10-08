@@ -28,7 +28,7 @@
       '<option value="funktionswunsch">Funktionswunsch</option>' +
       '<option value="fehler">Fehler</option>' +
       '</select></label>' +
-      '<label>Nachricht <textarea id="fb-nachricht" rows="3" placeholder="Was wollen Sie uns sagen?"></textarea></label>' +
+      '<label>Nachricht <textarea id="fb-nachricht" rows="3" placeholder="Was willst du uns sagen?"></textarea></label>' +
       '<button id="fb-senden" class="primaer">Senden</button>' +
       '<p id="fb-dank" class="leise-text" hidden>Danke! Wir lesen das.</p>';
 

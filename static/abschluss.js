@@ -34,7 +34,7 @@ function darstellen(z) {
   const eigenerSchluessel = !!z.eigener_schluessel;
   const eurText = z.kosten_eur.toLocaleString("de-DE", { minimumFractionDigits: 2 });
   $("ab-kosten-satz").textContent = eigenerSchluessel
-    ? `Die KI-Kosten dieses Meetings (${eurText} €) liefen über Ihren eigenen Schlüssel.`
+    ? `Die KI-Kosten dieses Meetings (${eurText} €) liefen über euren eigenen Schlüssel.`
     : `Dieses Meeting hat Niclas ${eurText} € an KI-Kosten gekostet.`;
 
   // Eigener Schlüssel: kein Kostenausgleich mit Stufen, nur der allgemeine Link ohne Betrag (Lastenheft 4.5)

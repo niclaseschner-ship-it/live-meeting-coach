@@ -13,9 +13,9 @@ from dataclasses import asdict, dataclass
 # deterministisch (Uhr, Zähler); hinweis: KI-gestützt, kann irren; experimentell: nie gemessen. Das sagt noch
 # nichts darüber, ob sie im Betrieb stimmt. docs/lastenheft.md 4.3 misst das inzwischen nach: „geprueft“ ist
 # dort durchweg verlässlich, „experimentell“ durchweg experimentell – nur bei „hinweis“ hängt es von der
-# einzelnen Regel ab (ton: 31/32 erkannt → verlässlich; ausreden, ergebnisse: schwach im Feld → experimentell).
-# Deshalb zwei sichtbare Stufen statt drei, direkt an jeder Regel, nicht mechanisch aus der alten Stufe
-# abgeleitet.
+# einzelnen Regel ab (ton: 31/32 erkannt, ergebnisse: 4/5 im deutschen Material → verlässlich; ausreden:
+# schwach im Feld → experimentell). Deshalb zwei sichtbare Stufen statt drei, direkt an jeder Regel, nicht
+# mechanisch aus der alten Stufe abgeleitet.
 # Anzeige-Text, nicht der Schlüssel (Ticket #10, Rückmeldung 07.10.2026): „experimentell“ klingt in der
 # Oberfläche nach Labor, nicht nach Produkt. Der Schlüssel "experimentell" bleibt im Code/Katalog unverändert,
 # nur das, was Nutzer lesen, heißt jetzt "Beta".
@@ -58,9 +58,13 @@ KATALOG = [
           "Killerphrasen und Pauschalvorwürfe („immer“, „nie“) im Live-Text", False),
     Regel("eingehen", "Zuhören und aufeinander eingehen", "experimentell",
           "Wiederholte Argumente, Beiträge ohne Bezug", False),
-    Regel("ergebnisse", "Ergebnisse festhalten – wer macht was bis wann", "experimentell",
-          "Beim Wechsel: Punkt ohne ausgesprochenes Ergebnis, Aufgabe ohne Verantwortliche/n oder Termin", True,
-          "Experimentell: erkennt 4 von 5 Beschlüssen richtig, bei englischsprachigem Material kaum."),
+    # Rückmeldung Niclas 08.10.2026: zu Unrecht "experimentell" – gemessen 4/5 Beschlüsse richtig im deutschen
+    # Material (docs/gespraechsregeln.md Regel 10, scripts/bench_ergebnisse.py); nur im englischsprachigen
+    # AMI-Material deutlich schwächer (docs/testlauf_2026-10-06.md) – das bleibt ein Hinweis, kein Grund zur
+    # Abstufung, da Nestor für deutsche Präsenzmeetings gebaut ist (Lastenheft 1).
+    Regel("ergebnisse", "Ergebnisse festhalten – wer macht was bis wann", "verlaesslich",
+          "Nestor erinnert beim Punktwechsel, wenn kein Ergebnis, keine Zuständigkeit oder kein Termin genannt "
+          "wurde", True),
 ]
 NACH_ID = {r.id: r for r in KATALOG}
 STANDARD = ["ausreden", "thema", "zeit", "kurz"]

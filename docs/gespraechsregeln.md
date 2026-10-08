@@ -294,7 +294,8 @@ Kontrollphasen ohne Verstoß.
 
 Umgesetzt: Regelkatalog (`coach/regeln.py`), Auswahl mit Prüfstufen statt Freifeld, Karte „Vereinbarte
 Regeln“ im Dashboard. Hinweise nennen die gewählte Regel („Vereinbart war: …“). Umgesetzt sind die Regeln
-1 (nur Überlappung), 3, 4, 5, 6, 7 und 10; 2, 8 und 9 sind sichtbar mit „folgt“ markiert.
+1 (nur Überlappung), 3, 4, 5, 6, 7 und 10; 2, 8 und 9 bleiben im Katalog (`umgesetzt=False`), erscheinen aber
+seit der Rückmeldung vom 08.10.2026 nicht mehr zur Auswahl (vorher sichtbar mit „folgt“ markiert).
 
 | Regel | Messung | Ergebnis |
 |---|---|---|

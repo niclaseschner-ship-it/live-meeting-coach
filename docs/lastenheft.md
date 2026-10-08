@@ -44,6 +44,12 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 
    Danach wird der Meetingzustand auf dem Server gelöscht.
 
+**Stil (Rückmeldung Niclas 08.10.2026):** Startseite, Rechtstexte, Abschluss, Feedback-Fenster und die
+Anmeldeseite duzen – „du“/„dein“, wenn die eine Person angesprochen wird, die Nestor einrichtet oder die
+Rechtstexte liest, „ihr“/„euer“, wo es ausdrücklich um die ganze Runde im Meeting geht (z. B. der aufgenommene
+Ton). Genau wie Nestors gesprochene Begrüßung, die schon „du“ und „ihr“ je nach Adressat mischt. Vorher stand
+hier Sie-Form.
+
 ## 3. Die zwei Stufen
 
 Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Gleiche Funktionen, gleiche
@@ -79,10 +85,10 @@ Die Startseite zeigt je Stufe zwei Plus- und zwei Minus-Stichpunkte statt Fließ
 auf Zuruf“, „− US-Anbieter (OpenAI)“, „− etwa 2 € je Meetingstunde“ (Richtwert). **Basis**: „+ KI nur bei Mistral
 (Frankreich), Verarbeitung in der EU“, „+ etwa 0,7 € je Meetingstunde“ (Richtwert), „− Ansprache immer mit Namen,
 kein Reinreden“, „− Überblick als Text statt Live-Bild“. Zum Schalter wörtlich: „Nur auf Knopfdruck – ohne Knopf
-geht nichts an Mistral. Ihr Ton liegt bis dahin nur auf unserem Server in der EU und wird am Ende gelöscht.“
+geht nichts an Mistral. Euer Ton liegt bis dahin nur auf unserem Server in der EU und wird am Ende gelöscht.“
 
-Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir sehen nichts von Ihren Meetingdaten und
-nutzen nichts davon – außer Sie erlauben es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
+Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir sehen nichts von deinen Meetingdaten und
+nutzen nichts davon – außer du erlaubst es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
 gelöscht.“ Unter den Karten ein knapper Satz zum Hosting (Cloudflare, Server in der EU; Einzelheiten in der
 Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hinweis: „Nestor ist Open Source
 (AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das (seit 08.10.2026 öffentliche, seit 0da0713 unter
@@ -117,9 +123,11 @@ eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbei
 sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Mit „Nur auf Knopfdruck“ gilt
 das Absenden einer Spracheingabe als Knopfdruck.
 
-Daneben gibt es „Weitere Regeln“: ein Freitext (Kachel im selben Raster wie die Gesprächsregeln), den Nestor
-einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N weitere, die ihr
-auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
+Daneben gibt es „Weitere Regeln“: ein Freitext in einer eigenen, neutral gestalteten Gruppe unterhalb der
+Gesprächsregeln – deutlich von den prüfbaren Regeln abgehoben (anderes Symbol, gestrichelter Rahmen, eigener
+Untertitel „Nestor liest sie zu Beginn vor – prüfen kann er sie nicht“), damit auf einen Blick klar ist, dass
+Nestor das nur einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N
+weitere, die ihr auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
 
 ### 4.2 Die Knöpfe – Analysen auf Knopfdruck
 
@@ -183,7 +191,7 @@ Regel-Ampeln im Dashboard.
 | Agendawechsel mit Ansage | verlässlich | sofort, 5–13 s | – |
 | Agendawechsel ohne Ansage | experimentell | 15–60 s Verzug, kurze Punkte werden verpasst | „Experimentell: meldet einen stillen Themenwechsel meist erst nach 15 bis 60 Sekunden, kurze Punkte werden dabei manchmal verpasst.“ |
 | Fokus (klares Fremdthema) | verlässlich | 3/3 erkannt nach 26–28 s, 0 Fehlalarme; eigene Tests mit Urlaub und Fußball. Fließende Übergänge zwischen Punkten: siehe Agendawechsel ohne Ansage | |
-| Ergebnisse festhalten | experimentell | 4/5 Beschlüsse richtig, in englischem Material kaum | „Experimentell: erkennt 4 von 5 Beschlüssen richtig, bei englischsprachigem Material kaum.“ |
+| Ergebnisse festhalten | verlässlich | 4/5 Beschlüsse richtig im deutschen Material ([gespraechsregeln.md](gespraechsregeln.md) §10); Hinweis: im englischsprachigen AMI-Material deutlich schwächer (0/8, 1/9, 3/8, [testlauf_2026-10-06.md](testlauf_2026-10-06.md)) | – |
 | Gleichzeitiges Sprechen | experimentell | findet 41–68 % der echten, 84–86 % der Meldungen stimmen | „Experimentell: findet 41 bis 68 % der echten Stellen; was gemeldet wird, stimmt in 84 bis 86 % der Fälle.“ |
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
