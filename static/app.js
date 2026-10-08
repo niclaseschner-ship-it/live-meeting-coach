@@ -108,8 +108,11 @@ $("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
 $("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
 $("reiter-nestor").onclick = () => { reiter = "nestor"; rendern(); };
 $("karte-zu").onclick = () => karteSchliessen();
-$("btn-einstellungen").onclick = () => { $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = $("handy-fenster").hidden = true; };
-$("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = true; if (zustand) kostenRendern(zustand); };
+// Kopfleiste entschlackt (Ticket #17 Punkt 4): Handy koppeln und Einstellungen stecken im „Mehr“-Menü – beides
+// seltene, vorbereitende Aktionen statt Aktionen je Minute. Ein Klick darauf wählt aus und schließt das Menü.
+$("btn-mehr").onclick = () => { $("mehr-menu").hidden = !$("mehr-menu").hidden; $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true; };
+$("btn-einstellungen").onclick = () => { $("mehr-menu").hidden = true; $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = $("handy-fenster").hidden = true; };
+$("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = $("mehr-menu").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
 $("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
 // Basis: kein Bildmodell – der Knopf schreibt den Überblick neu; Premium: Live-Bild (Knopfdruck gibt es nur in Basis)
@@ -133,7 +136,7 @@ async function handyFensterZeigen() {
     : ["Kein Tailscale gefunden. HTTPS ist Pflicht fürs Handy-Mikrofon: ", el("code", {}, k.befehl),
       " einrichten oder LMC_HANDY_URL setzen."]));
 }
-$("btn-handy").onclick = handyFensterZeigen;
+$("btn-handy").onclick = () => { $("mehr-menu").hidden = true; handyFensterZeigen(); };
 $("btn-ton-hier").onclick = () => stimme.bereit(true);
 $("btn-mikro-quelle").onclick = handyFensterZeigen;
 $("hf-laptop").onclick = async () => {
@@ -147,6 +150,7 @@ document.addEventListener("click", (e) => {
       && !$("btn-mikro-quelle").contains(e.target)) $("handy-fenster").hidden = true;
   if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
   if (!$("kosten").hidden && !$("kosten").contains(e.target) && !$("btn-kosten").contains(e.target)) $("kosten").hidden = true;
+  if (!$("mehr-menu").hidden && !$("mehr-menu").contains(e.target) && !$("btn-mehr").contains(e.target)) $("mehr-menu").hidden = true;
 });
 // Einstellungen: jede Änderung sofort an den Server
 const einstellen = (feld, wert) => api("/api/einstellungen", { [feld]: wert });
@@ -179,7 +183,7 @@ $("s-entfernen").onclick = () => schluesselSenden("");
 
 function schluesselRendern(z) {
   const s = z.schluessel ?? {};
-  $("eigener-schluessel-pill").hidden = s.quelle !== "dashboard";  // dezenter Hinweis in der Kopfleiste
+  // „eigener Schlüssel“ steht seit der entschlackten Kopfleiste (Ticket #17) an der Stufen-Pille (siehe rendern())
   $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline || basisStufe(z); // Basis: Mistral-Schlüssel liegt am Server
   $("s-status").textContent = s.offline ? "Offline-Modus (LMC_OFFLINE=1): keine KI-Aufrufe."
     : !s.vorhanden ? "Noch kein Schlüssel – nur Demos möglich."
@@ -490,9 +494,13 @@ function rendern() {
   // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
   $("modus-pill").hidden = !z.modus;
   document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
-  $("modus-pill").textContent = z.stufe === "basis" ? `Basis${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium";
-  $("modus-pill").dataset.tip = z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
-    : "Nestor Premium: OpenAI, Gespräch und Live-Bild";
+  // „eigener Schlüssel“ (Ticket #17, entschlackte Kopfleiste) steht hier statt in einer eigenen Pille
+  const eigenerSchluessel = z.schluessel?.quelle === "dashboard";
+  $("modus-pill").textContent = (z.stufe === "basis" ? `Basis${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium")
+    + (eigenerSchluessel ? " · eigener Schlüssel" : "");
+  $("modus-pill").dataset.tip = (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
+    : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
+    + (eigenerSchluessel ? " – die KI-Kosten dieses Meetings laufen über Ihren eigenen OpenAI-Schlüssel" : "");
   $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
   $("btn-mikro").classList.toggle("an", !!z.stumm);
@@ -736,7 +744,9 @@ function verbinden() {
 // Start: Icons setzen, Formular vorbelegen, Regeln, Szenarien und Aufnahmen laden
 (async () => {
   iconSetzen("btn-fragen", "frage"); iconSetzen("btn-still", "stopp"); iconSetzen("btn-fortsetzen", "weiter");
-  iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-einstellungen", "einstellungen"); iconSetzen("btn-handy", "handy");
+  iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-mehr", "mehr");
+  // btn-handy/btn-einstellungen stecken jetzt im „Mehr“-Menü mit sichtbarem Label (Ticket #17) – Icon davor, Label bleibt stehen
+  $("btn-einstellungen").prepend(icon("einstellungen")); $("btn-handy").prepend(icon("handy"));
   iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
   iconSetzen("kosten-icon", "muenze"); iconSetzen("btn-folie", "folie");
   document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));

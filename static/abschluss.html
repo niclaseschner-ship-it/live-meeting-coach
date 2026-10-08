@@ -16,6 +16,8 @@
           <defs><linearGradient id="nlg" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient></defs>
           <rect width="40" height="40" rx="11" fill="url(#nlg)"/>
+          <path d="M9.5 28.5a13 13 0 0 1-1.6-13.8M30.5 28.5a13 13 0 0 0 1.6-13.8" stroke="#FBBF24" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M8 19.5l-2.4-1.2M8.6 24.2l-2.6.2M32 19.5l2.4-1.2M31.4 24.2l2.6.2" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
           <path d="M14 27V13l12 14V13" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </span>
@@ -27,6 +29,11 @@
     <div id="ab-leer" class="karte ab-leer" hidden>
       <p>Kein beendetes Meeting gefunden.</p>
       <a href="/" class="primaer ab-link">Zur Startseite</a>
+    </div>
+
+    <!-- Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“ -->
+    <div id="ab-kopf" class="ab-kopfzeile" hidden>
+      <h1 id="ab-kopfzeile-text">Danke!</h1>
     </div>
 
     <div id="ab-inhalt" hidden>
@@ -62,16 +69,13 @@
           <a id="ab-eigener-link" target="_blank" rel="noopener"></a></p>
       </section>
 
-      <!-- Nestor verbessern -->
+      <!-- Nestor verbessern: allgemeines Feedback jetzt über den Feedback-Knopf unten rechts (feedback.js),
+           auf jeder Seite gleich erreichbar. Hier bleibt nur die Datenspende mit ihrer eigenen Anmerkung. -->
       <section class="karte">
-        <h2>Nestor verbessern</h2>
-        <label>Feedback <small>freiwillig, auch ohne Datenspende</small>
-          <textarea id="fb-text" rows="3" placeholder="Was hat gut funktioniert, was nicht?"></textarea>
+        <h2>Datenspende</h2>
+        <label>Anmerkung zur Spende <small>optional</small>
+          <textarea id="fb-text" rows="3" placeholder="Was soll Nestor über diese Spende wissen?"></textarea>
         </label>
-        <button id="btn-feedback" class="leise klein">Nur Feedback senden</button>
-        <p id="fb-danke" class="leise-text" hidden>Danke für das Feedback!</p>
-
-        <h3>Datenspende</h3>
         <p id="ab-spende-hinweis" class="ab-wird-fertig leise-text" hidden>Die Ablage wird noch fertiggestellt …</p>
         <p class="leise-text">Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
           einzeln an oder wertet Inhalte aus.</p>
@@ -88,5 +92,6 @@
 
   <script src="/static/basis.js"></script>
   <script src="/static/abschluss.js"></script>
+  <script src="/static/feedback.js"></script>
 </body>
 </html>

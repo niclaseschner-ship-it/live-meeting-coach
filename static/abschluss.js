@@ -9,13 +9,25 @@ async function laden() {
   const r = await fetch("/api/abschluss");
   if (!r.ok) {
     $("ab-leer").hidden = false;
+    $("ab-kopf").hidden = true;
     $("ab-inhalt").hidden = true;
     return;
   }
   letzterStand = await r.json();
   $("ab-leer").hidden = true;
+  $("ab-kopf").hidden = false;
   $("ab-inhalt").hidden = false;
+  kopfDarstellen(letzterStand);
   darstellen(letzterStand);
+}
+
+// Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“
+function kopfDarstellen(z) {
+  const minuten = Math.max(1, Math.round(z.dauer_sekunden / 60));
+  const teile = [`${minuten} Minute${minuten === 1 ? "" : "n"}`];
+  if (z.punkte) teile.push(`${z.punkte} Punkt${z.punkte === 1 ? "" : "e"}`);
+  if (z.entscheidungen) teile.push(`${z.entscheidungen} Entscheidung${z.entscheidungen === 1 ? "" : "en"}`);
+  $("ab-kopfzeile-text").textContent = `Danke! ${teile.join(" · ")}`;
 }
 
 function darstellen(z) {
@@ -61,14 +73,6 @@ async function betragWaehlen(s) {
 $("btn-paket").onclick = () => {
   const mit = $("pk-aufnahme").checked ? 1 : 0;
   location.href = `/api/abschluss/paket.zip?aufnahme=${mit}`;
-};
-
-$("btn-feedback").onclick = async () => {
-  const text = $("fb-text").value.trim();
-  if (!text) return;
-  await api("/api/abschluss/feedback", { text });
-  $("fb-text").value = "";
-  $("fb-danke").hidden = false;
 };
 
 function spendeKnopfAktualisieren() {

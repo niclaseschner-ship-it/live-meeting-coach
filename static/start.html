@@ -29,40 +29,53 @@
   <main class="s-haupt">
     <h1 class="s-frage">Wie soll Nestor diesmal mithören?</h1>
 
-    <!-- Ticket #13: zwei Stufen statt zwei Modi. Gleiche Knöpfe an gleicher Stelle – Premium legt nur das Gespräch
-         und das Live-Bild darauf. „Nur auf Knopfdruck“ ist ein Schalter in Basis. -->
+    <!-- Nachtrag #18 (Niclas): Datenversprechen gut sichtbar, nicht im Kleingedruckten. -->
+    <section class="s-versprechen">
+      <p><strong>Unser Datenversprechen:</strong> Wir sehen nichts von Ihren Meetingdaten und nutzen nichts
+        davon – außer Sie erlauben es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
+        gelöscht.</p>
+    </section>
+
+    <!-- Ticket #13/#18: zwei Stufen statt zwei Modi. Premium (OpenAI) ist der Standard, Basis (Mistral) das
+         Downgrade für DSGVO-Nähe und weniger Kosten – deshalb Premium zuerst, größer und mit Vor-/Nachteilen auf
+         einen Blick statt Fließtext; „Nur auf Knopfdruck“ bleibt ein Schalter in Basis. -->
     <div class="s-karten">
-      <div class="s-stufe">
-        <button id="karte-basis" class="moduskarte">
-          <h2>Nestor Basis <small>Einstieg · EU</small></h2>
-          <ul>
-            <li>Live-Transkript, Fokus, Zeit und Agenda im Blick</li>
-            <li>Nestor hört auf „Nestor, …“ und antwortet gesprochen, mit Karte – oder per Knopf, auch am Handy</li>
-            <li>Überblick als Text: Entschiedenes, Offenes, Aufgaben</li>
-            <li>Ein „Nein“ in der Begrüßung löscht sofort alles</li>
+      <div class="s-stufe s-stufe-premium">
+        <button id="karte-premium" class="moduskarte moduskarte-premium">
+          <h2>Nestor Premium <small>Standard</small></h2>
+          <ul class="s-plus">
+            <li>Natürliches Gespräch: Rückfragen ohne Namen, ihr könnt reinreden</li>
+            <li>Live-Bild alle 10 Minuten und auf Zuruf</li>
           </ul>
-          <p class="s-datenhinweis">Alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU.</p>
-          <p class="s-kosten" id="kosten-basis">etwa 0,7 € je Meetingstunde</p>
+          <ul class="s-minus">
+            <li>US-Anbieter (OpenAI)</li>
+            <li id="kosten-premium">etwa 2 € je Meetingstunde</li>
+          </ul>
+        </button>
+      </div>
+
+      <div class="s-stufe s-stufe-basis">
+        <button id="karte-basis" class="moduskarte">
+          <h2>Nestor Basis <small>Downgrade · EU</small></h2>
+          <ul class="s-plus">
+            <li>KI nur bei Mistral (Frankreich), Verarbeitung in der EU</li>
+            <li id="kosten-basis">etwa 0,7 € je Meetingstunde</li>
+          </ul>
+          <ul class="s-minus">
+            <li>Ansprache immer mit Namen, kein Reinreden</li>
+            <li>Überblick als Text statt Live-Bild</li>
+          </ul>
         </button>
         <label class="s-schalter"><input type="checkbox" id="nur-knopfdruck">
           <span><strong>Nur auf Knopfdruck</strong> – ohne Knopf geht nichts an Mistral. Ihr Ton liegt bis dahin nur
             auf unserem Server in der EU und wird am Ende gelöscht; dazu „letzte 5 Minuten“ oder „alles verwerfen“.</span></label>
       </div>
-
-      <div class="s-stufe">
-        <button id="karte-premium" class="moduskarte">
-          <h2>Nestor Premium</h2>
-          <ul>
-            <li>Alles aus Basis – dieselben Knöpfe an derselben Stelle</li>
-            <li>Nestor als Gesprächspartner: Rückfragen ohne Namen, Reinreden macht ihn still</li>
-            <li>Dazu das Live-Bild alle 10 Minuten und auf Zuruf</li>
-          </ul>
-          <p class="s-datenhinweis">Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.</p>
-          <p class="s-kosten" id="kosten-premium">etwa 2 € je Meetingstunde</p>
-        </button>
-      </div>
     </div>
     <p id="stufe-fehlt" class="s-meldung" hidden></p>
+    <p class="s-cloudflare">Nestor läuft bei Cloudflare, mit Servern in der EU – Details in der
+      <a href="/static/datenschutz.html">Datenschutzerklärung</a>.</p>
+    <p class="s-quelloffen">Wer es anders betreiben will: Nestor ist Open Source (AGPL-3.0) und lässt sich selbst
+      hosten – <a href="https://github.com/niclaseschner-ship-it/live-meeting-coach" target="_blank" rel="noopener">Quellcode auf GitHub</a>.</p>
 
     <details class="s-schluessel">
       <summary>Eigenen OpenAI-Schlüssel verwenden (optional, nur Nestor Premium)</summary>
@@ -91,5 +104,6 @@
   </footer>
 
   <script src="/static/start.js"></script>
+  <script src="/static/feedback.js"></script>
 </body>
 </html>

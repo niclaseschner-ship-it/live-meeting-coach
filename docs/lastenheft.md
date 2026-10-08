@@ -36,10 +36,11 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
 4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen; Premium zeigt zusätzlich
    das Live-Bild und spricht im Gespräch.
-5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite mit drei Angeboten:
+5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite, eingeleitet mit einem Abschluss-Kopf – „Danke!
+   11 Minuten · 4 Punkte · 2 Entscheidungen“, mit demselben Logo wie im Dashboard – und drei Angeboten:
    - **Eigenes Paket** herunterladen (Abschnitt 4.4).
    - **Unterstützung:** echte Kosten des Meetings, drei Vorschläge und ein PayPal-QR-Code.
-   - **Datenspende** mit Feedback.
+   - **Datenspende** (Abschnitt 4.6).
 
    Danach wird der Meetingzustand auf dem Server gelöscht.
 
@@ -49,18 +50,23 @@ Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Varian
 Knöpfe, gleiche Stellen im Dashboard – man kann jederzeit umsteigen, ohne überrascht zu werden. Premium legt nur das
 Erlebnis darauf (Gespräch, Live-Bild). `LMC_KI=codex` und der Claude-Bildweg sind reine Testwege, keine Stufe.
 
-| | **Nestor Basis** (Einstieg, EU) | **Nestor Premium** |
+**Wording (Niclas, 08.10.2026, Ticket #18):** **Nestor Premium** (OpenAI) ist der **Standard** – auf der
+Startseite zuerst, größer, mit dem Zusatz „Standard“. **Nestor Basis** (Mistral) ist das **Downgrade** für alle,
+denen DSGVO-Nähe (alles in der EU, europäischer Anbieter) und weniger Kosten wichtiger sind als Gespräch und
+Live-Bild.
+
+| | **Nestor Premium** (Standard) | **Nestor Basis** (Downgrade, EU) |
 |---|---|---|
-| KI-Anbieter | nur Mistral AI (Frankreich, Verarbeitung in der EU), ein Schlüssel | OpenAI |
-| Ton | läuft zum Server und in Echtzeit zu Mistral (Voxtral Realtime) | läuft zum Server und in Echtzeit zu OpenAI |
+| KI-Anbieter | OpenAI | nur Mistral AI (Frankreich, Verarbeitung in der EU), ein Schlüssel |
+| Ton | läuft zum Server und in Echtzeit zu OpenAI | läuft zum Server und in Echtzeit zu Mistral (Voxtral Realtime) |
 | Live-Transkript, Fokus, Ton, Ergebnisse | live | live |
 | Monolog, Redeanteile, Überlappung, Zeit | live, lokal auf dem Server | live, lokal auf dem Server |
-| Nestor ansprechen | „Nestor, …“ per Zuruf und die Knöpfe (auch am Handy) | „Nestor, …“ wie im Gespräch, und die Knöpfe |
-| Nestors Antwort | gesprochen mit der Stimme **Thorsten** (Thorsten-Voice, CC0) und als Karte; keine Rückfragen ohne Namen, kein Ins-Wort-Fallen | Realtime-Gespräch: Rückfragen ohne Namen, Reinreden macht ihn still |
-| Überblick | **Überblick als Text** (Abschnitt 4.7) nach 5 min, dann alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf |
+| Nestor ansprechen | „Nestor, …“ wie im Gespräch, und die Knöpfe | „Nestor, …“ per Zuruf und die Knöpfe (auch am Handy) |
+| Nestors Antwort | Realtime-Gespräch: Rückfragen ohne Namen, Reinreden macht ihn still | gesprochen mit der Stimme **Thorsten** (Thorsten-Voice, CC0) und als Karte; keine Rückfragen ohne Namen, kein Ins-Wort-Fallen |
+| Überblick | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf | **Überblick als Text** (Abschnitt 4.7) nach 5 min, dann alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell |
 | Knöpfe | Wo stehen wir? · Regeln eingehalten? · Überblick · Protokoll · Nestor fragen (am Handy: halten) | dieselben |
 | Löschen | „Nein“ in der Begrüßung löscht alles | „Nein“ in der Begrüßung löscht alles |
-| Kosten (Richtwert) | ~0,7 € je Stunde | ~2 € je Stunde |
+| Kosten (Richtwert) | ~2 € je Stunde | ~0,7 € je Stunde |
 
 **Schalter „Nur auf Knopfdruck“ (nur Basis):** der frühere Modus „Auf Knopfdruck“. Ohne Knopf geht nichts an
 Mistral: Der Ton bleibt auf dem Server, Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf
@@ -68,10 +74,19 @@ Knopfdruck (Abschnitt 4.2), Nestor hört nicht auf Zuruf und antwortet als Karte
 Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je
 Stunde (Voxtral-Transkription der Sprache plus wenige Cent je Knopf, gerechnet).
 
-Auf der Startseite steht zu **Basis** wörtlich: „Alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der
-EU.“ Zu **Premium**: „Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.“ Zum Schalter: „Nur auf
-Knopfdruck – ohne Knopf geht nichts an Mistral. Ihr Ton liegt bis dahin nur auf unserem Server in der EU und wird am
-Ende gelöscht.“
+Die Startseite zeigt je Stufe zwei Plus- und zwei Minus-Stichpunkte statt Fließtext (kein Ganzsatz, Ticket #18).
+**Premium**: „+ Natürliches Gespräch: Rückfragen ohne Namen, ihr könnt reinreden“, „+ Live-Bild alle 10 Minuten und
+auf Zuruf“, „− US-Anbieter (OpenAI)“, „− etwa 2 € je Meetingstunde“ (Richtwert). **Basis**: „+ KI nur bei Mistral
+(Frankreich), Verarbeitung in der EU“, „+ etwa 0,7 € je Meetingstunde“ (Richtwert), „− Ansprache immer mit Namen,
+kein Reinreden“, „− Überblick als Text statt Live-Bild“. Zum Schalter wörtlich: „Nur auf Knopfdruck – ohne Knopf
+geht nichts an Mistral. Ihr Ton liegt bis dahin nur auf unserem Server in der EU und wird am Ende gelöscht.“
+
+Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir sehen nichts von Ihren Meetingdaten und
+nutzen nichts davon – außer Sie erlauben es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
+gelöscht.“ Unter den Karten ein knapper Satz zum Hosting (Cloudflare, Server in der EU; Einzelheiten in der
+Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hinweis: „Nestor ist Open Source
+(AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das (seit 08.10.2026 öffentliche, seit 0da0713 unter
+AGPL-3.0 lizenzierte) GitHub-Repo – solange das Repo privat gewesen wäre, hätte dieser Hinweis entfallen.
 
 Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription auf Knopfdruck
 `voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
@@ -201,11 +216,16 @@ Die KI-Kosten liefen über das eigene OpenAI-Konto, ein Kostenausgleich entfäll
 „Wer die Entwicklung trotzdem unterstützen möchte“ mit dem allgemeinen PayPal.me-Link, ohne vorgeschlagenen
 Betrag.
 
-### 4.6 Datenspende und Feedback
+### 4.6 Feedback, Datenspende
 
-- Freitextfeld für Feedback, auch ohne Datenspende absendbar.
-- Datenspende: Transkript, Hinweise, Agenda und optional die Aufnahme. Absenden geht nur mit dem Häkchen
-  „Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden“.
+- **Feedback-Knopf (Ticket #18, Nachtrag):** auf jeder Seite erreichbar – Startseite, Dashboard, Abschluss –, im
+  Dashboard gut sichtbar, aber nicht in der Kopfleiste und nicht störend. Öffnet ein kleines Fenster: Art wählen
+  (Feedback · Funktionswunsch · Fehler), Textfeld, Senden, kurzer Dank. Jederzeit erlaubt, auch während eines
+  laufenden Meetings – anders als die Datenspende unten kein beendetes Meeting nötig. `POST /api/feedback`
+  (`coach/api_abschluss.py`), legt über dieselbe Ablage ab wie die Datenspende (lokal ein Ordner, im Cloud-Betrieb
+  R2), ohne Meetinginhalte.
+- **Datenspende:** Transkript, Hinweise, Agenda und optional die Aufnahme, mit einer eigenen Anmerkung dazu.
+  Absenden geht nur mit dem Häkchen „Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden“.
 - Hinweistext: „Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
   einzeln an oder wertet Inhalte aus.“
 - Die Spende landet in einem Speicher in der EU (R2), lokal unter `spenden/`.

@@ -117,6 +117,7 @@ def beendetes_meeting(monkeypatch, archiv_pfad):
 
     c = _abgelegtes_meeting()
     monkeypatch.setattr(server.coach, "archiv", c.archiv)
+    monkeypatch.setattr(server.coach, "meeting", c.meeting)  # Abschluss-Kopf braucht Agenda/Ergebnisse dieses Meetings
     monkeypatch.setattr(server.coach, "hoerstrom", None)
     monkeypatch.setattr(server.coach, "kosten_stand", lambda: {"meeting": 0.80})
     return c
@@ -148,6 +149,9 @@ def test_get_abschluss_mit_kosten_stufen_und_ablage_stand(beendetes_meeting):
         assert [s["betrag"] for s in z["stufen"]] == [2, 3, 6]
         assert z["paypal"][0]["link"] == "https://paypal.me/niclaseschner/2EUR"
         assert z["ablage_fertig"] is True
+        # Abschluss-Kopf (Ticket #17 Punkt 3): Punkte aus der Agenda, Entscheidungen aus den Ergebnissen
+        assert z["punkte"] == 1  # Fixture-Agenda: ein Punkt „Start“
+        assert z["entscheidungen"] == 0  # keine Ergebnisprüfung gelaufen
     finally:
         object.__setattr__(EINST, "paypal_me", alt)
 
@@ -201,6 +205,34 @@ def test_feedback_allein_ohne_meetingdaten(monkeypatch, beendetes_meeting, tmp_p
     assert {p.name for p in ordner.iterdir()} == {"feedback.txt"}
     assert (ordner / "feedback.txt").read_text(encoding="utf-8") == "Danke!"
     assert _lokal().post("/api/abschluss/feedback", json={"text": "  "}).status_code == 400
+
+
+def test_feedback_knopf_jederzeit_auch_ohne_beendetes_meeting(monkeypatch, tmp_path):
+    """Ticket #18 Nachtrag: der Feedback-Knopf auf jeder Seite braucht kein beendetes Meeting – anders als
+    `/api/abschluss/feedback`."""
+    from coach import api_abschluss, server
+
+    monkeypatch.setattr(server.coach, "archiv", None)
+    monkeypatch.setattr(server.coach, "hoerstrom", object())  # Meeting läuft noch
+    ziel = tmp_path / "spenden"
+    monkeypatch.setattr(api_abschluss, "_ablage", OrdnerAblage(ziel))
+    r = _lokal().post("/api/feedback", json={"art": "funktionswunsch", "text": "Bitte Dunkelmodus", "seite": "/meeting"})
+    assert r.status_code == 200
+    [ordner] = list(ziel.iterdir())
+    inhalt = (ordner / "feedback.txt").read_text(encoding="utf-8")
+    assert "funktionswunsch" in inhalt and "Bitte Dunkelmodus" in inhalt and "/meeting" in inhalt
+
+
+def test_feedback_knopf_ohne_text_400_und_unbekannte_art_wird_feedback(monkeypatch, tmp_path):
+    from coach import api_abschluss
+
+    ziel = tmp_path / "spenden"
+    monkeypatch.setattr(api_abschluss, "_ablage", OrdnerAblage(ziel))
+    assert _lokal().post("/api/feedback", json={"text": "  "}).status_code == 400
+    r = _lokal().post("/api/feedback", json={"art": "unsinn", "text": "Hallo"})
+    assert r.status_code == 200
+    [ordner] = list(ziel.iterdir())
+    assert "Art: feedback" in (ordner / "feedback.txt").read_text(encoding="utf-8")
 
 
 def test_fertig_setzt_leeres_meeting_und_behaelt_ablage_standardmaessig(beendetes_meeting):
