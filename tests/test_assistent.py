@@ -100,6 +100,45 @@ def test_eigene_sprache_wird_nur_live_herausgefiltert():
     assert not c.assistent.eigene_sprache(10.5, 14.0)
 
 
+def test_wer_waehrend_nestor_spricht_redet_ist_kein_echo():
+    """Ticket #15: Thorsten las noch vor, als die Ansage kam – sie fiel als „eigene Sprache“ aus dem Transkript."""
+    c = Coach()
+    c.assistent.sprechzeiten = [(456.0, 484.0)]
+    c.assistent.sprechtexte = [(456.0, 484.0, "Zu Punkt zwei, Budget für das Sommerfest: Beschlossen ist ein "
+                                              "Ausgabenrahmen von höchstens 9000 Euro. Offen ist noch die Frage "
+                                              "nach den Sponsoren.")]
+    # Echo von Nestors eigener Stimme (leicht verhört) bleibt draußen …
+    assert c.assistent.eigene_sprache(460.0, 466.0, "Beschlossen ist ein Ausgabenrahmen von höchstens 9000 Euro.")
+    assert c.assistent.eigene_sprache(470.0, 471.0, "Ja.")
+    # … jemand anderes, der gleichzeitig spricht, nicht
+    assert not c.assistent.eigene_sprache(478.8, 483.0, "Wir gehen jetzt zu Agendapunkt drei, der möglichen "
+                                                        "Anschaffung eines Vereinsbusses.")
+    # ohne Text (Sprecherabschnitte) und ohne bekannten Text (Realtime-Gespräch) zählt wie bisher die Zeit
+    assert c.assistent.eigene_sprache(478.8, 483.0)
+    c.assistent.sprechtexte = []
+    assert c.assistent.eigene_sprache(478.8, 483.0, "Wir gehen jetzt zu Agendapunkt drei.")
+
+
+def test_ansage_waehrend_nestor_spricht_wechselt_den_punkt():
+    async def ablauf():
+        c = Coach()
+        c._client = None
+        c.meeting.agenda = [Agendapunkt("Kassenbericht"), Agendapunkt("Budget"), Agendapunkt("Vereinsbus")]
+        c.meeting.aktiver_punkt = 1
+        c.meeting.regel_ids = []
+        c.meeting.starten(virtuell=True)
+        c.meeting.virtuelle_zeit = 484.0
+        c.assistent.sprechzeiten = [(456.0, 484.0)]
+        c.assistent.sprechtexte = [(456.0, 484.0, "Zu Punkt zwei: beschlossen sind höchstens 9000 Euro.")]
+        await c.satz(Segment("Person 1", "Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines "
+                                         "Vereinsbusses.", 478.8, 483.0))
+        return c
+
+    c = asyncio.run(ablauf())
+    assert c.meeting.aktiver_punkt == 2
+    assert c.meeting.transkript and "Agendapunkt drei" in c.meeting.transkript[-1].text
+
+
 class _Strom:
     def __init__(self, teile):
         self.teile = teile

@@ -315,10 +315,11 @@ async def _regeln(coach, frage: str) -> dict:
     return karte
 
 
-def _protokoll_md(coach, gesamt: dict | None) -> str:
+def _protokoll_md(coach, gesamt: dict | None, am_ende: bool = False) -> str:
     m = coach.meeting
+    wie = "am Meetingende" if am_ende else "auf Knopfdruck"
     z = [f"# Protokoll: {m.titel or 'Meeting'}", "",
-         f"{datetime.now():%d.%m.%Y} · Laufzeit {mmss(m.jetzt())} min · erstellt von Nestor auf Knopfdruck"]
+         f"{datetime.now():%d.%m.%Y} · Laufzeit {mmss(m.jetzt())} min · erstellt von Nestor {wie}"]
     if m.ziel:
         z.append(f"Ziel: {m.ziel}")
 
@@ -344,7 +345,9 @@ def _protokoll_md(coach, gesamt: dict | None) -> str:
     return "\n".join(z) + "\n"
 
 
-async def _protokoll(coach, frage: str) -> dict:
+async def _protokoll(coach, frage: str, am_ende: bool = False) -> dict | None:
+    """Protokoll-Knopf; `am_ende`: dasselbe automatisch am Meetingende in Basis (Paket mit protokoll.md, Ticket #15),
+    dann ohne Karte."""
     from . import ergebnisse
 
     m, k = coach.meeting, coach.knopf
@@ -365,8 +368,10 @@ async def _protokoll(coach, frage: str) -> dict:
         gesamt, nutzung = await ergebnisse.pruefen(coach._client, EINST.analyse_modell, m.titel or "Meeting", m.ziel,
                                                    text, EINST.analyse_aufwand)
         nutzung_loggen({"art": "ergebnisse", "modell": EINST.analyse_modell, "knopf": "protokoll", **nutzung})
-    k.protokoll = _protokoll_md(coach, gesamt)
+    k.protokoll = _protokoll_md(coach, gesamt, am_ende)
     k.protokoll_zeit = m.jetzt()
+    if am_ende:
+        return None
     if m.agenda:
         punkte = [f"{i + 1}. {p.titel}: " + ((m.ergebnisse[i]["ergebnis"] or "kein Ergebnis ausgesprochen")
                                               if i in m.ergebnisse else "noch nicht ausgewertet")

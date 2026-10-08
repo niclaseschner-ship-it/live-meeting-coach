@@ -341,3 +341,147 @@ def test_knoepfe_auch_ohne_knopfdruck_regeln_aus_ampeln():
     assert karte["art"] == "regeln" and len(karte["punkte"]) == 2
     knopfdruck.reservieren(c, "ueberblick")
     assert c.knopf.laeuft == "ueberblick"
+
+
+# --- Ticket #15: Überblick auf Zuruf und im Takt, Protokoll am Ende ---------------------------------------------
+_LEER = {"kernaussage": "x", "entschieden": [], "offen": [], "aufgaben": [], "ausserhalb": [], "neu": []}
+
+
+def test_visuelle_uebersicht_ist_keine_folie():
+    """Cloud-Lauf 08.10.: nach einer Recherche machte Mistral aus „mach uns die visuelle Übersicht“ eine Folie."""
+    assert A.aktion_pruefen({"typ": "folie"}, "mach uns die visuelle Übersicht.") == {"typ": "bild", "fokus": "gesamt"}
+    assert A.aktion_pruefen({"typ": "folie"}, "Ja, mach uns dazu eine Folie.") == {"typ": "folie"}
+    assert A.aktion_pruefen({"typ": "folie"}, "ja gerne") == {"typ": "folie"}  # Antwort auf „Soll ich eine Folie …?“
+    assert A.aktion_pruefen({"typ": "recherche", "frage": "x"}, "gib uns einen Überblick zu Messeständen") == {
+        "typ": "recherche", "frage": "x"}
+    config.stufe_setzen("basis")
+    s = A.system_text()
+    assert "visuelle Übersicht" in s and "Eine Übersicht über das Meeting ist keine Folie" in s
+
+
+def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
+    from coach.pipeline import Coach
+
+    config.stufe_setzen("basis")
+    c = Coach()
+    fake = FakeClient(_LEER)
+
+    class Strom:
+        def __aiter__(self):
+            async def gen():
+                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(
+                    content="AKTION: folie\nDie Folie erscheint gleich im Dashboard."))])
+            return gen()
+
+    async def create(**kw):
+        return Strom() if kw.get("stream") else await fake._create(**kw)
+
+    c._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    c.meeting = _meeting()
+    c.letzte_recherche = {"frage": "Messestand", "text": "t", "quellen": [], "zeit": 1.0}
+
+    async def lauf():
+        await c.satz(Segment("Person 4", "Nestor, mach uns die visuelle Übersicht.", 120, 123))
+        await c.assistent._aufgabe
+        for _ in range(50):
+            if c.ueberblick:
+                break
+            await asyncio.sleep(0.02)
+
+    object.__setattr__(EINST, "stimme_aus", True)
+    try:
+        asyncio.run(lauf())
+    finally:
+        object.__setattr__(EINST, "stimme_aus", False)
+    assert c.ueberblick and c.folie is None
+    assert c.assistent.letzte["aktion"] == {"typ": "bild", "fokus": "gesamt"}
+
+
+def test_basis_erster_ueberblick_nach_fuenf_minuten_dann_alle_zehn():
+    from coach.pipeline import Coach
+
+    config.stufe_setzen("basis")
+    c = Coach()
+    c._client = FakeClient(_LEER)
+    c.meeting = _meeting()
+    c.hoerstrom = object()  # nur „Meeting läuft mit Ton“ für den Takt
+    gestartet = []
+
+    def starten(fokus=None, nachholen=False):
+        gestartet.append(c.meeting.jetzt())
+        c._onepager_letzter_start = c.meeting.jetzt()
+        return True
+
+    c.ueberblick_starten = starten
+    for t in (290.0, 299.0, 300.0, 600.0, 899.0, 900.0):
+        c.meeting.virtuelle_zeit = t
+        c.takt()
+    assert gestartet == [300.0, 900.0]
+
+
+def test_basis_ueberblick_am_ende_wird_nachgeholt():
+    from coach.pipeline import Coach
+
+    config.stufe_setzen("basis")
+    c = Coach()
+    c._client = FakeClient(_LEER)
+    c.meeting = _meeting()
+
+    async def lauf():
+        assert c.ueberblick_starten()  # Zuruf kurz vor Schluss
+        assert not c.ueberblick_starten(nachholen=True)  # Meetingende, während der erste noch entsteht
+        for _ in range(100):
+            if c.ueberblick_version >= 2 and not c._ueberblick_laeuft:
+                break
+            await asyncio.sleep(0.02)
+
+    asyncio.run(lauf())
+    assert c.ueberblick_version == 2
+
+
+def test_basis_paket_mit_protokoll_und_ueberblick(tmp_path, monkeypatch):
+    """Cloud-Lauf 08.10.: das Paket in Basis hatte kein protokoll.md (Premium nimmt die Analyse des Abschlussbilds)."""
+    import zipfile
+
+    import coach.pipeline as P
+    from coach.abschluss import paket
+    from coach.pipeline import Coach
+
+    config.stufe_setzen("basis")
+    alt_archiv = EINST.archiv
+    object.__setattr__(EINST, "archiv", str(tmp_path))
+    schlafen = asyncio.sleep
+
+    async def kurz(s, *a):  # die Wartezeit für die Ergebnisprüfung (8 s) im Test abkürzen
+        await schlafen(min(s, 0.01))
+
+    monkeypatch.setattr(P.asyncio, "sleep", kurz)
+
+    async def lauf():
+        c = Coach()
+        c._client = None  # ohne Live-Text starten (kein Netz)
+        c.archiv_aktiv = True
+        c._einrichten({"titel": "Messeplanung 2027", "agenda": [{"titel": "Budget", "minuten": 10}],
+                       "regel_ids": ["zeit"]})
+        await c.hoeren_starten()
+        await c.hoeren_zufuehren(bytes(24000 * 2))
+        c.meeting.transkript = list(_meeting().transkript) + [
+            Segment("Person 1", "Damit ist das Budget beschlossen, wir schauen nächste Woche wieder drauf.", 30, 52)]
+        c._client = FakeClient({**_LEER, "ergebnis": "höchstens 25.000 Euro", "entscheidungen": [], "aufgaben": []})
+        await c.hoeren_beenden()
+        for _ in range(300):
+            if c.archiv.fertig:
+                break
+            await schlafen(0.02)
+        return c
+
+    try:
+        c = asyncio.run(lauf())
+        assert c.archiv.fertig
+        namen = zipfile.ZipFile(io.BytesIO(paket(c.archiv.ordner, False))).namelist()
+        assert "protokoll.md" in namen and "ueberblick.md" in namen
+        protokoll = (c.archiv.ordner / "protokoll.md").read_text(encoding="utf-8")
+        assert "am Meetingende" in protokoll and "höchstens 25.000 Euro" in protokoll
+        assert not any(k["art"] == "protokoll" for k in c.karten)  # am Ende keine Karte
+    finally:
+        object.__setattr__(EINST, "archiv", alt_archiv)

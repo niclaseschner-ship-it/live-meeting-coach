@@ -25,7 +25,6 @@ import json
 import os
 import sys
 import time
-import types
 from collections import defaultdict
 from pathlib import Path
 
@@ -95,14 +94,7 @@ async def main() -> None:
         sys.exit("Kein KI-Client – Schlüssel in der Umgebung? (LMC_STUFE=basis + MISTRAL_API_KEY)")
     coach.archiv_aktiv = True
     coach._einrichten(einrichtung(referenz))
-    if not args.ohne_eigene_sprache:
-        a = coach.assistent
-
-        def eigene_sprache(self, start: float, ende: float) -> bool:  # wie live: ohne simulation_laeuft-Ausnahme
-            ueber = sum(max(0.0, min(ende, b) - max(start, x)) for x, b in self.sprechzeiten)
-            return ueber >= 0.5 * max(0.1, ende - start)
-
-        a.eigene_sprache = types.MethodType(eigene_sprache, a)
+    coach.assistent.echo_im_abspielen = not args.ohne_eigene_sprache
 
     beginn = time.strftime("%Y-%m-%dT%H:%M:%S")
     ueberblicke: list[dict] = []

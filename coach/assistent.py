@@ -76,6 +76,14 @@ BILD_ZEILE = "                            Sag dazu, dass das Bild etwa eine bis 
 # Nestor Basis (und Überblick als Text): „AKTION: bild“ zeigt den Überblick als Text – er steht nach wenigen Sekunden
 BILD_ZEILE_TEXT = ("                            Nur bei dieser Aktion sagst du dazu, dass die Übersicht gleich im\n"
                    "                            Dashboard erscheint.\n")
+BILD_TEXT = ("Übersicht über das Meeting (Entschiedenes, Offenes,\n"
+             "                            Aufgaben) ins Dashboard stellen – auch bei „visuelle Übersicht“, „Bild“ oder\n"
+             "                            „zeig uns die Übersicht“")
+FOLIE_ZEILE = ("                            wenn die Gruppe das möchte („ja, mach eine Folie“). Sag, dass sie gleich "
+               "erscheint.\n")
+FOLIE_ZEILE_KLAR = ("                            nur wenn ausdrücklich eine Folie gewünscht ist („ja, mach eine Folie“).\n"
+                    "                            Eine Übersicht über das Meeting ist keine Folie. Sag, dass sie gleich "
+                    "erscheint.\n")
 UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
 
 
@@ -83,9 +91,33 @@ def system_text() -> str:
     """Systemanweisung für die gewählte Stufe: in Basis entsteht auf „AKTION: bild“ der Überblick als Text."""
     s = SYSTEM.format(name=EINST.assistent_name)
     if EINST.bild_anbieter == "text":
-        s = s.replace("visuelle Übersicht zeichnen lassen", "Übersicht ins Dashboard stellen").replace(
-            BILD_ZEILE, BILD_ZEILE_TEXT)
-    return s
+        s = s.replace("visuelle Übersicht zeichnen lassen", BILD_TEXT).replace(BILD_ZEILE, BILD_ZEILE_TEXT)
+    return s.replace(FOLIE_ZEILE, FOLIE_ZEILE_KLAR)
+
+
+def aktion_pruefen(aktion: dict | None, frage: str) -> dict | None:
+    """Folie und Übersicht nicht verwechseln: Mistral machte aus „Nestor, mach uns die visuelle Übersicht“ nach einer
+    Recherche eine Folie (Cloud-Lauf 08.10., Ticket #15). Wer „Übersicht“/„Bild“ sagt und keine Folie, meint das
+    Meeting – dann die Übersicht (bzw. das Live-Bild)."""
+    if aktion and aktion["typ"] == "folie" and not re.search(r"folie", frage, re.IGNORECASE) \
+            and re.search(r"übersicht|uebersicht|bild|aufmal|visuell", frage, re.IGNORECASE):
+        return {"typ": "bild", "fokus": "gesamt"}
+    return aktion
+
+
+def _woerter(text: str) -> list[str]:
+    return [w for w in re.findall(r"\w+", text.lower()) if len(w) >= 3]
+
+
+def echo(gehoert: str, gesagt: str) -> bool:
+    """Klingt der gehörte Satz nach dem, was Nestor gesagt hat? Mindestens die Hälfte seiner Wörter (ab drei
+    Buchstaben) kommt in Nestors Text vor. Ein Satz ohne solche Wörter („Ja.“) zählt als Echo – zu wenig, um ihn
+    gegen Nestors Stimme zu behaupten."""
+    woerter = _woerter(gehoert)
+    if not woerter:
+        return True
+    bekannt = set(_woerter(gesagt))
+    return sum(w in bekannt for w in woerter) >= 0.5 * len(woerter)
 
 
 def angesprochen(text: str) -> bool:
@@ -252,6 +284,8 @@ class Assistent:
         self.letzte: dict | None = None  # {frage, antwort, zeit}
         self.verlauf: list[tuple[str, str]] = []  # (Frage, Antwort) für Rückfragen
         self.sprechzeiten: list[tuple[float, float]] = []  # Meetingzeit, in der der Coach spricht
+        self.sprechtexte: list[tuple[float, float, str]] = []  # dasselbe mit dem gesprochenen Text (Textweg)
+        self.echo_im_abspielen = False  # Testläufe (scripts/cloudtest_lokal.py): eigene Sprache filtern wie live
         self.messung: dict | None = None  # laufende Zeitmessung Auslöser -> erster Ton
         self._angesprochen_bis = -1e9
         self._nachfrage_bis = -1e9
@@ -283,12 +317,24 @@ class Assistent:
     def spricht_um(self, t: float) -> bool:
         return any(a - 0.2 <= t <= b for a, b in self.sprechzeiten)
 
-    def eigene_sprache(self, start: float, ende: float) -> bool:
-        """Überwiegend in einem Zeitfenster, in dem der Coach selbst sprach (nur live mit Lautsprecher)."""
-        if self.coach.simulation_laeuft:
+    def eigene_sprache(self, start: float, ende: float, text: str | None = None) -> bool:
+        """Überwiegend in einem Zeitfenster, in dem der Coach selbst sprach (nur live mit Lautsprecher).
+
+        Mit `text` (fertiger Satz) zusätzlich: nur dann eigene Sprache, wenn der Satz auch nach Nestors Worten klingt.
+        Spricht jemand, während Nestor noch redet, ist das kein Echo – im Cloud-Lauf (Ticket #15) gingen so die Ansage
+        „Wir gehen jetzt zu Agendapunkt drei“ und zwei Fragen an Nestor verloren, weil Thorsten noch vorlas."""
+        if self.coach.simulation_laeuft and not self.echo_im_abspielen:
             return False
         ueber = sum(max(0.0, min(ende, b) - max(start, a)) for a, b in self.sprechzeiten)
-        return ueber >= 0.5 * max(0.1, ende - start)
+        if ueber < 0.5 * max(0.1, ende - start):
+            return False
+        if text is None:
+            return True
+        # Was Nestor in diesem Zeitraum gesagt hat (mit Spielraum für den Verzug des Live-Texts)
+        gesagt = " ".join(t for a, b, t in self.sprechtexte if a - 2.0 <= ende and start <= b + 2.0)
+        if not gesagt:
+            return True  # Text unbekannt (Realtime-Gespräch): nach der Zeit entscheiden wie bisher
+        return echo(text, gesagt)
 
     # --- Begrüßung mit Einwilligung ----------------------------------------
     async def begruessen(self) -> None:
@@ -548,7 +594,7 @@ class Assistent:
                     if "\n" not in puffer:
                         continue
                     erste_zeile, puffer = puffer.split("\n", 1)
-                    aktion = aktion_lesen(erste_zeile)
+                    aktion = aktion_pruefen(aktion_lesen(erste_zeile), frage)
                     if not AKTION_RE.match(erste_zeile):  # Aktionszeile vergessen – dann ist sie schon Text
                         puffer = erste_zeile + " " + puffer
                 fertig, puffer = saetze_teilen(puffer)
@@ -556,7 +602,7 @@ class Assistent:
                     gesprochen.append(s)
                     await saetze.put(s)
             if erste_zeile is None:  # sehr kurze Antwort ohne Zeilenumbruch
-                aktion = aktion_lesen(puffer)
+                aktion = aktion_pruefen(aktion_lesen(puffer), frage)
                 puffer = re.sub(r"^\s*AKTION:\s*keine\b", "", puffer, flags=re.IGNORECASE) if aktion is None else ""
             if puffer.strip():
                 gesprochen.append(puffer.strip())
@@ -627,6 +673,7 @@ class Assistent:
         if self.sprechzeiten and self.sprechzeiten[-1][1] > beginn:
             beginn = self.sprechzeiten[-1][1]  # schließt an den vorigen Satz an
         self.sprechzeiten.append((beginn, beginn + 30))  # vorläufig, wird unten genau gesetzt
+        self.sprechtexte.append((beginn, beginn + 30, text))
         try:
             async with c._client.audio.speech.with_streaming_response.create(
                     model=EINST.stimme_modell, voice=EINST.stimme, input=text, response_format="pcm",
@@ -646,6 +693,7 @@ class Assistent:
             log.warning("Sprachausgabe fehlgeschlagen: %s", type(e).__name__)
         dauer = n_bytes / 2 / RATE
         self.sprechzeiten[-1] = (beginn, beginn + dauer + NACHLAUF_SEKUNDEN)
+        self.sprechtexte[-1] = (beginn, beginn + dauer + NACHLAUF_SEKUNDEN, text)
         from .pipeline import nutzung_loggen
         nutzung_loggen({"art": "stimme", "modell": EINST.stimme_modell, "zeichen": len(text),
                         "sekunden_audio": round(dauer, 1)})

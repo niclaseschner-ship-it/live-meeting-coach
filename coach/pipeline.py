@@ -122,6 +122,8 @@ class Coach:
         self.ueberblick: dict | None = None
         self.ueberblick_version = 0
         self._ueberblick_laeuft = False
+        self._ueberblick_nachholen = False  # Meetingende, während noch ein Überblick entsteht: danach noch einmal
+        self._protokoll_laeuft = False  # Basis: Protokoll am Meetingende (für protokoll.md im Paket)
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
@@ -436,7 +438,12 @@ class Coach:
         if (self.hoerstrom and EINST.onepager_minuten > 0 and m.transkript and not self._onepager_laeuft
                 and not self.knopfdruck):
             seit = m.jetzt() - (self._onepager_letzter_start or 0)
-            if seit >= EINST.onepager_minuten * 60:
+            takt = EINST.onepager_minuten * 60
+            if self._onepager_letzter_start is None and EINST.bild_anbieter == "text":
+                # Basis: der erste Überblick nach der halben Zeit (5 min), danach alle 10 – sonst gibt es in einem
+                # kurzen Meeting nie einen (Cloud-Lauf 08.10., 10 min: erst nach dem Ende; Ticket #15)
+                takt /= 2
+            if seit >= takt:
                 self.onepager_starten()
         self.assistent.takt()
         if "alle" in m.regel_ids:
@@ -725,10 +732,20 @@ class Coach:
         if self.assistent.gespraech:
             await self.assistent.gespraech.schliessen()
         # Knopfdruck: auch am Ende nichts ohne Knopf – Ergebnisse und Bild gibt es, wenn vorher gedrückt wurde
-        if "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda and not self.knopfdruck:
+        basis = EINST.bild_anbieter == "text"
+        if basis and not self.knopfdruck and self._client is not None:
+            # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb
+            # am Ende das Protokoll wie beim Knopf: Regel 10 je Punkt, daraus protokoll.md (Ticket #15). Prüft auch
+            # den letzten Punkt (mit Hinweisen, wenn Regel 10 gewählt ist).
+            self._protokoll_laeuft = True
+            hintergrund(self._protokoll_am_ende())
+        elif "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda and not self.knopfdruck:
             hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
         if self.onepager_am_ende and not self.knopfdruck:
-            self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
+            if basis:  # Abschluss-Überblick; entsteht gerade einer (Zuruf, Takt), wird er danach nachgeholt
+                self.ueberblick_starten(nachholen=True)
+            else:
+                self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
         if self.archiv and not self.archiv.fertig:
             self.archiv.ereignis("stopp")
             self.archiv.schreiben(endgueltig=False)
@@ -738,7 +755,7 @@ class Coach:
     async def _archiv_abschliessen(self, archiv) -> None:
         """Ablegen, sobald Abschlussbild, Folie und Ergebnisprüfung durch sind (höchstens ~4 min warten)."""
         for _ in range(240):
-            if not (self._onepager_laeuft or self._folie_laeuft or self._ueberblick_laeuft):
+            if not (self._onepager_laeuft or self._folie_laeuft or self._ueberblick_laeuft or self._protokoll_laeuft):
                 break
             await asyncio.sleep(1)
         await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
@@ -748,6 +765,18 @@ class Coach:
             log.warning("Meeting-Ablage fehlgeschlagen: %s", e)
             archiv.fertig = True
         await self.melden()
+
+    async def _protokoll_am_ende(self) -> None:
+        from .knopfdruck import _protokoll
+
+        try:
+            async with self.knopf.sperre:  # nicht gleichzeitig mit einem gerade gedrückten Protokoll-Knopf
+                await _protokoll(self, "", am_ende=True)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Protokoll am Meetingende fehlgeschlagen: %s", fehlertext(e))
+        finally:
+            self._protokoll_laeuft = False
+            await self.melden()
 
     async def teiltext(self, text: str) -> None:
         self.meeting.teiltext = text
@@ -803,7 +832,7 @@ class Coach:
         Transkript; Ansagen und Nestor sehen weiter den ganzen Text, damit „Nestor, …“ nicht zerrissen wird.
         """
         m = self.meeting
-        if self.assistent.eigene_sprache(seg.start, seg.ende):
+        if self.assistent.eigene_sprache(seg.start, seg.ende, seg.text):
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
         if self.knopfdruck:
             # Sätze kommen erst beim Knopf, gesammelt: nur ins Transkript. Keine Ansage-Erkennung (der Wechsel käme
@@ -990,10 +1019,16 @@ class Coach:
             self._folie_laeuft = False
             await self.melden()
 
-    def ueberblick_starten(self, fokus: str | None = None) -> bool:
-        """Überblick als Text neu erstellen (Knopf „Überblick“, Zuruf in Basis, Takt und Meetingende in Basis)."""
-        if not self.meeting.transkript or self._client is None or self._ueberblick_laeuft:
+    def ueberblick_starten(self, fokus: str | None = None, nachholen: bool = False) -> bool:
+        """Überblick als Text neu erstellen (Knopf „Überblick“, Zuruf in Basis, Takt und Meetingende in Basis).
+        `nachholen`: entsteht gerade einer, danach noch einmal (Meetingende – der Stand soll vollständig sein)."""
+        if not self.meeting.transkript or self._client is None:
             return False
+        if self._ueberblick_laeuft:
+            self._ueberblick_nachholen = self._ueberblick_nachholen or nachholen
+            return False
+        if EINST.bild_anbieter == "text":
+            self._onepager_letzter_start = self.meeting.jetzt()  # Takt: der nächste automatische erst N min danach
         self._ueberblick_laeuft = True
         hintergrund(self.ueberblick_bauen(fokus))
         return True
@@ -1019,6 +1054,9 @@ class Coach:
             return None
         finally:
             self._ueberblick_laeuft = False
+            if self._ueberblick_nachholen:
+                self._ueberblick_nachholen = False
+                self.ueberblick_starten()
             await self.melden()
 
     def onepager_starten(self, fokus: str | None = None) -> bool:
@@ -1030,7 +1068,7 @@ class Coach:
         if not self.meeting.transkript:
             return False
         if EINST.bild_anbieter == "text":
-            self._onepager_letzter_start = self.meeting.jetzt()  # Takt: alle N Minuten ab hier
+            self._onepager_letzter_start = self.meeting.jetzt()  # Takt: alle N Minuten ab hier (auch wenn gerade einer entsteht)
             return self.ueberblick_starten(fokus)
         if self._onepager_laeuft:
             self._onepager_nachholen = True  # nach dem laufenden Bild noch einmal zeichnen
