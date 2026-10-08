@@ -112,6 +112,16 @@ class Einstellungen:
     assistent_modus: str = os.getenv("LMC_ASSISTENT_MODUS", "gespraech")
     realtime_modell: str = os.getenv("LMC_REALTIME_MODELL", "gpt-realtime")
     gespraech_ende_sekunden: float = _zahl("LMC_GESPRAECH_ENDE_SEKUNDEN", 20)  # so lange Ruhe → Sitzung zu
+    # Begrüßung (Ticket #23): „frei“ = Premium spricht sie im Realtime-Gespräch frei formuliert und unterbrechbar,
+    # Pflichtinhalte über das Ausgabe-Transkript geprüft (coach/begruessung.py); „fest“ = die festen Texte per TTS
+    begruessung: str = os.getenv("LMC_BEGRUESSUNG", "frei")
+    begruessung_transkription: str = os.getenv("LMC_BEGRUESSUNG_TRANSKRIPTION", "gpt-4o-mini-transcribe")
+    begruessung_frist_ton: float = _zahl("LMC_BEGRUESSUNG_FRIST_TON", 8)  # kein Ton bis dahin → feste Fassung
+    begruessung_max_sekunden: float = _zahl("LMC_BEGRUESSUNG_MAX_SEKUNDEN", 120)
+    # Basis: Begrüßungstext vorher von Mistral frei formulieren lassen (optional, nur wenn er schnell genug kommt)
+    basis_begruessung_frei: bool = os.getenv("LMC_BASIS_BEGRUESSUNG_FREI", "0") == "1"
+    basis_begruessung_frist: float = _zahl("LMC_BASIS_BEGRUESSUNG_FRIST", 2.0)
+    basis_begruessung_modell: str = os.getenv("LMC_BASIS_BEGRUESSUNG_MODELL", "mistral-small-latest")
     # Recherche auf Zuruf (Websuche über die Responses-API)
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
