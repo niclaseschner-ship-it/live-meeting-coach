@@ -250,6 +250,14 @@ umschaltbar. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe m
 - **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt die
   Empfänger je Stufe: in Basis Mistral AI (statt OpenAI), in Premium OpenAI, in beiden Cloudflare.
 
+### 4.8 Qualität aus Nutzersicht
+
+Der Cloud-Testlauf (Ticket #9) prüft, ob alles funktioniert; die Rubrik in [qualitaet.md](qualitaet.md)
+(Ticket #11) hält zusätzlich fest, ob es sich auch gut anfühlt – Ansprache-Treffer/Fehlauslöser,
+Antwortzeit, Antwortgüte, Verständlichkeit der Oberfläche auf einen Blick, Live-Bild/Überblick-Treue,
+Abschlusspaket-Brauchbarkeit, Ruhe (Hinweise je 10 min) und ein Gesamteindruck. Bewertet mit
+`scripts/cloudtest_bewerten.py`, Kennzahlen gerechnet, Urteile 1–5 von einem Sprachmodell mit Bild-Eingabe.
+
 ## 7. Nicht enthalten
 
 Online-Meetings (Teams, Zoom), Stimmprofile über mehrere Meetings, Bewertung von Personen, Bezahlpflicht,
