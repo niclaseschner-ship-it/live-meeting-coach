@@ -222,13 +222,36 @@ def fokus_hinweistext(meeting: Meeting, ergebnis: dict) -> str:
     return "Bezug zum aktuellen Agendapunkt unklar."
 
 
-def themen_auswerten(meeting: Meeting, entscheider: Entscheider, ergebnis: dict, karenz_bloecke: int) -> None:
-    """Ergebnis der Themen-Zuordnung in Fokus-Hinweis und Wechselvorschlag (FR-02) übersetzen."""
+def rueckkehr(text: str, titel: list[str], aktiv: int) -> bool:
+    """„Gut, zurück zur Datenbank“, „zurück zum Thema“: Rückkehr ohne neues Ziel – die Runde ist wieder beim
+    aktiven Punkt (Ticket #24). Mit anderem Agendapunkt als Ziel ist es ein Wechsel (angekuendigter_punkt)."""
+    return rueckwaerts(text) and angekuendigter_punkt(text, titel, aktiv) is None
+
+
+RUECKKEHR = "Rückkehr zum Thema angesagt"
+
+
+def rueckkehr_merken(meeting: Meeting) -> None:
+    """Fokus wieder beim aktiven Punkt: ein Eintrag „aktiv“ im Verlauf, so wird die Ampel grün."""
+    meeting.themen_verlauf.append({"punkt": meeting.aktiver_punkt, "art": "aktiv", "konfidenz": 1.0,
+                                   "begruendung": RUECKKEHR, "ton": []})
+
+
+def themen_auswerten(meeting: Meeting, entscheider: Entscheider, ergebnis: dict, karenz_bloecke: int,
+                     zurueckgekehrt: bool = False) -> None:
+    """Ergebnis der Themen-Zuordnung in Fokus-Hinweis und Wechselvorschlag (FR-02) übersetzen.
+
+    `zurueckgekehrt`: Seit Beginn des eingeordneten Fensters fiel eine Rückkehr-Ansage. Ein Hinweis käme dann
+    veraltet (Cloud-Lauf 08.10.: „Bezug unklar“ 45 s nach „Gut, zurück zur Datenbank“) – er wird verworfen.
+    """
     meeting.themen_verlauf.append(ergebnis)
     status, ausloeser = fokus_status(meeting.themen_verlauf, karenz_bloecke)
     if status == "gruen":
         if ergebnis["art"] == "aktiv":
             meeting.vorschlag = None
+        return
+    if zurueckgekehrt:
+        rueckkehr_merken(meeting)
         return
     if ausloeser["art"] in ("vorgriff", "zurueck") and ausloeser["punkt"] is not None:
         ziel = ausloeser["punkt"]

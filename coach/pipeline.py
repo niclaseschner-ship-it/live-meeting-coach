@@ -16,6 +16,10 @@ from .entscheider import Entscheider
 from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
 from .zustand import Agendapunkt, Meeting, Segment
 
+VORLAUF_MAX = 40  # so viele schon eingeordnete Sätze bleiben für Fensteranfang und Kontext der Zuordnung
+FENSTER_LUECKE = 10.0  # Sätze, die so lange vor dem ersten neuen Satz endeten, gehören nicht mehr ins Fenster
+KONTEXT_SEKUNDEN = 30.0  # so viel Gesprochenes vor dem Fenster geht als Kontext mit (wie früher zwei Abschnitte)
+
 STIMMEN = ("cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad", "echo", "shimmer")
 
 log = logging.getLogger("coach")
@@ -97,7 +101,10 @@ class Coach:
         self.archiv = None
         self.auto_wechsel = False  # Abspielmodus: Agenda-Vorschläge wie von der Moderation bestätigt übernehmen
         self.protokoll: list[dict] = []  # Ereignisse für den Testbericht (Wechsel, Ampeln, Doku)
-        self._abschnitt: list[Segment] = []
+        self._abschnitt: list[Segment] = []  # neue Sätze seit der letzten Themen-Zuordnung
+        self._vorlauf: list[Segment] = []  # schon eingeordnete Sätze: Anfang des nächsten Fensters und Kontext
+        self._fenster_ab = 0.0  # frühere Sätze gehören nicht mehr ins Fenster (Punktwechsel, Rückkehr-Ansage)
+        self._rueckkehr_ab: float | None = None  # Beginn der letzten Rückkehr-Ansage („zurück zur Datenbank“)
         self._themen_sperre = asyncio.Lock()
         # Live-Bild (One-Pager, FR-10): gezeichnet von Claude über das Abo
         self.onepager_svg: str | None = None
@@ -140,8 +147,10 @@ class Coach:
 
     @property
     def karenz_bloecke(self) -> int:
-        """FR-05: Karenzzeit in Abschnitten der Themen-Zuordnung (mindestens einer)."""
-        return max(1, round(EINST.fokus_karenz_sekunden / EINST.abschnitt_sekunden))
+        """FR-05: Karenzzeit in Fenstern der Themen-Zuordnung (mindestens eines). Die Fenster überlappen: k Fenster
+        umfassen etwa abschnitt_sekunden + (k − 1) · abschnitt_schritt_sekunden Sprache (20 s Karenz → 1 Fenster)."""
+        rest = max(0.0, EINST.fokus_karenz_sekunden - EINST.abschnitt_sekunden)
+        return 1 + int(rest // EINST.abschnitt_schritt_sekunden)
 
     # --- Einrichtung (FR-01) -----------------------------------------------
     def einrichten(self, daten: dict) -> None:
@@ -170,7 +179,7 @@ class Coach:
         self.monolog_sekunden = EINST.monolog_sekunden
         self.fehler = None
         self.protokoll = []
-        self._abschnitt = []
+        self._abschnitt_zuruecksetzen()
         self.onepager_svg = self.onepager_analyse = self.onepager_stand = self.onepager_fehler = None
         self.onepager_png = None
         self.onepager_fokus = self._onepager_voll = None
@@ -446,6 +455,7 @@ class Coach:
             if seit >= takt:
                 self.onepager_starten()
         self.assistent.takt()
+        self._abschnitt_takt()
         if "alle" in m.regel_ids:
             self._alle_pruefen()
         if not 0 <= m.aktiver_punkt < len(m.agenda):
@@ -603,35 +613,42 @@ class Coach:
             text = "Mehrere Personen sprechen gleichzeitig." + zusatz
             self.entscheider.vorschlagen(m, "ueberlappung", "hinweis", "gruppe", text)
 
-    async def _themen_pruefen(self, text: str, karenz: int | None = None) -> None:
-        """FR-05: Abgleich Gespräch ↔ aktueller Agendapunkt per Sprachmodell."""
+    async def _themen_pruefen(self, text: str, karenz: int | None = None, kontext: list[str] | None = None,
+                              fenster_ab: float | None = None) -> dict | None:
+        """FR-05: Abgleich Gespräch ↔ aktueller Agendapunkt per Sprachmodell. `fenster_ab`: Beginn des eingeordneten
+        Fensters – fiel seitdem eine Rückkehr-Ansage, kommt kein Fokus-Hinweis mehr (Ticket #24)."""
         m = self.meeting
         if not m.agenda or self.knopfdruck:  # Knopfdruck: kein Themen-Abgleich und keine Ton-Prüfung im Lauf
-            return
+            return None
         if self._client is None:
             self.entscheider.einmalig(
                 m, "info-kein-schluessel", "info", "hinweis", "moderation",
                 "Fokus-Erkennung ist aus: kein KI-Schlüssel bzw. Offline-Modus.",
             )
-            return
+            return None
         try:
             modell = EINST.zuordnung_modell or EINST.analyse_modell
             ergebnis, nutzung = await themen.zuordnen(
-                self._client, modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids
+                self._client, modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids, kontext=kontext
             )
         except Exception as e:  # noqa: BLE001
             log.warning("Themen-Zuordnung fehlgeschlagen: %s", fehlertext(e))
             self.fehler = f"Themen-Zuordnung fehlgeschlagen: {fehlertext(e)}"
-            return
+            return None
         nutzung_loggen({"art": "themen", "modell": modell, **nutzung})
-        analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke)
+        # Erst jetzt prüfen: Die Rückkehr-Ansage kann auch während der Zuordnung gefallen sein
+        zurueck = fenster_ab is not None and self._rueckkehr_ab is not None and self._rueckkehr_ab >= fenster_ab
+        analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke, zurueck)
         self._ton_melden(ergebnis.get("ton", []))
+        return ergebnis
 
     def punkt_wechseln(self, i: int) -> None:
         """Agendapunkt wechseln (Moderation, Vorschlag, Abspielmodus); Regel 10 prüft den abgeschlossenen Punkt."""
         m = self.meeting
         alt = m.aktiver_punkt
         m.punkt_wechseln(i)
+        if alt != m.aktiver_punkt:  # bisher Gesagtes gehört zum alten Punkt: nicht mehr ins Fenster der Zuordnung
+            self._fenster_ab = max(self._fenster_ab, m.jetzt())
         if alt != m.aktiver_punkt and "ergebnisse" in m.regel_ids and not self.knopfdruck:
             hintergrund(self._ergebnis_pruefen(alt))
 
@@ -726,7 +743,7 @@ class Coach:
         await hs.beenden()
         # Kein letzter Themen-Abgleich mehr: nach dem Ende erzeugte er nur Hinweise, die niemand mehr sieht
         # (synthetische Kontrollrunde 06.10.: zwei Fokus-Hinweise in der letzten Sekunde)
-        self._abschnitt = []
+        self._abschnitt_zuruecksetzen()
         self.meeting.teiltext = ""
         self.meeting.beenden()
         if self.assistent.gespraech:
@@ -862,25 +879,100 @@ class Coach:
             m.vorschlag = None
             # Was davor gesagt wurde, gehört zum alten Punkt – nicht gegen den neuen prüfen (sonst „zurück zu …“)
             self._abschnitt = list(zeilen or [seg])
-        elif analyse.ankuendigung(seg.text) or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_sekunden:
-            hintergrund(self._abschnitt_auswerten())
+            self._fenster_ab = min(z.start for z in self._abschnitt)  # ab der Ansage gehört alles zum neuen Punkt
+        else:
+            if m.laeuft and analyse.rueckkehr(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt):
+                self._rueckkehr(seg)
+            if (analyse.ankuendigung(seg.text)
+                    or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_schritt_sekunden):
+                self._abschnitt_schliessen()
         await self.melden()
         await self.assistent.satz(seg.text, seg.ende)
 
-    async def _abschnitt_auswerten(self) -> None:
-        saetze, self._abschnitt = self._abschnitt, []
-        if not saetze:
+    # --- Themen-Zuordnung in gleitenden Fenstern (Strom 4, Ticket #24) ------------------------------------------
+    def _abschnitt_zuruecksetzen(self) -> None:
+        self._abschnitt, self._vorlauf = [], []
+        self._fenster_ab, self._rueckkehr_ab = 0.0, None
+
+    def _rueckkehr(self, seg: Segment) -> None:
+        """„Gut, zurück zur Datenbank“: Die Runde ist wieder beim Thema. Ein Fokus-Hinweis aus einem Fenster, das bis
+        hierher reicht, wäre veraltet; die Fokus-Ampel wird sofort grün."""
+        m = self.meeting
+        self._rueckkehr_ab = seg.start
+        self._fenster_ab = max(self._fenster_ab, seg.start)
+        if analyse.fokus_status(m.themen_verlauf, self.karenz_bloecke)[0] == "gelb":
+            analyse.rueckkehr_merken(m)
+        self.protokoll.append({"zeit": seg.ende, "art": "rueckkehr"})
+
+    def _abschnitt_takt(self) -> None:
+        """Ein Abschnitt schließt auch nach Zeit, nicht nur nach Sprechmenge: nach `abschnitt_ruhe_sekunden` Stille
+        oder `abschnitt_max_sekunden` nach dem ersten offenen Satz. Sonst wartet das Ende einer Abschweifung vor einer
+        Pause auf den nächsten Satz (Cloud-Lauf 08.10.: 30 s Pause, Hinweis 76 s nach Beginn). Ist zu wenig neu
+        Gesprochenes da (ein „Gut.“), wandert es nur in den Vorlauf – kein Hinweis aus einem einzelnen kurzen Satz."""
+        if not self._abschnitt or self.knopfdruck:
             return
+        m = self.meeting
+        jetzt = m.jetzt()
+        # Stille: kein Satz zu Ende und keine Sprache am Mikrofon (VAD) – ein langer Satz, dessen Text noch nicht
+        # da ist, zählt nicht als Pause
+        still = jetzt - max(m.sprache_bis, *(s.ende for s in self._abschnitt)) >= EINST.abschnitt_ruhe_sekunden
+        lang = jetzt - self._abschnitt[0].start >= EINST.abschnitt_max_sekunden
+        if sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_min_sekunden:
+            if still or lang:
+                self._abschnitt_schliessen()
+        elif still:
+            self._vorlauf = (self._vorlauf + self._abschnitt)[-VORLAUF_MAX:]
+            self._abschnitt = []
+
+    def _fenster_nehmen(self) -> tuple[list[Segment], list[Segment], list[str]] | None:
+        """Offene Sätze (neu) als Fenster: davor so viel schon Eingeordnetes, dass das Fenster etwa
+        `abschnitt_sekunden` Sprache umfasst (überlappende Fenster), davor der ältere Verlauf als Kontext."""
+        neu, self._abschnitt = self._abschnitt, []
+        if not neu:
+            return None
+        rest = EINST.abschnitt_sekunden - sum(s.dauer for s in neu)
+        grenze = neu[0].start - FENSTER_LUECKE
+        i = len(self._vorlauf)
+        while (i > 0 and rest > 0 and self._vorlauf[i - 1].ende >= grenze
+               and self._vorlauf[i - 1].start >= self._fenster_ab):
+            i -= 1
+            rest -= self._vorlauf[i].dauer
+        davor = self._vorlauf[i:]
+        kontext: list[str] = []
+        dauer = 0.0
+        for s in reversed(self._vorlauf[:i]):
+            if dauer >= KONTEXT_SEKUNDEN:
+                break
+            kontext.insert(0, f"{s.sprecher}: {s.text}")
+            dauer += s.dauer
+        self._vorlauf = (self._vorlauf + neu)[-VORLAUF_MAX:]
+        return neu, davor, kontext
+
+    def _abschnitt_schliessen(self) -> None:
+        """Fenster sofort bilden (Reihenfolge bleibt), die Zuordnung läuft im Hintergrund."""
+        fenster = self._fenster_nehmen()
+        if fenster:
+            hintergrund(self._abschnitt_auswerten(*fenster))
+
+    async def _abschnitt_auswerten(self, neu: list[Segment] | None = None, davor: list[Segment] | None = None,
+                                   kontext: list[str] | None = None) -> None:
+        """Ein Fenster einordnen: `davor` (schon eingeordnet) + `neu`. Ohne Angabe die offenen Sätze (Skripte)."""
+        if neu is None:
+            fenster = self._fenster_nehmen()
+            if not fenster:
+                return
+            neu, davor, kontext = fenster
+        saetze = (davor or []) + neu
         text = "\n".join(f"{s.sprecher}: {s.text}" for s in saetze)
         ueberleitung = any(analyse.ankuendigung(s.text) for s in saetze)
         if ueberleitung:
             text += "\n[Im Abschnitt wird ausdrücklich ein Punkt angekündigt – ordne nach dem angekündigten Inhalt.]"
-        async with self._themen_sperre:  # Reihenfolge der Abschnitte einhalten
-            await self._themen_pruefen(text, karenz=1 if ueberleitung else None)
+        async with self._themen_sperre:  # Reihenfolge der Fenster einhalten
+            v = await self._themen_pruefen(text, karenz=1 if ueberleitung else None, kontext=kontext,
+                                           fenster_ab=saetze[0].start)
             m = self.meeting
-            m.block_texte.append(text)
-            if m.themen_verlauf:
-                v = m.themen_verlauf[-1]
+            m.block_texte.append("\n".join(f"{s.sprecher}: {s.text}" for s in neu))  # ohne Überschneidung
+            if v:
                 self.protokoll.append({"zeit": saetze[-1].ende, "art": "thema", "zuordnung": v["art"],
                                        "punkt": v["punkt"], "konfidenz": v["konfidenz"],
                                        "begruendung": v["begruendung"], "aktiv": m.aktiver_punkt})
@@ -930,7 +1022,7 @@ class Coach:
         m.mischungen.clear()
         m.ueberlappungen.clear()
         m.teiltext = ""
-        self._abschnitt = []
+        self._abschnitt_zuruecksetzen()
         if self.hoerstrom:
             from .stimmen import Personenregister
             self.hoerstrom.stimmen.register = Personenregister(EINST.stimm_schwelle)
