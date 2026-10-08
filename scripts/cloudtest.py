@@ -330,11 +330,18 @@ async def einrichten(seite: Page, agenda_text: str, bericht: Bericht) -> None:
     # (Nachtrag des Koordinators nach dem ersten Cloud-Lauf: zustand.titel blieb '', obwohl die Tabelle
     # sichtbar gefüllt war).
     vor_zeilen = await seite.locator("#agenda-tabelle .agenda-zeile").count()
+    vor_titel = await seite.locator("#f-titel").input_value()
     await feld.fill(agenda_text)
+    t0 = time.monotonic()
     await knopf.click()
+    # Warten, bis Nestor geantwortet hat (Knopf wieder „Absenden“, Antwortzeile sichtbar) – sonst startet der Test
+    # das Meeting mit der Vorgabe-Agenda (Cloud-Lauf 08.10., 05:06: Titel blieb „Testmeeting“)
     bekommen = await warten_auf(
-        seite, "() => document.getElementById('f-titel').value.trim() !== '' && "
-              "document.querySelectorAll('#agenda-tabelle .agenda-zeile').length > 0", timeout_s=30.0)
+        seite, "() => document.getElementById('agenda-senden').textContent.trim() !== '…' && "
+              "!document.getElementById('agenda-antwort').hidden", timeout_s=120.0)
+    bericht.messwerte["agenda_prompt_sekunden"] = round(time.monotonic() - t0, 1)
+    if (await seite.locator("#f-titel").input_value()) == vor_titel:
+        bericht.fehler.append(f"Agenda per Prompt: Titel unverändert „{vor_titel}“")
     titel = await seite.locator("#f-titel").input_value()
     ziel = await seite.locator("#f-ziel").input_value()
     n_punkte = await seite.locator("#agenda-tabelle .agenda-zeile").count()
