@@ -14,7 +14,8 @@
     knopf.setAttribute("aria-label", "Feedback geben");
     knopf.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" '
       + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      + '<path d="M21 11.5a8.4 8.4 0 0 1-1.1 4.2L21 20l-4.4-1.1a8.4 8.4 0 1 1 4.4-7.4Z"/></svg>';
+      + '<path d="M21 11.5a8.4 8.4 0 0 1-1.1 4.2L21 20l-4.4-1.1a8.4 8.4 0 1 1 4.4-7.4Z"/></svg>'
+      + '<span>Feedback</span>';  // mit Wort, nicht nur Symbol – soll auf Anhieb verständlich sein (Niclas, 08.10.)
 
     const fenster = document.createElement("div");
     fenster.id = "fb-fenster";

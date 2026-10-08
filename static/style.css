@@ -547,8 +547,9 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 
 /* Feedback-Knopf (Ticket #18, Nachtrag): auf jeder Seite, unten rechts, nicht in der Kopfleiste – soll auffindbar,
    aber nicht störend sein. */
-.fb-schwebend { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 48px; height: 48px;
-  background: var(--marke); border-color: var(--marke); color: #fff; box-shadow: 0 8px 24px rgba(55, 48, 163, .35); }
+.fb-schwebend { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: auto; height: 44px; padding: 0 16px 0 12px;
+  display: inline-flex; align-items: center; gap: 8px; border-radius: 22px; font-weight: 700; font-size: 15px;
+  background: var(--marke); border: 1px solid var(--marke); color: #fff; box-shadow: 0 6px 18px rgba(30, 27, 75, .25); }
 .fb-schwebend:hover { background: var(--marke-2); border-color: var(--marke-2); }
 .fb-fenster { top: auto; right: 20px; bottom: 78px; }
 @media (max-width: 480px) { .fb-schwebend { right: 14px; bottom: 14px; } .fb-fenster { right: 14px; left: 14px; width: auto; bottom: 72px; } }
