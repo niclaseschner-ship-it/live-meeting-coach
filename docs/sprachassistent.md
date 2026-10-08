@@ -52,7 +52,10 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 | Beispiel | Aktion |
 |---|---|
 | „Nestor, wo stehen wir?“, „Fass den aktuellen Punkt zusammen“, „Was kommt als Nächstes?“ | Antwort aus Agenda, Ergebnissen und Transkript |
-| „Wir kommen jetzt zum nächsten Punkt“ | Agendapunkt wechseln, danach greift Regel 10 (Ergebnis des abgeschlossenen Punkts) |
+| „Wir kommen jetzt zum nächsten Punkt“ | Agendapunkt wechseln; mit Regel 10 fragt Nestor danach gebündelt nach Lücken der Meeting-Artefakte (Ticket #26) |
+| „Nestor, Sofie übernimmt die Statusseite bis Freitag“ | Artefakt ergänzen und kurz bestätigen – Premium: Werkzeug `artefakt_eintragen`, Basis: `AKTION: eintragen <nr>; wer=…; bis=…` |
+| nach einer Nachfrage ohne Namen: „Sofie, bis Freitag“, „mach ich“, „brauchen wir nicht“ | eingetragen bzw. nie wieder gefragt, „Eingetragen: Sofie, bis Freitag.“ (30 s Fenster nach der Frage) |
+| fünf Minuten vor Schluss: „Ja“ | Zusammenfassung plus höchstens drei Lücken, als Karte im Nestor-Feld |
 | „Erstell uns die visuelle Übersicht“, „Visualisier nur den letzten Punkt“, „Zeig, was noch ansteht“, „Wo fehlen Entscheidungen?“ | Live-Bild mit diesem Fokus (Claude, ~1–2 min), danach „Das Bild ist fertig“ |
 | „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | Recherche im Web: „Ich schau kurz nach“, dann gesprochene Zusammenfassung; danach bietet Nestor an, das Ergebnis mit Quellen auf einer Folie zusammenzustellen |
 | „Ja, mach eine Folie“ (nach einer Recherche) | Recherche-Folie im Dashboard: Titel, Kernaussage, Stichpunkte, Offenes, Quellen als Links (~3 s) |

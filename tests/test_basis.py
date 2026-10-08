@@ -468,7 +468,9 @@ def test_basis_paket_mit_protokoll_und_ueberblick(tmp_path, monkeypatch):
         await c.hoeren_zufuehren(bytes(24000 * 2))
         c.meeting.transkript = list(_meeting().transkript) + [
             Segment("Person 1", "Damit ist das Budget beschlossen, wir schauen nächste Woche wieder drauf.", 30, 52)]
-        c._client = FakeClient({**_LEER, "ergebnis": "höchstens 25.000 Euro", "entscheidungen": [], "aufgaben": []})
+        c._client = FakeClient({**_LEER, "artefakte": [
+            {"typ": "entscheidung", "was": "höchstens 25.000 Euro", "status": "endgueltig", "wer": "die Runde",
+             "zeit": "0:15", "konfidenz": 0.9}]})
         await c.hoeren_beenden()
         for _ in range(300):
             if c.archiv.fertig:
@@ -481,6 +483,7 @@ def test_basis_paket_mit_protokoll_und_ueberblick(tmp_path, monkeypatch):
         assert c.archiv.fertig
         namen = zipfile.ZipFile(io.BytesIO(paket(c.archiv.ordner, False))).namelist()
         assert "protokoll.md" in namen and "ueberblick.md" in namen
+        assert "meeting.json" in namen and "tasks.json" in namen  # Ticket #26: Grundlage für den Export (#22)
         protokoll = (c.archiv.ordner / "protokoll.md").read_text(encoding="utf-8")
         assert "am Meetingende" in protokoll and "höchstens 25.000 Euro" in protokoll
         assert not any(k["art"] == "protokoll" for k in c.karten)  # am Ende keine Karte

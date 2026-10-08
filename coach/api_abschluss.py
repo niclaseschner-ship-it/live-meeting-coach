@@ -86,8 +86,9 @@ async def abschluss():
     eigener = schluessel_info()["quelle"] == "dashboard"
     m = coach.meeting
     # Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“ – Punkte aus der
-    # Agenda, Entscheidungen aus den Ergebnissen je Punkt (Regel 10, coach/ergebnisse.py).
-    entscheidungen = sum(len(e.get("entscheidungen") or []) for e in m.ergebnisse.values())
+    # Agenda, Entscheidungen aus den Meeting-Artefakten (Ticket #26, coach/artefakte.py) – beschlossene und vorläufige,
+    # keine bloßen Vorschläge; auch ohne Agenda.
+    entscheidungen = sum(1 for a in coach.artefakte.liste if a.typ == "entscheidung" and a.status != "vorschlag")
     return {
         "dauer_sekunden": round(m.jetzt(), 1),
         "kosten_usd": round(kosten_usd, 4),

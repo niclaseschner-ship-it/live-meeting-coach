@@ -47,7 +47,7 @@ BEREICHE = {
     "live-text": ("Live-Text", ("live-text", "text", "sprecherspur")),
     "nestor": ("Nestor spricht", ("gespraech", "stimme", "assistent", "karte")),
     "recherche": ("Recherche", ("recherche", "folie")),
-    "analyse": ("Agenda, Ton, Ergebnisse", ("themen", "ergebnisse")),
+    "analyse": ("Agenda, Ton, Ergebnisse", ("themen", "ergebnisse", "artefakte")),
     "bild": ("Live-Bild, Überblick", ("onepager", "ueberblick")),
 }
 _ART_ZU_BEREICH = {art: b for b, (_, arten) in BEREICHE.items() for art in arten}
@@ -67,7 +67,7 @@ def dollar(e: dict) -> float:
         return (e.get("zeichen") or 0) * ZEICHENPREISE[modell]
     if art in ("live-text", "text", "sprecherspur", "stimme"):
         return (e.get("sekunden_audio") or 0) / 60 * MINUTENPREISE.get(modell, 0.0)
-    if art in ("themen", "ergebnisse", "assistent", "folie", "karte", "ueberblick"):
+    if art in ("themen", "ergebnisse", "artefakte", "assistent", "folie", "karte", "ueberblick"):
         return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus"))
     if art == "recherche":
         suche = WEBSUCHE_MISTRAL * (e.get("suchen") or 1) if modell.startswith("mistral") else WEBSUCHE

@@ -66,6 +66,11 @@ AKTION: folie             – das letzte Rechercheergebnis mit Quellen als Folie
                             wenn die Gruppe das möchte („ja, mach eine Folie“). Sag, dass sie gleich erscheint.
 AKTION: pause             – die Gruppe möchte, dass du nicht mehr zuhörst. Sag, dass man dich über den
                             Knopf im Dashboard wieder einschaltet.
+AKTION: eintragen <nummer>; wer=…; bis=…     – Aufgabe, Entscheidung, offenen Punkt oder Risiko ergänzen, wenn
+AKTION: eintragen neu <typ>; was=…; wer=…; bis=…   die Gruppe es dir sagt („Sofie übernimmt die Statusseite bis
+                            Freitag“). Nummer aus „Festgehaltene Artefakte“ unten; typ ist aufgabe, entscheidung,
+                            offen oder risiko; weitere Felder: status=endgueltig|vorlaeufig, reaktion=…. Bestätige
+                            danach in einem kurzen Satz, was eingetragen ist.
 
 Beispiel:
 AKTION: keine
@@ -162,6 +167,10 @@ def aktion_lesen(zeile: str) -> dict | None:
         return {"typ": "recherche", "frage": rest}
     if typ == "folie":
         return {"typ": "folie"}
+    if typ == "eintragen":  # Ticket #26: Lücke per Stimme schließen (Basis/Text-Weg)
+        from .artefakte import aktion_lesen as eintrag_lesen
+
+        return eintrag_lesen(rest)
     return None
 
 
@@ -587,6 +596,27 @@ class Assistent:
             asyncio.ensure_future(self.gespraech.schliessen())
         self.zustand = "pausiert" if self.pausiert else "bereit"
 
+    async def sagen(self, text: str) -> float:
+        """Wie `ansagen`, wartet aber, bis es gesagt ist (Nachfrage und Zusammenfassung, Ticket #26) – danach beginnt
+        das Fenster für die Antwort der Runde. Liefert die ungefähre Dauer in Sekunden (0, wenn Nestor schweigt)."""
+        if not self.aktiv or self.pausiert or self.ansprache_aus or self.coach._client is None:
+            return 0.0
+        g = self.gespraech
+        if g is not None and g.offen:
+            await g.ansagen(text, woertlich=True)
+            for _ in range(60):  # bis das Modell die Ansage gesprochen hat (höchstens ~30 s)
+                await asyncio.sleep(0.5)
+                if not g._antwort_laeuft:
+                    break
+            return len(text) / 14
+        if self._aufgabe and not self._aufgabe.done():
+            for _ in range(60):  # nicht in eine laufende Antwort hinein
+                await asyncio.sleep(0.5)
+                if self._aufgabe.done():
+                    break
+        self.text_neu(None)
+        return await self._sprechen_texte([text])
+
     def ansagen(self, text: str) -> None:
         """Kurze Ansage, die eine laufende Antwort nicht abbricht (z. B. „Das Bild ist fertig“).
 
@@ -685,11 +715,12 @@ class Assistent:
                 zeile = (f"{i + 1}. {p.titel} [{m.status(i)}; {mmss(m.genutzt(i))} von {p.minuten:.0f} min]"
                          + (f" – Ziel: {p.ziel}" if p.ziel else ""))
                 erg = m.ergebnisse.get(i)
-                if erg:
-                    zeile += f" – Ergebnis: {erg['ergebnis'] or 'keins ausgesprochen'}"
-                    zeile += "".join(f"; Aufgabe: {a['was']} (wer: {a['wer'] or 'offen'}, bis: {a['bis'] or 'offen'})"
-                                     for a in erg["aufgaben"])
+                if erg and erg.get("ergebnis"):
+                    zeile += f" – beschlossen: {erg['ergebnis']}"
                 z.append(zeile)
+        art = getattr(c, "artefakte", None)
+        if art is not None:  # Ticket #26: Aufgaben, Entscheidungen, Offenes, Risiken mit Nummer und Lücken
+            z += art.kontext_zeilen()
         if m.regel_ids:
             z.append("Vereinbarte Regeln: " + ", ".join(NACH_ID[r].titel for r in m.regel_ids if r in NACH_ID))
         hinweise = [h for h in m.hinweise[-5:]]

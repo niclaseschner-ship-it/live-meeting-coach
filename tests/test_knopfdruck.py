@@ -335,8 +335,9 @@ def test_regeln_und_protokoll_knopf(monkeypatch):
             {"thema": {"eingehalten": False, "befund": "Ab 0:20 ging es um das Catering."},
              "ergebnisse": {"eingehalten": True, "befund": "Termin beschlossen."},
              "ton": [{"zitat": "so ein Mist", "art": "kraftausdruck"}]},
-            {"ergebnis": "Termin im April beschlossen", "entscheidungen": [{"was": "Termin", "ergebnis": "einstimmig"}],
-             "aufgaben": [{"was": "Stand buchen", "wer": "Lea", "bis": None}]},
+            {"artefakte": [{"typ": "entscheidung", "was": "Termin im April", "status": "endgueltig", "wer": "die Runde",
+                            "zeit": "0:01", "konfidenz": 0.9},
+                           {"typ": "aufgabe", "was": "Stand buchen", "wer": "Lea", "zeit": "0:14", "konfidenz": 0.9}]},
         ])
 
         async def chat(**kw):
@@ -356,8 +357,9 @@ def test_regeln_und_protokoll_knopf(monkeypatch):
     assert status["ergebnisse"]["farbe"] == "gruen" and "Stand" in status["ergebnisse"]["detail"]
     regeln, protokoll = c.karten[-2], c.karten[-1]
     assert regeln["art"] == "regeln" and any("Catering" in p for p in regeln["punkte"])
-    assert protokoll["art"] == "protokoll" and protokoll["punkte"][0] == "1. Termin: Termin im April beschlossen"
-    assert "Stand buchen (wer: Lea, bis: offen)" in c.knopf.protokoll and c.meeting.ergebnisse[0]["ergebnis"]
+    assert protokoll["art"] == "protokoll" and protokoll["punkte"][0] == "1. Termin: Termin im April"
+    assert "- Stand buchen · wer: Lea · bis: offen – **fehlt: bis wann**" in c.knopf.protokoll
+    assert c.meeting.ergebnisse[0]["ergebnis"] == "Termin im April"
     assert any(h.art == "ton" for h in c.meeting.hinweise)
 
 

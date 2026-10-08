@@ -49,16 +49,13 @@ def test_ohne_gewaehlte_regel_kein_hinweis():
     assert _coach(["A", "B", "C"], seg, 650, regel_ids=()) == []
 
 
-def test_ergebnis_hinweise_bei_fehlendem_ergebnis_und_unvollstaendiger_aufgabe():
-    from coach import ergebnisse
+def test_ergebnisse_fragt_nur_nach_dem_was_fehlt():
+    """Regel 10 (Ticket #26): Agendapunkte müssen keine Entscheidung haben; gefragt wird nur nach Lücken."""
+    from coach.artefakte import Artefakt, frage_zu
 
-    erg = ergebnisse.normalisieren({"ergebnis": None, "entscheidungen": [],
-                                    "aufgaben": [{"was": "Angebot einholen", "wer": "Frau Lang", "bis": None}]})
-    texte = ergebnisse.hinweise("Budget", erg)
-    assert any("kein" in t or "nicht ausgesprochen" in t for t in texte)
-    assert any("Angebot einholen" in t and "Termin" in t and "Verantwortliche" not in t for t in texte)
-    voll = ergebnisse.normalisieren({"ergebnis": "Einstimmig beschlossen", "aufgaben": []})
-    assert ergebnisse.hinweise("Budget", voll) == []
+    a = Artefakt(1, "aufgabe", "Angebot einholen", wer="Frau Lang")
+    assert a.luecken() == ["bis"] and frage_zu(a) == "Ich hab notiert: Angebot einholen, Frau Lang. Bis wann?"
+    assert Artefakt(2, "aufgabe", "Angebot einholen", wer="Frau Lang", bis="Freitag").vollstaendig
 
 
 def test_nur_zwei_sichtbare_stufen():

@@ -4,6 +4,9 @@
         zusammenfassung.png|svg   Abschlussbild
         protokoll.md              Analyse hinter dem Bild (Ergebnisse, Aufgaben, Verlauf)
         ueberblick.md             Überblick als Text (Nestor Basis statt Bild; Premium, wenn gedrückt)
+        meeting.json              Standardgliederung: Kopf, Entscheidungen, Aufgaben, Offenes, Risiken, Parkplatz,
+                                  Agenda Soll/Ist (Ticket #26, Grundlage des Export-Dokuments #22)
+        tasks.json                nur die Aufgaben: was, wer, bis, Lücken, bestätigt
         bericht.json              alles Messbare: Transkript, Hinweise, Agenda, Karten, Dynamik, Kosten,
                                   Zeitreihe – dasselbe Format wie die Testläufe (scripts/abspielen.py),
                                   damit die Auswertungsskripte auch auf echten Meetings laufen
@@ -51,6 +54,8 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
         "folie": coach.folie,
         "ueberblick": getattr(coach, "ueberblick", None),
         "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
+        "artefakte": [a.bild() for a in coach.artefakte.liste] if hasattr(coach, "artefakte") else [],
+        "artefakte_verlauf": coach.artefakte.verlauf if hasattr(coach, "artefakte") else [],
         "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)}
                    for i, p in enumerate(m.agenda)],
         "kosten": coach.kosten_stand(),
@@ -198,6 +203,11 @@ class Archiv:
             from .ueberblick import als_markdown
 
             (self.ordner / "ueberblick.md").write_text(als_markdown(c.ueberblick), encoding="utf-8")
+        if getattr(c, "artefakte", None) is not None:  # Ticket #26: Standardgliederung und Aufgaben für Export (#22)
+            (self.ordner / "meeting.json").write_text(
+                json.dumps(c.artefakte.standardgliederung(), ensure_ascii=False, indent=1), encoding="utf-8")
+            (self.ordner / "tasks.json").write_text(
+                json.dumps(c.artefakte.aufgaben_json(), ensure_ascii=False, indent=1), encoding="utf-8")
         # Knopfdruck: das Protokoll vom Protokoll-Knopf hat Vorrang vor der Analyse hinter dem Bild
         protokoll = getattr(getattr(c, "knopf", None), "protokoll", None) or c.onepager_analyse
         if protokoll:

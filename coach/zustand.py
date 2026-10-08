@@ -74,7 +74,7 @@ class Meeting:
     virtuelle_zeit: float | None = None  # gesetzt im Simulationsbetrieb
     _punkt_seit: float = 0.0
     punkt_beginne: list[tuple[int, float]] = field(default_factory=list)  # (Punkt, Meetingzeit) je Wechsel
-    ergebnisse: dict[int, dict] = field(default_factory=dict)  # Regel 10: Ergebnis je abgeschlossenem Punkt
+    ergebnisse: dict[int, dict] = field(default_factory=dict)  # je Punkt, abgeleitet aus coach/artefakte.py (#26)
 
     # --- Uhr -------------------------------------------------------------
     def jetzt(self) -> float:

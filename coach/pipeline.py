@@ -9,7 +9,8 @@ import re
 import time
 from pathlib import Path
 
-from . import analyse, ergebnisse, konfidenz, kosten, regeln, themen, transkription
+from . import analyse, konfidenz, kosten, regeln, themen, transkription
+from .artefakte import Artefakte
 from .assistent import Assistent
 from .config import EINST, WURZEL, ki_verfuegbar, mistral_schluessel, openai_schluessel, schluessel_info
 from .entscheider import Entscheider
@@ -140,6 +141,7 @@ class Coach:
         self.knopf = Knopfstand()  # Knopf-Analysen (coach/knopfdruck.py)
         self.aeusserungen: list = []  # Regel 1: Äußerungen mit Sprecherabschnitten und Pegel (unterbrechung.py)
         self._unterbrechungen_gemeldet: set[float] = set()
+        self.artefakte = Artefakte(self)  # Ticket #26: Aufgaben, Entscheidungen, offene Punkte, Risiken
 
     @property
     def knopfdruck(self) -> bool:
@@ -193,6 +195,7 @@ class Coach:
         self.karten = []
         self.namen = {}
         self.knopf = Knopfstand()
+        self.artefakte = Artefakte(self)
 
     @property
     def stufe(self) -> str:
@@ -282,6 +285,7 @@ class Coach:
                 "recherche_da": self.letzte_recherche is not None,
                 "karten": self.karten[-50:],
                 "assistent": self.assistent.schnappschuss(),
+                "artefakte": self.artefakte.schnappschuss(),
                 # Einstufung verlässlich/experimentell für Regeln und Signale, eine Quelle (Lastenheft 4.3,
                 # Ticket „Konfidenz“) statt verstreuter Badges.
                 "signale": konfidenz.katalog(),
@@ -334,9 +338,12 @@ class Coach:
                 farbe = "gelb" if h else "gruen"
                 detail = "nicht alle kommen zu Wort" if h else "alle beteiligt"
             elif rid == "ergebnisse":
-                h = juengst("ergebnisse", 180)
-                farbe = "gelb" if h else "gruen"
-                detail = "Ergebnis oder Zuständigkeit fehlt" if h else "Ergebnisse festgehalten"
+                # Ticket #26: gelb, sobald nach einer Lücke gefragt wurde und sie noch offen ist (nicht abgelehnt)
+                offen = [a for a in self.artefakte.liste if a.nachgefragt and not a.abgelehnt and a.luecken()]
+                farbe = "gelb" if offen else "gruen"
+                n = len(self.artefakte.liste)
+                detail = (f"{len(offen)} Lücke{'n' if len(offen) > 1 else ''} offen" if offen
+                          else f"{n} festgehalten" if n else "noch nichts festgehalten")
             if self.knopfdruck and rid in KNOPF_REGELN:
                 # Diese Regeln brauchen den Text – im Modus Knopfdruck nur der Stand des letzten Knopfs
                 k = self.knopf.regeln.get(rid)
@@ -367,6 +374,7 @@ class Coach:
             "restzeit_punkt": analyse.mmss(akt.minuten * 60 - m.genutzt(m.aktiver_punkt)) if akt else None,
             "live_bild": bild,
             "ergebnisse": {f"{i + 1}": e.get("ergebnis") for i, e in m.ergebnisse.items()},
+            "artefakte": [a.kurz() for a in self.artefakte.liste[-25:]],
             "letzte_hinweise": [h.text for h in m.hinweise[-3:]],
             "folie": ("wird gerade erstellt" if self._folie_laeuft else
                       f"fertig: {self.folie['titel']}" if self.folie else "keine"),
@@ -455,6 +463,7 @@ class Coach:
             if seit >= takt:
                 self.onepager_starten()
         self.assistent.takt()
+        self.artefakte.takt()  # Ticket #26: Erkennung je Minute Sprache, Fünf-Minuten-Frage
         self._abschnitt_takt()
         if "alle" in m.regel_ids:
             self._alle_pruefen()
@@ -649,30 +658,9 @@ class Coach:
         m.punkt_wechseln(i)
         if alt != m.aktiver_punkt:  # bisher Gesagtes gehört zum alten Punkt: nicht mehr ins Fenster der Zuordnung
             self._fenster_ab = max(self._fenster_ab, m.jetzt())
-        if alt != m.aktiver_punkt and "ergebnisse" in m.regel_ids and not self.knopfdruck:
-            hintergrund(self._ergebnis_pruefen(alt))
-
-    async def _ergebnis_pruefen(self, i: int, mit_hinweisen: bool = True) -> None:
-        """Regel 10 für Punkt i; auch Baustein des Protokoll-Knopfs (dort Hinweise nur, wenn die Regel gewählt ist)."""
-        m = self.meeting
-        saetze = m.punkt_transkript(i)
-        if self._client is None or not 0 <= i < len(m.agenda) or sum(s.dauer for s in saetze) < 20:
-            return  # zu wenig Gesprochenes für eine sinnvolle Prüfung
-        p = m.agenda[i]
-        text = "\n".join(f"{s.sprecher}: {s.text}" for s in saetze)
-        try:
-            erg, nutzung = await ergebnisse.pruefen(self._client, EINST.analyse_modell, p.titel, p.ziel, text,
-                                                    EINST.analyse_aufwand)
-        except Exception as e:  # noqa: BLE001
-            log.warning("Ergebnis-Prüfung fehlgeschlagen: %s", fehlertext(e))
-            return
-        nutzung_loggen({"art": "ergebnisse", "modell": EINST.analyse_modell, **nutzung})
-        m.ergebnisse[i] = erg
-        self.protokoll.append({"zeit": m.jetzt(), "art": "ergebnis", "punkt": i, **erg})
-        for n, text in enumerate(ergebnisse.hinweise(p.titel, erg) if mit_hinweisen else []):
-            self.entscheider.einmalig(m, f"ergebnis-{i}-{n}", "ergebnisse", "hinweis", "gruppe",
-                                      text + regeln.vereinbart(m.regel_ids, "ergebnisse"))
-        await self.melden()
+        if alt != m.aktiver_punkt and not self.knopfdruck and self._client is not None:
+            # Ticket #26: Artefakte des alten Punkts fertig erkennen; mit Regel 10 eine gebündelte Nachfrage
+            hintergrund(self.artefakte.punkt_abgeschlossen(alt))
 
     def _ton_melden(self, stellen: list[dict]) -> None:
         """Regel 7: nur an die Moderation, ohne Namen und ohne Wertung (Lastenheft: keine Personenbewertung)."""
@@ -752,12 +740,12 @@ class Coach:
         basis = EINST.bild_anbieter == "text"
         if basis and not self.knopfdruck and self._client is not None:
             # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb
-            # am Ende das Protokoll wie beim Knopf: Regel 10 je Punkt, daraus protokoll.md (Ticket #15). Prüft auch
-            # den letzten Punkt (mit Hinweisen, wenn Regel 10 gewählt ist).
+            # am Ende das Protokoll wie beim Knopf: die letzten Sätze auf Artefakte prüfen (Ticket #26), daraus
+            # protokoll.md (Ticket #15).
             self._protokoll_laeuft = True
             hintergrund(self._protokoll_am_ende())
-        elif "ergebnisse" in self.meeting.regel_ids and self.meeting.agenda and not self.knopfdruck:
-            hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
+        elif not self.knopfdruck and self._client is not None:
+            hintergrund(self.artefakte.erkennen())  # Ticket #26: die letzten Sätze noch auswerten, ohne Nachfrage
         if self.onepager_am_ende and not self.knopfdruck:
             if basis:  # Abschluss-Überblick; entsteht gerade einer (Zuruf, Takt), wird er danach nachgeholt
                 frisch = (self.ueberblick is not None and not self._ueberblick_laeuft
@@ -775,7 +763,8 @@ class Coach:
     async def _archiv_abschliessen(self, archiv) -> None:
         """Ablegen, sobald Abschlussbild, Folie und Ergebnisprüfung durch sind (höchstens ~4 min warten)."""
         for _ in range(240):
-            if not (self._onepager_laeuft or self._folie_laeuft or self._ueberblick_laeuft or self._protokoll_laeuft):
+            if not (self._onepager_laeuft or self._folie_laeuft or self._ueberblick_laeuft or self._protokoll_laeuft
+                    or self.artefakte.laeuft):
                 break
             await asyncio.sleep(1)
         await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
@@ -887,6 +876,8 @@ class Coach:
                     or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_schritt_sekunden):
                 self._abschnitt_schliessen()
         await self.melden()
+        if self.artefakte.wartet_auf_antwort(seg.ende) and await self.artefakte.satz(seg):
+            return  # Antwort auf Nestors Nachfrage oder die Fünf-Minuten-Frage (Ticket #26)
         await self.assistent.satz(seg.text, seg.ende)
 
     # --- Themen-Zuordnung in gleitenden Fenstern (Strom 4, Ticket #24) ------------------------------------------
@@ -1009,6 +1000,10 @@ class Coach:
             self.assistent.zustand = "pausiert"
         elif aktion["typ"] == "recherche" and aktion.get("frage"):
             hintergrund(self.assistent.recherche_vorlesen(aktion["frage"]))
+        elif aktion["typ"] == "eintragen":  # Basis: „Nestor, Sofie übernimmt die Statusseite bis Freitag“ (#26)
+            a, _ = self.artefakte.eintragen(aktion.get("daten") or {})
+            if a is not None:
+                self.protokoll.append({"zeit": m.jetzt(), "art": "artefakt_eingetragen", "id": a.id, "durch": "stimme"})
         await self.melden()
 
     async def einwand_umsetzen(self) -> None:
@@ -1023,6 +1018,8 @@ class Coach:
         m.ueberlappungen.clear()
         m.teiltext = ""
         self._abschnitt_zuruecksetzen()
+        self.artefakte = Artefakte(self)
+        m.ergebnisse = {}
         if self.hoerstrom:
             from .stimmen import Personenregister
             self.hoerstrom.stimmen.register = Personenregister(EINST.stimm_schwelle)
@@ -1061,7 +1058,7 @@ class Coach:
     def antwort_karte(self, frage: str, antwort: str, aktion: dict | None, quellen: list[dict]) -> None:
         """Nestors gesprochene Antwort zusätzlich als Karte: Recherche immer, sonst nur, wenn es etwas zu zeigen
         gibt. Bei Aktionen (Bild, Wechsel, Pause, Folie) zeigt das Dashboard das Ergebnis selbst – keine Karte."""
-        if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie"):
+        if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie", "eintragen"):
             return
         hintergrund(self._karte_bauen(frage, antwort, quellen))
 
