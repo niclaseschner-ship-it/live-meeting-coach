@@ -233,14 +233,18 @@ class WsSpur:
         stimme = self.nachrichten("stimme")
         if not stimme:
             return 0.0
+        # Wie static/basis.js abspielt: jedes Stück beginnt bei seiner Ankunft oder, wenn das vorige
+        # noch läuft, direkt danach. `pos` ist das Ende des bisher Geschriebenen – nicht Ankunft plus
+        # Stücklänge, sonst wächst bei schneller als Echtzeit geschickten Stücken ein Versatz auf.
         teile, pos = [], 0.0
         for m in stimme:
             pcm = np.frombuffer(base64.b64decode(m["pcm"]), dtype="<i2")
             luecke = m["_t"] - pos
             if luecke > 0:
                 teile.append(np.zeros(int(luecke * RATE), dtype="<i2"))
+                pos += int(luecke * RATE) / RATE
             teile.append(pcm)
-            pos = m["_t"] + len(pcm) / RATE
+            pos += len(pcm) / RATE
         audio = np.concatenate(teile)
         with wave.open(str(ziel), "wb") as w:
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE); w.writeframes(audio.tobytes())
