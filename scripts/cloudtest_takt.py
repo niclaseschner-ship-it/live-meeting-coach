@@ -10,7 +10,8 @@ WebAudio-Quelle, die der Test abschnittsweise füttert und anhält:
   `bereit`/`gespraech`, seit ≥ 1,5 s kein `stimme`-Paket, im Browser keine Wiedergabe mehr (`stimme.naechste`
   in static/basis.js), stabil über 2 s. Zeitlimit mit Befund statt Hängen (60 s, Begrüßung 120 s).
   `warten: "bestaetigung"` (Bild, Folie: „macht ruhig weiter“) wartet nur, bis die erste Rückmeldung zu Ende
-  gesprochen ist, `warten: false` (Hineinreden, Fehlauslöser) gar nicht.
+  gesprochen ist, `warten: false` (Hineinreden, Fehlauslöser) gar nicht. Nach einem Teil vor dem letzten
+  („Nestor?“, Modus `ja`) gilt Nestor als fertig, sobald „Ja?“ gesprochen ist und er auf die Frage wartet.
 - Nach dem Warten wird die Stille übersprungen, die das Material für eine Antwort am Stück vorgesehen hatte
   (bis auf 0,8 s) – sonst säßen alle nach jeder Antwort noch 22 s stumm da.
 - Ein Zeitplan (Quellzeit ↔ Laufachse) wird mitgeschrieben; damit rechnen Bewertung und HTML-Bericht die
@@ -190,6 +191,8 @@ def schnittpunkte(referenz: dict) -> list[dict]:
         for i, t in enumerate(teile):
             letzter = i == len(teile) - 1
             modus = t.get("warten", warten_von(g) if letzter else False)
+            if modus is True and not letzter:
+                modus = "ja"  # „Nestor?“ → „Ja?“: Nestor wartet jetzt auf die Frage (Zustand „angesprochen“)
             if modus:
                 aus.append({"quelle_s": t["ende"], "modus": modus, "id": g["id"], "teil": i,
                             "erwartet": g.get("erwartet"), "text": t.get("text", "")})
@@ -599,6 +602,7 @@ SEITE_STAND = """() => ({
   z: (typeof zustand !== 'undefined' && zustand && zustand.assistent) ? zustand.assistent.zustand : null,
   rest: (typeof stimme !== 'undefined' && stimme.ctx) ? Math.max(0, stimme.naechste - stimme.ctx.currentTime) : 0,
   hoeren: (typeof zustand !== 'undefined' && zustand) ? !!zustand.hoeren : false,
+  bogen: !!(typeof zustand !== 'undefined' && zustand && zustand.assistent && zustand.assistent.bogen),
 })"""
 
 
@@ -651,7 +655,13 @@ class Regie:
             if modus == "bestaetigung" and stimme_seit:
                 fertig = ruhe  # nur die erste Rückmeldung abwarten („macht ruhig weiter“)
             else:
-                fertig = reagiert and ruhe and s["z"] in NESTOR_FERTIG
+                # Ticket #28: Solange ein Bogen läuft, ist Nestor nicht fertig – zwischen Floskel und Kartensatz steht
+                # der Zustand kurz auf „bereit“ (lokaler Lauf: der Test spielte die Rückfrage 1r in den Satz zur
+                # Zusammenfassung hinein, sie ging als „während Nestor spricht“ verloren).
+                # Nach „Ja?“ bleibt Nestor „angesprochen“ und wartet auf die Frage – die Runde stellt sie
+                # dann gleich (bis #28 wartete der Test hier 25 s, und die Frage kam nach dem Fenster)
+                fertig = (reagiert and ruhe and not s.get("bogen")
+                          and (s["z"] in NESTOR_FERTIG or (modus == "ja" and s["z"] == "angesprochen")))
             if not s["hoeren"] and jetzt - t0 > 3:
                 ergebnis = "kein_hoeren"
                 break

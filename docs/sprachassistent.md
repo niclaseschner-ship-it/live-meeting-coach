@@ -49,8 +49,8 @@ Zeile im Band oben oder als Karte im Verlauf. Einzige Ausnahme ist die Begrüßu
 2. **Zuhören ohne Einmischen.** Regel-Hinweise (nur gewählte Regeln), Agenda-Vorschlag, Fünf-Minuten-Angebot und
    Lücken stehen still im Band; Zusammenfassungen je Agendapunkt kommen still in den Verlauf.
 3. **Ansprache.** Premium (Telefon): „Nestor, …“ irgendwo im Satz; kommt nur der Name, antwortet er „Ja?“ (aus dem
-   Zwischenspeicher) und nimmt den nächsten Satz als Frage. Nach jedem Bogen ist 15 s lang eine Nachfrage ohne Namen
-   möglich (Follow-up-Modus, unten). Am Handy geht auch die Sprechtaste. Basis (Funkgerät): nur die Sprechtaste –
+   Zwischenspeicher) und nimmt den nächsten Satz, der binnen 12 s nach „Ja?“ endet, sicher als Frage (Ticket #28).
+   Nach jedem Bogen ist eine Nachfrage ohne Namen möglich, wenn sie binnen 6 s beginnt (Follow-up-Modus, unten). Am Handy geht auch die Sprechtaste. Basis (Funkgerät): nur die Sprechtaste –
    halten, sprechen, loslassen (Laptop: Knopf oder Leertaste; Handy: großer Knopf). Sagt jemand „Nestor“, steht still
    im Band „Sprechtaste halten, dann fragen“ (höchstens einmal je Minute). In beiden Stufen: getippte Frage und Knöpfe.
 4. **Antwortbogen** – siehe unten. **Aktionen** auf Zuruf:
@@ -107,16 +107,24 @@ beantwortet.
 
 ## Nachfrage ohne Namen (Premium, Follow-up-Modus)
 
-Nach jedem Bogen öffnet sich ab dem Ende der Wiedergabe ein Fenster von 15 s (`LMC_NACHFRAGE_SEKUNDEN`), sichtbar als
-Ring „Ich höre zu“, der abläuft. Nur der **erste Satz** danach kann eine Nachfrage sein; ist er nicht an Nestor
-gerichtet, schließt das Fenster sofort (die Runde hat übernommen). Entscheidung in drei Stufen, im Zweifel schweigen
-(`coach/bogen.py`, `coach/assistent.py: nachfrage_einordnen`):
+Nach jedem Bogen öffnet sich ab dem Ende der Wiedergabe ein Fenster von 6 s (`LMC_NACHFRAGE_SEKUNDEN`, bis #28 15 s),
+sichtbar als Ring „Ich höre zu“, der abläuft. Der Satz muss in diesem Fenster **beginnen** (er darf später als Text
+ankommen). Nur der **erste Satz** danach kann eine Nachfrage sein; ist er nicht an Nestor gerichtet oder hat seit der
+Antwort schon jemand anderes gesprochen, schließt das Fenster sofort (die Runde hat übernommen). Hintergrund (#28): Im
+Premium-Abendlauf 08.10. beantwortete Nestor „Heißt das, selbst ein schneller Application Rollback hätte uns nicht
+gerettet“ – eine Frage an die Kollegen, 6,2 s nach seiner Antwort zur Restzeit. Entscheidung in Stufen, im Zweifel
+schweigen (`coach/bogen.py`, `coach/assistent.py: nachfrage_einordnen`):
 1. Regel: der Satz spricht eine Person der Runde an („Anna, …“, „…, oder Tarek?“, ein Name aus Einrichtung oder
    Namensrunde) → nicht an Nestor.
-2. Regel: klare Anschlussfrage oder Auftrag („Und bis wann?“, „Und wer?“, „Zeig/trag/ergänz …“, „Kannst du …“ ohne
-   anderen Namen) → an Nestor, Bogen.
-3. Sonst ein schneller Klassifikator (gpt-5.4-mini, kurzer Prompt mit Nestors letzter Antwort): `frage_an_nestor`
+2. Regel: klare Anschlussfrage oder Auftrag („Und bis wann?“, „Und wer?“, kurze „Und …?“-Frage ohne Wir/Uns,
+   „Zeig/trag/ergänz …“, „Kannst du …“ ohne anderen Namen) → an Nestor, Bogen.
+3. Regel (#28): der Satz teilt ein Sachwort mit dem, was die Runde zuletzt sagte, aber keins mit Nestors Frage und
+   Antwort, und spricht ihn nicht an („Rollback“ nach einer Antwort zur Restzeit) → knüpft an die Runde an, still.
+4. Sonst ein schneller Klassifikator (gpt-5.4-mini; Prompt mit den letzten Sätzen der Runde, Nestors Frage und Antwort;
+   streng: nur eindeutige Anschlussfragen, Wir-/Uns-Sicht und Fragen an die Runde sprechen dagegen): `frage_an_nestor`
    (Bogen), `an_nestor_ohne_antwort` („Passt“, „Danke“ → still), `nicht_an_nestor` (still). Frist 2,5 s.
+   Messung (`scripts/einordnen_messen.py --wiederholen 3`, 08.10.): 48/50, alle 20 Fälle aus #28 richtig, die 14
+   Sätze aus #27 wie vorher („Warum steht da noch nichts zum SLA?“ schwankt, wie schon vor #28).
 Dieselbe Person wie die Fragende wird mitgeschrieben, ist aber nur ein Plus-Signal. Antwortet Nestor doch falsch,
 stoppt ihn Reinreden. Gemessen (`scripts/einordnen_messen.py`, 14 typische Sätze direkt nach einer Antwort, u. a. „Anna, das machst du doch, oder?“, „Ja, passt.“, „Und bis wann?“, „Was meinst du mit Wartungsfenster?“): Denkaufwand „low“ 14/14 richtig, Median 1,04 s; „none“ 13/14, Median 0,70 s (der eine Fehler: Zeitüberschreitung, also still). Eingestellt ist „none“ (`LMC_EINORDNEN_AUFWAND`).
 

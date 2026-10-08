@@ -944,7 +944,7 @@ class Coach:
                     or sum(s.dauer for s in self._abschnitt) >= EINST.abschnitt_schritt_sekunden):
                 self._abschnitt_schliessen()
         await self.melden()
-        await self.assistent.satz(seg.text, seg.ende, self.namen.get(seg.sprecher, seg.sprecher))
+        await self.assistent.satz(seg.text, seg.ende, self.namen.get(seg.sprecher, seg.sprecher), seg.start)
 
     # --- Themen-Zuordnung in gleitenden Fenstern (Strom 4, Ticket #24) ------------------------------------------
     def _abschnitt_zuruecksetzen(self) -> None:

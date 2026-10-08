@@ -361,7 +361,7 @@ function arbeitRendern(z) {
 
 // ---------- Nestor-Zeile (Ticket #21/#27) ----------
 // Über dem Verlauf: Nestors Zustand mit dem N – Ring dreht sich, solange er arbeitet; in Premium nach einem Bogen der
-// Ring „Ich höre zu“ (Nachfrage ohne Namen, läuft in 15 s ab). Darunter läuft mit, was er gerade sagt – im Takt der
+// Ring „Ich höre zu“ (Nachfrage ohne Namen, läuft in 6 s ab, nach „Ja?“ in 12 s – hoert_dauer). Darunter läuft mit, was er gerade sagt – im Takt der
 // Wiedergabe: Jedes Textstück erscheint, wenn der Ton, der vor ihm ankam, abgespielt ist.
 const feld = { text: "", wartend: [], seit: 0, schaetzEnde: 0 };
 const jetztS = () => performance.now() / 1000;
@@ -409,7 +409,7 @@ function nestorZeileRendern(z) {
   const zeile = $("nestor-zeile");
   zeile.className = `nestor-zeile${arbeitet ? " arbeitet" : ""}${redet ? " spricht" : ""}${hoertNoch > 0 && !redet && !arbeitet ? " hoert" : ""}`
     + `${a.taste ? " taste" : ""}${a.zustand === "pausiert" || !a.aktiv ? " aus" : ""}`;
-  zeile.style.setProperty("--rest", String(Math.max(0, Math.min(1, hoertNoch / 15))));
+  zeile.style.setProperty("--rest", String(Math.max(0, Math.min(1, hoertNoch / (a.hoert_dauer || 15)))));
   const basis = basisStufe(z);
   let text;
   if (!aktiv) text = name;

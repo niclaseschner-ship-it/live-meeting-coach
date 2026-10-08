@@ -993,13 +993,106 @@ def nestor_reaktion(start: float, ende_fenster: float, zustaende: list[dict], hi
     return True, f"{begruendung} (Verzug {zeit - start:+.1f}s)"
 
 
+# ---------- Ungefragte Äußerungen (Ticket #28) ----------
+# Bis #28 zählten als Fehlauslöser nur die fest benannten Grenzfälle 6a–6d. Eine Antwort auf einen ganz normalen Satz
+# der Runde (Premium-Abendlauf 08.10.: „Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet“,
+# eine Frage an die Kollegen im Rückfrage-Fenster) sah der Test nicht. Jetzt braucht jede Nestor-Äußerung einen
+# Auslöser: eine Ansprache oder Rückfrage aus der Referenz (Grenzfall, der eine Reaktion erwartet; Nestor-Anweisung)
+# oder einen Druck aus dem Bedienplan. Eine Äußerung trägt die Frage, auf die sie antwortet (nestor_text „frage“) –
+# passt die zu keinem Auslöser kurz davor, ist sie ein Fehlauslöser. Ohne Frage („Ja?“, „Abgebrochen“) reicht ein
+# Auslöser kurz davor; vor dem ersten Auslöser ist es die Begrüßung.
+KEIN_AUSLOESER = ("keine_antwort", "kein_fehlausloeser", "kein_abbruch", "agendawechsel")
+AUSLOESER_FENSTER_S = 60.0   # so lange nach dem Auslöser darf die Antwort beginnen (Recherche-Bestätigung, Werkzeuge)
+OHNE_FRAGE_FENSTER_S = 15.0  # Äußerung ohne eigene Frage („Ja?“): so kurz nach einem Auslöser
+KNOPF_FRAGEN = {"stand": ["wo stehen wir"], "zusammenfassen": ["zusammenfassen", "zusammenfassung"],
+                "band": ["zusammenfassen", "zusammenfassung"]}
+
+
+def _text_norm(text: str) -> str:
+    t = re.sub(r"\bn[eä]st\w*", " ", (text or "").lower())  # Nestor, Nester, Nestro – die Frage kommt ohne Namen
+    return " ".join(re.sub(r"[^\wäöüß]+", " ", t).split())
+
+
+def _text_passt(frage: str, ziel: str, schwelle: float = 0.6) -> bool:
+    import difflib
+
+    a, b = _text_norm(frage), _text_norm(ziel)
+    if not a or not b:
+        return False
+    return a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= schwelle
+
+
+def _meetingzeit(zustaende: list[dict], t: float) -> float | None:
+    """Meetinguhr zur Laufachse t: die zeitlich nächste Zustandsmeldung."""
+    import bisect
+
+    if not zustaende:
+        return None
+    ts = [z["_t"] for z in zustaende]
+    i = bisect.bisect_left(ts, t)
+    nah = min((k for k in (i - 1, i) if 0 <= k < len(ts)), key=lambda k: abs(ts[k] - t))
+    return zustaende[nah].get("zeit")
+
+
+def ungefragt_eingaben(messwerte: dict, frames: list[dict], zustaende: list[dict]) -> dict:
+    """Was pruefpunkte_berechnen für die Fehlauslöser braucht: jede Nestor-Äußerung und jeder Druck des Bedienplans,
+    beide auf der Meetinguhr. Für Live-Lauf, Bewertung und HTML-Bericht gleich."""
+    aeusserungen = [{**u, "zeit": _meetingzeit(zustaende, u["t"])} for u in takt.nestor_texte(frames)]
+    bedienung = [{**b, "zeit": _meetingzeit(zustaende, b["t"])}
+                 for b in (messwerte.get("takt") or {}).get("bedienung") or []]
+    return {"aeusserungen": [u for u in aeusserungen if u["zeit"] is not None],
+            "bedienung": [b for b in bedienung if b["zeit"] is not None]}
+
+
+def ungefragte_aeusserungen(referenz: dict, aeusserungen: list[dict], bedienung: list[dict]) -> list[dict]:
+    """Nestor-Äußerungen ohne Auslöser. `referenz` schon auf der Meetinguhr (versatzkorrigiert), `aeusserungen`
+    [{zeit, frage, antwort}], `bedienung` [{zeit, art, satz?}] – Zeiten auf der Meetinguhr."""
+    ausloeser: list[tuple[float, list[str]]] = []  # (Ende des Auslösers, Texte, zu denen eine Frage passen darf)
+    for n in referenz.get("nestor", []):
+        ausloeser.append((n["ende"], [n["text"]]))
+    for g in referenz.get("grenzfaelle", []):
+        if g.get("erwartet") in KEIN_AUSLOESER:
+            continue
+        for t in g.get("teile") or [{"text": "", "ende": g["ende"]}]:
+            ausloeser.append((t["ende"], [t["text"]]))
+    for b in bedienung:
+        if b.get("art") == "still":
+            continue  # „Still“ lässt Nestor verstummen, nicht sprechen
+        ausloeser.append((b["zeit"], [b.get("satz") or ""] + KNOPF_FRAGEN.get(b.get("art"), [])))
+    if not ausloeser:
+        return []
+    erster = min(z for z, _ in ausloeser)
+    aus = []
+    for u in aeusserungen:
+        zeit, frage = u["zeit"], (u.get("frage") or "").strip()
+        davor = [(z, texte) for z, texte in ausloeser if z - 5.0 <= zeit <= z + AUSLOESER_FENSTER_S]
+        if not frage:
+            if zeit < erster - 5.0 or any(zeit <= z + OHNE_FRAGE_FENSTER_S for z, _ in davor):
+                continue  # Begrüßung bzw. „Ja?“ / Bestätigung direkt nach einem Auslöser
+        elif any(_text_passt(frage, x) for _, texte in davor for x in texte if x):
+            continue
+        aus.append(u)
+    return aus
+
+
+def anschluss_kennzahlen(referenz: dict | None, pruefliste: list[dict]) -> dict:
+    """Ticket #28, getrennt gezählt: verpasste Anschlussfragen (Grenzfälle, die als Rückfrage ohne Namen eine Antwort
+    erwarten – `nach` oder „rueckfrage“ in der ID – und keine bekamen) und ungefragte Antworten (Fehlauslöser bei …s)."""
+    anschluss = {f"Grenzfall {g['id']}" for g in (referenz or {}).get("grenzfaelle", [])
+                 if (g.get("nach") or "rueckfrage" in g["id"]) and g.get("erwartet") not in KEIN_AUSLOESER}
+    return {"anschlussfragen": len(anschluss),
+            "verpasste_anschlussfragen": sum(1 for p in pruefliste if p["name"] in anschluss and p["status"] == "fehlt"),
+            "ungefragte_antworten": sum(1 for p in pruefliste if p["name"].startswith("Fehlauslöser bei"))}
+
+
 # ---------- Prüfliste gegen referenz.json – reine Berechnung, kein Bericht/keine Seite nötig ----------
 # So verwendet scripts/cloudtest_bewerten.py beim nachträglichen Auswerten (z. B. mit korrigiertem Versatz)
 # exakt dieselbe Logik wie der Live-Lauf hier, statt sie zu verdoppeln.
 def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: list[dict], karten: list[dict],
                           stimme_frames: list[dict], offline_lauf: bool,
                           nur_knopfdruck: bool = False,
-                          plan: list[dict] | None = None) -> tuple[list[dict], float | None]:
+                          plan: list[dict] | None = None, aeusserungen: list[dict] | None = None,
+                          bedienung: list[dict] | None = None) -> tuple[list[dict], float | None]:
     """`nur_knopfdruck` (Ticket #17 Punkt 7): in diesem Modus reagiert Nestor grundsätzlich nicht auf
     spontane Ansprache (kein KI-Aufruf ohne Knopf, siehe scripts/cloudtest.py aufzeichnen()/kein_ki_vor_
     erstem_knopf) - ein "fehlt" bei einer Nestor-Anweisung/einem Grenzfall, der eine Antwort erwartet, wäre
@@ -1009,7 +1102,11 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
 
     `plan` (Ticket #25, abwechselnd reden): der auf die Meetinguhr gebrachte Zeitplan der Abschnitte
     (meeting_plan()). Dann werden die Referenzzeiten erst damit umgerechnet – Pausen verschieben alles danach –
-    und der Segment-Abgleich schätzt nur noch den kleinen Restversatz (Verarbeitung bis zum Transkript)."""
+    und der Segment-Abgleich schätzt nur noch den kleinen Restversatz (Verarbeitung bis zum Transkript).
+
+    `aeusserungen`/`bedienung` (Ticket #28, aus ungefragt_eingaben): jede Nestor-Äußerung ohne Auslöser laut Referenz
+    und Bedienplan wird ein eigener Prüfpunkt „Fehlauslöser bei …s“ (❌); ohne solche einer „Keine ungefragten
+    Nestor-Äußerungen“ (✅). Diese Punkte stehen hinter den Grenzfällen (cloudtest_bericht zählt die Reihenfolge)."""
     segmente = _segmente_dedup(zustaende)  # einmal statt bei jedem Textabgleich neu (sonst zu langsam)
     if plan:
         referenz_roh = takt.referenz_auf_meetinguhr(referenz_roh, plan)
@@ -1087,6 +1184,16 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
             # ohne echte Nestor-Stimme im Offline-Material nicht sauber nachstellbar): nur dokumentieren.
             pruefen(name, "beobachtet", f"erwartet: {erwartet} – {begruendung}")
 
+    if aeusserungen is not None and not offline_lauf:
+        ungefragt = ungefragte_aeusserungen(referenz, aeusserungen, bedienung or [])
+        for u in ungefragt:
+            aus.append({"name": f"Fehlauslöser bei {u['zeit']:.0f}s", "status": "fehlt", "zeit": u["zeit"],
+                        "detail": f"erwartet: kein Auslöser laut Referenz und Bedienplan – Nestor sprach ungefragt auf "
+                                  f"„{(u.get('frage') or '–')[:80]}“: „{(u.get('antwort') or '')[:80]}“"})
+        if not ungefragt:
+            pruefen("Keine ungefragten Nestor-Äußerungen", "ok",
+                    f"{len(aeusserungen)} Äußerungen, jede mit Auslöser laut Referenz bzw. Bedienplan")
+
     fehler_eintraege = sorted({h.get("text", "") for h in hinweise if h.get("art") == "ton"} |
                               {z["fehler"] for z in zustaende if z.get("fehler")})
     pruefen("Keine Einträge in fehler", "ok" if not any(z.get("fehler") for z in zustaende) else "fehlt",
@@ -1146,7 +1253,8 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
         bericht.notieren(f"Takt: {len(plan)} Abschnitte, Meetinguhr − Laufachse {uhr:+.2f}s; Referenz endet auf "
                          f"der Meetinguhr bei {takt.referenz_auf_meetinguhr(referenz_roh, plan)['dauer_s']:.0f}s")
     pruefpunkte, versatz = pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme_frames,
-                                                 offline_lauf, nur_knopfdruck, plan)
+                                                 offline_lauf, nur_knopfdruck, plan,
+                                                 **ungefragt_eingaben(bericht.messwerte, spur.frames, zustaende))
     bericht.messwerte["versatz_s"] = round(versatz, 1) if versatz is not None else None
     bezeichnung = "Restversatz nach Zeitplan" if plan else "Versatz Referenzzeit↔Meetinguhr"
     bericht.notieren(f"{bezeichnung}: {versatz:+.1f}s (aus Segment-Abgleich)" if versatz is not None
@@ -1159,6 +1267,10 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
                          "am Ende (Hinweis auf Verarbeitungsrückstand im Container, falls deutlich größer)")
     for p in pruefpunkte:
         bericht.pruefen(p["name"], p["status"], p["detail"])
+    anschluss = anschluss_kennzahlen(referenz_roh, pruefpunkte)
+    bericht.messwerte.update(anschluss)
+    bericht.notieren(f"Anschlussfragen verpasst: {anschluss['verpasste_anschlussfragen']} von "
+                     f"{anschluss['anschlussfragen']} · ungefragte Antworten: {anschluss['ungefragte_antworten']}")
     takt_punkte, takt_kennzahlen = takt_auswerten(bericht.messwerte, spur.frames)
     for p in takt_punkte:
         bericht.pruefen(p["name"], p["status"], p["detail"])

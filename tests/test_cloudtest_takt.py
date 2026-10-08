@@ -39,6 +39,8 @@ def test_schnittpunkte_an_den_satzgrenzen_mit_warten():
     s = takt.schnittpunkte(_referenz())
     assert [(x["id"], x["teil"], x["quelle_s"]) for x in s] == [("frage", 0, 12.0), ("zwei", 0, 21.0),
                                                                  ("zwei", 1, 24.0)]
+    # Ticket #28: nach „Nestor?“ wartet der Test nur, bis „Ja?“ gesprochen ist (Nestor bleibt „angesprochen“)
+    assert [x["modus"] for x in s] == [True, "ja", True]
 
 
 def test_warten_standard_nach_erwartung():

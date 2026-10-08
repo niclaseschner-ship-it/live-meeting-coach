@@ -499,6 +499,204 @@ def test_einordnung_regeln():
     assert not BG.klar_an_nestor("Kannst du das übernehmen, Anna?", namen)
 
 
+# --- Ticket #28: Premium-Abendlauf 08.10., Meetinguhr 245–300 s – genau diese Sätze -----------------------------------
+ROLLBACK = "Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet"
+URSACHE = ("Wir müssen klären, warum die Migration den Ausfall ausgelöst hat und weshalb kein vollständiger Rollback "
+           "möglich war.")
+
+
+def _nach_zeitfrage(einordnung: str):
+    """Wie im Lauf: Jonas spricht über den Rollback, Person 2 fragt Nestor nach der Zeit, Nestor antwortet – dann ist
+    das Rückfrage-Fenster offen. Liefert (Coach, Assistent, Ende von Nestors Antwort)."""
+    c, gesendet = _coach(Attrappe(antwort=("AKTION: keine\nIhr habt für alles zusammen noch knapp drei Minuten.",),
+                                  einordnung=einordnung))
+    c.meeting.transkript += [Segment("Jonas", URSACHE, 197.7, 203.0),
+                             Segment("Person 2", "Wie viel Zeit haben wir noch, Nestor?", 204.3, 205.5),
+                             Segment("Person 2", "Und reicht das noch für alle Punkte?", 245.5, 246.9)]
+    return c, gesendet
+
+
+@pytest.mark.parametrize("satz", [ROLLBACK, ROLLBACK + "?"])
+def test_28_frage_an_die_kollegen_im_rueckfrage_fenster_bleibt_still(satz):
+    """Fall 1: Der Klassifikator hielt den Satz für eine Nachfrage (hier: die Attrappe sagt frage_an_nestor). Er knüpft
+    an Jonas an („Rollback“), nicht an Nestors Antwort zur Restzeit – die Regel „knüpft an die Runde an“ schweigt,
+    ohne das Modell zu fragen."""
+    async def ablauf():
+        c, _ = _nach_zeitfrage("frage_an_nestor")
+        a = c.assistent
+        c.meeting.virtuelle_zeit = 247.9
+        b = a.bogen_starten("frage", "Und reicht das noch für alle Punkte?", "nachfrage", "Person 2")
+        await b.task
+        ende = a.sprechzeiten[-1][1]
+        anfragen_vorher = len(c._client.anfragen)
+        c.meeting.virtuelle_zeit = ende + 11.1
+        await a.satz(satz, ende + 9.9, "Person 2")
+        return c, a, anfragen_vorher
+
+    c, a, n = asyncio.run(ablauf())
+    assert a.bogen is None and a.letzte["frage"] == "Und reicht das noch für alle Punkte?"
+    assert len(c._client.anfragen) == n  # kein Klassifikator-Aufruf
+    assert a.schnappschuss()["hoert_bis"] is None  # erster Satz verbraucht: Fenster zu
+    eintrag = [p for p in c.protokoll if p["art"] == "nachfrage_einordnung"][-1]
+    assert (eintrag["ergebnis"], eintrag["weg"]) == ("nicht_an_nestor", "regel runde")
+
+
+def test_28_klassifikator_sieht_frage_antwort_und_die_saetze_davor():
+    """Eine Nachfrage, die keine Regel entscheidet, geht ans Modell – mit Nestors Frage, seiner Antwort und den letzten
+    Sätzen der Runde."""
+    async def ablauf():
+        c, _ = _nach_zeitfrage("frage_an_nestor")
+        c.meeting.transkript.pop()  # die Rückfrage kommt erst noch
+        a = c.assistent
+        c.meeting.virtuelle_zeit = 206.5
+        b = a.bogen_starten("frage", "Wie viel Zeit haben wir noch?", "stimme", "Person 2")
+        await b.task
+        ende = a.sprechzeiten[-1][1]
+        c.meeting.virtuelle_zeit = ende + 5
+        await a.satz("Was heißt knapp drei Minuten genau?", ende + 4, "Person 2", ende + 2)
+        neu = a.bogen
+        await neu.task
+        return c, neu
+
+    c, neu = asyncio.run(ablauf())
+    assert neu.quelle == "nachfrage"
+    frage = next(x for x in c._client.anfragen if "Ordne ihn ein" in x)
+    assert "Frage an den Assistenten: Wie viel Zeit haben wir noch?" in frage
+    assert "Seine Antwort: Ihr habt für alles zusammen noch knapp drei Minuten." in frage
+    assert f"Jonas: {URSACHE}" in frage and "Satz: Was heißt knapp drei Minuten genau?" in frage
+
+
+def test_28_regeln_mit_genau_diesen_saetzen():
+    vorher = [f"Jonas: {URSACHE}", "Person 2: Wie viel Zeit haben wir noch, Nestor?",
+              "Person 2: Und reicht das noch für alle Punkte?"]
+    frage, antwort = "Und reicht das noch für alle Punkte?", "Ihr habt für alles zusammen noch knapp drei Minuten."
+    assert BG.knuepft_an_runde(ROLLBACK, vorher, frage, antwort)
+    assert BG.knuepft_an_runde(ROLLBACK + "?", vorher, frage, antwort)
+    # Nachfragen zu Nestors Antwort und Ansprachen bleiben beim Klassifikator bzw. der Anschluss-Regel
+    assert not BG.knuepft_an_runde("Heißt das, wir schaffen nicht mehr alle Punkte?", vorher, frage, antwort)
+    assert not BG.knuepft_an_runde("Kannst du uns sagen, warum der Rollback nicht geholfen hätte?", vorher, frage,
+                                   antwort)
+    assert not BG.knuepft_an_runde(frage, vorher[:2], "Wie viel Zeit haben wir noch?",
+                                   "Ihr habt für diesen Punkt noch knapp zwei Minuten.")
+    assert BG.klar_an_nestor("Und wer übernimmt das?")  # 2r: Anschlussfrage per Regel, ohne Modell
+    assert BG.klar_an_nestor("Und reicht das noch für alle Punkte?")  # 1r: kurze „Und …?“-Frage ohne Wir-Sicht
+    assert not BG.klar_an_nestor("Und hätte uns das Runbook da geholfen?")  # Uns-Sicht: die Runde fragt sich selbst
+    assert not BG.klar_an_nestor("Und reicht das noch für alle Punkte, Anna?", ["Anna"])
+
+
+def _zeitantwort_fertig(c, sekunden: float = 6.0):
+    """Leitlinie zu #28: das Fenster ohne Namen ist kurz (Satzbeginn bis 6 s nach Nestors Wiedergabe)."""
+    object.__setattr__(EINST, "nachfrage_sekunden", sekunden)
+    a = c.assistent
+    c.meeting.virtuelle_zeit = 247.9
+    return a, a.bogen_starten("frage", "Und reicht das noch für alle Punkte?", "nachfrage", "Person 2")
+
+
+def test_28_satz_ohne_namen_zaehlt_nur_wenn_er_binnen_6_s_beginnt():
+    """Im Abendlauf begann „Heißt das, …“ 6,2 s nach dem Ende der Antwort – zu spät, ohne Klassifikator still. Der Ring
+    zeigt die 6 s."""
+    async def ablauf():
+        c, _ = _nach_zeitfrage("frage_an_nestor")
+        a, b = _zeitantwort_fertig(c)
+        await b.task
+        ende = a.sprechzeiten[-1][1]
+        ring = a.schnappschuss()["hoert_bis"]
+        n = len(c._client.anfragen)
+        c.meeting.virtuelle_zeit = ende + 11.0
+        a.takt()
+        await a.satz("Wie lange dauert der Rollback denn insgesamt?", ende + 10.0, "Person 2", ende + 6.2)
+        return a, ende, ring, len(c._client.anfragen) - n, c.protokoll
+
+    a, ende, ring, anfragen, protokoll = asyncio.run(ablauf())
+    assert ring == pytest.approx(ende + 6.0, abs=0.01)
+    assert a.bogen is None and anfragen == 0 and protokoll[-1]["weg"] == "zu spät"
+
+
+def test_28_rechtzeitig_begonnen_spaet_als_text_angekommen_zaehlt():
+    async def ablauf():
+        c, _ = _nach_zeitfrage("frage_an_nestor")
+        a, b = _zeitantwort_fertig(c)
+        await b.task
+        ende = a.sprechzeiten[-1][1]
+        c.meeting.virtuelle_zeit = ende + 10.5  # Ring längst weg, der Satz kommt jetzt erst als Text
+        a.takt()
+        await a.satz("Und wie viel bleibt dann von den drei Minuten noch für die Maßnahmen übrig?", ende + 9.5,
+                     "Person 2", ende + 4.0)
+        return a.bogen
+
+    neu = asyncio.run(ablauf())
+    assert neu is not None and neu.quelle == "nachfrage"
+
+
+def test_28_hat_schon_jemand_anderes_gesprochen_ist_das_fenster_zu():
+    async def ablauf():
+        c, _ = _nach_zeitfrage("frage_an_nestor")
+        a, b = _zeitantwort_fertig(c)
+        await b.task
+        ende = a.sprechzeiten[-1][1]
+        # ein Satz, der als Text verloren ging bzw. noch nicht durch war – im Transkript steht er schon
+        c.meeting.transkript.append(Segment("Jonas", "Genau.", ende + 0.5, ende + 1.0))
+        c.meeting.virtuelle_zeit = ende + 4.0
+        await a.satz("Und reicht das dann auch für die Maßnahmen?", ende + 3.5, "Person 2", ende + 1.5)
+        return a.bogen, c.protokoll
+
+    neu, protokoll = asyncio.run(ablauf())
+    assert neu is None and protokoll[-1]["weg"] == "jemand sprach dazwischen"
+
+
+def test_28_nach_ja_gilt_der_naechste_satz_12_s_lang_als_frage():
+    """Fall 2 und 2r: „Nestor?“ → „Ja?“ → die Frage kommt – auch 11 s nach dem Ende von „Ja?“ und mit Verzug des
+    Live-Texts – und wird beantwortet; danach die Rückfrage „Und wer übernimmt das?“ ohne Namen."""
+    async def ablauf():
+        c, gesendet = _coach(Attrappe(antwort=("AKTION: keine\nZu Punkt eins habt ihr den Down-Pfad beschlossen.",),
+                                      einordnung="nicht_an_nestor"))
+        a = c.assistent
+        c.meeting.virtuelle_zeit = 274.8
+        await a.satz("Nestor,", 274.0, "Person 2")
+        await a._aufgabe
+        ja_ende = a.sprechzeiten[-1][1]
+        zustand_nach_ja = a.zustand, a.schnappschuss()["hoert_bis"]
+        c.meeting.virtuelle_zeit = ja_ende + 12.8  # der Satz endete 11,5 s nach „Ja?“, kam aber erst jetzt als Text an
+        a.takt()
+        await a.satz("Was haben wir zu Punkt eins beschlossen?", ja_ende + 11.5, "Person 2")
+        frage = a.bogen
+        await frage.task
+        ende = a.sprechzeiten[-1][1]
+        c.meeting.virtuelle_zeit = ende + 3
+        await a.satz("Und wer übernimmt das?", ende + 2.2, "Person 2")
+        rueckfrage = a.bogen
+        if rueckfrage:
+            await rueckfrage.task
+        return ja_ende, zustand_nach_ja, frage, rueckfrage, gesendet
+
+    ja_ende, (zustand, hoert_bis), frage, rueckfrage, gesendet = asyncio.run(ablauf())
+    assert "Ja?" in _texte(gesendet)
+    assert zustand == "angesprochen" and hoert_bis == pytest.approx(ja_ende + 12.0, abs=0.01)  # Ring „Ich höre zu“
+    assert frage is not None and frage.frage == "Was haben wir zu Punkt eins beschlossen?"
+    assert rueckfrage is not None and rueckfrage.quelle == "nachfrage" and rueckfrage.frage == "Und wer übernimmt das?"
+
+
+def test_28_nach_ja_endet_das_fenster_nach_12_s_und_nestor_hoert_wieder_zu():
+    async def ablauf():
+        c, _ = _coach(Attrappe(einordnung="frage_an_nestor"))
+        a = c.assistent
+        c.meeting.virtuelle_zeit = 274.8
+        await a.satz("Nestor?", 274.0, "Person 2")
+        await a._aufgabe
+        ja_ende = a.sprechzeiten[-1][1]
+        c.meeting.virtuelle_zeit = ja_ende + 12.5
+        a.takt()
+        noch = a.zustand  # ein Satz, der bis 12 s nach „Ja?“ endete, darf noch als Text ankommen
+        c.meeting.virtuelle_zeit = ja_ende + 15.5
+        a.takt()
+        zustand = a.zustand
+        await a.satz("Das schieben wir auf next week.", ja_ende + 13.5, "Person 1")  # endete nach dem Fenster
+        return noch, zustand, a.bogen
+
+    noch, zustand, bogen = asyncio.run(ablauf())
+    assert noch == "angesprochen" and zustand == "bereit" and bogen is None
+
+
 def test_karten_art_erkennt_eindeutige_auftraege():
     assert BG.karten_art("fass mal kurz zusammen") == "zusammenfassen"
     assert BG.karten_art("gib mir die Zusammenfassung") == "zusammenfassen"

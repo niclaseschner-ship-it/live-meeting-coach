@@ -134,7 +134,10 @@ class Einstellungen:
     # Recherche auf Zuruf (Websuche über die Responses-API)
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
-    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich (Premium)
+    # Rückfrage ohne Namen (Premium): der Satz muss so bald nach dem Ende von Nestors Wiedergabe BEGINNEN (Ticket #28:
+    # echte Anschlussfragen kommen in den ersten Sekunden – Alexa ~5 s; die ungefragt beantwortete Gruppenfrage im
+    # Abendlauf 08.10. begann erst 6,2 s danach, bis #28 galten 15 s)
+    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 6)
     # Ticket #27, Nachtrag C: Denkaufwand der Einordnung „Nachfrage an Nestor oder nicht?“ (Ziel unter 1 s; scripts/einordnen_messen.py)
     einordnen_aufwand: str = os.getenv("LMC_EINORDNEN_AUFWAND", "none")  # gemessen: Median 0,70 s (low: 1,04 s)
     # Ticket #27: Zusammenfassung je Abschnitt – beim Punktwechsel und spätestens nach so vielen Minuten am selben

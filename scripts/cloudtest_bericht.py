@@ -103,15 +103,18 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
     nur_knopfdruck = cb.nur_knopfdruck_aus_bericht(bericht)
     plan, uhr = ct.meeting_plan(bericht["messwerte"], zustaende)
     pruefliste, versatz = ct.pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme,
-                                                   offline_lauf, nur_knopfdruck, plan)
+                                                   offline_lauf, nur_knopfdruck, plan,
+                                                   **ct.ungefragt_eingaben(bericht["messwerte"], frames, zustaende))
     if plan:  # #25: Referenzzeiten mit den Pausen auf der Meetinguhr
         referenz_roh = ct.takt.referenz_auf_meetinguhr(referenz_roh, plan)
     referenz = ct.referenz_verschieben(referenz_roh, versatz or 0.0)
 
     # Die Prüfliste ist in Referenz-Reihenfolge (Ereignisse, Anweisungen, Grenzfälle); Kennzahl-Punkte dazwischen
     # (#24: „Kennzahl Verzug Abschweifung …“) haben keine eigene Referenzzeile und würden sonst alles verrücken.
+    # Ticket #28: jede ungefragte Äußerung als eigene Marke an ihrer Stelle im Zeitstrahl
+    marken: list[dict] = [{"t": p["zeit"], "art": "fehlausloeser", "label": p["name"], "status": p["status"],
+                           "detail": p["detail"]} for p in pruefliste if p.get("zeit") is not None]
     pruefliste = [p for p in pruefliste if not p["name"].startswith("Kennzahl")]
-    marken: list[dict] = []
     i = 0
     for e in referenz.get("ereignisse", []):
         p = pruefliste[i]; i += 1

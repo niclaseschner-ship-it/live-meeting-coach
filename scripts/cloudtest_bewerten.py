@@ -75,7 +75,8 @@ def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[di
     offline_lauf = bool((zustaende[-1].get("schluessel") or {}).get("offline"))
     plan, _ = ct.meeting_plan(bericht["messwerte"], zustaende)  # #25: Referenz auf die Meetinguhr mit Pausen
     return ct.pruefpunkte_berechnen(referenz, zustaende, hinweise, karten, stimme, offline_lauf,
-                                    nur_knopfdruck_aus_bericht(bericht), plan)
+                                    nur_knopfdruck_aus_bericht(bericht), plan,
+                                    **ct.ungefragt_eingaben(bericht["messwerte"], frames, zustaende))
 
 
 def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], versatz: float | None) -> dict:
@@ -83,8 +84,10 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
     nur noch gezählt und nach Rubrik (qualitaet.md) sortiert, nicht neu bewertet."""
     ok = [p for p in pruefliste if p["status"] == "ok"]
     fehlt = [p for p in pruefliste if p["status"] == "fehlt"]
-    # Fehlauslöser: Grenzfälle, die NICHT reagieren sollten, aber reagiert haben ("erwartet: kein_..." + fehlt)
-    fehlausloeser = [p for p in fehlt if "erwartet: kein" in p["detail"] or "erwartet: keine_antwort" in p["detail"]]
+    # Fehlauslöser: Grenzfälle, die NICHT reagieren sollten, aber reagiert haben ("erwartet: kein_..." + fehlt), und
+    # seit #28 jede Nestor-Äußerung ohne Auslöser laut Referenz und Bedienplan („Fehlauslöser bei …s“)
+    fehlausloeser = [p for p in fehlt if p["name"].startswith("Fehlauslöser") or "erwartet: kein" in p["detail"]
+                     or "erwartet: keine_antwort" in p["detail"]]
     verpasst = [p for p in fehlt if p not in fehlausloeser]
     # "Antwortzeit" meint Nestors Reaktion auf eine Anweisung/einen Grenzfall, nicht den Verzug einer
     # Ereignis-Erkennung (z. B. Monolog) - sonst mischen sich zwei verschiedene Dinge in einer Kennzahl.
@@ -103,7 +106,8 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
         spannweite = ct.versatz_spannweite(referenz, ct._segmente_dedup(zustaende))
 
     kosten = max(bericht["messwerte"].get("kosten_usd", 0.0), ct.meeting_kosten(zustaende))
-    return {
+    anschluss = ct.anschluss_kennzahlen(ct.referenz_laden(bericht["messwerte"]), pruefliste)
+    return {**anschluss,
         "treffer": len(ok), "verpasst": len(verpasst), "fehlausloeser": len(fehlausloeser),
         "beobachtet": len([p for p in pruefliste if p["status"] == "beobachtet"]),
         "uebersprungen_offline": len([p for p in pruefliste if p["status"] == "offline"]),
@@ -260,6 +264,10 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         f"| Treffer | {kennzahlen['treffer']} |",
         f"| Verpasst | {kennzahlen['verpasst']} |",
         f"| Fehlauslöser | {kennzahlen['fehlausloeser']} |",
+        f"| davon ungefragte Antworten (ohne Auslöser laut Referenz und Bedienplan) | "
+        f"{kennzahlen.get('ungefragte_antworten', '–')} |",
+        f"| Verpasste Anschlussfragen (Rückfrage ohne Namen) | {kennzahlen.get('verpasste_anschlussfragen', '–')} von "
+        f"{kennzahlen.get('anschlussfragen', '–')} |",
         f"| Dokumentiert (kein klares Richtig/Falsch) | {kennzahlen['beobachtet']} |",
         f"| Übersprungen (offline) | {kennzahlen['uebersprungen_offline']} |",
         f"| Antwortzeit, Median | {_s(kennzahlen['antwortzeit_median_s'])} |",

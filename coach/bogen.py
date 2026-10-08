@@ -60,8 +60,8 @@ def karten_art(frage: str) -> str | None:
 
 # --- Rückfrage-Fenster (Premium): ist der erste Satz nach dem Bogen an Nestor gerichtet? -----------------------
 # Ticket #27, Nachtrag C („Follow-up-Modus“ wie bei Sprachassistenten): Nur der erste Satz nach dem Bogen kann eine
-# Nachfrage sein; ist er es nicht, schließt das Fenster sofort. Drei Stufen, im Zweifel schweigen – ein falsches
-# Antworten bricht die Grundregel, ein verpasstes kostet nur ein neues „Nestor, …“.
+# Nachfrage sein; ist er es nicht, schließt das Fenster sofort. Regeln, dann ein Klassifikator, im Zweifel schweigen –
+# ein falsches Antworten bricht die Grundregel, ein verpasstes kostet nur ein neues „Nestor, …“.
 NICHT_NAMEN = {"und", "also", "okay", "gut", "ja", "nein", "danke", "super", "prima", "genau", "moment", "hm", "achso",
                "ach", "klar", "stimmt", "aber", "dann", "so", "nee", "naja", "na", "oder", "jetzt", "hier", "das", "die",
                "der", "wir", "ihr", "ich", "du", "sie", "es", "was", "wer", "wie", "wo", "wann", "warum", "bitte",
@@ -85,27 +85,86 @@ def jemand_anderes(text: str, namen: list[str] | None = None) -> bool:
     return bool(bekannte & woerter) and not AUFTRAG_RE.match(text)
 
 
+# Ticket #28: kurze „Und …?“-Frage ohne Wir-/Uns-Sicht – „Und reicht das noch für alle Punkte?“ (Grenzfall 1r) ordnete
+# der strengere Klassifikator in 2 von 3 Messungen als Gespräch der Runde ein
+UND_FRAGE_RE = re.compile(r"^\W*und\b[^.!]*\?\s*$", re.IGNORECASE)
+WIR_RE = re.compile(r"\b(?:wir|uns|unser\w*)\b", re.IGNORECASE)
+
+
 def klar_an_nestor(text: str, namen: list[str] | None = None) -> bool:
-    """Eindeutige Anschlussfrage („Und bis wann?“) oder ein Auftrag („Zeig …“, „Kannst du …“) ohne anderen Namen."""
-    return not jemand_anderes(text, namen) and bool(ANSCHLUSS_RE.match(text) or AUFTRAG_RE.match(text))
+    """Eindeutige Anschlussfrage („Und bis wann?“, „Und reicht das noch für alle Punkte?“) oder ein Auftrag („Zeig …“,
+    „Kannst du …“) ohne anderen Namen."""
+    und_frage = bool(UND_FRAGE_RE.match(text)) and len(text.split()) <= 8 and not WIR_RE.search(text)
+    return not jemand_anderes(text, namen) and bool(ANSCHLUSS_RE.match(text) or AUFTRAG_RE.match(text) or und_frage)
+
+
+# Ticket #28, Premium-Abendlauf 08.10.: Nach „Und reicht das noch für alle Punkte?“ (Antwort: „noch knapp drei Minuten“)
+# fragte jemand die Kollegen „Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet“ – eine
+# Frage zu dem, was die Runde vorher besprochen hatte (Jonas: „… weshalb kein vollständiger Rollback möglich war“).
+# Der Klassifikator hielt sie in 6 von 6 Messungen für eine Nachfrage an Nestor. Deshalb eine dritte Regel vor dem
+# Modell: Teilt der Satz ein Sachwort mit dem, was die Runde zuletzt gesagt hat, aber keins mit Nestors Frage und
+# Antwort, und spricht er Nestor nicht an, knüpft er an die Runde an – schweigen.
+DU_RE = re.compile(r"\b(?:du|dir|dich|dein\w*|euch)\b", re.IGNORECASE)
+NICHT_SACHWORT = {"haben", "hatte", "hätte", "hätten", "hatten", "würde", "würden", "werden", "wurde", "wurden",
+                  "können", "konnte", "könnte", "müssen", "musste", "müsste", "sollen", "sollte", "sollten", "wollen",
+                  "nicht", "schon", "immer", "eigentlich", "selbst", "heißt", "einen", "einem", "einer", "eines",
+                  "diese", "dieser", "dieses", "diesem", "diesen", "unser", "unsere", "unseren", "unserem", "unserer",
+                  "ihnen", "denen", "deren", "dessen", "damit", "darum", "dafür", "davon", "dazu", "daran", "wieder",
+                  "etwas", "nichts", "alles", "allen", "aller", "jetzt", "gerade", "vorhin", "danach", "dabei",
+                  "nochmal", "ebenfalls", "wirklich", "genau", "vielleicht", "ungefähr", "eben", "sowie", "weil",
+                  "obwohl", "warum", "wieso", "welche", "welcher", "welches", "machen", "macht", "gesagt", "sagen",
+                  "meinst", "meint", "kommen", "kommt", "gehen", "geht", "lassen", "zwischen", "durch", "gegen",
+                  "unter", "über", "ohne", "schnell", "schneller", "bitte", "kurze", "kurzer", "erste", "ersten",
+                  "zweite", "zweiten", "dritte", "dritten", "meine", "meiner", "seine", "ihrer", "ihren", "nestor"}
+
+
+def _sachworte(text: str) -> set[str]:
+    """Sachwörter (ab fünf Buchstaben, ohne Füllwörter), auf die ersten fünf Buchstaben gekürzt – „Rollback“ und
+    „Rollbacks“, „schneller“ und „schnell“ fallen zusammen."""
+    return {w[:5] for w in re.findall(r"[a-zäöüß]+", (text or "").lower()) if len(w) >= 5 and w not in NICHT_SACHWORT}
+
+
+def knuepft_an_runde(text: str, vorher: list[str] | None, frage: str, antwort: str) -> bool:
+    """„Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet“ nach einer Antwort zur Restzeit:
+    gleiches Sachwort wie die Runde vorher („Rollback“), keins wie Nestors Frage und Antwort, keine Anrede."""
+    if DU_RE.search(text) or AUFTRAG_RE.match(text):
+        return False
+    eigene = _sachworte(text)
+    runde = set().union(*(_sachworte(v.split(":", 1)[-1]) for v in vorher or [])) if vorher else set()
+    return bool(eigene & runde) and not eigene & _sachworte(f"{frage} {antwort}")
 
 
 EINORDNEN = """\
 Ein Moderationsassistent namens {name} hat einer Besprechungsrunde gerade geantwortet. Direkt danach sagt jemand im
 Raum den Satz unten. Ordne ihn ein:
-- "frage_an_nestor": eine Nachfrage, Bitte oder ein Auftrag an den Assistenten, der eine Antwort braucht
+- "frage_an_nestor": nur eine eindeutige Anschlussfrage, Bitte oder ein Auftrag an den Assistenten, der eine Antwort
+  braucht. Dafür spricht: „Und …?“ als Anschluss an seine Antwort, die du-Form an ihn, eine Aufforderung an ihn
+  („zeig“, „trag ein“), ein Rückbezug auf seine Worte („was meinst du mit …“, „welche … ist da gemeint“).
 - "an_nestor_ohne_antwort": an den Assistenten, braucht aber keine Antwort („Passt“, „Danke“, „Alles klar“)
-- "nicht_an_nestor": die Leute reden untereinander (über die Karte, mit einer Person, Weiterarbeit, Diskussion)
+- "nicht_an_nestor": die Leute reden untereinander (über die Karte, mit einer Person, Weiterarbeit, Diskussion).
+  Dafür spricht: die Wir-/Uns-Sicht aufs eigene Thema („Heißt das, … hätte uns …“, „Sollten wir nicht …“), eine Frage
+  an die Runde, eine angesprochene Person.
 Im Zweifel "nicht_an_nestor". Antworte nur mit JSON: {{"einordnung": "…"}}
 
-Letzte Antwort des Assistenten: {antwort}
+Zuletzt in der Runde gesagt:
+{vorher}
+Frage an den Assistenten: {frage}
+Seine Antwort: {antwort}
 Satz: {satz}"""
 EINORDNEN_FRIST = 2.5
 EINORDNUNGEN = ("frage_an_nestor", "an_nestor_ohne_antwort", "nicht_an_nestor")
 
 
-async def einordnen(client, satz: str, antwort: str) -> tuple[str, dict]:
-    """Schneller Text-Klassifikator (Premium): (Einordnung, Nutzung). Fehler oder Frist: nicht an Nestor."""
+async def einordnen(client, satz: str, antwort: str, frage: str = "", vorher: list[str] | None = None
+                    ) -> tuple[str, dict]:
+    """Schneller Text-Klassifikator (Premium): (Einordnung, Nutzung). Fehler oder Frist: nicht an Nestor.
+
+    Ticket #28: Er sieht auch die Frage, auf die Nestor geantwortet hat, und die letzten Sätze der Runde davor (`vorher`).
+    Nur mit der Antwort („Ihr habt noch knapp drei Minuten.“) hielt er eine Sachfrage der Runde („Heißt das, selbst ein
+    schneller Application Rollback hätte uns nicht gerettet“ – sie knüpft an „… weshalb kein vollständiger Rollback
+    möglich war“ an) in 6 von 6 Messungen für eine Nachfrage an Nestor; diesen Fall fängt jetzt schon die Regel
+    knuepft_an_runde ab. Prompt-Fassungen mit Prüffragen („gleiches Thema?“) machten ihn zu streng (Messung:
+    scripts/einordnen_messen.py)."""
     if client is None:
         return "nicht_an_nestor", {}
     extra = {}
@@ -114,7 +173,8 @@ async def einordnen(client, satz: str, antwort: str) -> tuple[str, dict]:
     try:
         r = await asyncio.wait_for(client.chat.completions.create(
             model=EINST.assistent_modell, response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": EINORDNEN.format(name=EINST.assistent_name,
+            messages=[{"role": "user", "content": EINORDNEN.format(name=EINST.assistent_name, frage=(frage or "-")[:300],
+                                                                  vorher="\n".join(vorher or []) or "-",
                                                                   antwort=(antwort or "-")[:600], satz=satz)}],
             **extra), EINORDNEN_FRIST)
         roh = json.loads(r.choices[0].message.content or "{}")
