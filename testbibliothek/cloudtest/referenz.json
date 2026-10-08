@@ -1,0 +1,207 @@
+{
+ "quelle": "vereinsrunde (~/arbeit/lmc-vertonung), gekürzt auf Ereignis-Äußerungen + Füllmaterial",
+ "titel": "Vorstandssitzung des SV Eichenfeld: Zwischen Kassenlage, Sommerfest und Vereinsbus",
+ "ziel": "Die finanzielle Lage des Vereins klären, ein Budget für das Sommerfest beschließen und die mögliche Anschaffung eines gebrauchten Vereinsbusses vorbereiten.",
+ "agenda": [
+  {
+   "titel": "Kassenbericht",
+   "ziel": "Einnahmen, Ausgaben und verfügbare Rücklagen nachvollziehen und den Kassenstand bestätigen.",
+   "minuten": 4
+  },
+  {
+   "titel": "Budget für das Sommerfest",
+   "ziel": "Den finanziellen Rahmen des Sommerfests festlegen und einen verbindlichen Höchstbetrag beschließen.",
+   "minuten": 6
+  },
+  {
+   "titel": "Anschaffung eines Vereinsbusses",
+   "ziel": "Bedarf und Finanzierung eines gebrauchten Neunsitzers beraten und das weitere Vorgehen festlegen.",
+   "minuten": 5
+  }
+ ],
+ "dauer_s": 591.8,
+ "vorlauf_s": 25.0,
+ "ereignisse": [
+  {
+   "ereignis": "monolog",
+   "zeit_s": 25.0,
+   "person": 0,
+   "punkt": 0,
+   "text": "So, es ist neunzehn Uhr drei. Danke, dass ihr alle da seid. Ich würde gern wirklich um Viertel nach acht fertig sein, weil wir heute nur drei Punkte haben: erst den Kassenbericht, dann das Budget fürs Sommerfest und zum Schluss den Vereinsbus. Beim Sommerfest müssen wir heute zu einer Zahl kommen. Beim Bus reicht mir zunächst ein belastbarer Überblick und eine klare nächste Aufgabe. Jörg, dann bitte du."
+  },
+  {
+   "ereignis": "monolog",
+   "zeit_s": 51.02,
+   "person": 1,
+   "punkt": 0,
+   "text": "Ja, also, Stand Ende Mai haben wir auf dem Vereinskonto 48.760 Euro. Davon sind allerdings 12.000 Euro zweckgebundene Jugendförderung und 8.500 Euro Rücklage für die Dachsanierung. Frei verfügbar sind damit, wenn man die laufenden Verpflichtungen bis Jahresende berücksichtigt, ungefähr 19.400 Euro. Die Mitgliedsbeiträge liegen knapp über Plan, rund 1.800 Euro. Bei den Energiekosten sind wir bisher etwa 2.300 Euro günstiger als erwartet. Dafür waren Reparaturen am Rasenmäher und an der Heizungssteuerung zusammen 3.650 Euro teurer. Unterm Strich sind wir gegenüber dem Haushaltsplan derzeit 420 Euro im Minus. Das ist nicht dramatisch, aber es ist eben auch kein zusätzlicher Spielraum von mehreren Tausend Euro."
+  },
+  {
+   "ereignis": "wechsel_ansage",
+   "zeit_s": 152.83,
+   "person": 0,
+   "punkt": 1,
+   "text": "Gut. Gibt es eine Frage, die den Kassenbericht grundsätzlich infrage stellt? Nein? Dann halten wir fest: Der Kontostand ist nachvollziehbar, zweckgebundene Mittel und bekannte Verpflichtungen sind berücksichtigt. Danke, Jörg. Wir wechseln jetzt ausdrücklich zu Agendapunkt zwei, dem Budget für das Sommerfest. Geplant waren dafür sechs Minuten; es ist jetzt neunzehn Uhr zehn."
+  },
+  {
+   "ereignis": "monolog",
+   "zeit_s": 200.67,
+   "person": 3,
+   "punkt": 1,
+   "text": "Ich habe den bisherigen Plan noch einmal zusammengerechnet. Mit Bühne, Technik, zwei Zelten, Toilettenwagen, Kinderprogramm, Sicherheitsdienst und den Gebühren liegen wir bei 8.900 Euro Ausgaben. Dem stehen vorsichtig geschätzt 5.500 Euro Einnahmen aus Essen, Getränken und den Standgebühren gegenüber. Der Zuschussbedarf wäre also 3.400 Euro. Wenn das Wetter gut ist, kann der deutlich niedriger ausfallen. Ich würde trotzdem nicht mit dem besten Fall rechnen."
+  },
+  {
+   "ereignis": "angriff",
+   "zeit_s": 232.33,
+   "person": 3,
+   "punkt": 1,
+   "text": "Jörg, ich habe gerade einen Vorschlag gemacht. Und bei den Einnahmen setzt du grundsätzlich immer nur die schwächste Variante an. Du rechnest ja immer schön, damit du hinterher sagen kannst, du hättest uns gewarnt. So kann ich keine Veranstaltung planen."
+  },
+  {
+   "ereignis": "kraftausdruck",
+   "zeit_s": 262.94,
+   "person": 3,
+   "punkt": 1,
+   "text": "Ach, und deshalb sollen wir jetzt jeden Betrag so lange herunterrechnen, bis auf dem Papier gar nichts mehr passieren kann? Das ist doch Mist! Dann können wir das Sommerfest gleich als Grillabend mit drei Biertischen anmelden."
+  },
+  {
+   "ereignis": "monolog",
+   "zeit_s": 277.79,
+   "person": 0,
+   "punkt": 1,
+   "text": "Stopp. Mehmet, der Ton hilft gerade nicht, und der Satz von eben an Jörg war nicht in Ordnung. Jörg, du hast deinen Risikopunkt deutlich gemacht. Wir brauchen jetzt eine Zahl. Es ist neunzehn Uhr siebzehn; damit haben wir die vorgesehenen sechs Minuten für diesen Punkt bereits um eine Minute überzogen. Ich gebe uns noch drei Minuten, dann entscheiden wir."
+  },
+  {
+   "ereignis": "abschweifung",
+   "zeit_s": 300.5,
+   "person": 3,
+   "punkt": 1,
+   "text": "Bevor wir uns auf 300 Euro festbeißen: Der größere finanzielle Brocken wird ohnehin der Bus. Wenn ein brauchbarer Neunsitzer zwanzig- oder fünfundzwanzigtausend Euro kostet, ist die Differenz beim Kinderprogramm im Verhältnis doch eher klein."
+  },
+  {
+   "ereignis": "unterbrechung",
+   "zeit_s": 314.97,
+   "person": 1,
+   "punkt": 1,
+   "text": "Du musst nicht bis kurz vor dem Fest warten, du musst nur die Zusagen einsammeln, bevor du alles buchst. Zwei Sponsoren haben doch grundsätzliches Interesse signalisiert."
+  },
+  {
+   "ereignis": "beschluss",
+   "zeit_s": 420.24,
+   "person": 0,
+   "punkt": 1,
+   "text": "Dann ist einstimmig beschlossen: Das Sommerfest erhält einen Ausgabenrahmen von höchstens 9.000 Euro und einen geplanten Vereinszuschuss von höchstens 3.500 Euro. Oberhalb von 7.000 Euro dürfen Verpflichtungen erst eingegangen werden, wenn 3.000 Euro an sicheren Einnahmen oder schriftlichen Zusagen nachgewiesen sind. Abweichungen meldet Mehmet sofort dem Vorstand. Es ist neunzehn Uhr einundzwanzig; der Budgetpunkt hat elf statt sechs Minuten gedauert."
+  },
+  {
+   "ereignis": "wechsel_ansage",
+   "zeit_s": 478.76,
+   "person": 0,
+   "punkt": 2,
+   "text": "Wir gehen jetzt zu Agendapunkt drei, der möglichen Anschaffung eines Vereinsbusses. Wir haben noch ungefähr vier Minuten. Lasst uns zuerst einen Überblick verschaffen, was ein gebrauchter Neunsitzer kostet und mit welchen laufenden Kosten wir rechnen müssen."
+  },
+  {
+   "ereignis": "unterbrechung",
+   "zeit_s": 493.31,
+   "person": 1,
+   "punkt": 2,
+   "text": "Das bestreite ich überhaupt nicht. Ich will nur eine vollständige Rechnung, bevor wir sagen, der Bus finanziere sich über gesparte Mieten von selbst."
+  },
+  {
+   "ereignis": "aufgabe_ohne_zustaendig",
+   "zeit_s": 503.21,
+   "person": 1,
+   "punkt": 2,
+   "text": "Und für die Probefahrt mit dem möglichen Bus müsste auch noch jemand die Zusatzversicherung klären, bevor wir losfahren."
+  },
+  {
+   "ereignis": "unterbrechung",
+   "zeit_s": 510.36,
+   "person": 3,
+   "punkt": 2,
+   "text": "Ich wollte nur vermeiden, dass wir uns schon auf die teuerste Variante festlegen, bevor wir die Nutzung sauber erfasst haben."
+  },
+  {
+   "ereignis": "monolog",
+   "zeit_s": 518.81,
+   "person": 0,
+   "punkt": 2,
+   "text": "Wir legen uns heute auf kein Fahrzeug fest. Bis zur nächsten Sitzung stellen wir eine Übersicht mit drei gebrauchten Neunsitzern zusammen: vollständige Anschaffungsnebenkosten, geschätzte Jahreskosten, Fördermöglichkeiten, Leasingvergleich und eine Gegenüberstellung zu unseren bisherigen Miet- und Fahrtkosten. Sabine liefert dafür bis Freitag die Fahrten der Jugend aus dem letzten Jahr, Jörg die verbuchten Miet- und Erstattungskosten. Dann können wir entscheiden, ob wir einen konkreten Finanzierungsrahmen aufstellen."
+  },
+  {
+   "ereignis": "monolog",
+   "zeit_s": 547.94,
+   "person": 0,
+   "punkt": 2,
+   "text": "Gut. Dann haben wir keinen Kaufbeschluss, aber einen klaren Prüfauftrag. Zum Abschluss noch einmal: Kassenbericht zur Kenntnis genommen, Sommerfest mit maximal 9.000 Euro Ausgaben beschlossen, Busvergleich kommt zur nächsten Sitzung. Das Protokoll verschickt Mehmet bis Montag. Gibt es einen Einwand gegen diese Zusammenfassung? Nein. Dann schließen wir um neunzehn Uhr siebenundzwanzig. Danke euch, und bitte klärt den Rest zum Sommerfest morgen in Ruhe, nicht heute Abend in der Chatgruppe."
+  }
+ ],
+ "nestor": [
+  {
+   "ziel_s": 150,
+   "start": 176.21,
+   "ende": 178.07,
+   "text": "Nestor, wo stehen wir gerade?",
+   "recherche": false,
+   "bild": false,
+   "pause_s": 22.0,
+   "zeit_s": 176.21
+  },
+  {
+   "ziel_s": 300,
+   "start": 325.49,
+   "ende": 332.17,
+   "text": "Nestor, gib uns einen kurzen Überblick, was ein Messestand auf einer Fachmesse in Deutschland typischerweise kostet.",
+   "recherche": true,
+   "bild": false,
+   "pause_s": 35.0,
+   "zeit_s": 325.49
+  },
+  {
+   "ziel_s": 335.0,
+   "start": 367.47,
+   "ende": 369.01,
+   "text": "Ja, mach uns dazu eine Folie.",
+   "recherche": false,
+   "bild": true,
+   "pause_s": 10.0,
+   "zeit_s": 367.47
+  },
+  {
+   "ziel_s": 360,
+   "start": 379.61,
+   "ende": 385.24,
+   "text": "Nestor, wie ist der aktuelle Stand bei der Förderung von Messeauftritten für kleine Unternehmen?",
+   "recherche": true,
+   "bild": false,
+   "pause_s": 35.0,
+   "zeit_s": 379.61
+  },
+  {
+   "ziel_s": 420,
+   "start": 451.97,
+   "ende": 456.16,
+   "text": "Nestor, fass bitte kurz zusammen, was wir zu Punkt zwei besprochen haben.",
+   "recherche": false,
+   "bild": false,
+   "pause_s": 22.0,
+   "zeit_s": 451.97
+  },
+  {
+   "ziel_s": 540,
+   "start": 571.94,
+   "ende": 574.4,
+   "text": "Nestor, mach uns die visuelle Übersicht.",
+   "recherche": false,
+   "bild": true,
+   "pause_s": 10.0,
+   "zeit_s": 571.94
+  }
+ ],
+ "aufgabe_ohne_zustaendig_ergaenzt": {
+  "ziel_s": 480,
+  "start": 503.21,
+  "ende": 509.96,
+  "text": "Und für die Probefahrt mit dem möglichen Bus müsste auch noch jemand die Zusatzversicherung klären, bevor wir losfahren."
+ },
+ "echte_stimmen_ausschnitt": "ausgelassen (yt-dlp/Download/Zuschnitt zu aufwändig für diesen Lauf, siehe Bericht) - Material ist durchgehend synthetisch (Azure)."
+}
