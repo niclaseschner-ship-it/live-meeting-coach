@@ -1,5 +1,5 @@
 r"""Bewertung eines Cloud-Testlaufs nach der Qualitätsrubrik (docs/qualitaet.md, Ticket #11): rechnet die
-messbaren Kennzahlen aus dem Bericht/Mitschnitt eines scripts/cloudtest.py-Laufs und lässt die Urteilskriterien
+messbaren Kennzahlen aus dem Mitschnitt eines scripts/cloudtest.py-Laufs und lässt die Urteilskriterien
 (1–5, mit Begründung) von einem Sprachmodell mit Bild-Eingabe bewerten – über Codex auf dem Pi
 (`codex exec -i <Screenshot> …`, geprüft: funktioniert, 0 $ über das ChatGPT-Abo). Ohne Codex (z. B. nicht
 angemeldet) stehen die Urteile als „übersprungen“ im Bericht, die Kennzahlen und Screenshots bleiben – dann
@@ -7,9 +7,13 @@ entscheidet der Koordinator von Auge.
 
     ~/.venvs/lmc/bin/python scripts/cloudtest_bewerten.py logs/cloudtest/2026-10-08_0306_premium
 
-Liest <lauf>/bericht.json (von cloudtest.py geschrieben – Prüfliste mit Status/Begründung je Punkt, das ist
-schon die eine Quelle für Treffer/Fehlauslöser/Verzug, hier nicht zweimal berechnen) und <lauf>/ws.jsonl
-(für die Ruhe-Kennzahl: wie viele Hinweise insgesamt, nicht nur die zu einem erwarteten Ereignis passenden).
+Liest, wenn vorhanden, <lauf>/ws.jsonl + die referenz.json aus bericht.json["messwerte"]["referenz_datei"] und
+berechnet die Prüfliste DAMIT NEU (scripts/cloudtest.py: pruefpunkte_berechnen) statt die in bericht.json
+gespeicherten Urteile zu übernehmen - die können von einer älteren Skriptversion stammen, insbesondere ohne
+die Versatz-Korrektur (Nachtrag nach dem ersten echten Cloud-Lauf: Referenzzeiten und Meetinguhr liefen dort
+~6-15 s auseinander, wachsend über den Lauf - Chromium spielt die Mikrofon-Datei nicht exakt ab "Meeting
+starten"). Nur wenn `ws.jsonl` oder die referenz.json fehlen (ältere Läufe), fällt es auf die gespeicherte
+Prüfliste zurück - dann ohne Versatz-Korrektur, mit Hinweis im Protokoll.
 Schreibt <lauf>/bewertung.md.
 """
 
@@ -24,6 +28,7 @@ from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WURZEL))
+import cloudtest as ct  # noqa: E402 - selbe Auswertungslogik wie der Live-Lauf, hier nicht verdoppeln
 
 VERZUG_RE = re.compile(r"Verzug ([+-]?\d+(?:\.\d+)?)s")
 # Bis zu so viele Screenshots gehen an Codex (Laufzeit/Umfang begrenzen) – immer Start, Abschluss und sonst
@@ -35,7 +40,7 @@ def bericht_laden(ordner: Path) -> dict:
     return json.loads((ordner / "bericht.json").read_text(encoding="utf-8"))
 
 
-def ws_zeilen(ordner: Path) -> list[dict]:
+def ws_frames_laden(ordner: Path) -> list[dict]:
     datei = ordner / "ws.jsonl"
     if not datei.exists():
         return []
@@ -46,39 +51,49 @@ def ws_zeilen(ordner: Path) -> list[dict]:
     return aus
 
 
-def kennzahlen_bauen(bericht: dict, ws: list[dict]) -> dict:
-    """Treffer/Fehlauslöser/Verzug kommen aus bericht["pruefliste"] (dort schon von cloudtest.py anhand des
-    vollständigen WS-Mitschnitts entschieden) – hier nur noch gezählt und nach Rubrik (qualitaet.md) sortiert,
-    nicht neu bewertet. Nur die Ruhe-Kennzahl (Hinweise insgesamt) braucht den rohen Mitschnitt."""
-    pl = bericht["pruefliste"]
-    ok = [p for p in pl if p["status"] == "ok"]
-    fehlt = [p for p in pl if p["status"] == "fehlt"]
+def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[dict], float | None] | None:
+    """Frisch aus dem WS-Mitschnitt + referenz.json (mit Versatz-Korrektur). None, wenn das nicht geht
+    (keine ws.jsonl oder referenz_datei unbekannt/fehlt) - dann übernimmt main() die gespeicherte Prüfliste."""
+    referenz_pfad = bericht["messwerte"].get("referenz_datei")
+    if not frames or not referenz_pfad or not Path(referenz_pfad).exists():
+        return None
+    referenz = json.loads(Path(referenz_pfad).read_text(encoding="utf-8"))
+    zustaende = ct.zustaende_aus_frames(frames)
+    if not zustaende:
+        return None
+    hinweise = ct._hinweise_dedup(zustaende)
+    karten = ct._karten_dedup(zustaende)
+    stimme = ct.nachrichten_aus_frames(frames, "stimme")
+    offline_lauf = bool((zustaende[-1].get("schluessel") or {}).get("offline"))
+    return ct.pruefpunkte_berechnen(referenz, zustaende, hinweise, karten, stimme, offline_lauf)
+
+
+def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], versatz: float | None) -> dict:
+    """Treffer/Fehlauslöser/Verzug aus der (ggf. frisch mit Versatz-Korrektur berechneten) Prüfliste - hier
+    nur noch gezählt und nach Rubrik (qualitaet.md) sortiert, nicht neu bewertet."""
+    ok = [p for p in pruefliste if p["status"] == "ok"]
+    fehlt = [p for p in pruefliste if p["status"] == "fehlt"]
     # Fehlauslöser: Grenzfälle, die NICHT reagieren sollten, aber reagiert haben ("erwartet: kein_..." + fehlt)
     fehlausloeser = [p for p in fehlt if "erwartet: kein" in p["detail"] or "erwartet: keine_antwort" in p["detail"]]
     verpasst = [p for p in fehlt if p not in fehlausloeser]
     # "Antwortzeit" meint Nestors Reaktion auf eine Anweisung/einen Grenzfall, nicht den Verzug einer
     # Ereignis-Erkennung (z. B. Monolog) - sonst mischen sich zwei verschiedene Dinge in einer Kennzahl.
-    antwort_pruefpunkte = [p for p in pl if p["name"].startswith(("Nestor-Anweisung", "Grenzfall"))]
+    antwort_pruefpunkte = [p for p in pruefliste if p["name"].startswith(("Nestor-Anweisung", "Grenzfall"))]
     verzuege = [float(m.group(1)) for p in antwort_pruefpunkte for m in [VERZUG_RE.search(p["detail"])] if m]
 
-    hinweise_gesamt = 0
-    gesehen = set()
-    for z in ws:
-        d = z.get("daten", {})
-        if z.get("richtung") != "empfangen" or not isinstance(d, dict) or "hinweise" not in d:
-            continue
-        for h in d.get("hinweise") or []:
-            hid = h.get("id")
-            if hid is None or hid not in gesehen:
-                if hid is not None:
-                    gesehen.add(hid)
-                hinweise_gesamt += 1
+    zustaende = ct.zustaende_aus_frames(frames) if frames else []
+    hinweise_gesamt = len(ct._hinweise_dedup(zustaende)) if zustaende else 0
     dauer_min = bericht["messwerte"].get("meeting_s", 0) / 60 or 1
+    referenz_pfad = bericht["messwerte"].get("referenz_datei")
+    spannweite = None
+    if zustaende and referenz_pfad and Path(referenz_pfad).exists():
+        referenz = json.loads(Path(referenz_pfad).read_text(encoding="utf-8"))
+        spannweite = ct.versatz_spannweite(referenz, ct._segmente_dedup(zustaende))
 
     return {
         "treffer": len(ok), "verpasst": len(verpasst), "fehlausloeser": len(fehlausloeser),
-        "beobachtet": len([p for p in pl if p["status"] == "beobachtet"]),
-        "uebersprungen_offline": len([p for p in pl if p["status"] == "offline"]),
+        "beobachtet": len([p for p in pruefliste if p["status"] == "beobachtet"]),
+        "uebersprungen_offline": len([p for p in pruefliste if p["status"] == "offline"]),
         "antwortzeit_median_s": sorted(verzuege)[len(verzuege) // 2] if verzuege else None,
         "antwortzeit_max_s": max(verzuege) if verzuege else None,
         "hinweise_gesamt": hinweise_gesamt, "hinweise_je_10min": round(hinweise_gesamt / dauer_min * 10, 1),
@@ -86,14 +101,17 @@ def kennzahlen_bauen(bericht: dict, ws: list[dict]) -> dict:
         "kosten_je_stunde_usd": round(bericht["messwerte"].get("kosten_usd", 0.0) / dauer_min * 60, 3) if dauer_min else 0,
         "ablage_wartezeit_s": bericht["messwerte"].get("ablage_wartezeit_s"),
         "kaltstart_s": bericht["messwerte"].get("kaltstart_s"),
+        "versatz_s": round(versatz, 1) if versatz is not None else None,
+        "versatz_anfang_s": spannweite[0] if spannweite else None,
+        "versatz_ende_s": spannweite[1] if spannweite else None,
     }
 
 
-def schlimmste_stellen(bericht: dict, n: int = 5) -> list[dict]:
+def schlimmste_stellen(pruefliste: list[dict], bericht: dict, n: int = 5) -> list[dict]:
     """Die n Prüfpunkte mit Status "fehlt" - einfachste ehrliche Näherung an "schlimmste Stellen": alles
     andere wäre eine zweite, unbelegte Gewichtung obendrauf. Screenshot: der zeitlich nächste, falls aus dem
     Namen (dashboard_M_SS) eine Zeit hervorgeht."""
-    fehlt = [p for p in bericht["pruefliste"] if p["status"] == "fehlt"]
+    fehlt = [p for p in pruefliste if p["status"] == "fehlt"]
     aus = []
     for p in fehlt[:n]:
         zeit_m = re.search(r"bei (\d+)s", p["name"] + " " + p["detail"])
@@ -196,7 +214,7 @@ NOTEN_NAMEN = {"antwortguete": "Antwortgüte", "verstaendlichkeit": "Verständli
 
 
 def _s(wert) -> str:
-    return "–" if wert is None else f"{wert} s"
+    return "–" if wert is None else f"{round(wert, 1)} s"
 
 
 def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: dict | None,
@@ -217,6 +235,8 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         f"| Kosten gesamt / je Stunde | {kennzahlen['kosten_usd']:.4f} $ / {kennzahlen['kosten_je_stunde_usd']:.3f} $ |",
         f"| Kaltstart Startseite | {_s(kennzahlen['kaltstart_s'])} |",
         f"| Wartezeit bis Abschlusspaket fertig | {_s(kennzahlen['ablage_wartezeit_s'])} |",
+        f"| Versatz Referenzzeit↔Meetinguhr | {_s(kennzahlen['versatz_s'])} "
+        f"(Anfang {_s(kennzahlen['versatz_anfang_s'])} → Ende {_s(kennzahlen['versatz_ende_s'])}) |",
         "", "## Urteile (1–5)", ""]
     if urteile is None:
         z += ["Übersprungen – kein Codex-Urteil möglich (siehe Protokoll). Screenshots liegen unter "
@@ -246,11 +266,23 @@ async def main() -> None:
     ordner = Path(args.lauf)
 
     bericht = bericht_laden(ordner)
-    ws = ws_zeilen(ordner)
-    if not ws:
-        print(f"Hinweis: keine ws.jsonl in {ordner} – Ruhe-Kennzahl (Hinweise) bleibt 0 (älterer Lauf vor #11?).")
-    kennzahlen = kennzahlen_bauen(bericht, ws)
-    schlimmste = schlimmste_stellen(bericht)
+    frames = ws_frames_laden(ordner)
+    if not frames:
+        print(f"Hinweis: keine ws.jsonl in {ordner} – Ruhe-Kennzahl (Hinweise) bleibt 0, keine Versatz-Korrektur "
+             "möglich (älterer Lauf vor #11?). Fällt auf die im Bericht gespeicherte Prüfliste zurück.")
+
+    neu = pruefliste_neu_berechnen(bericht, frames)
+    if neu is not None:
+        pruefliste, versatz = neu
+        print(f"Prüfliste neu berechnet (Versatz-Korrektur: "
+             f"{'nicht schätzbar' if versatz is None else f'{versatz:+.1f}s'}).")
+    else:
+        pruefliste, versatz = bericht["pruefliste"], bericht["messwerte"].get("versatz_s")
+        print("Prüfliste aus bericht.json übernommen (keine Neuberechnung möglich) - ohne Versatz-Korrektur, "
+             "falls das ein älterer Lauf ist.")
+
+    kennzahlen = kennzahlen_bauen(bericht, frames, pruefliste, versatz)
+    schlimmste = schlimmste_stellen(pruefliste, bericht)
     bilder = bilder_auswaehlen(ordner, bericht)
     print(f"Kennzahlen: {json.dumps(kennzahlen, ensure_ascii=False)}")
     print(f"{len(bilder)} Screenshots für das Urteil ausgewählt: {[b.name for b in bilder]}")

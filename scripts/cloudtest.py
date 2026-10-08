@@ -123,11 +123,17 @@ class Bericht:
         fehlt = sum(1 for p in self.pruefliste if p["status"] == "fehlt")
         offline = sum(1 for p in self.pruefliste if p["status"] == "offline")
         beobachtet = sum(1 for p in self.pruefliste if p["status"] == "beobachtet")
+        versatz = self.messwerte.get("versatz_s")
+        versatz_zeile = (f"Versatz Referenzzeit↔Meetinguhr: {versatz:+.1f}s" if versatz is not None
+                        else "Versatz Referenzzeit↔Meetinguhr: nicht schätzbar")
+        if self.messwerte.get("versatz_anfang_s") is not None:
+            versatz_zeile += (f" (wächst von {self.messwerte['versatz_anfang_s']:+.1f}s am Anfang auf "
+                              f"{self.messwerte['versatz_ende_s']:+.1f}s am Ende)")
         zeilen = [
             f"# Cloud-Testlauf – {self.messwerte.get('modus', '?')}", "",
             f"Gestartet {self.messwerte.get('gestartet', '?')}, Dauer {self.messwerte.get('meeting_s', '?')} s "
             f"(Soll ~{self.messwerte.get('soll_dauer_s', '?')} s). "
-            f"Kaltstart Startseite: {self.messwerte.get('kaltstart_s', '?')} s.",
+            f"Kaltstart Startseite: {self.messwerte.get('kaltstart_s', '?')} s. {versatz_zeile}.",
             "", f"**Prüfliste:** {ok} ✅ · {fehlt} ❌ · {offline} ⏭️ übersprungen (offline) · "
                 f"{beobachtet} 📝 dokumentiert (kein klares Richtig/Falsch)", "",
             "| Prüfpunkt | Status | Detail |", "|---|---|---|",
@@ -147,6 +153,30 @@ class Bericht:
 
 async def zustand(seite: Page) -> dict:
     return await seite.evaluate("() => zustand") or {}  # null, bis die WebSocket den ersten Stand geliefert hat
+
+
+# ---------- Reine Funktionen auf einer Liste von ws.jsonl-Zeilen ({"t","richtung","daten"}) ----------
+# Getrennt von WsSpur, damit scripts/cloudtest_bewerten.py dieselbe Auswertung auf einer bereits gespeicherten
+# ws.jsonl fahren kann (z. B. mit einer korrigierten Versatz-Schätzung), ohne einen Live-Lauf zu brauchen.
+def zustaende_aus_frames(frames: list[dict]) -> list[dict]:
+    """Volle Zustands-Broadcasts (nicht die schmalen Typen pegel/knopf/stimme/stimme_stopp), in der
+    empfangenen Reihenfolge, mit dem Mitschnitt-Zeitstempel ("_t") ergänzt."""
+    aus = []
+    for f in frames:
+        d = f["daten"]
+        if f["richtung"] != "empfangen" or not isinstance(d, dict) or "typ" in d or "zeit" not in d:
+            continue
+        aus.append({**d, "_t": f["t"]})
+    return aus
+
+
+def nachrichten_aus_frames(frames: list[dict], typ: str) -> list[dict]:
+    aus = []
+    for f in frames:
+        d = f["daten"]
+        if f["richtung"] == "empfangen" and isinstance(d, dict) and d.get("typ") == typ:
+            aus.append({**d, "_t": f["t"]})
+    return aus
 
 
 class WsSpur:
@@ -185,23 +215,10 @@ class WsSpur:
 
     # ---- Abgeleitete Sichten für die Auswertung ----
     def zustaende(self) -> list[dict]:
-        """Volle Zustands-Broadcasts (nicht die schmalen Typen pegel/knopf/stimme/stimme_stopp), in der
-        empfangenen Reihenfolge, mit dem Mitschnitt-Zeitstempel ("_t") ergänzt."""
-        aus = []
-        for f in self.frames:
-            d = f["daten"]
-            if f["richtung"] != "empfangen" or not isinstance(d, dict) or "typ" in d or "zeit" not in d:
-                continue
-            aus.append({**d, "_t": f["t"]})
-        return aus
+        return zustaende_aus_frames(self.frames)
 
     def nachrichten(self, typ: str) -> list[dict]:
-        aus = []
-        for f in self.frames:
-            d = f["daten"]
-            if f["richtung"] == "empfangen" and isinstance(d, dict) and d.get("typ") == typ:
-                aus.append({**d, "_t": f["t"]})
-        return aus
+        return nachrichten_aus_frames(self.frames, typ)
 
     def nestor_wav_schreiben(self, ziel: Path) -> float:
         """Nestors gesprochene Antworten aus den "stimme"-Nachrichten (Base64-PCM, 24 kHz mono, wie
@@ -618,6 +635,117 @@ def _naechstes_fenster(zeit_s: float, verzug_max: float = 90.0):
     return lambda t: 0 <= t - zeit_s <= verzug_max or abs(t - zeit_s) < 5  # etwas Vorlauf erlaubt (Messungenauigkeit)
 
 
+# ---------- Versatz Referenzzeit <-> Meetinguhr (Nachtrag nach dem ersten echten Cloud-Lauf, #11) ----------
+# Chromium spielt die Fake-Mikrofon-Datei nicht exakt ab "Meeting starten" (zeit=0), sondern schon vorher -
+# ein eingebautes Ereignis bei Referenzzeit X taucht im Mitschnitt systematisch erst bei X + Versatz auf
+# (gemessen im ersten Cloud-Lauf: ~5,7 s). Ohne Korrektur wirkt jede Antwort zu spät oder ganz verpasst.
+def _segmente_dedup(zustaende: list[dict]) -> list[dict]:
+    """Jede Zustandsmeldung trägt die komplette, wachsende Segmentliste - dieselben Segmente stecken in
+    hunderten Momentaufnahmen. Für den Textabgleich reicht die Menge der unterschiedlichen (start, text)."""
+    gesehen, aus = set(), []
+    for z in zustaende:
+        for s in z.get("segmente") or []:
+            schluessel = (s.get("start"), s.get("text"))
+            if schluessel not in gesehen:
+                gesehen.add(schluessel)
+                aus.append(s)
+    return aus
+
+
+def segment_match(segmente: list[dict], text: str, schwelle: float = 0.55) -> dict | None:
+    """Bestpassendes transkribiertes Segment zu `text` (Ähnlichkeitsquote, keine reine Teilstring-Suche -
+    die matcht sonst jeden kurzen Segment-Schnipsel wie "Nestor," fälschlich gegen jeden längeren Zielsatz,
+    der mit dem Namen beginnt - genau das lieferte beim ersten Versuch mit echten Cloud-Daten groben
+    Unsinn). `segmente` ist die bereits entdoppelte Liste (siehe _segmente_dedup), sonst viel zu langsam auf
+    einem langen Mitschnitt. None, wenn nichts über der Schwelle liegt."""
+    import difflib
+
+    ziel = " ".join(text.lower().split())
+    if not ziel:
+        return None
+    bestes, beste_quote = None, 0.0
+    for s in segmente:
+        kandidat = " ".join((s.get("text") or "").lower().split())
+        if not kandidat:
+            continue
+        quote = difflib.SequenceMatcher(None, ziel, kandidat).ratio()
+        if quote > beste_quote:
+            beste_quote, bestes = quote, s
+    return bestes if beste_quote >= schwelle else None
+
+
+def versatz_schaetzen(referenz: dict, segmente: list[dict]) -> float | None:
+    """Median aus (beobachtete Segment-Startzeit - Referenzzeit) über alle Grenzfall-/Nestor-Texte, die sich
+    im Mitschnitt wiederfinden lassen. `segmente` bereits entdoppelt (_segmente_dedup). None, wenn nichts
+    passt (z. B. Offline-Lauf ohne Transkript)."""
+    kandidaten: list[tuple[str, float]] = []
+    for g in referenz.get("grenzfaelle", []):
+        for teil in g.get("teile", []):
+            kandidaten.append((teil["text"], teil["start"]))
+    for n in referenz.get("nestor", []):
+        kandidaten.append((n["text"], n["start"]))
+    diffs = []
+    for text, referenz_zeit in kandidaten:
+        seg = segment_match(segmente, text)
+        if seg is not None and seg.get("start") is not None:
+            diffs.append(seg["start"] - referenz_zeit)
+    if not diffs:
+        return None
+    diffs.sort()
+    return diffs[len(diffs) // 2]
+
+
+def referenz_verschieben(referenz: dict, versatz: float) -> dict:
+    """Kopie von referenz.json mit allen Zeitstempeln um `versatz` verschoben, damit ereignis_pruefen/
+    nestor_reaktion unverändert gegen die Meetinguhr vergleichen können."""
+    if not versatz:
+        return referenz
+    r = json.loads(json.dumps(referenz))  # einfache tiefe Kopie
+    for e in r.get("ereignisse", []):
+        e["zeit_s"] += versatz
+    for n in r.get("nestor", []):
+        n["start"] += versatz
+        n["ende"] += versatz
+    for g in r.get("grenzfaelle", []):
+        g["start"] += versatz
+        g["ende"] += versatz
+        for t in g.get("teile", []):
+            t["start"] += versatz
+            t["ende"] += versatz
+    return r
+
+
+def antwortfenster_start(segmente: list[dict], text: str, versatz_zeit: float) -> float:
+    """Ende des Segments mit der Frage (Meetinguhr) ist der genauere Startpunkt fürs Antwortfenster als die
+    versatzkorrigierte Referenzzeit (Nachtrag des Koordinators, Punkt 3) - Segment-Abgleich bevorzugt, sonst
+    die Korrektur über den geschätzten/gemessenen Versatz. `segmente` bereits entdoppelt (_segmente_dedup)."""
+    seg = segment_match(segmente, text)
+    return seg["ende"] if seg and seg.get("ende") is not None else versatz_zeit
+
+
+def versatz_spannweite(referenz: dict, segmente: list[dict]) -> tuple[float, float] | None:
+    """Versatz am Anfang und am Ende des Mitschnitts statt nur im Median (Punkt 4): wächst er über den Lauf,
+    deutet das auf einen Verarbeitungsrückstand im Container hin, nicht nur auf einen festen Startversatz.
+    Robuster als ein Vergleich über Wanduhr-Zeitstempel (die hängen zusätzlich am Zeitpunkt, den Chromium
+    wirklich als "Meeting starten" zählt - unsicher, siehe seite_bis_meeting_start_s) - hier zählt nur, wann
+    ein bekannter Text tatsächlich im Transkript auftaucht."""
+    kandidaten: list[tuple[float, float]] = []  # (referenz_zeit, diff), nach referenz_zeit sortiert
+    for g in referenz.get("grenzfaelle", []):
+        for teil in g.get("teile", []):
+            kandidaten.append((teil["start"], teil["text"]))
+    for n in referenz.get("nestor", []):
+        kandidaten.append((n["start"], n["text"]))
+    kandidaten.sort()
+    diffs = []
+    for referenz_zeit, text in kandidaten:
+        seg = segment_match(segmente, text)
+        if seg is not None and seg.get("start") is not None:
+            diffs.append(seg["start"] - referenz_zeit)
+    if len(diffs) < 2:
+        return None
+    return round(diffs[0], 1), round(diffs[-1], 1)
+
+
 def ereignis_pruefen(ereignis: dict, zustaende: list[dict], hinweise: list[dict]) -> tuple[bool, str]:
     """(erkannt?, Begründung) für ein eingebautes Ereignis aus referenz.json – je Typ das passende Signal
     (Nachtrag des Koordinators nach dem ersten Cloud-Lauf): Agendawechsel = aktiver_punkt ändert sich,
@@ -673,9 +801,83 @@ def nestor_reaktion(start: float, ende_fenster: float, zustaende: list[dict], hi
     return True, f"{begruendung} (Verzug {zeit - start:+.1f}s)"
 
 
-# ---------- Prüfliste gegen referenz.json ----------
-def pruefliste_bauen(referenz: dict, verlauf: list[dict], spur: "WsSpur", meeting_start: float,
-                     bericht: Bericht) -> None:
+# ---------- Prüfliste gegen referenz.json – reine Berechnung, kein Bericht/keine Seite nötig ----------
+# So verwendet scripts/cloudtest_bewerten.py beim nachträglichen Auswerten (z. B. mit korrigiertem Versatz)
+# exakt dieselbe Logik wie der Live-Lauf hier, statt sie zu verdoppeln.
+def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: list[dict], karten: list[dict],
+                          stimme_frames: list[dict], offline_lauf: bool) -> tuple[list[dict], float | None]:
+    segmente = _segmente_dedup(zustaende)  # einmal statt bei jedem Textabgleich neu (sonst zu langsam)
+    versatz = versatz_schaetzen(referenz_roh, segmente)
+    referenz = referenz_verschieben(referenz_roh, versatz or 0.0)
+    aus: list[dict] = []
+
+    def pruefen(name: str, status: str, detail: str = "") -> None:
+        aus.append({"name": name, "status": status, "detail": detail})
+
+    for e in referenz.get("ereignisse", []):
+        name = f"Ereignis „{e['ereignis']}“ bei {e['zeit_s']:.0f}s"
+        if e["ereignis"] not in LOKAL_OHNE_KI and offline_lauf:
+            pruefen(name, "offline", "braucht Text-/Themen-KI, mit LMC_OFFLINE nicht verfügbar")
+            continue
+        erkannt, begruendung = ereignis_pruefen(e, zustaende, hinweise)
+        pruefen(name, "ok" if erkannt else "fehlt", begruendung)
+
+    # #9-Schema (Nestor-Anweisungen) - weiter unterstützt, falls referenz.json das alte Format hat.
+    for n in referenz.get("nestor", []):
+        kurz = n["text"][:40] + "…" if len(n["text"]) > 40 else n["text"]
+        name = f"Nestor-Anweisung „{kurz}“"
+        if offline_lauf:
+            pruefen(name, "offline", "ohne Schlüssel keine Antwort möglich")
+            continue
+        fenster_start = antwortfenster_start(segmente, n["text"], n["start"])
+        fenster_ende = fenster_start + max(n.get("pause_s", 30) * 1.5, 30)
+        bild = "bild" in (n.get("art") or "") or "übersicht" in n["text"].lower() or "visuelle" in n["text"].lower()
+        erkannt, begruendung = nestor_reaktion(fenster_start, fenster_ende, zustaende, hinweise, karten,
+                                               stimme_frames, bild)
+        pruefen(name, "ok" if erkannt else "fehlt", begruendung)
+
+    # #11-Schema (Grenzfälle der Ansprache) - je nach erwartetem Verhalten unterschiedlich gewertet.
+    grenzfaelle = referenz.get("grenzfaelle", [])
+    for i, g in enumerate(grenzfaelle):
+        name = f"Grenzfall {g['id']}"
+        if offline_lauf:
+            pruefen(name, "offline", f"erwartet: {g['erwartet']} – ohne Schlüssel nicht prüfbar")
+            continue
+        fenster_start = antwortfenster_start(segmente, g["teile"][-1]["text"], g["ende"])
+        fenster_ende = (grenzfaelle[i + 1]["start"] if i + 1 < len(grenzfaelle) else g["ende"] + 60)
+        bild = g["erwartet"] in ("folie",) or "bild" in g["erwartet"] or "übersicht" in g["teile"][0]["text"].lower()
+        reagiert, begruendung = nestor_reaktion(fenster_start, fenster_ende, zustaende, hinweise, karten,
+                                                stimme_frames, bild)
+        erwartet = g["erwartet"]
+        if erwartet in ("antwort", "ja_dann_antwort", "antwort_mit_quellen", "nachfrage_oder_bild_mit_fokus", "folie"):
+            pruefen(name, "ok" if reagiert else "fehlt", f"erwartet: {erwartet} – {begruendung}")
+        elif erwartet in ("keine_antwort", "kein_fehlausloeser", "kein_abbruch"):
+            # "kein_abbruch" (Fall 10) prüft zusätzlich, dass hoeren danach nicht abbrach
+            zustand_danach = next((z for z in zustaende if z.get("zeit", -1) >= g["ende"]), None)
+            abgebrochen = erwartet == "kein_abbruch" and zustand_danach is not None and not zustand_danach.get("hoeren")
+            if reagiert or abgebrochen:
+                grund = begruendung if reagiert else "hoeren wurde false (Meeting/Mikro gestoppt)"
+                pruefen(name, "fehlt", f"erwartet: {erwartet}, aber reagiert – {grund}")
+            else:
+                pruefen(name, "ok", f"erwartet: {erwartet} – keine Reaktion ausgelöst, wie vorgesehen")
+        elif erwartet == "agendawechsel":
+            treffer = [w for w in _aktiver_punkt_wechsel(zustaende) if g["ende"] - 2 <= w[0] <= fenster_ende]
+            pruefen(name, "ok" if treffer else "fehlt",
+                   f"erwartet: Agendawechsel – {'aktiver_punkt ' + str(treffer[0][1]) + '→' + str(treffer[0][2]) if treffer else 'kein Wechsel gesehen'}")
+        else:
+            # "antwort_erwuenscht_dokumentieren" (Nuschelvarianten) und "nestor_verstummt" (Hineinreden,
+            # ohne echte Nestor-Stimme im Offline-Material nicht sauber nachstellbar): nur dokumentieren.
+            pruefen(name, "beobachtet", f"erwartet: {erwartet} – {begruendung}")
+
+    fehler_eintraege = sorted({h.get("text", "") for h in hinweise if h.get("art") == "ton"} |
+                              {z["fehler"] for z in zustaende if z.get("fehler")})
+    pruefen("Keine Einträge in fehler", "ok" if not any(z.get("fehler") for z in zustaende) else "fehlt",
+           "; ".join(list(fehler_eintraege)[:3]))
+    return aus, versatz
+
+
+def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht) -> None:
+    """Live-Lauf: berechnet (pruefpunkte_berechnen) und schreibt jeden Punkt in den Bericht."""
     offline_lauf = bool(verlauf) and bool((verlauf[-1].get("schluessel") or {}).get("offline"))
     zustaende = spur.zustaende()
     hinweise = _hinweise_dedup(zustaende)
@@ -683,63 +885,18 @@ def pruefliste_bauen(referenz: dict, verlauf: list[dict], spur: "WsSpur", meetin
     stimme_frames = spur.nachrichten("stimme")
     bericht.messwerte["ws_zustandsmeldungen"] = len(zustaende)
 
-    for e in referenz.get("ereignisse", []):
-        name = f"Ereignis „{e['ereignis']}“ bei {e['zeit_s']:.0f}s"
-        if e["ereignis"] not in LOKAL_OHNE_KI and offline_lauf:
-            bericht.pruefen(name, "offline", "braucht Text-/Themen-KI, mit LMC_OFFLINE nicht verfügbar")
-            continue
-        erkannt, begruendung = ereignis_pruefen(e, zustaende, hinweise)
-        bericht.pruefen(name, "ok" if erkannt else "fehlt", begruendung)
-
-    # #9-Schema (Nestor-Anweisungen) - weiter unterstützt, falls referenz.json das alte Format hat.
-    for n in referenz.get("nestor", []):
-        kurz = n["text"][:40] + "…" if len(n["text"]) > 40 else n["text"]
-        name = f"Nestor-Anweisung „{kurz}“"
-        if offline_lauf:
-            bericht.pruefen(name, "offline", "ohne Schlüssel keine Antwort möglich")
-            continue
-        fenster_ende = n["start"] + max(n.get("pause_s", 30) * 1.5, 30)
-        bild = "bild" in (n.get("art") or "") or "übersicht" in n["text"].lower() or "visuelle" in n["text"].lower()
-        erkannt, begruendung = nestor_reaktion(n["start"], fenster_ende, zustaende, hinweise, karten,
-                                               stimme_frames, bild)
-        bericht.pruefen(name, "ok" if erkannt else "fehlt", begruendung)
-
-    # #11-Schema (Grenzfälle der Ansprache) - je nach erwartetem Verhalten unterschiedlich gewertet.
-    grenzfaelle = referenz.get("grenzfaelle", [])
-    for i, g in enumerate(grenzfaelle):
-        name = f"Grenzfall {g['id']}"
-        if offline_lauf:
-            bericht.pruefen(name, "offline", f"erwartet: {g['erwartet']} – ohne Schlüssel nicht prüfbar")
-            continue
-        fenster_ende = (grenzfaelle[i + 1]["start"] if i + 1 < len(grenzfaelle) else g["ende"] + 60)
-        bild = g["erwartet"] in ("folie",) or "bild" in g["erwartet"] or "übersicht" in g["teile"][0]["text"].lower()
-        reagiert, begruendung = nestor_reaktion(g["ende"], fenster_ende, zustaende, hinweise, karten,
-                                                stimme_frames, bild)
-        erwartet = g["erwartet"]
-        if erwartet in ("antwort", "ja_dann_antwort", "antwort_mit_quellen", "nachfrage_oder_bild_mit_fokus", "folie"):
-            bericht.pruefen(name, "ok" if reagiert else "fehlt", f"erwartet: {erwartet} – {begruendung}")
-        elif erwartet in ("keine_antwort", "kein_fehlausloeser", "kein_abbruch"):
-            # "kein_abbruch" (Fall 10) prüft zusätzlich, dass hoeren danach nicht abbrach
-            zustand_danach = next((z for z in zustaende if z.get("zeit", -1) >= g["ende"]), None)
-            abgebrochen = erwartet == "kein_abbruch" and zustand_danach is not None and not zustand_danach.get("hoeren")
-            if reagiert or abgebrochen:
-                grund = begruendung if reagiert else "hoeren wurde false (Meeting/Mikro gestoppt)"
-                bericht.pruefen(name, "fehlt", f"erwartet: {erwartet}, aber reagiert – {grund}")
-            else:
-                bericht.pruefen(name, "ok", f"erwartet: {erwartet} – keine Reaktion ausgelöst, wie vorgesehen")
-        elif erwartet == "agendawechsel":
-            treffer = [w for w in _aktiver_punkt_wechsel(zustaende) if g["ende"] - 2 <= w[0] <= fenster_ende]
-            bericht.pruefen(name, "ok" if treffer else "fehlt",
-                            f"erwartet: Agendawechsel – {'aktiver_punkt ' + str(treffer[0][1]) + '→' + str(treffer[0][2]) if treffer else 'kein Wechsel gesehen'}")
-        else:
-            # "antwort_erwuenscht_dokumentieren" (Nuschelvarianten) und "nestor_verstummt" (Hineinreden,
-            # ohne echte Nestor-Stimme im Offline-Material nicht sauber nachstellbar): nur dokumentieren.
-            bericht.pruefen(name, "beobachtet", f"erwartet: {erwartet} – {begruendung}")
-
-    fehler_eintraege = sorted({h.get("text", "") for h in hinweise if h.get("art") == "ton"} |
-                              {z["fehler"] for z in zustaende if z.get("fehler")})
-    bericht.pruefen("Keine Einträge in fehler", "ok" if not any(z.get("fehler") for z in zustaende) else "fehlt",
-                    "; ".join(list(fehler_eintraege)[:3]))
+    pruefpunkte, versatz = pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme_frames,
+                                                 offline_lauf)
+    bericht.messwerte["versatz_s"] = round(versatz, 1) if versatz is not None else None
+    bericht.notieren(f"Versatz Referenzzeit↔Meetinguhr: {versatz:+.1f}s (aus Segment-Abgleich)" if versatz is not None
+                     else "Versatz Referenzzeit↔Meetinguhr: nicht schätzbar (kein passendes Segment im Mitschnitt)")
+    spannweite = versatz_spannweite(referenz_roh, _segmente_dedup(zustaende))
+    bericht.messwerte["versatz_anfang_s"], bericht.messwerte["versatz_ende_s"] = spannweite or (None, None)
+    if spannweite:
+        bericht.notieren(f"Versatz wächst über den Lauf: {spannweite[0]:+.1f}s am Anfang → {spannweite[1]:+.1f}s "
+                         "am Ende (Hinweis auf Verarbeitungsrückstand im Container, falls deutlich größer)")
+    for p in pruefpunkte:
+        bericht.pruefen(p["name"], p["status"], p["detail"])
 
     if zustaende:
         bericht.messwerte["kosten_usd"] = zustaende[-1].get("kosten", {}).get("meeting", 0.0)
@@ -806,16 +963,21 @@ async def lauf(args: argparse.Namespace) -> Bericht:
             await startseite(seite, args.stufe, args.nur_knopfdruck, bericht)
             meeting_start = await meeting_starten(seite, Path(args.agenda_prompt).read_text(encoding="utf-8"),
                                                   bericht)
+            # Rohdaten für die Versatz-Schätzung (Nachtrag nach dem ersten echten Cloud-Lauf: die
+            # Referenzzeiten aus dem Drehbuch und die Meetinguhr liefen dort ~6 s auseinander, weil Chromium
+            # die Mikrofon-Datei schon vor "Meeting starten" zu spielen beginnt). Direkt gemessen reicht
+            # nicht als Korrektur (siehe pruefliste_bauen) - nur zur Einordnung mit abgelegt.
+            bericht.messwerte["seite_bis_meeting_start_s"] = round(meeting_start - lauf_start, 1)
             verlauf = await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start)
             z_letzt = verlauf[-1] if verlauf else {}
             offline = bool((z_letzt.get("schluessel") or {}).get("offline"))
             await abschluss(seite, bericht, offline)
-            pruefliste_bauen(referenz, verlauf, spur, meeting_start, bericht)
+            pruefliste_bauen(referenz, verlauf, spur, bericht)
         except SchrittFehler as e:
             bericht.fehler.append(f"Lauf abgebrochen: {e}")
             bericht.notieren(f"Abgebrochen: {e}")
             if verlauf:  # trotz Abbruch die bis dahin gesammelten Prüfpunkte gegen die Referenz auswerten
-                pruefliste_bauen(referenz, verlauf, spur, meeting_start, bericht)
+                pruefliste_bauen(referenz, verlauf, spur, bericht)
         finally:
             dauer_stimme = spur.nestor_wav_schreiben(bericht.ordner / "nestor_stimme.wav")
             if dauer_stimme:
