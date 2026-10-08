@@ -63,10 +63,9 @@ def nur_knopfdruck_aus_bericht(bericht: dict) -> bool:
 def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[dict], float | None] | None:
     """Frisch aus dem WS-Mitschnitt + referenz.json (mit Versatz-Korrektur). None, wenn das nicht geht
     (keine ws.jsonl oder referenz_datei unbekannt/fehlt) - dann übernimmt main() die gespeicherte Prüfliste."""
-    referenz_pfad = bericht["messwerte"].get("referenz_datei")
-    if not frames or not referenz_pfad or not Path(referenz_pfad).exists():
+    referenz = ct.referenz_laden(bericht["messwerte"])
+    if not frames or referenz is None:
         return None
-    referenz = json.loads(Path(referenz_pfad).read_text(encoding="utf-8"))
     zustaende = ct.zustaende_aus_frames(frames)
     if not zustaende:
         return None
@@ -74,8 +73,9 @@ def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[di
     karten = ct._karten_dedup(zustaende)
     stimme = ct.nachrichten_aus_frames(frames, "stimme")
     offline_lauf = bool((zustaende[-1].get("schluessel") or {}).get("offline"))
+    plan, _ = ct.meeting_plan(bericht["messwerte"], zustaende)  # #25: Referenz auf die Meetinguhr mit Pausen
     return ct.pruefpunkte_berechnen(referenz, zustaende, hinweise, karten, stimme, offline_lauf,
-                                    nur_knopfdruck_aus_bericht(bericht))
+                                    nur_knopfdruck_aus_bericht(bericht), plan)
 
 
 def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], versatz: float | None) -> dict:
@@ -94,10 +94,12 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
     zustaende = ct.zustaende_aus_frames(frames) if frames else []
     hinweise_gesamt = len(ct._hinweise_dedup(zustaende)) if zustaende else 0
     dauer_min = bericht["messwerte"].get("meeting_s", 0) / 60 or 1
-    referenz_pfad = bericht["messwerte"].get("referenz_datei")
+    referenz = ct.referenz_laden(bericht["messwerte"])
     spannweite = None
-    if zustaende and referenz_pfad and Path(referenz_pfad).exists():
-        referenz = json.loads(Path(referenz_pfad).read_text(encoding="utf-8"))
+    if zustaende and referenz is not None:
+        plan, _ = ct.meeting_plan(bericht["messwerte"], zustaende)
+        if plan:
+            referenz = ct.takt.referenz_auf_meetinguhr(referenz, plan)
         spannweite = ct.versatz_spannweite(referenz, ct._segmente_dedup(zustaende))
 
     return {
@@ -117,7 +119,7 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
     }
 
 
-def schlimmste_stellen(pruefliste: list[dict], bericht: dict, n: int = 5) -> list[dict]:
+def schlimmste_stellen(pruefliste: list[dict], bericht: dict, n: int = 6) -> list[dict]:
     """Die n Prüfpunkte mit Status "fehlt" - einfachste ehrliche Näherung an "schlimmste Stellen": alles
     andere wäre eine zweite, unbelegte Gewichtung obendrauf. Screenshot: der zeitlich nächste, falls aus dem
     Namen (dashboard_M_SS) eine Zeit hervorgeht."""
@@ -227,8 +229,28 @@ def _s(wert) -> str:
     return "–" if wert is None else f"{round(wert, 1)} s"
 
 
+def takt_zeilen(tk: dict) -> list[str]:
+    """Kennzahlen-Zeilen zum abwechselnden Reden (#25) und aus #21 Punkt 5 – leer bei einem Lauf am Stück."""
+    if not tk:
+        return []
+    ungestoert = tk.get("begruessung_ungestoert")
+    return [
+        f"| Begrüßung ungestört / gesprochen | {'ja' if ungestoert else ('nein' if ungestoert is False else '–')}"
+        f" / {_s(tk.get('begruessung_s'))} |",
+        f"| Bestätigung sichtbar (Median / längste) | {_s(tk.get('bestaetigung_sichtbar_median_s'))} / "
+        f"{_s(tk.get('bestaetigung_sichtbar_max_s'))} |",
+        f"| Erster Ton nach Frage-Ende (Median / längste) | {_s(tk.get('erster_ton_median_s'))} / "
+        f"{_s(tk.get('erster_ton_max_s'))} |",
+        f"| Warten bis Zeitlimit | {tk.get('zeitlimits', 0)} |",
+        f"| Ton ohne Text / Text ohne Ton | {tk.get('ton_ohne_text', '–')} / {tk.get('text_ohne_ton', '–')} "
+        f"(von {tk.get('ton_bloecke', '–')} Ton-Blöcken, {tk.get('antworten_text', '–')} Antworttexten) |",
+        f"| Tonspur-Abweichung, größte | {_s(tk.get('tonspur_abweichung_max_s'))} |",
+    ]
+
+
 def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: dict | None,
-                        schlimmste: list[dict]) -> None:
+                        schlimmste: list[dict], takt_punkte: list[dict] | None = None,
+                        takt_kennzahlen: dict | None = None) -> None:
     z = [f"# Bewertung – {bericht['messwerte'].get('modus', '?')}", "",
         f"Lauf: `{ordner}` · Gestartet {bericht['messwerte'].get('gestartet', '?')} · "
         f"Dauer {bericht['messwerte'].get('meeting_s', '?')} s", "",
@@ -247,6 +269,7 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         f"| Wartezeit bis Abschlusspaket fertig | {_s(kennzahlen['ablage_wartezeit_s'])} |",
         f"| Versatz Referenzzeit↔Meetinguhr | {_s(kennzahlen['versatz_s'])} "
         f"(Anfang {_s(kennzahlen['versatz_anfang_s'])} → Ende {_s(kennzahlen['versatz_ende_s'])}) |",
+        *takt_zeilen(takt_kennzahlen or {}),
         "", "## Urteile (1–5)", ""]
     if urteile is None:
         z += ["Übersprungen – kein Codex-Urteil möglich (siehe Protokoll). Screenshots liegen unter "
@@ -265,6 +288,10 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         # Zeit steht meist schon im Namen ("… bei 25s") - nicht doppelt anhängen.
         zeit_teil = f" (bei {s['zeit_s']}s)" if s["zeit_s"] and "bei" not in s["name"] else ""
         z.append(f"- **{s['name']}**{zeit_teil}{bild}: {s['detail']}")
+    if takt_punkte:
+        zeichen = {"ok": "✅", "fehlt": "❌", "beobachtet": "📝", "offline": "⏭️"}
+        z += ["", "## Abwechselnd reden (#25)", "", "| Prüfpunkt | Status | Detail |", "|---|---|---|"]
+        z += [f"| {p['name'].removeprefix('Takt: ')} | {zeichen[p['status']]} | {p['detail']} |" for p in takt_punkte]
     (ordner / "bewertung.md").write_text("\n".join(z), encoding="utf-8")
 
 
@@ -292,13 +319,18 @@ async def main() -> None:
              "falls das ein älterer Lauf ist.")
 
     kennzahlen = kennzahlen_bauen(bericht, frames, pruefliste, versatz)
-    schlimmste = schlimmste_stellen(pruefliste, bericht)
+    takt_punkte, takt_kennzahlen = ct.takt_auswerten(bericht["messwerte"], frames)
+    # Treffer/Verpasst bleiben die Referenz-Prüfliste (vergleichbar mit älteren Läufen); ❌ aus dem Takt
+    # gehören trotzdem zu den schlimmsten Stellen.
+    schlimmste = schlimmste_stellen(pruefliste + [p for p in takt_punkte if p["status"] == "fehlt"], bericht)
+    if takt_kennzahlen:
+        print(f"Takt: {json.dumps(takt_kennzahlen, ensure_ascii=False)}")
     bilder = bilder_auswaehlen(ordner, bericht)
     print(f"Kennzahlen: {json.dumps(kennzahlen, ensure_ascii=False)}")
     print(f"{len(bilder)} Screenshots für das Urteil ausgewählt: {[b.name for b in bilder]}")
 
     urteile = None if args.ohne_urteil else await urteile_holen(kennzahlen, bilder)
-    bewertung_schreiben(ordner, bericht, kennzahlen, urteile, schlimmste)
+    bewertung_schreiben(ordner, bericht, kennzahlen, urteile, schlimmste, takt_punkte, takt_kennzahlen)
     print(f"Bewertung: {ordner / 'bewertung.md'}")
 
     # Ticket #19: HTML-Testbericht (Audio+Zeitstrahl+Screenshots) ist seitdem Standard für jeden Lauf - hier am

@@ -90,10 +90,9 @@ def bewertung_md_parsen(pfad: Path) -> dict | None:
 
 # ---------- Zeitstrahl-Marken: dieselbe Prüfliste wie cloudtest_bewerten.py, hier mit Zeitstempeln gezippt ----------
 def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], float | None]:
-    referenz_pfad = bericht["messwerte"].get("referenz_datei")
-    if not frames or not referenz_pfad or not Path(referenz_pfad).exists():
+    referenz_roh = ct.referenz_laden(bericht["messwerte"])
+    if not frames or referenz_roh is None:
         return [], bericht["messwerte"].get("versatz_s")
-    referenz_roh = json.loads(Path(referenz_pfad).read_text(encoding="utf-8"))
     zustaende = ct.zustaende_aus_frames(frames)
     if not zustaende:
         return [], None
@@ -102,8 +101,11 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
     stimme = ct.nachrichten_aus_frames(frames, "stimme")
     offline_lauf = bool((zustaende[-1].get("schluessel") or {}).get("offline"))
     nur_knopfdruck = cb.nur_knopfdruck_aus_bericht(bericht)
+    plan, uhr = ct.meeting_plan(bericht["messwerte"], zustaende)
     pruefliste, versatz = ct.pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme,
-                                                   offline_lauf, nur_knopfdruck)
+                                                   offline_lauf, nur_knopfdruck, plan)
+    if plan:  # #25: Referenzzeiten mit den Pausen auf der Meetinguhr
+        referenz_roh = ct.takt.referenz_auf_meetinguhr(referenz_roh, plan)
     referenz = ct.referenz_verschieben(referenz_roh, versatz or 0.0)
 
     marken: list[dict] = []
@@ -121,6 +123,14 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
         p = pruefliste[i]; i += 1
         marken.append({"t": g["start"], "art": "grenzfall", "label": f"Grenzfall {g['id']} ({g['erwartet']})",
                       "status": p["status"], "detail": p["detail"]})
+    if plan:  # wo der Test auf Nestor gewartet hat (#25)
+        status = {"fertig": "ok", "zeitlimit": "fehlt", "keine_reaktion": "beobachtet"}
+        for pa in (bericht["messwerte"].get("takt") or {}).get("pausen", []):
+            name = "Begrüßung abgewartet" if pa["art"] == "begruessung" else f"Nestor abgewartet nach {pa.get('id')}"
+            marken.append({"t": pa["t_bezug"] + uhr, "art": "pause", "label": name,
+                          "status": status.get(pa["ergebnis"], "beobachtet"),
+                          "detail": f"{pa['ergebnis']}, {pa['dauer_s']:.0f} s gewartet, Nestor sprach "
+                                    f"{pa.get('ton_dauer_s', 0):.0f} s"})
     marken.sort(key=lambda m: m["t"])
     return marken, versatz
 
@@ -511,6 +521,9 @@ def erzeugen(ordner: Path) -> Path:
 
     marken, versatz_meeting = marken_und_versatz(bericht, frames)
     versatz_nestor = nestor_versatz_schaetzen(frames)
+    plan, uhr = ct.meeting_plan(bericht["messwerte"], ct.zustaende_aus_frames(frames)) if frames else (None, None)
+    if plan:
+        versatz_nestor = uhr  # gleiche Achse wie der Meeting-Ton, siehe unten
     dauer_s = bericht["messwerte"].get("meeting_s") or (max((m["t"] for m in marken), default=600.0) + 60.0)
 
     referenz_pfad_str = bericht["messwerte"].get("referenz_datei")
@@ -522,9 +535,22 @@ def erzeugen(ordner: Path) -> Path:
             v_meeting = versatz_meeting or 0.0
             nestor_wav = ordner / "nestor_stimme.wav"
             v_nestor = versatz_nestor if (versatz_nestor is not None and nestor_wav.exists()) else 0.0
-            audio_uri = audio_mp3_data_uri(meeting_wav, v_meeting, nestor_wav if nestor_wav.exists() else None,
-                                           v_nestor, dauer_s)
-            versatz_hinweise.append(f"Versatz Meeting-Ton {v_meeting:+.1f}s")
+            zusammen = None
+            if plan:
+                # #25: Meeting-Ton so, wie er im Browser lief - Abschnitte am Zeitplan, dazwischen die Pausen.
+                # Beide Spuren hängen an derselben Laufachse (Zeitplan und stimme-Ankunft), verschoben um
+                # Meetinguhr − Laufachse - daher kein eigener Versatz für den Meeting-Ton mehr.
+                zusammen = Path(ct._TMP) / f"meeting_takt_{os.getpid()}.wav"
+                ct.takt.wav_schreiben(zusammen, ct.takt.meeting_spur(ct.takt.wav_laden(meeting_wav), plan, dauer_s))
+                meeting_wav, v_meeting = zusammen, 0.0
+            try:
+                audio_uri = audio_mp3_data_uri(meeting_wav, v_meeting,
+                                               nestor_wav if nestor_wav.exists() else None, v_nestor, dauer_s)
+            finally:
+                if zusammen is not None:
+                    zusammen.unlink(missing_ok=True)
+            versatz_hinweise.append("Meeting-Ton nach Zeitplan mit Pausen" if plan
+                                    else f"Versatz Meeting-Ton {v_meeting:+.1f}s")
             if nestor_wav.exists():
                 versatz_hinweise.append(
                     f"Nestor-Stimme {v_nestor:+.1f}s" if versatz_nestor is not None

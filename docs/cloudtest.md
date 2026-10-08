@@ -2,8 +2,10 @@
 
 Prüft Nestor so, wie ein echter Kunde ihn benutzt: ein echter Browser (Chromium ohne Bildschirm) meldet
 sich an (falls nötig), wählt die Stufe (Basis/Premium, Ticket #13), richtet das Meeting über die
-Agenda-per-Prompt-Eingabe ein, hört zehn Minuten in Echtzeit zu (Mikrofon aus einer Datei, kein Vorspulen),
-mit „Nur auf Knopfdruck“ drückt es die Knöpfe zu festen Zeiten, und geht am Ende durch den Abschluss. Läuft
+Agenda-per-Prompt-Eingabe ein, hört zehn Minuten in Echtzeit zu (Meeting-Audio aus einer Datei über ein
+steuerbares Mikrofon, kein Vorspulen; die Teilnehmenden warten, bis Nestor fertig ist, siehe
+[Abwechselnd reden](#abwechselnd-reden-ticket-25)), mit „Nur auf Knopfdruck“ drückt es die Knöpfe zu festen
+Zeiten, und geht am Ende durch den Abschluss. Läuft
 gegen eine beliebige Adresse: lokal (`python -m coach` oder Docker-Container) und gegen die Cloud.
 `scripts/cloudtest_bewerten.py` (Ticket #11) wertet einen Lauf danach nach einer Qualitätsrubrik aus
 ([qualitaet.md](qualitaet.md)).
@@ -36,7 +38,9 @@ Schlüssel. `.env` ist gitignored.
 
 Weitere Optionen: `--bericht <ordner>` (Standard `logs/cloudtest/<datum_uhrzeit>_<modus>/`), `--referenz`,
 `--audio`, `--agenda-prompt` (Standard: die Dateien unter `testbibliothek/cloudtest/`), `--chromium`
-(Standard `/usr/bin/chromium`).
+(Standard `/usr/bin/chromium`), `--am-stueck` (alter Modus für Lasttests: Audio am Stück, niemand wartet auf
+Nestor), `--bis <s>` (nur die ersten s Sekunden des Materials – kurze Probeläufe, z. B. `--bis 250` für
+Begrüßung, die ersten Fragen und beide Rückfragen in ~5 min).
 
 **Server vorher/danach beenden** – auf dem Pi läuft wenig Speicher frei (Immich, Paperless); keinen
 `python -m coach`-Prozess nach dem Lauf stehen lassen.
@@ -58,7 +62,13 @@ gebaut mit `testbibliothek/cloudtest/bauen_grenzfaelle.py` – neues Drehbuch pe
 Kundenportals am Montag“, IT-Team, viel Fachsprache), ein ausdrücklich >90 s langer Monolog (in #9 blieben
 einzelne „monolog“-Äußerungen oft unter der 60-s-Schwelle der lokalen Erkennung – kein Fehler in Nestor,
 nur zu kurzes Material), plus die zwölf Grenzfälle der Ansprache aus dem Ticket (`referenz.json["grenzfaelle"]`,
-je mit erwartetem Verhalten).
+je mit erwartetem Verhalten). Seit #25 trägt jeder Grenzfall `warten` (siehe unten), und zwei **Rückfragen im
+Redefluss** kamen dazu: `1r_rueckfrage_reicht` („Und reicht das noch für alle Punkte?“ nach der Zeitfrage)
+und `2r_rueckfrage_wer` („Und wer übernimmt das?“ nach „Was haben wir zu Punkt eins beschlossen?“) – ohne
+Namen, direkt nach Nestors Antwort, danach geht das Meeting normal weiter. Eingeschnitten mit
+`bauen_grenzfaelle.py --rueckfragen-nachtragen` (nur die beiden Sätze neu vertont, Azure „alloy“, 0 $; alle
+Zeiten danach verschoben). **Die alte `meeting_grenzfaelle.wav` passt nicht mehr zur neuen Referenz** – der
+Lauf bricht dann mit „Testmaterial passt nicht“ ab; dann die WAV neu bauen bzw. nachtragen.
 
 Ein Ausschnitt mit echten (nicht synthetischen) Stimmen aus einer öffentlichen Aufnahme ist bewusst
 ausgelassen – hätte einen Download (yt-dlp) und einen manuellen Zuschnitt gebraucht, siehe Bericht des
@@ -66,6 +76,44 @@ Laufs, der das Material gebaut hat.
 
 Neu bauen: `~/.venvs/lmc/bin/python testbibliothek/cloudtest/bauen.py` bzw. `bauen_grenzfaelle.py` (kostet
 nichts – Azure läuft über Teachbuddys eigenes Kontingent auf diesem Rechner, das Drehbuch über Codex/Abo).
+
+## Abwechselnd reden (Ticket #25)
+
+Bis #25 lief das Meeting-Audio am Stück (`--use-file-for-fake-audio-capture`). Seit Nestor unterbrechbar ist
+(#23), hätte der Test ihn ständig unterbrochen. Jetzt (Standard; `--am-stueck` für den alten Modus):
+
+- **Steuerbares Mikrofon:** ein Init-Script (`scripts/cloudtest_takt.py: INIT_SCRIPT`) ersetzt
+  `navigator.mediaDevices.getUserMedia` durch einen Strom aus einer WebAudio-Quelle. Der Test lädt jeden
+  Abschnitt als PCM in den Browser und startet ihn; dazwischen liefert das „Mikrofon“ Stille wie ein echtes
+  im ruhigen Raum. Produktcode bleibt unverändert.
+- **Abschnitte:** die Audiodatei wird an den Satzgrenzen aus der Referenz geschnitten – am Ende jedes
+  Grenzfalls (bzw. Teils) mit `warten`, im #9-Material nach jeder Nestor-Anweisung. Den Vorlauf (25 s Stille
+  für die Begrüßung) und die Stille, die das Material nach jeder Frage für die Antwort am Stück vorsah,
+  überspringt der Test bis auf 0,8 s – nach Nestors Antwort redet die Runde gleich weiter.
+- **Warten, bis Nestor fertig ist:** vor dem ersten Abschnitt die Begrüßung, nach jedem Schnitt die Antwort.
+  Fertig heißt: Nestor hat reagiert (Ton oder Zustand denkt/recherchiert/spricht), sein Zustand ist wieder
+  `bereit`/`gespraech`, seit ≥ 1,5 s kam kein `stimme`-Paket, im Browser steht keine Wiedergabe mehr an
+  (`stimme.naechste` in static/basis.js) – und das 2 s am Stück. Reagiert Nestor 10 s lang gar nicht (Nuschel-
+  fälle, offline), geht es weiter (📝 „keine Reaktion“). Zeitlimit 60 s, Begrüßung 120 s – dann ❌ statt Hängen.
+- **`warten` in der Referenz:** `true` (bis fertig), `"bestaetigung"` (nur bis die erste Rückmeldung zu Ende
+  gesprochen ist – Bild/Folie: „macht ruhig weiter“), `false` (gar nicht: Hineinreden #20 und alle Sätze, auf
+  die Nestor nicht reagieren soll). Ohne Angabe gilt ein Standard je `erwartet`.
+- **Meetinguhr:** die Regie schreibt einen Zeitplan (Quellzeit ↔ Laufachse) in `bericht.json`
+  (`messwerte.takt`); über den Median aus `zustand.zeit` − Empfangszeit kommt er auf die Meetinguhr. Prüfliste,
+  Bewertung und HTML-Bericht rechnen die Referenzzeiten damit um (Pausen verschieben alles danach); der
+  Segment-Abgleich schätzt nur noch den Restversatz (Verarbeitung bis zum Transkript, lokal ~0,3 s).
+
+Zusätzliche Prüfpunkte (`Takt: …` in bericht.md, eigene Tabelle „Abwechselnd reden“ in bewertung.md; sie
+zählen nicht in Treffer/Verpasst, damit die mit älteren Läufen vergleichbar bleiben):
+
+- Begrüßung ungestört durchgelaufen (fertig, kein `stimme_stopp`)
+- je Schnitt: Nestor abgewartet – mit **Zeit bis zur ersten sichtbaren Bestätigung** (Zustand angesprochen/
+  denkt/recherchiert/spricht; stand er beim Frage-Ende schon darauf: 0 s) und **erstem Ton**
+- je Rückfrage im Redefluss: beantwortet und danach neue Segmente im Transkript (Meeting läuft weiter)
+- **zu jeder Antwort Ton und Text** (#21 Punkt 5): jeder Ton-Block hat eine gespeicherte Antwort
+  (`assistent.letzte`, daraus zeigt das Dashboard Karte/Untertitel) und umgekehrt; Begrüßung ausgenommen
+- **Tonspur im Bericht ≤ 1 s** neben der Ankunft der Stimme (#21 Punkt 5), je Ton-Block. `nestor_stimme.wav`
+  berücksichtigt dafür jetzt `stimme_stopp` wie der Browser (abgeschnitten, danach wieder ab Ankunft).
 
 ## Was geprüft wird
 
@@ -126,7 +174,9 @@ Grenzfall).
 Baut aus `bericht.json` + `ws.jsonl` (dieselbe Prüflisten-/Versatz-Logik wie `cloudtest_bewerten.py`, nicht
 zweimal gerechnet) und – wenn vorhanden – `bewertung.md` eine einzige, eigenständige `<lauf>/bericht.html`:
 
-- **Audiospieler** mit dem Meeting-Ton (`testbibliothek/cloudtest/meeting[_grenzfaelle].wav`, aus dem
+- **Audiospieler** mit dem Meeting-Ton (seit #25: im abwechselnden Modus aus dem Zeitplan zusammengesetzt,
+  mit den Pausen, in denen alle auf Nestor gewartet haben; beide Spuren auf derselben Achse; der Zeitstrahl
+  zeigt zusätzlich je Pause eine Marke „Nestor abgewartet“) (`testbibliothek/cloudtest/meeting[_grenzfaelle].wav`, aus dem
   `referenz_datei`-Namen abgeleitet) gemischt mit Nestors Stimme (`<lauf>/nestor_stimme.wav`, falls
   vorhanden – mit `--nur-knopfdruck` gibt es keine, siehe oben). Beide Spuren werden um ihren jeweils
   gemessenen Versatz auf die Meetinguhr verschoben: der Meeting-Ton um den Versatz Referenzzeit↔Meetinguhr

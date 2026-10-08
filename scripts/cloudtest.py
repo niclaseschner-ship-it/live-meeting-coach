@@ -16,9 +16,11 @@ Zwei Testmaterialien unter testbibliothek/cloudtest/ (--referenz/--audio/--agend
   referenz_grenzfaelle.json / meeting_grenzfaelle.wav / agenda_prompt_grenzfaelle.txt  (#11, Incident-Review
       mit zwölf Grenzfällen der Ansprache – siehe docs/qualitaet.md)
 
-Playwright mit dem System-Chromium (kein `playwright install`): --use-fake-ui-for-media-stream und
---use-file-for-fake-audio-capture=<meeting.wav> lassen Chromium die Aufnahme wie ein echtes Mikrofon in
-Echtzeit liefern. Testmaterial und Referenz: testbibliothek/cloudtest/ (siehe dort bauen.py und README in
+Playwright mit dem System-Chromium (kein `playwright install`). Seit Ticket #25 reden die Teilnehmenden
+abwechselnd mit Nestor: ein Init-Script ersetzt getUserMedia durch eine steuerbare WebAudio-Quelle, der Test
+spielt das Material abschnittsweise und wartet dazwischen, bis Nestor fertig ist (scripts/cloudtest_takt.py).
+Mit --am-stueck der alte Modus: --use-file-for-fake-audio-capture=<meeting.wav> lässt Chromium die Datei am
+Stück wie ein echtes Mikrofon in Echtzeit liefern (Lasttests). Testmaterial und Referenz: testbibliothek/cloudtest/ (siehe dort bauen.py und README in
 docs/cloudtest.md). Ohne OpenAI-Schlüssel bzw. mit LMC_OFFLINE=1 am Server werden alle KI-Prüfpunkte als
 „übersprungen (offline)" statt als Fehler geführt – lokale Signale (Zeit, Monolog, Redeanteile, Überlappung)
 laufen auch offline und werden echt geprüft.
@@ -55,6 +57,11 @@ _TMP.mkdir(parents=True, exist_ok=True)
 os.environ["TMPDIR"] = str(_TMP)
 
 from playwright.async_api import Page, async_playwright  # noqa: E402
+
+import sys  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cloudtest_takt as takt  # noqa: E402 – abwechselnd reden (#25)
 
 # Meetingzeit (zustand.zeit, Sekunden seit Start), zu der jeweils etwas passieren soll.
 SCREENSHOT_TAKT = 30.0  # Sekunden (Ticket #11: "alle 30 s plus an jedem Ereignis")
@@ -152,7 +159,8 @@ class Bericht:
 
 
 async def zustand(seite: Page) -> dict:
-    return await seite.evaluate("() => zustand") or {}  # null, bis die WebSocket den ersten Stand geliefert hat
+    # null, bis die WebSocket den ersten Stand geliefert hat; auf der Startseite gibt es `zustand` gar nicht
+    return await seite.evaluate("() => (typeof zustand !== 'undefined' ? zustand : null)") or {}
 
 
 # ---------- Reine Funktionen auf einer Liste von ws.jsonl-Zeilen ({"t","richtung","daten"}) ----------
@@ -189,6 +197,10 @@ class WsSpur:
         self.start = start
         self.frames: list[dict] = []
         self.datei = (ordner / "ws.jsonl").open("w", encoding="utf-8")
+        # Für das Abwarten (scripts/cloudtest_takt.py, #25): wann zuletzt Ton kam, wie oft gestoppt wurde
+        self.letzte_stimme_t: float | None = None
+        self.stopp_zahl = 0
+        self._stimme_bytes: list[tuple[float, int]] = []
 
     def anhaengen(self, seite: Page) -> None:
         seite.on("websocket", self._bei_websocket)
@@ -208,6 +220,12 @@ class WsSpur:
             geparst = daten
         eintrag = {"t": round(time.monotonic() - self.start, 3), "richtung": richtung, "daten": geparst}
         self.frames.append(eintrag)
+        if richtung == "empfangen" and isinstance(geparst, dict):
+            if geparst.get("typ") == "stimme":
+                self.letzte_stimme_t = eintrag["t"]
+                self._stimme_bytes.append((eintrag["t"], len(geparst.get("pcm") or "") * 3 // 4))
+            elif geparst.get("typ") == "stimme_stopp":
+                self.stopp_zahl += 1
         self.datei.write(json.dumps(eintrag, ensure_ascii=False) + "\n")
 
     def schliessen(self) -> None:
@@ -220,35 +238,41 @@ class WsSpur:
     def nachrichten(self, typ: str) -> list[dict]:
         return nachrichten_aus_frames(self.frames, typ)
 
+    def stimme_dauer_seit(self, t: float) -> float:
+        """Sekunden Nestor-Ton, die seit Laufzeit t ankamen (24 kHz, 16 bit)."""
+        return sum(n for tt, n in self._stimme_bytes if tt >= t) / 2 / 24000
+
     def nestor_wav_schreiben(self, ziel: Path) -> float:
         """Nestors gesprochene Antworten aus den "stimme"-Nachrichten (Base64-PCM, 24 kHz mono, wie
         static/basis.js sie abspielt) zu einer WAV zusammensetzen, mit Stille für die Lücken dazwischen –
         zum Nachhören, ob die Stimme passt. Liefert die Gesamtdauer in Sekunden (0, wenn nichts da war)."""
-        import base64
-        import wave
+        return nestor_wav_aus_frames(self.frames, ziel)
 
-        import numpy as np
 
-        RATE = 24000
-        stimme = self.nachrichten("stimme")
-        if not stimme:
-            return 0.0
-        # Wie static/basis.js abspielt: jedes Stück beginnt bei seiner Ankunft oder, wenn das vorige
-        # noch läuft, direkt danach. `pos` ist das Ende des bisher Geschriebenen – nicht Ankunft plus
-        # Stücklänge, sonst wächst bei schneller als Echtzeit geschickten Stücken ein Versatz auf.
-        teile, pos = [], 0.0
-        for m in stimme:
-            pcm = np.frombuffer(base64.b64decode(m["pcm"]), dtype="<i2")
-            luecke = m["_t"] - pos
-            if luecke > 0:
-                teile.append(np.zeros(int(luecke * RATE), dtype="<i2"))
-                pos += int(luecke * RATE) / RATE
-            teile.append(pcm)
-            pos += len(pcm) / RATE
-        audio = np.concatenate(teile)
-        with wave.open(str(ziel), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE); w.writeframes(audio.tobytes())
-        return len(audio) / RATE
+STIMME_RATE = 24000
+
+
+stimme_platzieren = takt.stimme_platzieren  # Ticket #25: dort, weil auch die Takt-Prüfungen sie brauchen
+
+
+def nestor_wav_aus_frames(frames: list[dict], ziel: Path) -> float:
+    import base64
+    import wave
+
+    import numpy as np
+
+    platz = [p for p in stimme_platzieren(frames) if p["dauer"] > 0]
+    if not platz:
+        return 0.0
+    audio = np.zeros(int((platz[-1]["pos"] + platz[-1]["dauer"]) * STIMME_RATE) + 1, dtype="<i2")
+    for p in platz:
+        pcm = np.frombuffer(base64.b64decode(p["pcm"]), dtype="<i2")[:int(round(p["dauer"] * STIMME_RATE))]
+        a = int(round(p["pos"] * STIMME_RATE))
+        n = max(0, min(len(pcm), len(audio) - a))
+        audio[a:a + n] = pcm[:n]
+    with wave.open(str(ziel), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(STIMME_RATE); w.writeframes(audio.tobytes())
+    return len(audio) / STIMME_RATE
 
 
 async def warten_auf(seite: Page, ausdruck: str, timeout_s: float = 20.0, takt: float = 0.3) -> bool:
@@ -453,7 +477,7 @@ async def meeting_starten(seite: Page, agenda_text: str, bericht: Bericht) -> fl
     await seite.locator("#btn-start").click()
     # Hart abbrechen statt blind weiterzumachen: ohne laufendes Meeting wäre jeder folgende Schritt
     # (Knöpfe, Mitschnitt, "Beenden"-Klick) ohnehin sinnlos und würde nur auf unsichtbare Elemente warten.
-    await schritt_oder_abbrechen(seite, bericht, "Meeting gestartet (Mikrofon aus Datei angenommen)",
+    await schritt_oder_abbrechen(seite, bericht, "Meeting gestartet (Mikrofon angenommen)",
                                  "() => !document.getElementById('live').hidden", 25.0)
     return time.monotonic()
 
@@ -470,19 +494,37 @@ LOKAL_OHNE_KI = {"monolog"}  # läuft auch mit LMC_OFFLINE (lokale VAD/Diarisier
 
 
 async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht: Bericht,
-                      meeting_start: float) -> list[dict]:
+                      meeting_start: float, regie: "takt.Regie | None" = None) -> list[dict]:
     """Zustand alle 2 s aus der Seite lesen (sie hält ihn über ihre eigene /ws aktuell) – Mitschnitt für die
-    Prüfliste, Verzugsmessung je Nestor-Anweisung und für die Knöpfe mit --nur-knopfdruck."""
+    Prüfliste, Verzugsmessung je Nestor-Anweisung und für die Knöpfe mit --nur-knopfdruck.
+
+    Mit `regie` (abwechselnd reden, #25) ist die Länge offen: Schluss 20 s nach dem letzten Abschnitt; die
+    Screenshot-Ziele für Ereignisse/Grenzfälle kommen von der Regie, sobald sie den Abschnitt abspielt."""
     verlauf: list[dict] = []
     letzte_zeit = -1.0
     soll_dauer = referenz["dauer_s"] + 20
+    schutz = soll_dauer + 30
     geknopft: set[str] = set()
-    naechster_screenshot = iter(screenshot_ziele(referenz))
+    if regie is None:
+        ziele = screenshot_ziele(referenz)
+    else:
+        # grob: Pausen (Begrüßung, je Antwort bis 60 s) verlängern das Meeting; nur ein Notausgang
+        schutz = referenz["dauer_s"] + takt.BEGRUESSUNG_LIMIT_S + 75 * len(regie.abschnitte) + 60
+        ziele = [float(t) for t in range(0, int(schutz), int(SCREENSHOT_TAKT))]
+        lauf_zu_meeting = regie.lauf_start - meeting_start  # Laufachse → (grob) Meetinguhr
+    regie_genommen: set[float] = set()
+    regie_ende: float | None = None
+    naechster_screenshot = iter(ziele)
     ss_zeit = next(naechster_screenshot, None)
     kosten_vor_erstem_knopf = None
     vorzeitig_beendet = False  # hoeren wurde false, bevor wir absichtlich "Beenden" gedrückt haben
 
-    while time.monotonic() - meeting_start < soll_dauer + 30:
+    async def screenshot_bei(zeit: float) -> None:
+        name = f"dashboard_{mmss(zeit).replace(':', '')}"
+        if name not in bericht.screenshots:
+            await bericht.screenshot(seite, name)
+
+    while time.monotonic() - meeting_start < schutz:
         try:
             z = await zustand(seite)
         except Exception:  # noqa: BLE001
@@ -500,8 +542,14 @@ async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht
         verlauf.append(z)
 
         while ss_zeit is not None and t >= ss_zeit:
-            await bericht.screenshot(seite, f"dashboard_{mmss(ss_zeit).replace(':', '')}")
+            await screenshot_bei(ss_zeit)
             ss_zeit = next(naechster_screenshot, None)
+        if regie is not None:
+            jetzt_lauf = time.monotonic() - regie.lauf_start
+            for ziel in list(regie.screenshot_ziele):
+                if ziel <= jetzt_lauf and ziel not in regie_genommen:
+                    regie_genommen.add(ziel)
+                    await screenshot_bei(ziel + lauf_zu_meeting)
 
         if nur_knopfdruck:
             offline = bool((z.get("schluessel") or {}).get("offline"))
@@ -521,8 +569,12 @@ async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht
             if kosten_vor_erstem_knopf is not None:
                 bericht.messwerte.setdefault("kein_ki_vor_erstem_knopf", kosten_vor_erstem_knopf == 0.0)
 
-        if t >= soll_dauer:
+        if regie is None and t >= soll_dauer:
             break
+        if regie is not None and regie.fertig:
+            regie_ende = t if regie_ende is None else regie_ende
+            if t >= regie_ende + 20:
+                break
         await asyncio.sleep(2.0)
 
     if vorzeitig_beendet:
@@ -597,17 +649,19 @@ async def fertig_und_neues_meeting(seite: Page, url: str, cloud: bool, bericht: 
 
     # "Ein neuer Aufruf bekommt ein neues Meeting": erneut auf die Seite gehen (kein Meeting starten, keine
     # KI-Kosten) und prüfen, dass der Server-Zustand leer ist statt das gerade beendete Meeting zu zeigen.
-    await seite.goto(url)
+    # Die Startseite (/) kennt keinen Meeting-Zustand – der neue Aufruf ist das Dashboard (/meeting), wie nach
+    # der Stufenwahl (static/start.js). Früher endete der Lauf hier mit „zustand is not defined“.
+    await seite.goto(url.rstrip("/") + "/meeting")
     frisch = await warten_auf(
-        seite, "() => !!zustand && !zustand.titel && !(zustand.agenda && zustand.agenda.length) && !zustand.hoeren",
+        seite, "() => typeof zustand !== 'undefined' && !!zustand && !zustand.titel && !(zustand.agenda && zustand.agenda.length) && !zustand.hoeren",
         20.0)
     if frisch:
         bericht.pruefen("Neuer Aufruf bekommt ein neues (leeres) Meeting", "ok")
     else:
         z = await zustand(seite)
         bericht.pruefen("Neuer Aufruf bekommt ein neues (leeres) Meeting", "fehlt",
-                        f"zustand.titel={z.get('titel')!r}, hoeren={z.get('hoeren')}, "
-                        f"Agendapunkte={len(z.get('agenda') or [])}")
+                        f"Pfad {await seite.evaluate('() => location.pathname')}, zustand.titel={z.get('titel')!r}, "
+                        f"hoeren={z.get('hoeren')}, Agendapunkte={len(z.get('agenda') or [])}")
 
 
 # ---------- Abschluss ----------
@@ -890,14 +944,21 @@ def nestor_reaktion(start: float, ende_fenster: float, zustaende: list[dict], hi
 # exakt dieselbe Logik wie der Live-Lauf hier, statt sie zu verdoppeln.
 def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: list[dict], karten: list[dict],
                           stimme_frames: list[dict], offline_lauf: bool,
-                          nur_knopfdruck: bool = False) -> tuple[list[dict], float | None]:
+                          nur_knopfdruck: bool = False,
+                          plan: list[dict] | None = None) -> tuple[list[dict], float | None]:
     """`nur_knopfdruck` (Ticket #17 Punkt 7): in diesem Modus reagiert Nestor grundsätzlich nicht auf
     spontane Ansprache (kein KI-Aufruf ohne Knopf, siehe scripts/cloudtest.py aufzeichnen()/kein_ki_vor_
     erstem_knopf) - ein "fehlt" bei einer Nestor-Anweisung/einem Grenzfall, der eine Antwort erwartet, wäre
     also kein echter Mangel, sondern eine Eigenschaft des Modus. Solche Punkte werden "beobachtet" (📝)
     statt "fehlt"/"ok" gewertet; Grenzfälle, die ausdrücklich KEINE Reaktion erwarten ("keine_antwort",
-    "kein_fehlausloeser", "kein_abbruch"), bleiben normal geprüft - da stimmt die Erwartung auch hier."""
+    "kein_fehlausloeser", "kein_abbruch"), bleiben normal geprüft - da stimmt die Erwartung auch hier.
+
+    `plan` (Ticket #25, abwechselnd reden): der auf die Meetinguhr gebrachte Zeitplan der Abschnitte
+    (meeting_plan()). Dann werden die Referenzzeiten erst damit umgerechnet – Pausen verschieben alles danach –
+    und der Segment-Abgleich schätzt nur noch den kleinen Restversatz (Verarbeitung bis zum Transkript)."""
     segmente = _segmente_dedup(zustaende)  # einmal statt bei jedem Textabgleich neu (sonst zu langsam)
+    if plan:
+        referenz_roh = takt.referenz_auf_meetinguhr(referenz_roh, plan)
     versatz = versatz_schaetzen(referenz_roh, segmente)
     referenz = referenz_verschieben(referenz_roh, versatz or 0.0)
     aus: list[dict] = []
@@ -977,6 +1038,31 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
     return aus, versatz
 
 
+def meeting_plan(messwerte: dict, zustaende: list[dict]) -> tuple[list[dict] | None, float | None]:
+    """(Zeitplan auf der Meetinguhr, Versatz Meetinguhr − Laufachse) für einen Lauf mit abwechselndem Reden
+    (#25); (None, None) für einen Lauf am Stück oder ältere Berichte."""
+    zeitplan = (messwerte.get("takt") or {}).get("zeitplan")
+    if not zeitplan:
+        return None, None
+    versatz = takt.uhr_versatz(zustaende)
+    if versatz is None:
+        return None, None
+    return takt.zeitplan_auf_meetinguhr(zeitplan, versatz), versatz
+
+
+def takt_auswerten(messwerte: dict, frames: list[dict]) -> tuple[list[dict], dict]:
+    """Prüfpunkte/Kennzahlen zum abwechselnden Reden und aus #21 Punkt 5 (cloudtest_takt.takt_pruefpunkte)
+    aus Bericht + Mitschnitt – von Live-Lauf, Bewertung und HTML-Bericht gleich genutzt."""
+    t = messwerte.get("takt")
+    if not t:
+        return [], {}
+    zustaende = zustaende_aus_frames(frames)
+    _, versatz = meeting_plan(messwerte, zustaende)
+    offline = bool(zustaende) and bool((zustaende[-1].get("schluessel") or {}).get("offline"))
+    return takt.takt_pruefpunkte(t, zustaende, stimme_platzieren(frames), nachrichten_aus_frames(frames, "stimme"),
+                                 versatz, offline)
+
+
 def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht,
                      nur_knopfdruck: bool = False) -> None:
     """Live-Lauf: berechnet (pruefpunkte_berechnen) und schreibt jeden Punkt in den Bericht."""
@@ -988,18 +1074,30 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
     bericht.messwerte["ws_zustandsmeldungen"] = len(zustaende)
     bericht.messwerte["nur_knopfdruck"] = nur_knopfdruck  # Ticket #17 Punkt 7 - für cloudtest_bewerten.py
 
+    plan, uhr = meeting_plan(bericht.messwerte, zustaende)
+    if plan:
+        bericht.messwerte["uhr_versatz_s"] = round(uhr, 3)
+        bericht.notieren(f"Takt: {len(plan)} Abschnitte, Meetinguhr − Laufachse {uhr:+.2f}s; Referenz endet auf "
+                         f"der Meetinguhr bei {takt.referenz_auf_meetinguhr(referenz_roh, plan)['dauer_s']:.0f}s")
     pruefpunkte, versatz = pruefpunkte_berechnen(referenz_roh, zustaende, hinweise, karten, stimme_frames,
-                                                 offline_lauf, nur_knopfdruck)
+                                                 offline_lauf, nur_knopfdruck, plan)
     bericht.messwerte["versatz_s"] = round(versatz, 1) if versatz is not None else None
-    bericht.notieren(f"Versatz Referenzzeit↔Meetinguhr: {versatz:+.1f}s (aus Segment-Abgleich)" if versatz is not None
-                     else "Versatz Referenzzeit↔Meetinguhr: nicht schätzbar (kein passendes Segment im Mitschnitt)")
-    spannweite = versatz_spannweite(referenz_roh, _segmente_dedup(zustaende))
+    bezeichnung = "Restversatz nach Zeitplan" if plan else "Versatz Referenzzeit↔Meetinguhr"
+    bericht.notieren(f"{bezeichnung}: {versatz:+.1f}s (aus Segment-Abgleich)" if versatz is not None
+                     else f"{bezeichnung}: nicht schätzbar (kein passendes Segment im Mitschnitt)")
+    referenz_abgleich = takt.referenz_auf_meetinguhr(referenz_roh, plan) if plan else referenz_roh
+    spannweite = versatz_spannweite(referenz_abgleich, _segmente_dedup(zustaende))
     bericht.messwerte["versatz_anfang_s"], bericht.messwerte["versatz_ende_s"] = spannweite or (None, None)
     if spannweite:
         bericht.notieren(f"Versatz wächst über den Lauf: {spannweite[0]:+.1f}s am Anfang → {spannweite[1]:+.1f}s "
                          "am Ende (Hinweis auf Verarbeitungsrückstand im Container, falls deutlich größer)")
     for p in pruefpunkte:
         bericht.pruefen(p["name"], p["status"], p["detail"])
+    takt_punkte, takt_kennzahlen = takt_auswerten(bericht.messwerte, spur.frames)
+    for p in takt_punkte:
+        bericht.pruefen(p["name"], p["status"], p["detail"])
+    if takt_kennzahlen:
+        bericht.messwerte["takt_kennzahlen"] = takt_kennzahlen
 
     if zustaende:
         bericht.messwerte["kosten_usd"] = zustaende[-1].get("kosten", {}).get("meeting", 0.0)
@@ -1019,10 +1117,12 @@ async def chromium_starten(pw, args: argparse.Namespace, bericht: Bericht, versu
     fehler = None
     for versuch in range(1, versuche + 1):
         try:
+            # Am Stück: Chromium spielt die Datei selbst als Mikrofon. Sonst ersetzt cloudtest_takt.INIT_SCRIPT
+            # getUserMedia durch eine steuerbare WebAudio-Quelle (#25) - die Datei-Flags entfallen dann.
+            mikro = [f"--use-file-for-fake-audio-capture={args.audio}"] if args.am_stueck else []
             return await pw.chromium.launch(
                 executable_path=args.chromium, headless=True,
-                args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
-                     f"--use-file-for-fake-audio-capture={args.audio}",
+                args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", *mikro,
                      "--autoplay-policy=no-user-gesture-required", *sparsam])
         except Exception as e:  # noqa: BLE001
             fehler = e
@@ -1033,18 +1133,67 @@ async def chromium_starten(pw, args: argparse.Namespace, bericht: Bericht, versu
     raise RuntimeError(f"Chromium startete nach {versuche} Versuchen nicht: {fehler}")
 
 
+async def abwechselnd_aufzeichnen(seite: Page, spur: WsSpur, pcm, referenz: dict, args: argparse.Namespace,
+                                  bericht: Bericht, lauf_start: float, meeting_start: float) -> list[dict]:
+    """Ticket #25: Meeting-Audio abschnittsweise über das steuerbare Mikrofon, Nestor abwarten (Regie), daneben
+    wie immer der Zustandsmitschnitt mit Screenshots (aufzeichnen)."""
+    # Die Seite holt das Mikrofon erst nach /api/start (static/app.js) - kurz darauf warten
+    await warten_auf(seite, "() => window.__testMikro && window.__testMikro.stroeme > 0", 15.0)
+    stand = await seite.evaluate("() => window.__testMikro ? window.__testMikro.stand() : null")
+    if stand and stand.get("stroeme"):
+        bericht.pruefen("Steuerbares Mikrofon von der Seite übernommen", "ok", f"{stand['stroeme']} Strom/Ströme")
+    else:
+        bericht.pruefen("Steuerbares Mikrofon von der Seite übernommen", "fehlt",
+                        "getUserMedia der Seite lief nicht über das Init-Script")
+    # Mit „nur auf Knopfdruck“ antwortet Nestor nie spontan - dann nur am Anfang kurz auf eine Begrüßung warten
+    abschnitte = takt.abschnitte_bauen(referenz, pcm, args.bis, ohne_warten=args.nur_knopfdruck)
+    bericht.notieren(f"Takt: {len(abschnitte)} Abschnitte, gewartet wird nach "
+                     f"{', '.join(a['warten']['id'] for a in abschnitte if a.get('warten')) or '—'}")
+    regie = takt.Regie(seite, spur, pcm, abschnitte, lauf_start, bericht.notieren, referenz)
+    aufgabe = asyncio.ensure_future(regie.lauf())
+    try:
+        return await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start, regie)
+    finally:
+        if not aufgabe.done():
+            aufgabe.cancel()
+        (erg,) = await asyncio.gather(aufgabe, return_exceptions=True)
+        if isinstance(erg, Exception):
+            bericht.fehler.append(f"Regie (abwechselnd reden) abgebrochen: {type(erg).__name__}: {erg}")
+        bericht.messwerte["takt"] = regie.ergebnis()
+
+
 # ---------- main ----------
+def referenz_laden(messwerte: dict) -> dict | None:
+    """Die Referenz eines Laufs (für cloudtest_bewerten.py/cloudtest_bericht.py), mit --bis gekürzt wie im Lauf."""
+    pfad = messwerte.get("referenz_datei")
+    if not pfad or not Path(pfad).exists():
+        return None
+    referenz = json.loads(Path(pfad).read_text(encoding="utf-8"))
+    return takt.referenz_kuerzen(referenz, messwerte.get("bis_s"))
+
+
 async def lauf(args: argparse.Namespace) -> Bericht:
     referenz = json.loads(Path(args.referenz).read_text(encoding="utf-8"))
+    pcm = None
+    if not args.am_stueck:
+        pcm = takt.wav_laden(Path(args.audio))
+        problem = takt.material_pruefen(referenz, pcm)
+        if problem:
+            raise SystemExit(f"Testmaterial passt nicht: {problem}")
+    referenz = takt.referenz_kuerzen(referenz, args.bis)
     bericht = Bericht(Path(args.bericht))
-    stufe_text = f"{args.stufe}" + (" · nur auf Knopfdruck" if args.nur_knopfdruck else "")
+    stufe_text = (f"{args.stufe}" + (" · nur auf Knopfdruck" if args.nur_knopfdruck else "")
+                  + (" · am Stück" if args.am_stueck else " · abwechselnd"))
     bericht.messwerte.update(modus=stufe_text, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"],
-                             referenz_datei=str(Path(args.referenz).resolve()))  # für cloudtest_bewerten.py
+                             referenz_datei=str(Path(args.referenz).resolve()),  # für cloudtest_bewerten.py
+                             am_stueck=args.am_stueck, bis_s=args.bis)
 
     lauf_start = time.monotonic()
     async with async_playwright() as pw:
         browser = await chromium_starten(pw, args, bericht)
         context = await browser.new_context(permissions=["microphone"])
+        if not args.am_stueck:
+            await context.add_init_script(takt.INIT_SCRIPT)  # steuerbares Mikrofon (#25)
         seite = await context.new_page()
         # JS-Fehler, Konsole, native Dialoge (alert/confirm) und alle WebSocket-Nachrichten mitschneiden –
         # ein unbeantworteter Dialog würde die Seite sonst stillschweigend blockieren und jeden folgenden
@@ -1071,12 +1220,18 @@ async def lauf(args: argparse.Namespace) -> Bericht:
             # die Mikrofon-Datei schon vor "Meeting starten" zu spielen beginnt). Direkt gemessen reicht
             # nicht als Korrektur (siehe pruefliste_bauen) - nur zur Einordnung mit abgelegt.
             bericht.messwerte["seite_bis_meeting_start_s"] = round(meeting_start - lauf_start, 1)
-            verlauf = await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start)
+            if args.am_stueck:
+                verlauf = await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start)
+            else:
+                verlauf = await abwechselnd_aufzeichnen(seite, spur, pcm, referenz, args, bericht, lauf_start,
+                                                         meeting_start)
             z_letzt = verlauf[-1] if verlauf else {}
             offline = bool((z_letzt.get("schluessel") or {}).get("offline"))
             await abschluss(seite, bericht, offline, args.url, bool(args.passwort))
             pruefliste_bauen(referenz, verlauf, spur, bericht, args.nur_knopfdruck)
-        except SchrittFehler as e:
+        except Exception as e:  # noqa: BLE001 – auch unerwartete Fehler: Bericht trotzdem schreiben
+            if not isinstance(e, SchrittFehler):
+                e = f"{type(e).__name__}: {str(e)[:300]}"
             bericht.fehler.append(f"Lauf abgebrochen: {e}")
             bericht.notieren(f"Abgebrochen: {e}")
             if verlauf:  # trotz Abbruch die bis dahin gesammelten Prüfpunkte gegen die Referenz auswerten
@@ -1105,7 +1260,13 @@ def main() -> None:
     ap.add_argument("--audio", default=str(CLOUDTEST / "meeting.wav"))
     ap.add_argument("--agenda-prompt", default=str(CLOUDTEST / "agenda_prompt.txt"))
     ap.add_argument("--chromium", default=CHROMIUM)
+    ap.add_argument("--am-stueck", action="store_true",
+                    help="alter Modus (Lasttests): Audio am Stück als Fake-Mikrofon, ohne auf Nestor zu warten")
+    ap.add_argument("--bis", type=float, default=None,
+                    help="nur die ersten SEKUNDEN des Materials (Quellzeit) – kurze Probeläufe, nicht mit --am-stueck")
     args = ap.parse_args()
+    if args.bis and args.am_stueck:
+        ap.error("--bis gibt es nur im abwechselnden Modus (ohne --am-stueck).")
     if args.nur_knopfdruck and args.stufe != "basis":
         ap.error("--nur-knopfdruck gibt es nur mit --stufe basis (Ticket #13).")
     if not args.bericht:

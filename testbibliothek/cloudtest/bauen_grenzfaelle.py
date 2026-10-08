@@ -18,6 +18,15 @@ referenz.json["grenzfaelle"]. Fall 9 (leise, schnell) bekommt eine eigene Nachbe
 
 Ergebnis in testbibliothek/cloudtest/: drehbuch_grenzfaelle.json, referenz_grenzfaelle.json,
 agenda_prompt_grenzfaelle.txt (im Git) und meeting_grenzfaelle.wav (per .gitignore ausgenommen).
+
+Ticket #25 (abwechselnd reden): jeder Grenzfall trägt `warten` (true / "bestaetigung" / false, siehe
+scripts/cloudtest_takt.py), und zwei Rückfragen im Redefluss kommen dazu – je direkt nach einer beantworteten
+Frage eine Nachfrage ohne Namen (`RUECKFRAGEN`, Feld `nach`). Für vorhandenes Material ohne Neuvertonung:
+
+    ~/.venvs/lmc/bin/python testbibliothek/cloudtest/bauen_grenzfaelle.py --rueckfragen-nachtragen
+
+schneidet nur die beiden Rückfragen (Azure, Stimme „alloy“ wie alle Grenzfälle, 0 $) in die vorhandene
+meeting_grenzfaelle.wav und verschiebt alle Zeiten danach in referenz_grenzfaelle.json.
 """
 
 from __future__ import annotations
@@ -212,6 +221,93 @@ def sprech_block(tts, id_: str, text: str, tempo: float = 1.0, db: float = 0.0) 
     return {"kind": "grenzfall", "audio": audio, "text": text, "id": id_}
 
 
+# ---------- Ticket #25: warten und Rückfragen im Redefluss ----------
+# Ob der Test nach dem Fall wartet, bis Nestor fertig ist (scripts/cloudtest_takt.py). "bestaetigung": nur bis
+# die erste Rückmeldung gesprochen ist („macht ruhig weiter“, Bild/Folie); False: gar nicht – Hineinreden (#20)
+# und Sätze, auf die Nestor nicht reagieren soll, laufen im Redefluss weiter.
+WARTEN = {
+    "antwort": True, "ja_dann_antwort": True, "antwort_mit_quellen": True,
+    "antwort_erwuenscht_dokumentieren": True,
+    "folie": "bestaetigung", "nachfrage_oder_bild_mit_fokus": "bestaetigung",
+    "nestor_verstummt": False, "keine_antwort": False, "kein_fehlausloeser": False, "kein_abbruch": False,
+    "agendawechsel": False,
+}
+# Teile, nach denen zusätzlich gewartet wird: „Nestor?“ – wer ihn so anspricht, wartet auf sein „Ja?“.
+WARTEN_TEIL = {("2_name_dann_frage", 0): True}
+
+# (id, nach Grenzfall, Text): eine Nachfrage ohne Namen direkt nach Nestors Antwort; danach geht das Meeting
+# normal weiter. Im Material steht davor RUECKFRAGE_ABSTAND Stille (Platz für die Antwort im Modus am Stück);
+# im abwechselnden Modus überspringt der Test sie bis auf 0,8 s.
+RUECKFRAGEN = [
+    ("1r_rueckfrage_reicht", "1_name_satzende", "Und reicht das noch für alle Punkte?"),
+    ("2r_rueckfrage_wer", "2_name_dann_frage", "Und wer übernimmt das?"),
+]
+RUECKFRAGE_ABSTAND = 8.0
+
+
+def warten_setzen(grenzfaelle: list[dict]) -> None:
+    nach = {rid: basis for rid, basis, _ in RUECKFRAGEN}
+    for g in grenzfaelle:
+        g["warten"] = WARTEN.get(g["erwartet"], False)
+        for i, t in enumerate(g.get("teile", [])):
+            if (g["id"], i) in WARTEN_TEIL:
+                t["warten"] = WARTEN_TEIL[(g["id"], i)]
+        if g["id"] in nach:
+            g["nach"] = nach[g["id"]]
+
+
+def rueckfragen_nachtragen() -> None:
+    """Die Rückfragen in vorhandenes Material schneiden (keine Neuvertonung des Rests): direkt nach dem Ende des
+    Grundfalls Stille + Rückfrage einfügen, alle späteren Zeiten verschieben."""
+    ref_datei, wav_datei = ZIEL / "referenz_grenzfaelle.json", ZIEL / "meeting_grenzfaelle.wav"
+    referenz = json.loads(ref_datei.read_text(encoding="utf-8"))
+    with wave.open(str(wav_datei), "rb") as w:
+        audio = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+    if abs(len(audio) / RATE - referenz["dauer_s"]) > 0.5:
+        raise SystemExit("meeting_grenzfaelle.wav passt nicht zu referenz_grenzfaelle.json – erst neu bauen.")
+    vorhanden = {g["id"] for g in referenz["grenzfaelle"]}
+    tts = None
+    for rid, basis_id, text in RUECKFRAGEN:
+        if rid in vorhanden:
+            print(f"{rid}: schon im Material.")
+            continue
+        tts = tts or azure_tts()
+        basis = next(g for g in referenz["grenzfaelle"] if g["id"] == basis_id)
+        clip = sprech_block(tts, rid, text)["audio"]
+        einschub = np.concatenate([np.zeros(int(RUECKFRAGE_ABSTAND * RATE), dtype="<i2"), clip])
+        bei = basis["ende"]
+        a = int(round(bei * RATE))
+        audio = np.concatenate([audio[:a], einschub, audio[a:]])
+        dauer = len(einschub) / RATE
+
+        def schieben(t: float) -> float:
+            return round(t + dauer, 2) if t >= bei - 1e-6 else t
+
+        for e in referenz["ereignisse"]:
+            e["zeit_s"] = schieben(e["zeit_s"])
+        for g in referenz["grenzfaelle"]:
+            if g is basis:
+                continue
+            g["start"], g["ende"] = schieben(g["start"]), schieben(g["ende"])
+            for t in g["teile"]:
+                t["start"], t["ende"] = schieben(t["start"]), schieben(t["ende"])
+        start = round(bei + RUECKFRAGE_ABSTAND, 2)
+        ende = round(bei + dauer, 2)
+        referenz["grenzfaelle"].append({"id": rid, "ziel_s": basis["ziel_s"], "erwartet": "antwort",
+                                        "start": start, "ende": ende,
+                                        "teile": [{"text": text, "start": start, "ende": ende}]})
+        print(f"{rid}: „{text}“ nach {basis_id} bei {start:.2f}s eingefügt (+{dauer:.1f}s).")
+    referenz["grenzfaelle"].sort(key=lambda g: g["start"])
+    warten_setzen(referenz["grenzfaelle"])
+    referenz["dauer_s"] = round(len(audio) / RATE, 1)
+    with wave.open(str(wav_datei), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE); w.writeframes(audio.tobytes())
+    ref_datei.write_text(json.dumps(referenz, ensure_ascii=False, indent=1), encoding="utf-8")
+    if tts is not None:
+        print(f"Azure (Teachbuddy, eigenes Kontingent): {tts.zeichen} Zeichen, 0 $.")
+    print(f"meeting_grenzfaelle.wav: {len(audio) / RATE / 60:.2f} min, {len(referenz['grenzfaelle'])} Grenzfälle.")
+
+
 # ---------- Die zwölf Grenzfälle (Ticket #11; Fall 6 laut Nachtrag des Koordinators 07.10. geändert) ----------
 # ziel_s in aufsteigender Reihenfolge, damit jeder Fall an der zu diesem Zeitpunkt nächstgelegenen
 # Äußerungsgrenze der bereits (durch frühere Fälle) verschobenen Aufnahme eingefügt wird. Bei eng benachbarten
@@ -229,7 +325,10 @@ def grenzfaelle_einfuegen(blocks: list[dict], tts) -> list[dict]:
             if "stille_s" in seg:
                 neue.append(stille(seg["stille_s"]))
                 continue
-            neue.append(sprech_block(tts, id_, seg["text"], seg.get("tempo", 1.0), seg.get("db", 0.0)))
+            if seg.get("id"):  # eigener Fall im selben Einschub (Rückfrage, #25)
+                reihenfolge.append((seg["id"], ziel_s, seg["erwartet"]))
+            neue.append(sprech_block(tts, seg.get("id") or id_, seg["text"], seg.get("tempo", 1.0),
+                                     seg.get("db", 0.0)))
             if seg.get("stille_nach_s"):
                 neue.append(stille(seg["stille_nach_s"]))
         if pause_danach:
@@ -237,12 +336,15 @@ def grenzfaelle_einfuegen(blocks: list[dict], tts) -> list[dict]:
         einfuegen(blocks, i, neue)
         reihenfolge.append((id_, ziel_s, erwartet))
 
+    rueckfrage = {basis: {"id": rid, "text": text, "erwartet": "antwort"} for rid, basis, text in RUECKFRAGEN}
     eintragen("1_name_satzende", 150, "antwort",
-             [{"text": "Wie viel Zeit haben wir noch, Nestor?"}], pause_danach=22.0)
+             [{"text": "Wie viel Zeit haben wir noch, Nestor?"},
+              {"stille_s": RUECKFRAGE_ABSTAND}, rueckfrage["1_name_satzende"]], pause_danach=22.0)
 
     eintragen("2_name_dann_frage", 190, "ja_dann_antwort",
              [{"text": "Nestor?", "stille_nach_s": 2.0},
-              {"text": "Was haben wir zu Punkt eins beschlossen?"}], pause_danach=22.0)
+              {"text": "Was haben wir zu Punkt eins beschlossen?"},
+              {"stille_s": RUECKFRAGE_ABSTAND}, rueckfrage["2_name_dann_frage"]], pause_danach=22.0)
 
     eintragen("3a_nuschel_nester", 230, "antwort_erwuenscht_dokumentieren",
              [{"text": "Nester, fass mal zusammen."}], pause_danach=22.0)
@@ -313,6 +415,7 @@ def grenzfaelle_protokoll_aus_blocks(blocks: list[dict], reihenfolge: list[tuple
     # Basismaterial kann ein später eingefügter Fall vor einen früheren rutschen (s. o.) - referenz.json soll
     # die wirkliche Reihenfolge im Material zeigen, nicht die beabsichtigte.
     aus.sort(key=lambda g: g["start"])
+    warten_setzen(aus)
     return aus
 
 
@@ -333,7 +436,12 @@ async def main() -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--neu", action="store_true", help="Drehbuch neu über Codex erzeugen statt das vorhandene zu nutzen")
+    ap.add_argument("--rueckfragen-nachtragen", action="store_true",
+                    help="nur die Rückfragen (#25) in vorhandenes Material schneiden, nichts neu vertonen")
     args = ap.parse_args()
+    if args.rueckfragen_nachtragen:
+        rueckfragen_nachtragen()
+        return
 
     d = await drehbuch(neu=args.neu)
     tts = azure_tts()

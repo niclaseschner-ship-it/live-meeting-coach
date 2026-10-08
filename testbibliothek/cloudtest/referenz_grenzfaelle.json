@@ -23,7 +23,7 @@
    "minuten": 1
   }
  ],
- "dauer_s": 680.0,
+ "dauer_s": 699.2,
  "vorlauf_s": 25.0,
  "ereignisse": [
   {
@@ -42,35 +42,35 @@
   },
   {
    "ereignis": "abschweifung",
-   "zeit_s": 330.86,
+   "zeit_s": 350.06,
    "person": 3,
    "punkt": -1,
    "text": "Ganz kurz, weil wir gerade bei Montagmorgen und ungeprüften Dingen sind: Die Kaffeemaschine war ja ebenfalls kaputt. Ich stand um halb neun davor, sie blinkte dreimal, dann kam nur lauwarmes Wasser. Jonas meinte noch, man müsse den Tank einmal herausnehmen, aber danach lief das verdammte Ding komplett aus. Der halbe Küchenboden war nass, und gleichzeitig kamen die ersten Kundentickets rein. Das war, äh, wirklich ein beschissener Start. Vielleicht schreiben wir dafür aber kein Postmortem, sondern kleben einfach einen Zettel dran und bestellen Entkalker. Gut, zurück zur Datenbank."
   },
   {
    "ereignis": "kraftausdruck",
-   "zeit_s": 330.86,
+   "zeit_s": 350.06,
    "person": 3,
    "punkt": -1,
    "text": "Ganz kurz, weil wir gerade bei Montagmorgen und ungeprüften Dingen sind: Die Kaffeemaschine war ja ebenfalls kaputt. Ich stand um halb neun davor, sie blinkte dreimal, dann kam nur lauwarmes Wasser. Jonas meinte noch, man müsse den Tank einmal herausnehmen, aber danach lief das verdammte Ding komplett aus. Der halbe Küchenboden war nass, und gleichzeitig kamen die ersten Kundentickets rein. Das war, äh, wirklich ein beschissener Start. Vielleicht schreiben wir dafür aber kein Postmortem, sondern kleben einfach einen Zettel dran und bestellen Entkalker. Gut, zurück zur Datenbank."
   },
   {
    "ereignis": "beschluss",
-   "zeit_s": 549.31,
+   "zeit_s": 568.51,
    "person": 0,
    "punkt": 2,
    "text": "Dann ist der Beschluss: Sofie richtet drei zusätzliche Monitoring-Alerts ein, und die nächste produktive Migration bekommt ein Wartungsfenster von 30 Minuten. Rollback-Skript und Runbook müssen spätestens 24 Stunden vorher geprüft sein. Das kommt genauso ins Postmortem."
   },
   {
    "ereignis": "wechsel_ansage",
-   "zeit_s": 616.44,
+   "zeit_s": 635.64,
    "person": 0,
    "punkt": 3,
    "text": "Kommen wir zum vierten Punkt, der Kommunikation an die Kunden. Tarek, was ist bereits raus, und was sollten wir noch nachliefern?"
   },
   {
    "ereignis": "aufgabe_ohne_zustaendig",
-   "zeit_s": 661.98,
+   "zeit_s": 681.18,
    "person": 0,
    "punkt": 3,
    "text": "Einverstanden. Die allgemeine Kundenmail geht heute bis 16 Uhr raus, die SLA-Auswertungen morgen bis 10 Uhr. Außerdem muss noch eine verständliche Zusammenfassung des Postmortems für die Statusseite erstellt werden, ohne technische Schuldzuweisung und mit den beschlossenen Maßnahmen. Damit schließen wir das Review."
@@ -89,241 +89,291 @@
      "start": 173.82,
      "ende": 175.21
     }
-   ]
+   ],
+   "warten": true
+  },
+  {
+   "id": "1r_rueckfrage_reicht",
+   "ziel_s": 150,
+   "erwartet": "antwort",
+   "start": 183.21,
+   "ende": 185.18,
+   "teile": [
+    {
+     "text": "Und reicht das noch für alle Punkte?",
+     "start": 183.21,
+     "ende": 185.18
+    }
+   ],
+   "warten": true,
+   "nach": "1_name_satzende"
   },
   {
    "id": "2_name_dann_frage",
    "ziel_s": 190,
    "erwartet": "ja_dann_antwort",
-   "start": 214.12,
-   "ende": 219.39,
+   "start": 224.09,
+   "ende": 229.36,
    "teile": [
     {
      "text": "Nestor?",
-     "start": 214.12,
-     "ende": 215.15
+     "start": 224.09,
+     "ende": 225.12,
+     "warten": true
     },
     {
      "text": "Was haben wir zu Punkt eins beschlossen?",
-     "start": 217.15,
-     "ende": 219.39
+     "start": 227.12,
+     "ende": 229.36
     }
-   ]
+   ],
+   "warten": true
+  },
+  {
+   "id": "2r_rueckfrage_wer",
+   "ziel_s": 190,
+   "erwartet": "antwort",
+   "start": 237.36,
+   "ende": 238.59,
+   "teile": [
+    {
+     "text": "Und wer übernimmt das?",
+     "start": 237.36,
+     "ende": 238.59
+    }
+   ],
+   "warten": true,
+   "nach": "2_name_dann_frage"
   },
   {
    "id": "3a_nuschel_nester",
    "ziel_s": 230,
    "erwartet": "antwort_erwuenscht_dokumentieren",
-   "start": 259.23,
-   "ende": 260.6,
+   "start": 278.43,
+   "ende": 279.8,
    "teile": [
     {
      "text": "Nester, fass mal zusammen.",
-     "start": 259.23,
-     "ende": 260.6
+     "start": 278.43,
+     "ende": 279.8
     }
-   ]
+   ],
+   "warten": true
   },
   {
    "id": "3b_nuschel_nestro",
    "ziel_s": 260,
    "erwartet": "antwort_erwuenscht_dokumentieren",
-   "start": 283.5,
-   "ende": 285.04,
+   "start": 302.7,
+   "ende": 304.24,
    "teile": [
     {
      "text": "Nestro, wo stehen wir gerade?",
-     "start": 283.5,
-     "ende": 285.04
+     "start": 302.7,
+     "ende": 304.24
     }
-   ]
+   ],
+   "warten": true
   },
   {
    "id": "4_rueckfrage_direkt",
    "ziel_s": 285,
    "erwartet": "antwort",
-   "start": 307.34,
-   "ende": 308.86,
+   "start": 326.54,
+   "ende": 328.06,
    "teile": [
     {
      "text": "Und wer kümmert sich darum?",
-     "start": 307.34,
-     "ende": 308.86
+     "start": 326.54,
+     "ende": 328.06
     }
-   ]
+   ],
+   "warten": true
   },
   {
    "id": "6c_eigentor",
    "ziel_s": 370,
    "erwartet": "kein_fehlausloeser",
-   "start": 395.37,
-   "ende": 397.41,
+   "start": 414.57,
+   "ende": 416.61,
    "teile": [
     {
      "text": "Das war ein echtes Eigentor von uns.",
-     "start": 395.37,
-     "ende": 397.41
+     "start": 414.57,
+     "ende": 416.61
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "6b_next_week",
    "ziel_s": 365,
    "erwartet": "kein_fehlausloeser",
-   "start": 398.91,
-   "ende": 400.61,
+   "start": 418.11,
+   "ende": 419.81,
    "teile": [
     {
      "text": "Das schieben wir auf next week.",
-     "start": 398.91,
-     "ende": 400.61
+     "start": 418.11,
+     "ende": 419.81
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "6d_nest",
    "ziel_s": 375,
    "erwartet": "kein_fehlausloeser",
-   "start": 400.91,
-   "ende": 404.49,
+   "start": 420.11,
+   "ende": 423.69,
    "teile": [
     {
      "text": "Das ist ein Nest von Abhängigkeiten, da müssen wir vorsichtig sein.",
-     "start": 400.91,
-     "ende": 404.49
+     "start": 420.11,
+     "ende": 423.69
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "6a_viktor",
    "ziel_s": 360,
    "erwartet": "kein_fehlausloeser",
-   "start": 408.29,
-   "ende": 410.09,
+   "start": 427.49,
+   "ende": 429.29,
    "teile": [
     {
      "text": "Viktor, kannst du das übernehmen?",
-     "start": 408.29,
-     "ende": 410.09
+     "start": 427.49,
+     "ende": 429.29
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "5_rueckfrage_spaet",
    "ziel_s": 330,
    "erwartet": "keine_antwort",
-   "start": 411.59,
-   "ende": 412.77,
+   "start": 430.79,
+   "ende": 431.97,
    "teile": [
     {
      "text": "Und bis wann ungefähr?",
-     "start": 411.59,
-     "ende": 412.77
+     "start": 430.79,
+     "ende": 431.97
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "7_unklare_anweisung",
    "ziel_s": 400,
    "erwartet": "nachfrage_oder_bild_mit_fokus",
-   "start": 421.67,
-   "ende": 425.15,
+   "start": 440.87,
+   "ende": 444.35,
    "teile": [
     {
      "text": "Nestor, mach mal das mit dem Bild, aber nur für den Teil vorhin.",
-     "start": 421.67,
-     "ende": 425.15
+     "start": 440.87,
+     "ende": 444.35
     }
-   ]
+   ],
+   "warten": "bestaetigung"
   },
   {
    "id": "8_hineinreden",
    "ziel_s": 430,
    "erwartet": "nestor_verstummt",
-   "start": 460.02,
-   "ende": 466.58,
+   "start": 479.22,
+   "ende": 485.78,
    "teile": [
     {
      "text": "Nestor, kannst du uns das Postmortem-Template schicken?",
-     "start": 460.02,
-     "ende": 463.02
+     "start": 479.22,
+     "ende": 482.22
     },
     {
      "text": "Moment, warte, ich hab noch was.",
-     "start": 465.02,
-     "ende": 466.58
+     "start": 484.22,
+     "ende": 485.78
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "9_leise_schnell",
    "ziel_s": 460,
    "erwartet": "antwort",
-   "start": 477.48,
-   "ende": 479.36,
+   "start": 496.68,
+   "ende": 498.56,
    "teile": [
     {
      "text": "Nestor, notier kurz die SLA-Zahl von eben.",
-     "start": 477.48,
-     "ende": 479.36
+     "start": 496.68,
+     "ende": 498.56
     }
-   ]
+   ],
+   "warten": true
   },
   {
    "id": "10_nein_normalsatz",
    "ziel_s": 490,
    "erwartet": "kein_abbruch",
-   "start": 518.75,
-   "ende": 520.14,
+   "start": 537.95,
+   "ende": 539.34,
    "teile": [
     {
      "text": "Nein, das sehe ich anders.",
-     "start": 518.75,
-     "ende": 520.14
+     "start": 537.95,
+     "ende": 539.34
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "11_agenda_rueckwaerts",
    "ziel_s": 510,
    "erwartet": "agendawechsel",
-   "start": 541.47,
-   "ende": 543.71,
+   "start": 560.67,
+   "ende": 562.91,
    "teile": [
     {
      "text": "Lass uns nochmal kurz zu Punkt eins zurück.",
-     "start": 541.47,
-     "ende": 543.71
+     "start": 560.67,
+     "ende": 562.91
     }
-   ]
+   ],
+   "warten": false
   },
   {
    "id": "12a_recherche",
    "ziel_s": 540,
    "erwartet": "antwort_mit_quellen",
-   "start": 565.11,
-   "ende": 569.51,
+   "start": 584.31,
+   "ende": 588.71,
    "teile": [
     {
      "text": "Nestor, wie ist der aktuelle Stand bei der Umsetzung von NIS2 in Deutschland?",
-     "start": 565.11,
-     "ende": 569.51
+     "start": 584.31,
+     "ende": 588.71
     }
-   ]
+   ],
+   "warten": true
   },
   {
    "id": "12b_folie",
    "ziel_s": 578,
    "erwartet": "folie",
-   "start": 604.81,
-   "ende": 605.84,
+   "start": 624.01,
+   "ende": 625.04,
    "teile": [
     {
      "text": "Ja, mach eine Folie.",
-     "start": 604.81,
-     "ende": 605.84
+     "start": 624.01,
+     "ende": 625.04
     }
-   ]
+   ],
+   "warten": "bestaetigung"
   }
  ]
 }
