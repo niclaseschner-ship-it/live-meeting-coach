@@ -36,7 +36,7 @@
 
     <div class="kopf-knoepfe">
       <span id="modus-pill" class="pill" hidden></span>
-      <a id="modus-wechseln" class="textknopf" href="/" hidden data-tip="Nur außerhalb eines laufenden Meetings">Modus wechseln</a>
+      <a id="modus-wechseln" class="textknopf" href="/" hidden data-tip="Nur außerhalb eines laufenden Meetings">Stufe wechseln</a>
       <span id="eigener-schluessel-pill" class="pill" hidden data-tip="Die KI-Kosten dieses Meetings laufen über Ihren eigenen OpenAI-Schlüssel">eigener Schlüssel</span>
       <span id="status-pill" class="pill">Vorbereitung</span>
       <span id="aufnahme-pill" class="pill aufnahme" hidden data-tip="Audio wird lokal im Meeting-Ordner gespeichert (Testphase) – abschaltbar in den Einstellungen">Aufnahme</span>
@@ -56,13 +56,14 @@
     </div>
   </header>
 
-  <!-- Modus „Auf Knopfdruck“: Knopfleiste statt Nestor-Leiste – ohne Knopf geht nichts an einen KI-Dienst -->
+  <!-- Knopfleiste (Ticket #6, seit #13 in beiden Stufen gleich): dieselben Knöpfe an derselben Stelle. Mit „Nur auf
+       Knopfdruck“ geht ohne Knopf nichts an einen KI-Dienst; dann gibt es zusätzlich das Verwerfen. -->
   <section id="knopf-leiste" class="knopf-leiste" hidden>
     <div class="knopf-knoepfe">
       <button class="knopf-art" data-knopf="stand">Wo stehen wir?</button>
       <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
+      <button class="knopf-art" data-knopf="ueberblick">Überblick</button>
       <button class="knopf-art" data-knopf="protokoll">Protokoll</button>
-      <button class="knopf-art" data-knopf="bild">Bild</button>
       <form id="knopf-frage-form" class="knopf-frage">
         <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
         <button id="knopf-fragen" class="primaer">Fragen</button>
@@ -75,7 +76,7 @@
         <span id="knopf-schritt"></span>
       </div>
       <span id="knopf-fehler" class="knopf-fehler" hidden></span>
-      <span class="knopf-verwerfen">
+      <span id="knopf-verwerfen" class="knopf-verwerfen">
         <button id="knopf-verwerfen-5" class="klein" data-tip="Ton und Text der letzten 5 Minuten löschen – auch aus der Aufnahme">Letzte 5 min verwerfen</button>
         <button id="knopf-verwerfen-alles" class="klein knopf-gefahr" data-tip="Alles bisher Gesagte löschen – Ton, Text und Auswertungen">Alles verwerfen</button>
       </span>
@@ -84,7 +85,7 @@
 
   <!-- Kosten (Klapp-Fenster aus der Kopfleiste) -->
   <div id="kosten" class="klappfenster" hidden>
-    <h3>OpenAI-Kosten <small>Schätzung nach Listenpreis</small></h3>
+    <h3><span id="k-anbieter">KI</span>-Kosten <small>Schätzung nach Listenpreis</small></h3>
     <div class="kosten-summe"><strong id="k-meeting">0,00 $</strong><span id="k-rate"></span></div>
     <ul id="k-bereiche" class="kosten-bereiche"></ul>
     <div class="kosten-fuss">
@@ -92,7 +93,7 @@
       <span>Insgesamt <strong id="k-gesamt">–</strong></span>
     </div>
     <p class="leise-text">Gezählt werden nur Mengen, keine Inhalte. Was wirklich abgerechnet wird, steht unter
-      <a href="https://platform.openai.com/usage" target="_blank" rel="noopener">platform.openai.com/usage</a>.</p>
+      <a id="k-abrechnung" href="https://platform.openai.com/usage" target="_blank" rel="noopener">platform.openai.com/usage</a>.</p>
   </div>
 
   <!-- Handy koppeln (Klapp-Fenster aus der Kopfleiste) -->
@@ -110,7 +111,9 @@
   <!-- Einstellungen (Klapp-Fenster aus der Kopfleiste) -->
   <div id="einstellungen" class="klappfenster" hidden>
     <h3>Einstellungen</h3>
-    <div class="schluessel">
+    <p id="e-basis-hinweis" class="e-hinweis" hidden>Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich),
+      Stimme „Thorsten“, Überblick als Text. Gesprächsart, Stimme und Bildweg gibt es in Premium.</p>
+    <div class="schluessel" id="e-premium-schluessel">
       <span class="beschriftung">OpenAI-Schlüssel</span>
       <p id="s-status" class="leise-text"></p>
       <div class="schluessel-zeile">
@@ -123,12 +126,12 @@
         <button id="s-entfernen" class="textknopf" hidden>· Entfernen</button></p>
     </div>
     <label class="schalter"><input type="checkbox" id="e-assistent"> <span>Nestor spricht (Begrüßung, Antworten)</span></label>
-    <label>Gesprächsart
+    <label class="nur-premium">Gesprächsart
       <select id="e-modus">
         <option value="gespraech">Gespräch – wie ChatGPT, unterbrechbar</option>
         <option value="text">Kurzantwort – günstiger</option>
       </select></label>
-    <label>Stimme
+    <label class="nur-premium">Stimme
       <select id="e-stimme">
         <option>cedar</option><option>marin</option><option>coral</option><option>sage</option><option>verse</option>
         <option>alloy</option><option>ash</option><option>ballad</option><option>echo</option><option>shimmer</option>
@@ -143,7 +146,7 @@
       Unterbrechungen sind nicht betroffen. <strong>Gilt ab dem nächsten Meetingstart.</strong></p>
     <label class="schalter"><input type="checkbox" id="e-aufnahme"> <span>Audio speichern <small>lokal im
       Meeting-Ordner, zum Nachvollziehen in der Testphase; ab dem nächsten Start</small></span></label>
-    <label>Live-Bild zeichnet
+    <label class="nur-premium">Live-Bild zeichnet
       <select id="e-bild-anbieter">
         <option value="openai">OpenAI – wie ChatGPT, ~8 ct/Bild</option>
         <option value="claude">Claude-Abo – kostenlos, einfacher</option>
@@ -266,6 +269,7 @@
           <h2 id="bild-titel">Live-Bild <span id="bild-status" class="leise-text"></span></h2>
           <div id="ansicht-wahl" class="ansicht-wahl" hidden>
             <button id="tab-bild" class="aktiv">Live-Bild</button>
+            <button id="tab-ueberblick">Überblick</button>
             <button id="tab-folie">Recherche-Folie</button>
           </div>
         </div>
@@ -279,6 +283,9 @@
       <div class="bildflaeche">
         <img id="live-bild" alt="Live-Bild des Meetings" hidden>
         <article id="folie" class="folie" hidden></article>
+        <!-- Überblick als Text (Ticket #13): in Basis statt des Live-Bilds, in Premium umschaltbar -->
+        <article id="ueberblick" class="ueberblick" hidden></article>
+        <div id="ueberblick-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor schreibt den Überblick …</div>
         <div id="folie-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor baut die Folie …</div>
         <div id="bild-leer" class="bild-leer">
           <div class="bl-logo" aria-hidden="true">

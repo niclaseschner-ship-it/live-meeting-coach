@@ -58,10 +58,18 @@
         <span id="zeit" class="h-zeit">0:00</span>
       </div>
       <div class="h-knoepfe">
-        <button id="btn-fragen" class="gross primaer"><span class="i"></span>Nestor fragen</button>
         <button id="btn-still" class="gross" hidden><span class="i"></span>Stopp</button>
         <button id="btn-fortsetzen" class="gross warn" hidden><span class="i"></span>Wieder zuhören</button>
       </div>
+      <!-- Ticket #13: dieselben Knöpfe wie im Dashboard, in beiden Stufen; „Nestor fragen“ zum Halten -->
+      <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Nestor fragen – halten und sprechen</span></button>
+      <div class="h-knopfraster">
+        <button class="h-knopf" data-knopf="stand">Wo stehen wir?</button>
+        <button class="h-knopf" data-knopf="regeln">Regeln eingehalten?</button>
+        <button class="h-knopf" data-knopf="ueberblick">Überblick</button>
+        <button class="h-knopf" data-knopf="protokoll">Protokoll</button>
+      </div>
+      <p id="knopf-stand" class="leise" hidden></p>
       <p id="antwort" class="h-antwort" hidden></p>
     </section>
 

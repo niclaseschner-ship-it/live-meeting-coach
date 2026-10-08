@@ -98,6 +98,8 @@ class Gespraech:
     async def starten(self, frage: str | None) -> None:
         import websockets
 
+        if EINST.stufe == "basis":  # Realtime-Gespräch ist OpenAI – in Basis nie (Ticket #13), Rückfall Text-Weg
+            raise RuntimeError("Realtime-Gespräch gibt es nur in Nestor Premium")
         kopf = {"Authorization": f"Bearer {openai_schluessel()}"}
         self._ws = await websockets.connect(URL.format(modell=EINST.realtime_modell), additional_headers=kopf,
                                             max_size=None)

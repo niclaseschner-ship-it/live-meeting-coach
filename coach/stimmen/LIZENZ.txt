@@ -1,0 +1,14 @@
+thorsten_ref.wav – Referenz für Nestors Stimme in Nestor Basis
+================================================================
+
+Inhalt:   23 s Sprache (7 Sätze mit kurzen Pausen), 24 kHz mono, 16 bit
+Sprecher: Thorsten Müller („Thorsten-Voice“)
+Quelle:   Datensatz „Thorsten-Voice/TV-24kHz-Neutral“ (Hugging Face), sieben Aufnahmen aneinandergehängt
+Lizenz:   CC0 1.0 (gemeinfrei), https://creativecommons.org/publicdomain/zero/1.0/
+          Keine Namensnennung nötig; wir nennen die Quelle trotzdem.
+
+Zweck: Aus dieser Datei ist im Mistral-Konto die gespeicherte Stimme „nestor-thorsten-de“ angelegt
+(voice_id 01a1188b-54f4-71a8-86df-df69e318948c, siehe coach/mistral.py THORSTEN und LMC_BASIS_STIMME).
+Geht die Stimme verloren (anderes Konto, eigener Schlüssel „mistral-nestor“), lässt sie sich damit neu anlegen:
+Voices-API von Mistral (Name, Datei als ref_audio), danach die neue voice_id in LMC_BASIS_STIMME eintragen.
+Nicht löschen: die gespeicherten Stimmen „nic-de“ und „nestor-thorsten-de“ im Mistral-Konto (Ticket #13, Tabu).

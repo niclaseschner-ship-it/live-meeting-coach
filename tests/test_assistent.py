@@ -88,7 +88,7 @@ def test_begruessung_ohne_weitere_regeln_unveraendert():
     c = Coach()
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["zeit"]})
     gruss, _ = a.begruessungstext(c.meeting)
-    assert "vorgenommen" not in gruss
+    assert "Außerdem" not in gruss
 
 
 def test_eigene_sprache_wird_nur_live_herausgefiltert():
@@ -257,3 +257,43 @@ def test_name_aus_der_vorstellung():
     assert name_aus("Nestor.") is None
     assert name_aus("Hier ist Lea Brandt", ["Lea Brandt", "Jonas Ott"]) == "Lea Brandt"
     assert name_aus("Leander hier", ["Lea Brandt"]) == "Leander"  # Wortgrenze: Lea ≠ Leander
+
+
+def test_spaetes_nein_nur_name_und_nein():
+    assert a.spaetes_nein("Nestor, nein.") and a.spaetes_nein("nestor nein") and a.spaetes_nein("Nestor, nein!")
+    assert a.spaetes_nein("Nestor, wir sind nicht einverstanden.")
+    assert not a.spaetes_nein("Nestor, nein, ich meinte Punkt zwei.")
+    assert not a.spaetes_nein("Nein, das sehe ich anders.")
+
+
+def test_begruessung_erklaert_ansprache_und_kommentiert_agenda():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "A", "minuten": 5}, {"titel": "B", "minuten": 5}],
+                   "regel_ids": []})
+    gruss, start = a.begruessungstext(c.meeting)
+    assert "Nestor, nein" in gruss and "später" in gruss
+    assert "redet einfach rein" in start and "ohne Namen" in start
+    assert "Zwei Punkte in 10 Minuten – das ist sportlich." in start and start.endswith("Punkt eins: A.")
+
+
+async def _sprich_nicht(texte, danach="bereit", stil=None):
+    return 0.0
+
+
+def test_einfaches_nein_nur_kurz_nach_der_begruessung():
+    c = Coach()
+    c._einrichten({"titel": "T", "agenda": [{"titel": "A"}], "regel_ids": []})
+    gerufen = []
+
+    async def einwand():
+        gerufen.append(1)
+
+    c.assistent._einwand_erhalten = einwand
+    c.assistent._einwand_bis = c.meeting.jetzt() + 5
+    asyncio.run(c.assistent.satz("Nein.", c.meeting.jetzt()))
+    assert gerufen == [1]
+    c.assistent._einwand_bis = None
+    asyncio.run(c.assistent.satz("Nein, das sehe ich anders.", c.meeting.jetzt()))
+    assert gerufen == [1]
+    asyncio.run(c.assistent.satz("Nestor, nein.", c.meeting.jetzt()))
+    assert gerufen == [1, 1]

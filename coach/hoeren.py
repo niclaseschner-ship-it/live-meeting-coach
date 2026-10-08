@@ -1,6 +1,6 @@
 """Hörstrom (Version 2): Audio rein, Teiltext, Sprecherabschnitte und fertige Sätze heraus.
 
-    24-kHz-Audio ──► Live-Text (OpenAI, Streaming) ─────────────────► Teiltext, fertiger Satz
+    24-kHz-Audio ──► Live-Text (OpenAI bzw. Mistral in Basis, Streaming) ─────────────────► Teiltext, fertiger Satz
          │
          └─ 16 kHz ─► Pausenerkennung (lokal) ─► Äußerung ─► commit an Live-Text
                                                       └──► Stimm-Fingerabdruck je Fenster (lokal) ─► Personen, Überlappung
@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from .config import EINST
-from .livetext import LiveText
+from .livetext import LiveText, LiveTextMistral
 from .unterbrechung import Aeusserung, pegel_db
 from .stimmen import Stimmen
 from .vad import Pausenerkennung
@@ -183,7 +183,9 @@ class Hoerstrom:
             stichwoerter = [p.titel for p in m.agenda] + m.teilnehmende
             if coach.assistent.aktiv:
                 stichwoerter.append(EINST.assistent_name)  # Ansprache: „Mestor“ statt „Nestor“ vermeiden
-            self.live = LiveText(self._teiltext, self._satz, coach.vokabel_prompt(), stichwoerter)
+            # Basis: Voxtral Realtime (Mistral), Premium: OpenAI – gleiche Schnittstelle (Ticket #13)
+            klasse = LiveTextMistral if EINST.stufe == "basis" else LiveText
+            self.live = klasse(self._teiltext, self._satz, coach.vokabel_prompt(), stichwoerter)
 
     async def starten(self) -> None:
         if self.live:
@@ -194,6 +196,8 @@ class Hoerstrom:
             # Die Gruppe hat „Nein“ gesagt oder pausiert: nichts geht an den Live-Text, die Pausenerkennung
             # bekommt Stille (damit ihre Zeitachse weiter zur Meetinguhr passt).
             pcm24k = bytes(len(pcm24k))
+            if self.live and hasattr(self.live, "luecke"):
+                self.live.luecke(len(pcm24k) / 2 / 24000)  # Voxtral: Audiozeit läuft weiter, ohne zu senden
         else:
             if self.live:
                 await self.live.audio(pcm24k)
@@ -231,7 +235,7 @@ class Hoerstrom:
                             "pegel": pegel_db(proben)}  # Regel 1: Pegel-Einbruch = Übergabe, kein Unterbrechen
         knopf = None
         if self.live:
-            await self.live.commit({"id": uid})
+            await self.live.commit({"id": uid, "ende": ende})  # Ende: Zuordnung bei Voxtral
         elif self.knopfdruck:
             if len(proben) >= 16000 * MIN_TEXT and start >= self._verworfen_bis:
                 # als WAV (16 bit) statt float: halber Speicher, und genau die Bytes für Transkription und Zwischenspeicher

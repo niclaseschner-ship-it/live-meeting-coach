@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import analyse, ergebnisse, konfidenz, kosten, regeln, themen, transkription
 from .assistent import Assistent
-from .config import EINST, WURZEL, hat_openai_schluessel, openai_schluessel, schluessel_info
+from .config import EINST, WURZEL, ki_verfuegbar, mistral_schluessel, openai_schluessel, schluessel_info
 from .entscheider import Entscheider
 from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
 from .zustand import Agendapunkt, Meeting, Segment
@@ -52,6 +52,14 @@ def hintergrund(coro) -> asyncio.Task:
 
     task.add_done_callback(fertig)
     return task
+
+
+def hintergrund_leise(coro) -> None:
+    """Aufräumen nebenbei (Client schließen) – auch außerhalb einer laufenden Ereignisschleife."""
+    try:
+        asyncio.get_running_loop().create_task(coro)
+    except RuntimeError:
+        coro.close()
 
 
 def fehlertext(e: Exception) -> str:
@@ -110,6 +118,10 @@ class Coach:
         self._onepager_nachholen = False
         self._onepager_fokus_wunsch: str | None = None
         self.onepager_fokus: str | None = None  # Fokus des angezeigten Bildes (auf Zuruf), sonst Gesamtbild
+        # Überblick als Text (coach/ueberblick.py, Ticket #13): in Basis statt des Live-Bilds, in Premium daneben
+        self.ueberblick: dict | None = None
+        self.ueberblick_version = 0
+        self._ueberblick_laeuft = False
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
@@ -165,17 +177,40 @@ class Coach:
         self._onepager_letzter_start = None
         self.letzte_recherche = self.folie = None
         self.folie_version = 0
+        self.ueberblick = None
+        self.ueberblick_version = 0
         self.karten = []
         self.namen = {}
         self.knopf = Knopfstand()
 
-    def client_neu(self) -> None:
-        """OpenAI-Client mit dem aktuellen Schlüssel (im Dashboard eingetragen oder aus der Umgebung)."""
-        self._client = None
-        if hat_openai_schluessel():
-            from openai import AsyncOpenAI
+    @property
+    def stufe(self) -> str:
+        return EINST.stufe
 
-            self._client = AsyncOpenAI(api_key=openai_schluessel())
+    def stufe_setzen(self, stufe: str, nur_knopfdruck: bool = False) -> None:
+        """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting. „Nur auf Knopfdruck“ ist ein
+        Schalter in Basis (Ticket #13: der frühere Modus „Auf Knopfdruck“), in Premium gibt es ihn nicht."""
+        from .config import stufe_setzen
+
+        stufe_setzen(stufe)
+        self.modus = "knopfdruck" if stufe == "basis" and nur_knopfdruck else "live"
+        self.client_neu()
+
+    def client_neu(self) -> None:
+        """KI-Client der Stufe: Premium → OpenAI (Schlüssel aus dem Dashboard oder der Umgebung), Basis → Mistral
+        (MistralClient, gleiche Schnittstelle). Ohne Schlüssel oder mit LMC_OFFLINE=1: kein Client."""
+        alt, self._client = self._client, None
+        if alt is not None and hasattr(alt, "schliessen"):
+            hintergrund_leise(alt.schliessen())
+        if ki_verfuegbar():
+            if EINST.stufe == "basis":
+                from .mistral import MistralClient
+
+                self._client = MistralClient(mistral_schluessel())
+            else:
+                from openai import AsyncOpenAI
+
+                self._client = AsyncOpenAI(api_key=openai_schluessel())
             if EINST.ki == "codex":
                 from .ki_abo import AboClient
 
@@ -208,6 +243,7 @@ class Coach:
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,
                 "modus": self.modus,
+                "stufe": EINST.stufe,
                 "einstellungen": self.einstellungen(),
                 "referenzen": list(self.referenzen),
                 "fehler": self.fehler,
@@ -226,6 +262,9 @@ class Coach:
                 "onepager_minuten": EINST.onepager_minuten,
                 "onepager_fokus": self.onepager_fokus,
                 "onepager_format": "png" if self.onepager_png else "svg",
+                "ueberblick": self.ueberblick,
+                "ueberblick_version": self.ueberblick_version,
+                "ueberblick_laeuft": self._ueberblick_laeuft,
                 "folie": self.folie,
                 "folie_version": self.folie_version,
                 "folie_laeuft": self._folie_laeuft,
@@ -235,7 +274,8 @@ class Coach:
                 # Einstufung verlässlich/experimentell für Regeln und Signale, eine Quelle (Lastenheft 4.3,
                 # Ticket „Konfidenz“) statt verstreuter Badges.
                 "signale": konfidenz.katalog(),
-                "knopf": self.knopf.schnappschuss(self.hoerstrom) if self.knopfdruck else None,
+                # Knöpfe gibt es in beiden Stufen (Ticket #13); „offen“ (nicht Transkribiertes) nur bei Knopfdruck
+                "knopf": self.knopf.schnappschuss(self.hoerstrom if self.knopfdruck else None),
             }
         )
         return daten
@@ -335,6 +375,7 @@ class Coach:
 
     def einstellungen(self) -> dict:
         return {"assistent": self.assistent.aktiv, "modus": EINST.assistent_modus, "stimme": EINST.stimme,
+                "stufe": EINST.stufe,
                 "aufnahme": EINST.aufnahme_speichern,
                 "bild_anbieter": EINST.bild_anbieter, "live_art": EINST.live_art,
                 "bild_minuten": EINST.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
@@ -343,6 +384,9 @@ class Coach:
         """Einstellungen zur Laufzeit (Dashboard-Kopfleiste). Nur bekannte Felder, geprüfte Werte."""
         if "assistent" in daten:
             self.assistent.aktiv = bool(daten["assistent"])
+        if EINST.stufe == "basis":
+            # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Thorsten, Überblick als Text)
+            daten = {k: v for k, v in daten.items() if k not in ("modus", "stimme", "bild_anbieter")}
         if daten.get("modus") in ("gespraech", "text"):
             object.__setattr__(EINST, "assistent_modus", daten["modus"])
         if daten.get("live_art") in ("schnell", "sparsam"):
@@ -436,11 +480,13 @@ class Coach:
         return " ".join(teile)[-800:]
 
     async def block_verarbeiten(self, wav: bytes, start: float) -> None:
-        if self.knopfdruck:
+        if self.knopfdruck or EINST.stufe == "basis":
+            # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription mit OpenAI-Diarisierung – nicht ohne
+            # Knopf, und nicht in Basis (dort geht nichts an OpenAI)
             return  # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription – nicht ohne Knopf
         async with self._sperre:
             if self._client is None:
-                self.fehler = "Kein OpenAI-Schlüssel – in den Einstellungen eintragen."
+                self.fehler = "Kein KI-Schlüssel – in den Einstellungen eintragen."
                 await self.melden()
                 return
             dauer, pegel = transkription.wav_info(wav)
@@ -558,18 +604,19 @@ class Coach:
         if self._client is None:
             self.entscheider.einmalig(
                 m, "info-kein-schluessel", "info", "hinweis", "moderation",
-                "Fokus-Erkennung ist aus: kein OpenAI-Schlüssel bzw. Offline-Modus.",
+                "Fokus-Erkennung ist aus: kein KI-Schlüssel bzw. Offline-Modus.",
             )
             return
         try:
+            modell = EINST.zuordnung_modell or EINST.analyse_modell
             ergebnis, nutzung = await themen.zuordnen(
-                self._client, EINST.analyse_modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids
+                self._client, modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids
             )
         except Exception as e:  # noqa: BLE001
             log.warning("Themen-Zuordnung fehlgeschlagen: %s", fehlertext(e))
             self.fehler = f"Themen-Zuordnung fehlgeschlagen: {fehlertext(e)}"
             return
-        nutzung_loggen({"art": "themen", "modell": EINST.analyse_modell, **nutzung})
+        nutzung_loggen({"art": "themen", "modell": modell, **nutzung})
         analyse.themen_auswerten(m, self.entscheider, ergebnis, karenz or self.karenz_bloecke)
         self._ton_melden(ergebnis.get("ton", []))
 
@@ -634,6 +681,13 @@ class Coach:
                 log.warning("Meeting-Ablage nicht möglich: %s", e)
                 self.archiv = None
         KOSTEN.neues_meeting()
+        from .mistral import MistralClient
+
+        ziel = vars(self._client).get("_api", self._client) if self._client is not None else None  # AboClient
+        if isinstance(ziel, MistralClient):  # Basis: Kontextwörter der Batch-Transkription (Voxtral)
+            m = self.meeting
+            ziel.stichwoerter = ([EINST.assistent_name] if self.assistent.aktiv else []) + [
+                p.titel for p in m.agenda] + m.teilnehmende
         self.hoerstrom = Hoerstrom(self, mit_text=self._client is not None)
         try:
             await self.hoerstrom.starten()
@@ -684,7 +738,7 @@ class Coach:
     async def _archiv_abschliessen(self, archiv) -> None:
         """Ablegen, sobald Abschlussbild, Folie und Ergebnisprüfung durch sind (höchstens ~4 min warten)."""
         for _ in range(240):
-            if not (self._onepager_laeuft or self._folie_laeuft):
+            if not (self._onepager_laeuft or self._folie_laeuft or self._ueberblick_laeuft):
                 break
             await asyncio.sleep(1)
         await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
@@ -808,8 +862,12 @@ class Coach:
         """Aktion aus einer Antwort des Sprachassistenten ausführen."""
         m = self.meeting
         if aktion["typ"] == "bild":
-            self.assistent._bild_ansage = True
-            self.onepager_starten(fokus=None if aktion["fokus"].lower() in ("gesamt", "alles") else aktion["fokus"])
+            fokus = None if aktion["fokus"].lower() in ("gesamt", "alles") else aktion["fokus"]
+            if EINST.bild_anbieter == "text":  # Basis: der Überblick als Text (Nestor hat schon angesagt)
+                self.ueberblick_starten(fokus)
+            else:
+                self.assistent._bild_ansage = True
+                self.onepager_starten(fokus=fokus)
         elif aktion["typ"] == "weiter":
             ziel = aktion["ziel"]
             if ziel.startswith("naechst") or ziel.startswith("nächst"):
@@ -932,13 +990,48 @@ class Coach:
             self._folie_laeuft = False
             await self.melden()
 
+    def ueberblick_starten(self, fokus: str | None = None) -> bool:
+        """Überblick als Text neu erstellen (Knopf „Überblick“, Zuruf in Basis, Takt und Meetingende in Basis)."""
+        if not self.meeting.transkript or self._client is None or self._ueberblick_laeuft:
+            return False
+        self._ueberblick_laeuft = True
+        hintergrund(self.ueberblick_bauen(fokus))
+        return True
+
+    async def ueberblick_bauen(self, fokus: str | None = None) -> dict | None:
+        from . import ueberblick
+
+        self._ueberblick_laeuft = True
+        await self.melden()
+        try:
+            u, nutzung = await ueberblick.erstellen(self._client, self.meeting, self.ueberblick, fokus)
+            nutzung_loggen({"art": "ueberblick", "modell": EINST.analyse_modell, **nutzung})
+            self.ueberblick = u
+            self.ueberblick_version += 1
+            self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "ueberblick", "version": self.ueberblick_version,
+                                   "fokus": fokus})
+            self._karte_ablegen({"art": "ueberblick", "frage": "Überblick", "titel": "Überblick · Stand "
+                                 + u["laufzeit"], "punkte": ueberblick.punkte(u)})
+            return u
+        except Exception as e:  # noqa: BLE001
+            log.warning("Überblick fehlgeschlagen: %s", fehlertext(e))
+            self.onepager_fehler = f"Überblick fehlgeschlagen: {fehlertext(e)}"
+            return None
+        finally:
+            self._ueberblick_laeuft = False
+            await self.melden()
+
     def onepager_starten(self, fokus: str | None = None) -> bool:
         """Live-Bild neu zeichnen lassen (Knopf, alle N Minuten, Meetingende, Zuruf mit Fokus).
+        In Basis (bild_anbieter „text“) entsteht stattdessen der Überblick als Text – kein Bildmodell.
 
         False, wenn schon eins entsteht – dann wird es danach nachgeholt.
         """
         if not self.meeting.transkript:
             return False
+        if EINST.bild_anbieter == "text":
+            self._onepager_letzter_start = self.meeting.jetzt()  # Takt: alle N Minuten ab hier
+            return self.ueberblick_starten(fokus)
         if self._onepager_laeuft:
             self._onepager_nachholen = True  # nach dem laufenden Bild noch einmal zeichnen
             self._onepager_fokus_wunsch = fokus

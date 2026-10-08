@@ -48,7 +48,9 @@ def test_modus_setzen_erscheint_im_schnappschuss(lokal):
         assert r.status_code == 200 and r.json() == {"ok": True, "modus": "knopfdruck"}
         assert coach.modus == "knopfdruck"
         assert lokal.get("/api/zustand").json()["modus"] == "knopfdruck"
+        assert coach.stufe == "basis"  # „Nur auf Knopfdruck“ gibt es nur in Basis (Ticket #13)
     finally:
+        coach.stufe_setzen("premium")
         coach.modus = ursprung
 
 

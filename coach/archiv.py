@@ -3,6 +3,7 @@
     meetings/2026-10-06_1015_teamrunde/
         zusammenfassung.png|svg   Abschlussbild
         protokoll.md              Analyse hinter dem Bild (Ergebnisse, Aufgaben, Verlauf)
+        ueberblick.md             Überblick als Text (Nestor Basis statt Bild; Premium, wenn gedrückt)
         bericht.json              alles Messbare: Transkript, Hinweise, Agenda, Karten, Dynamik, Kosten,
                                   Zeitreihe – dasselbe Format wie die Testläufe (scripts/abspielen.py),
                                   damit die Auswertungsskripte auch auf echten Meetings laufen
@@ -48,6 +49,7 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
         "onepager_version": coach.onepager_version,
         "karten": coach.karten,
         "folie": coach.folie,
+        "ueberblick": getattr(coach, "ueberblick", None),
         "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
         "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)}
                    for i, p in enumerate(m.agenda)],
@@ -192,6 +194,10 @@ class Archiv:
             (self.ordner / "zusammenfassung.png").write_bytes(c.onepager_png)
         elif c.onepager_svg:
             (self.ordner / "zusammenfassung.svg").write_text(c.onepager_svg, encoding="utf-8")
+        if getattr(c, "ueberblick", None):
+            from .ueberblick import als_markdown
+
+            (self.ordner / "ueberblick.md").write_text(als_markdown(c.ueberblick), encoding="utf-8")
         # Knopfdruck: das Protokoll vom Protokoll-Knopf hat Vorrang vor der Analyse hinter dem Bild
         protokoll = getattr(getattr(c, "knopf", None), "protokoll", None) or c.onepager_analyse
         if protokoll:

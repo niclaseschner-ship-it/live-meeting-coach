@@ -4,15 +4,17 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 
 ## Ablauf im Meeting
 
-1. **Begrüßung mit Einverständnis.** Beim Start sagt der Coach: „Hallo zusammen, ich bin Nestor und begleite
-   heute euer Meeting. Ihr habt euch folgende Regeln gewünscht: … Dafür höre ich mit. Wenn jemand damit nicht
-   einverstanden ist, sagt jetzt bitte einfach Nein.“
-   - **Kein Nein in 7 s:** „Ich habe kein Nein gehört. Dann geht es los. Wir starten mit Punkt eins: … Ich kann
-     euch besser begleiten, wenn ihr kurz sagt, wann ihr zum nächsten Punkt geht, oder ihn selbst anklickt. Wenn
-     ihr wollt, fasse ich vorher kurz zusammen, was ihr besprochen habt. Ich höre zu und melde mich nur, wenn ihr
-     mich braucht. Sprecht mich einfach mit Nestor an.“ Die Bitte um den Agendawechsel entfällt bei nur einem Punkt.
-   - **Ein Nein:** Bisheriges Transkript und Stimmprofile werden gelöscht. Ab dann geht kein Ton mehr an
-     OpenAI. Wieder einschalten geht nur über den Knopf, weil der Coach dann nichts mehr hört.
+1. **Begrüßung mit Einverständnis, ohne Wartepause** (Stand 08.10.2026). Fest formuliert, weil sie die Einwilligung trägt:
+   „Hallo zusammen, ich bin Nestor und begleite heute euer Meeting. Ihr habt euch diese Regeln vorgenommen: …
+   (Außerdem habt ihr euch vorgenommen: … – die weiteren Regeln.) Dafür höre ich mit. Wer nicht einverstanden ist,
+   sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: ‚Nestor, nein‘. Dann lösche ich alles.“
+   Direkt danach, in lockerem Ton (eigene Stimm-Anweisung `STIL_START`): wie man mit Nestor arbeitet (Name + Frage,
+   Nachfragen ohne Namen, Reinreden macht ihn still, Hinweise nur auf dem Bildschirm), die Bitte um Agendawechsel,
+   ein Halbsatz zur Agenda („Vier Punkte in 60 Minuten – das passt gut.“) und „Los geht's mit Punkt eins: …“.
+   - **Nein:** Ein einfaches „Nein“ zählt bis 7 s nach der Begrüßung (`LMC_EINWAND_SEKUNDEN`), danach nur noch
+     „Nestor, nein“ als ganzer Satz – „Nestor, nein, ich meinte Punkt zwei“ löscht nichts. Bei einem Nein werden
+     Transkript und Stimmprofile gelöscht, ab dann geht kein Ton mehr an OpenAI; wieder einschalten nur per Knopf.
+   - Mit Vorstellungsrunde (`LMC_VORSTELLUNG_SEKUNDEN` > 0) kommt nach der Begrüßung zuerst die Bitte um die Namen.
 2. **Zuhören ohne Einmischen.** Ampeln und Hinweise laufen wie bisher still im Dashboard. Gesprochen wird
    nur auf Ansprache.
 3. **Ansprache:** „Nestor, …“ irgendwo im Satz, oder Knopf „Nestor fragen“ (dann ohne Namen). Kommt nur
@@ -64,10 +66,27 @@ Text) ─► Satz für Satz Sprachausgabe gpt-4o-mini-tts ─► Dashboard. Geme
 erster Ton ~0,5 s später, ~1 Cent je Frage. Nicht unterbrechbar, Rückfragen nur als Frage mit „?“. Der
 Coach nutzt diesen Weg automatisch, wenn keine Realtime-Sitzung zustande kommt.
 
+**Nestor Basis (Ticket #13, nur Mistral):** immer der Weg „text“ – Satz mit Namen ─► `mistral-medium-latest`
+gestreamt (dieselbe `AKTION:`-Zeile, kein Tool-Call) ─► Satz für Satz Voxtral TTS mit der gespeicherten Stimme
+**Thorsten** (`voice_id`, Thorsten-Voice CC0, Referenz in `coach/stimmen/`) ─► Dashboard. Live-Text über Voxtral
+Realtime. Gemessen 08.10. ([messung_basis.md](messung_basis.md)): Sprechende → erster Ton im Median ~2,0–2,1 s,
+24/24 Zurufe mit richtiger Aktion. Keine Rückfragen ohne Namen, kein Ins-Wort-Fallen; die Begrüßung sagt deshalb
+„jedes Mal mit meinem Namen – oder ihr nehmt die Knöpfe“. „Zeig uns die Übersicht“ (`AKTION: bild`) stellt in Basis
+den **Überblick als Text** ins Dashboard (`coach/ueberblick.py`), nach wenigen Sekunden. Kommt Mistral auch nach
+Wiederholungen nicht durch (HTTP 429), sagt Nestor: „Ich komme gerade nicht durch, versucht es gleich nochmal.“
+Die Stil-Anweisung für die Stimme (`STIL_START`) gibt es bei Voxtral nicht; sie entfällt in Basis.
+
+**Nestor fragen per Knopf, auch am Handy:** Am Handy wird „Nestor fragen“ gehalten: halten, fragen, loslassen. Der
+Ton der Frage geht als WAV an `/api/frage/audio`, wird mit dem Transkriptionsmodell der Stufe zu Text und dann wie
+eine gesprochene Frage beantwortet (Stimme + Karte); mit „Nur auf Knopfdruck“ als Karte. Was während des Haltens
+gesagt wurde, wertet der Live-Text nicht noch einmal als Zuruf aus.
+
 **Recherche** (`coach/recherche.py`): Websuche über die OpenAI-Responses-API (GPT-5.4-mini mit
 `web_search`). In die Suche geht nur das vom Modell formulierte Thema und der Meetingtitel, kein
 Transkript. Eingebettete Quellenverweise werden vor dem Vorlesen entfernt. Gemessen 05.10.: Suche 5–8 s,
-gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche.
+gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche. In Basis: Mistral Conversations-API mit dem
+Werkzeug `web_search` (`store: false`), gemessen ~5 s mit 2 Quellen; kommt eine Antwort ohne Quellen, wird die Suche
+einmal erzwungen. Kosten ~3 Cent (Suchergebnisse zählen bei Mistral als Eingabe-Tokens).
 
 **Nestor-Karten** (`coach/karten.py`): Was Nestor sagt, erscheint zusätzlich als Pop-up über dem Bildbereich –
 Titel, die Frage, 2–4 Stichpunkte, bei Recherchen die Quellen. GPT-5.4-mini verdichtet die gesprochene Antwort

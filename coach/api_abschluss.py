@@ -8,17 +8,25 @@ Ringimport zwischen server.py und diesem Modul gibt.
 from __future__ import annotations
 
 import asyncio
+import json
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
+from . import zugang
 from .abschluss import OrdnerAblage, paket, spenden_dateien, stufen
 from .ablage_r2 import AblageFehler, R2Ablage
 from .config import EINST, schluessel_info, schluessel_speichern
 
 router = APIRouter()
 _ablage = R2Ablage() if EINST.betrieb == "cloud" else OrdnerAblage()
+
+# Muss zum Cookie-Namen MEETING_COOKIE in cloudflare/src/index.ts passen (Ticket #12).
+_MEETING_COOKIE = "nestor_meeting"
 
 
 async def _ablegen(dateien: dict[str, bytes]) -> None:
@@ -31,6 +39,30 @@ async def _ablegen(dateien: dict[str, bytes]) -> None:
 
 def _kurz_id() -> str:
     return uuid.uuid4().hex[:8]
+
+
+def worker_melden(pfad: str, daten: dict) -> dict | None:
+    """Ruft im Cloud-Betrieb eine `/intern/`-Route des Workers auf (Ticket #12), Muster wie `ablage_r2.py`:
+    beweist sich mit `X-Nestor-Geheimnis`. Genutzt für `/intern/meeting-start` (`coach/server.py`, `/api/start`)
+    und `/intern/meeting-ende` (hier, `/api/abschluss/fertig`).
+
+    Ohne Worker-Zugang (lokaler Betrieb) oder bei einem Netzfehler liefert sie `None` – ein nicht gemeldetes
+    Meeting-Ende blockiert den Abschluss selbst nicht, der Platz im KundenZaehler fällt dann ohnehin nach der
+    Verfallszeit (`cloudflare/src/zaehler-logik.ts`, `VERFALL_MS`) frei; ein nicht gemeldeter Start lässt das
+    Meeting im Zweifel zu, statt an einer Netzstörung zu scheitern.
+    """
+    if EINST.betrieb != "cloud" or not EINST.worker_url or not EINST.worker_geheimnis:
+        return None
+    body = json.dumps(daten).encode("utf-8")
+    anfrage = urllib.request.Request(
+        f"{EINST.worker_url.rstrip('/')}{pfad}", data=body, method="POST",
+        headers={"Content-Type": "application/json", "X-Nestor-Geheimnis": EINST.worker_geheimnis},
+    )
+    try:
+        with urllib.request.urlopen(anfrage, timeout=10) as r:
+            return json.loads(r.read() or b"{}")
+    except (urllib.error.URLError, ValueError, TimeoutError):
+        return None
 
 
 def _nach_ende():
@@ -116,7 +148,7 @@ async def abschluss_feedback(daten: dict):
 
 
 @router.post("/api/abschluss/fertig")
-async def abschluss_fertig():
+async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
     coach = _nach_ende()
     ordner = coach.archiv.ordner
     # Cloud-Betrieb: ein im Dashboard eingetragener eigener Schlüssel galt nur für dieses eine Meeting (Angebot
@@ -131,4 +163,17 @@ async def abschluss_fertig():
 
         shutil.rmtree(ordner, ignore_errors=True)
     await coach.melden()
-    return {"ok": True}
+    if EINST.betrieb != "cloud":
+        return {"ok": True}
+    # Cloud (Ticket #12): dem Worker das Ende melden – er gibt den Platz im KundenZaehler frei und stoppt den
+    # Container. Als Hintergrundaufgabe, damit das erst NACH dieser Antwort an den Browser passiert (die Antwort
+    # läuft sonst noch durch genau den Container, der gerade gestoppt wird). Das Meeting-Cookie fällt sofort
+    # weg, damit der nächste Aufruf ein neues Meeting bekommt, statt dieses (gleich gestoppte) wiederzuverwenden.
+    meeting_id = zugang.meeting_id(request.scope)
+    if meeting_id:
+        hintergrund.add_task(
+            worker_melden, "/intern/meeting-ende", {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)},
+        )
+    antwort = JSONResponse({"ok": True}, background=hintergrund)
+    antwort.delete_cookie(_MEETING_COOKIE, path="/")
+    return antwort

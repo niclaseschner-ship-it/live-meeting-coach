@@ -18,7 +18,12 @@ TOKENPREISE = {
     "gpt-5.4-mini": (0.75, 4.50),
     "gpt-5": (1.25, 10.00),
     "gpt-5-mini": (0.25, 2.00),
+    # Nestor Basis (Mistral, Stand 08.10.2026, docs.mistral.ai/inference/pricing): Medium 3.5, Small 4
+    "mistral-medium-latest": (1.50, 7.50),
+    "mistral-small-latest": (0.15, 0.60),
 }
+# Dollar je Zeichen der Sprachausgabe (Voxtral TTS: 16 $ je 1 Mio. Zeichen)
+ZEICHENPREISE = {"voxtral-mini-tts-latest": 16.0 / 1e6}
 # Dollar je Minute Audio
 MINUTENPREISE = {
     "gpt-live-transcribe": 0.017,
@@ -26,10 +31,14 @@ MINUTENPREISE = {
     "gpt-4o-transcribe-diarize": 0.006,
     "gpt-4o-mini-transcribe": 0.003,
     "gpt-4o-mini-tts": 0.015,
+    "voxtral-mini-transcribe-realtime-2602": 0.006,  # Modellkarte docs.mistral.ai, 08.10.2026
+    "voxtral-mini-latest": 0.003,  # Voxtral Mini Transcribe (Batch)
 }
 # gpt-realtime je 1 Mio. Tokens
 REALTIME = {"text_rein": 4.00, "audio_rein": 32.00, "cache_rein": 0.40, "text_raus": 16.00, "audio_raus": 64.00}
 WEBSUCHE = 0.01  # je Aufruf (10 $ je 1000)
+# Mistral web_search: kein offizieller Preis gefunden (08.10.2026); Sekundärquellen nennen 30 $ je 1000 – vorsichtig so
+WEBSUCHE_MISTRAL = 0.03
 BILD = 0.05  # gpt-image-2, 1536×1024, medium, je Bild
 BILD_VORLAGE = 0.01  # Eingabebild bei der Fortschreibung
 
@@ -39,7 +48,7 @@ BEREICHE = {
     "nestor": ("Nestor spricht", ("gespraech", "stimme", "assistent", "karte")),
     "recherche": ("Recherche", ("recherche", "folie")),
     "analyse": ("Agenda, Ton, Ergebnisse", ("themen", "ergebnisse")),
-    "bild": ("Live-Bild", ("onepager",)),
+    "bild": ("Live-Bild, Überblick", ("onepager", "ueberblick")),
 }
 _ART_ZU_BEREICH = {art: b for b, (_, arten) in BEREICHE.items() for art in arten}
 
@@ -54,12 +63,15 @@ def _tokens(modell: str, rein, raus) -> float:
 def dollar(e: dict) -> float:
     """Geschätzte Kosten eines Protokolleintrags in Dollar."""
     art, modell = e.get("art"), e.get("modell", "")
+    if art == "stimme" and modell in ZEICHENPREISE:
+        return (e.get("zeichen") or 0) * ZEICHENPREISE[modell]
     if art in ("live-text", "text", "sprecherspur", "stimme"):
         return (e.get("sekunden_audio") or 0) / 60 * MINUTENPREISE.get(modell, 0.0)
-    if art in ("themen", "ergebnisse", "assistent", "folie", "karte"):
+    if art in ("themen", "ergebnisse", "assistent", "folie", "karte", "ueberblick"):
         return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus"))
     if art == "recherche":
-        return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus")) + WEBSUCHE
+        suche = WEBSUCHE_MISTRAL * (e.get("suchen") or 1) if modell.startswith("mistral") else WEBSUCHE
+        return _tokens(modell, e.get("tokens_rein"), e.get("tokens_raus")) + suche
     if art == "gespraech":
         rein, raus = e.get("details_rein") or {}, e.get("details_raus") or {}
         cache = rein.get("cached_tokens_details") or {}

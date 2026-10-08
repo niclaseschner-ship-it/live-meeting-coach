@@ -149,6 +149,7 @@ const mikro = {
       spitze = Math.max(spitze, Math.abs(v));
       this.puffer[this.n++] = v < 0 ? v * 0x8000 : v * 0x7fff;
       if (this.n === PAKET) {
+        if (halten.teile) halten.teile.push(this.puffer.slice()); // „Nestor fragen“ wird gehalten: mitschneiden
         if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.puffer.slice().buffer);
         this.n = 0;
       }
@@ -166,7 +167,59 @@ const mikro = {
   },
 };
 
-const KARTEN_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie" };
+// ---------- „Nestor fragen“ halten (Ticket #13) ----------
+// Halten, fragen, loslassen: der Ton der Frage geht als WAV an /api/frage/audio. Hört dieses Gerät ohnehin zu, wird
+// der laufende Mikrofonstrom mitgeschnitten; sonst öffnet das Halten das Mikrofon nur für die Frage.
+const halten = {
+  teile: null, eigen: null,
+  async start() {
+    this.teile = [];
+    if (mikro.laeuft()) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true } });
+    const ctx = new AudioContext();
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+    const quelle = ctx.createMediaStreamSource(stream), knoten = new AudioWorkletNode(ctx, "sammler");
+    const leise = ctx.createGain(); leise.gain.value = 0;
+    quelle.connect(knoten); knoten.connect(leise); leise.connect(ctx.destination);
+    const roh = [];
+    knoten.port.onmessage = (e) => roh.push(e.data);
+    this.eigen = { stream, ctx, roh };
+  },
+  async ende() {
+    const teile = this.teile ?? []; this.teile = null;
+    let pcm;
+    if (this.eigen) {
+      const { stream, ctx, roh } = this.eigen; this.eigen = null;
+      stream.getTracks().forEach((t) => t.stop());
+      const faktor = ctx.sampleRate / RATE; await ctx.close();
+      const n = roh.reduce((a, f) => a + f.length, 0), alle = new Float32Array(n);
+      let o = 0; for (const f of roh) { alle.set(f, o); o += f.length; }
+      pcm = new Int16Array(Math.floor(n / faktor));
+      for (let i = 0; i < pcm.length; i++) {
+        const p = i * faktor, j = Math.floor(p), a = alle[j], b = alle[j + 1] ?? a;
+        const v = Math.max(-1, Math.min(1, a + (b - a) * (p - j)));
+        pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+      }
+    } else {
+      pcm = new Int16Array(teile.reduce((a, t) => a + t.length, 0));
+      let o = 0; for (const t of teile) { pcm.set(t, o); o += t.length; }
+    }
+    return wavAus(pcm);
+  },
+};
+function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
+  const b = new ArrayBuffer(44 + pcm.length * 2), d = new DataView(b);
+  const text = (o, s) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+  text(0, "RIFF"); d.setUint32(4, 36 + pcm.length * 2, true); text(8, "WAVE"); text(12, "fmt ");
+  d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true); d.setUint32(24, RATE, true);
+  d.setUint32(28, RATE * 2, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true); text(36, "data");
+  d.setUint32(40, pcm.length * 2, true);
+  new Int16Array(b, 44).set(pcm);
+  return b;
+}
+
+const KARTEN_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie", stand: "Wo stehen wir?",
+  regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick" };
 const KARTEN_ICON = { antwort: "frage", recherche: "suche", folie: "folie" };
 const NESTOR_TEXT = {
   bereit: "hört zu", angesprochen: "hört dir zu …", denkt: "denkt nach …", spricht: "spricht",

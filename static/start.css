@@ -24,6 +24,16 @@ body { background: var(--bg); }
 .s-datenhinweis { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--marke-weich); color: var(--marke-2);
   font-size: 13.5px; font-style: italic; line-height: 1.4; }
 .s-kosten { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-2); }
+.moduskarte h2 small { font-size: 13px; font-weight: 600; color: var(--text-3); margin-left: 6px; }
+.moduskarte:disabled { opacity: .5; cursor: not-allowed; }
+.s-stufe { display: grid; gap: 10px; align-content: start; }
+.s-stufe .moduskarte { height: 100%; }
+.s-schalter { display: flex !important; flex-direction: row; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  border-radius: var(--radius); font-weight: 400;
+  background: var(--flaeche); border: 1px solid var(--rand); font-size: 13.5px; line-height: 1.45; color: var(--text-2);
+  cursor: pointer; }
+.s-schalter input { margin-top: 3px; flex: none; width: auto; }
+.s-schalter strong { color: var(--text); }
 
 .s-schluessel { margin: -6px 0 0; }
 .s-schluessel summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-3); list-style: none; }

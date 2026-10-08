@@ -239,8 +239,8 @@ def test_zweiter_knopf_waehrend_eines_laufs_wird_abgewiesen():
             knopfdruck.reservieren(c, "stand")
         c.knopf.laeuft = None
         c.modus = "live"
-        with pytest.raises(knopfdruck.KnopfFehler):
-            knopfdruck.reservieren(c, "stand")
+        knopfdruck.reservieren(c, "stand")  # seit #13: dieselben Knöpfe auch ohne „Nur auf Knopfdruck“
+        assert c.knopf.laeuft == "stand"
     asyncio.run(lauf())
 
 
