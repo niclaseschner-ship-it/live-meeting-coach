@@ -1,6 +1,6 @@
 # Nestor – Lastenheft
 
-**Stand:** 07.10.2026 · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
+**Stand:** 08.10.2026 (Ticket #13: zwei Stufen) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
 **Vorgänger:** [archiv/spezifikation_v2.md](archiv/spezifikation_v2.md) (Laptop-Fassung, Messungen bis 05.10.)
 
 Diese Datei beschreibt verbindlich, was Nestor tut. Wer etwas Nennenswertes ändert, trägt es hier im selben
@@ -12,6 +12,10 @@ Nestor begleitet Präsenzmeetings (3–8 Personen, Deutsch). Er behält Agenda, 
 antwortet auf Ansprache und hält fest, was besprochen und entschieden wurde. **Die Gruppe entscheidet,
 Nestor zeigt nur an.**
 
+Nestor gibt es in **zwei Stufen** (Abschnitt 3): **Nestor Basis** nutzt nur Mistral AI (Frankreich, Verarbeitung in
+der EU) – für Runden, bei denen der Einsatz sonst am Datenschutz scheitert („kein OpenAI“). **Nestor Premium** nutzt
+OpenAI und legt Gespräch und Live-Bild darauf. Der Name bleibt in beiden Stufen Nestor.
+
 Nestor ist ein privates Projekt von Niclas Eschner und kein Geschäft. Die API-Kosten trägt Niclas vor,
 Nutzer gleichen sie am Ende freiwillig aus.
 
@@ -19,17 +23,19 @@ Nutzer gleichen sie am Ende freiwillig aus.
 
 ```
 Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─► Abschluss
-                   Modus wählen   Agenda per Prompt              Paket · Unterstützung · Datenspende
+                   Stufe wählen   Agenda per Prompt              Paket · Unterstützung · Datenspende
 ```
 
 1. **Zugang:** Jeder Kunde bekommt einen Link und ein eigenes Passwort. Ein Kunde kann mehrere Meetings
    gleichzeitig führen.
-2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Modi (Abschnitt 3), die erwarteten Kosten je
-   Stunde und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und Datenschutz.
+2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Stufen Basis und Premium (Abschnitt 3) mit je einem
+   Satz zur Verarbeitung und den erwarteten Kosten je Stunde, in Basis der Schalter „Nur auf Knopfdruck“, und der
+   Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und Datenschutz.
 3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
    eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
-4. **Meeting:** Dashboard wie bisher, je nach Modus mit oder ohne Live-Unterstützung.
+4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen; Premium zeigt zusätzlich
+   das Live-Bild und spricht im Gespräch.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite mit drei Angeboten:
    - **Eigenes Paket** herunterladen (Abschnitt 4.4).
    - **Unterstützung:** echte Kosten des Meetings, drei Vorschläge und ein PayPal-QR-Code.
@@ -37,27 +43,47 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 
    Danach wird der Meetingzustand auf dem Server gelöscht.
 
-## 3. Die zwei Modi
+## 3. Die zwei Stufen
 
-| | **Live** | **Auf Knopfdruck** |
+Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Gleiche Funktionen, gleiche
+Knöpfe, gleiche Stellen im Dashboard – man kann jederzeit umsteigen, ohne überrascht zu werden. Premium legt nur das
+Erlebnis darauf (Gespräch, Live-Bild). `LMC_KI=codex` und der Claude-Bildweg sind reine Testwege, keine Stufe.
+
+| | **Nestor Basis** (Einstieg, EU) | **Nestor Premium** |
 |---|---|---|
-| Ton | läuft zum Server und in Echtzeit zu OpenAI | läuft zum Server und bleibt dort |
-| Live-Transkript, Fokus, Ton, Ergebnisse | live | nur auf Knopfdruck |
-| Monolog, Redeanteile, Überlappung, Zeit | live | live (lokal auf dem Server, ohne KI-Dienst) |
-| Nestor | hört auf seinen Namen und antwortet gesprochen | auf Knopfdruck, als Text (Abschnitt 4.2) |
-| Live-Bild | alle 10 min und auf Zuruf | nur auf Knopfdruck |
-| Löschen | „Nein“ in der Begrüßung löscht alles | zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“ |
-| Kosten (Richtwert) | ~2 $ je Stunde | ~0,4 $ je Stunde bei 4 Knopfdrücken (Stand, Regeln, Protokoll, Bild) |
+| KI-Anbieter | nur Mistral AI (Frankreich, Verarbeitung in der EU), ein Schlüssel | OpenAI |
+| Ton | läuft zum Server und in Echtzeit zu Mistral (Voxtral Realtime) | läuft zum Server und in Echtzeit zu OpenAI |
+| Live-Transkript, Fokus, Ton, Ergebnisse | live | live |
+| Monolog, Redeanteile, Überlappung, Zeit | live, lokal auf dem Server | live, lokal auf dem Server |
+| Nestor ansprechen | „Nestor, …“ per Zuruf und die Knöpfe (auch am Handy) | „Nestor, …“ wie im Gespräch, und die Knöpfe |
+| Nestors Antwort | gesprochen mit der Stimme **Thorsten** (Thorsten-Voice, CC0) und als Karte; keine Rückfragen ohne Namen, kein Ins-Wort-Fallen | Realtime-Gespräch: Rückfragen ohne Namen, Reinreden macht ihn still |
+| Überblick | **Überblick als Text** (Abschnitt 4.7) alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf |
+| Knöpfe | Wo stehen wir? · Regeln eingehalten? · Überblick · Protokoll · Nestor fragen (am Handy: halten) | dieselben |
+| Löschen | „Nein“ in der Begrüßung löscht alles | „Nein“ in der Begrüßung löscht alles |
+| Kosten (Richtwert) | ~0,6 € je Stunde | ~2 € je Stunde |
 
-Auf der Startseite steht zu **Live** wörtlich: „Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.“ Zu
-**Auf Knopfdruck**: „Ohne Ihren Knopfdruck gibt Nestor nichts an KI-Dienste weiter. Ihr Ton liegt bis dahin
-nur auf unserem Server in der EU und wird am Ende gelöscht.“
+**Schalter „Nur auf Knopfdruck“ (nur Basis):** der frühere Modus „Auf Knopfdruck“. Ohne Knopf geht nichts an
+Mistral: Der Ton bleibt auf dem Server, Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf
+Knopfdruck (Abschnitt 4.2), Nestor hört nicht auf Zuruf und antwortet als Karte. Zeit, Redeanteile, Überlappung und
+Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je
+Stunde (Voxtral-Transkription der Sprache plus wenige Cent je Knopf, gerechnet).
 
-Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll (`coach/kosten.py`). Der Wert für „Auf Knopfdruck“ ist
-gemessen (Ticket #7, [docs/messung_knopfdruck.md](messung_knopfdruck.md)) an einer 60-Minuten-Probe mit vier
-Knopfdrücken (Stand, Regeln, Protokoll, Bild): Transkription + Bild zusammen 0,25 $ bei ~49 % Sprechanteil in der
-Probe, hochgerechnet bis ~0,32 $ bei durchgehender Rede; dazu kommen im echten Betrieb (API statt Codex) ein bis
-zwei Cent für die Text-Analyse. Macht zusammen rund 0,3–0,4 $/h – daher der Richtwert 0,4.
+Auf der Startseite steht zu **Basis** wörtlich: „Alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der
+EU.“ Zu **Premium**: „Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.“ Zum Schalter: „Nur auf
+Knopfdruck – ohne Knopf geht nichts an Mistral. Ihr Ton liegt bis dahin nur auf unserem Server in der EU und wird am
+Ende gelöscht.“
+
+Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription auf Knopfdruck
+`voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
+Überblick, Folie), Zuordnung alle ~15 s `mistral-small-latest` (im Vergleich gleich gut, ein Zehntel der Kosten),
+Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts-latest` mit der gespeicherten Stimme
+Thorsten. Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
+
+Gemessen ([messung_basis.md](messung_basis.md)): Sprechende → Thorstens erster Ton im Median 2,0–2,1 s, alle zwölf
+Zurufe der Probe lösen die richtige Aktion aus (24/24). Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll
+(`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet (~0,45–0,6 $/h je nach Zahl der Fragen
+und Recherchen), Premium wie bisher ~2 $/h. Der frühere Richtwert für „Auf Knopfdruck“ mit OpenAI (0,4 $/h, Ticket #7,
+[messung_knopfdruck.md](messung_knopfdruck.md)) gilt nicht mehr, seit der Schalter zu Basis gehört.
 
 ## 4. Funktionen
 
@@ -71,26 +97,34 @@ Satz mit Zweck oder Anlass zum Ziel, eine Uhrzeit „von–bis“ zur Gesamtdaue
 Minutenangabe gleichmäßig verteilt werden. Titel, Ziel und Teilnehmende überschreibt das Modell nur, wenn sie
 leer sind oder die Eingabe eindeutig ein neues Meeting beschreibt; ein gezielter Änderungswunsch („Ziel ist
 eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbeitbar. Über dasselbe Feld lässt sie
-sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Im Modus „Auf Knopfdruck“ gilt
+sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Mit „Nur auf Knopfdruck“ gilt
 das Absenden einer Spracheingabe als Knopfdruck.
 
 Daneben gibt es „Weitere Regeln“: ein Freitext (Kachel im selben Raster wie die Gesprächsregeln), den Nestor
 einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N weitere, die ihr
 auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
 
-### 4.2 Analysen auf Knopfdruck
+### 4.2 Die Knöpfe – Analysen auf Knopfdruck
 
-Ein Knopfdruck transkribiert den bisher noch nicht transkribierten Ton (fertige Teile bleiben gespeichert)
-und führt dann die gewählte Analyse aus:
+Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leiste unter der Kopfzeile) und am Handy:
 
-- **Wo stehen wir?** Stand der Agenda und Vorschlag für den nächsten Schritt
-- **Regeln eingehalten?** Prüfung der vereinbarten Gesprächsregeln
+- **Wo stehen wir?** Stand der Agenda und Vorschlag für den nächsten Schritt (Karte)
+- **Regeln eingehalten?** Prüfung der vereinbarten Gesprächsregeln (Karte)
+- **Überblick:** Überblick als Text (Abschnitt 4.7)
 - **Protokoll**
-- **Live-Bild**
-- **Nestor fragen:** freie Frage als Text (Spracheingabe folgt)
+- **Nestor fragen:** im Dashboard getippt, am Handy **gehalten**: halten, fragen, loslassen – der Ton der Frage wird
+  transkribiert und wie „Nestor, …“ beantwortet, gesprochen und als Karte. Freie Fragen schließen Recherche („gib uns
+  einen Überblick zu …“) und das Arbeiten mit dem Transkript ein („such mir raus, was zum Budget gesagt wurde“).
+  Was während des Haltens gesagt wird, löst nicht zusätzlich eine Antwort über den Zuruf aus.
 
-Bis die Antwort kommt, sieht man den Fortschritt. Gemessene Wartezeit (Ticket #7, 60-Minuten-Probe, Einzelheiten
-und Messverfahren in [docs/messung_knopfdruck.md](messung_knopfdruck.md)):
+Ohne „Nur auf Knopfdruck“ liegt das Transkript schon vor, ein Knopf braucht dann nur die Analyse (gemessen 1–4 s);
+„Regeln eingehalten?“ fasst dann die laufenden Ampeln zusammen, ohne KI-Aufruf.
+
+Mit **„Nur auf Knopfdruck“** (Basis) transkribiert ein Knopfdruck zuerst den bisher noch nicht transkribierten Ton
+(fertige Teile bleiben gespeichert) und führt dann die Analyse aus; „Nestor fragen“ antwortet als Karte. Bis die
+Antwort kommt, sieht man den Fortschritt. In Basis gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)):
+1,8–3,9 s je Knopf. Die folgende Messung stammt noch aus dem früheren Modus mit OpenAI-Transkription und Codex
+(Ticket #7, 60-Minuten-Probe, [docs/messung_knopfdruck.md](messung_knopfdruck.md)):
 
 | Meetingzeit | Knopf | Transkription | Analyse (Codex) | Gesamt | Kosten |
 |---|---|---|---|---|---|
@@ -105,10 +139,10 @@ Cent statt nichts. Die Transkriptionszeit wächst mit der Menge offener Sprache 
 mit der Meetingdauer selbst; bei „Protokoll“ war sie am größten, weil seit „Regeln“ 30 Minuten statt 15
 aufgelaufen waren.
 
-Weitere Regeln in diesem Modus:
+Weitere Regeln mit „Nur auf Knopfdruck“:
 - Agendawechsel nur per Klick (Ansagen kämen erst beim nächsten Knopf an).
-- Am Meetingende keine automatische Auswertung; Protokoll und Bild gibt es, wenn vorher gedrückt wurde.
-- **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Bild, Protokoll, Befunde) aus dem
+- Am Meetingende keine automatische Auswertung; Protokoll und Überblick gibt es, wenn vorher gedrückt wurde.
+- **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Überblick, Protokoll, Befunde) aus dem
   Zeitraum; die Aufnahme wird dort zu Stille. Redeanteile bleiben, sie enthalten keine Inhalte.
 - Erster Probelauf (3 min, 4 Knöpfe): je Knopf 9–15 s, davon Transkription 1–6 s; 0,009 $ Transkription.
   Ausführliche Messung über 60 Minuten: siehe Tabelle oben.
@@ -171,11 +205,24 @@ Betrag.
   einzeln an oder wertet Inhalte aus.“
 - Die Spende landet in einem Speicher in der EU (R2), lokal unter `spenden/`.
 
+### 4.7 Überblick als Text
+
+Der Stand des Meetings als strukturierte Dashboard-Ansicht ohne Bildmodell (`coach/ueberblick.py`), in beiden Stufen:
+Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (grün), 🟡 Offen (bernstein),
+📌 Aufgaben (wer, bis wann), ↪ Außerhalb der Agenda (grau) und „Neu seit dem letzten Stand“. Inhalte aus einem
+Textaufruf über Agenda, die festgestellten Ergebnisse je Punkt (Regel 10) und das Transkript. Nichts wird gemalt:
+Jede Zahl muss im Material vorkommen, sonst entfällt der Eintrag; „Person N“ erscheint nicht. In Basis ersetzt der
+Überblick das Live-Bild (alle 10 min, auf Zuruf, am Ende, per Knopf), in Premium ist er neben dem Live-Bild
+umschaltbar. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
+(55.000 € statt 25.000 €, Wortsalat, Bilddatei bei Microsoft Azure) – deshalb in Basis kein Bildmodell.
+
 ## 5. Rahmenbedingungen
 
 | | |
 |---|---|
-| Kosten | Live ≤ 2 $ je Stunde, Knopfdruck ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll |
+| Kosten | Premium ≤ 2 $ je Stunde, Basis ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll |
+| Datenschutz Basis | In Basis geht kein einziger Aufruf an OpenAI (nachgewiesen über das Nutzungsprotokoll) |
+| Parallele Meetings | gemessen ohne 429: Basis bis 24, Premium bis 8 gleichzeitig ([messung_basis.md](messung_basis.md)); bei Überlast wiederholt Nestor mit Wartezeit und sagt sonst „Ich komme gerade nicht durch, versucht es gleich nochmal.“ |
 | Datenhaltung | Ton und Transkript nur bis zum Abschluss; danach bleibt nur, was heruntergeladen oder gespendet wurde. Nutzungsprotokoll ohne Inhalte. |
 | Ort | Server in der EU (Cloudflare-Jurisdiktion `eu`); Deutschland lässt sich nicht erzwingen |
 | Browser | aktueller Chrome, Edge, Safari; Handy als Mikrofon wie bisher |
@@ -186,8 +233,11 @@ Betrag.
 - **Cloudflare Containers** (Workers-Paid-Plan, 5 $/Monat). Ein Worker prüft das Passwort und startet je
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
-- **OpenAI-Schlüssel:** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Wer
-  möchte, trägt auf der Startseite (aufklappbare Zeile unter den Modus-Karten, optional) seinen eigenen Schlüssel
+- **Mistral-Schlüssel (Basis):** Niclas' Schlüssel als Secret `MISTRAL_API_KEY`, im Container als
+  `LMC_MISTRAL_SCHLUESSEL`. Fehlt er, ist Basis auf der Startseite nicht wählbar. Die Stimme Thorsten ist im
+  Mistral-Konto gespeichert; die Referenz (CC0) liegt in `coach/stimmen/`, um sie neu anzulegen.
+- **OpenAI-Schlüssel (Premium):** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Wer
+  möchte, trägt auf der Startseite (aufklappbare Zeile unter den Stufen-Karten, optional) seinen eigenen Schlüssel
   ein – ein Angebot, kein Pflichtschritt. Ein eingetragener Schlüssel hat Vorrang vor Niclas' Schlüssel; die
   Kopfleiste im Dashboard zeigt dann unauffällig „eigener Schlüssel“. Im Cloud-Betrieb wird ein so eingetragener
   Schlüssel beim Abschluss des Meetings („Fertig“) wieder gelöscht – er gilt nur für dieses eine Meeting; im
@@ -197,8 +247,8 @@ Betrag.
   im Abschluss gibt seinen Platz sofort frei und schließt den Container, ohne „Fertig“ erst nach 30 Minuten ohne
   Anfrage.
 - **Abo-Wege** (Codex, Claude über den Pi) sind nur für Tests und in der Cloud aus.
-- **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt
-  OpenAI und Cloudflare als Empfänger.
+- **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt die
+  Empfänger je Stufe: in Basis Mistral AI (statt OpenAI), in Premium OpenAI, in beiden Cloudflare.
 
 ## 7. Nicht enthalten
 

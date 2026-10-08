@@ -94,15 +94,22 @@ der Meeting-Zusammenfassung als Bild.
 
 ## Aufbau (Version 2: Ströme statt Blöcke)
 
+Zwei Stufen (Ticket #13, [Lastenheft 3](docs/lastenheft.md)): **Nestor Basis** leitet jeden KI-Aufruf über Mistral AI
+(Frankreich, EU; `coach/mistral.py`), **Nestor Premium** über OpenAI. Gewählt auf der Startseite bzw. lokal mit
+`LMC_STUFE=basis|premium`; Schlüssel `MISTRAL_API_KEY` (oder `LMC_MISTRAL_SCHLUESSEL`) bzw. `OPENAI_API_KEY`.
+Spalte „Technik“: Premium, *Basis kursiv*.
+
 | Strom | Datei | Technik |
 |---|---|---|
 | Audio | `static/app.js` | Browser-Mikro, durchgehend, PCM 24 kHz über WebSocket |
 | Pausen | `coach/vad.py` | Silero VAD, lokal |
-| 1 Live-Text | `coach/livetext.py` | OpenAI `gpt-live-transcribe`, Teiltext während des Sprechens |
+| 1 Live-Text | `coach/livetext.py` | OpenAI `gpt-live-transcribe`, Teiltext während des Sprechens; *Voxtral Realtime (`LiveTextMistral`), 16 kHz, Verzug 240 ms* |
 | 2 Wer spricht | `coach/stimmen.py` | Stimm-Fingerabdruck (CAM++) in 1,5-s-Fenstern, lokal – Benchmark 99 % (Stadtrat) / 95 % (Talkshow), Raumtest offen |
-| 4 Kontext | `coach/themen.py` | Zuordnung zum Agendapunkt per GPT-5.4-mini, alle ~15 s Gesprochenes |
-| 5 Live-Bild | `coach/bild_gpt.py`, `coach/onepager.py` | Standard: GPT-5.4 + gpt-image-2 wie in ChatGPT, Fortschreibung des letzten Bildes (~55 s, ~8 ct); Alternative: Claude-Abo, SVG (`LMC_BILD_ANBIETER=claude`) |
-| Sprachassistent | `coach/assistent.py`, `coach/gespraech.py` | Ansprache per Name im Live-Text, Realtime-Gespräch (gpt-realtime) bzw. Rückfall GPT-5.4-mini + Sprachausgabe |
+| 4 Kontext | `coach/themen.py` | Zuordnung zum Agendapunkt per GPT-5.4-mini, alle ~15 s Gesprochenes; *mistral-medium-latest* |
+| 5 Live-Bild | `coach/bild_gpt.py`, `coach/onepager.py` | Standard: GPT-5.4 + gpt-image-2 wie in ChatGPT, Fortschreibung des letzten Bildes (~55 s, ~8 ct); Alternative: Claude-Abo, SVG (`LMC_BILD_ANBIETER=claude`); *in Basis kein Bildmodell* |
+| 5 Überblick | `coach/ueberblick.py` | Überblick als Text (Entschieden, Offen, Aufgaben, Außerhalb, Neu) aus einem Textaufruf, Zahlen gegen das Material geprüft; in beiden Stufen, in Basis statt des Live-Bilds |
+| Sprachassistent | `coach/assistent.py`, `coach/gespraech.py` | Ansprache per Name im Live-Text, Realtime-Gespräch (gpt-realtime) bzw. Rückfall GPT-5.4-mini + Sprachausgabe; *mistral-medium + Voxtral TTS, Stimme Thorsten (`coach/stimmen/`)* |
+| Knöpfe | `coach/knopfdruck.py`, `coach/api_knopfdruck.py` | Wo stehen wir · Regeln · Überblick · Protokoll · Nestor fragen (am Handy halten), in beiden Stufen gleich; „Nur auf Knopfdruck“ in Basis |
 | Regeln, Signale | `coach/analyse.py`, `coach/entscheider.py` | Ampeln, Countdown, Cooldown |
 | Zusammenführung | `coach/hoeren.py`, `coach/pipeline.py` | Hörstrom, Meeting-Zustand, Abspielmodus |
 

@@ -35,9 +35,9 @@ from .config import EINST
 
 log = logging.getLogger("coach.knopfdruck")
 
-ARTEN = ("stand", "regeln", "protokoll", "bild", "frage")
-NAMEN = {"stand": "Wo stehen wir?", "regeln": "Regeln eingehalten?", "protokoll": "Protokoll", "bild": "Bild",
-         "frage": "Nestor fragen"}
+ARTEN = ("stand", "regeln", "ueberblick", "protokoll", "bild", "frage")
+NAMEN = {"stand": "Wo stehen wir?", "regeln": "Regeln eingehalten?", "ueberblick": "Überblick", "protokoll": "Protokoll",
+         "bild": "Bild", "frage": "Nestor fragen"}
 KNOPF_REGELN = ("thema", "ton", "ergebnisse")  # Regeln, die den Text brauchen – live nur über KI-Dienste
 INHALT_ARTEN = ("ton", "ergebnis", "assistent", "recherche", "folie", "name")  # Protokolleinträge mit Inhalt
 MIN_PUNKT_SEKUNDEN = 20  # wie Regel 10: kürzer Besprochenes wird nicht geprüft
@@ -104,12 +104,12 @@ def reservieren(coach, art: str) -> None:
     k = coach.knopf
     if art not in ARTEN:
         raise KnopfFehler("Unbekannter Knopf.")
-    if not coach.knopfdruck:
-        raise KnopfFehler("Die Knöpfe gibt es nur im Modus „Auf Knopfdruck“.")
+    # Seit Ticket #13 gibt es die Knöpfe in beiden Stufen und mit und ohne „Nur auf Knopfdruck“ – gleiche Knöpfe an
+    # gleicher Stelle. Ohne Knopfdruck-Schalter ist das Transkript schon da; der Schritt „transkribiere“ ist dann leer.
     if coach.hoerstrom is None:
         raise KnopfFehler("Es läuft kein Meeting.")
     if coach._client is None:
-        raise KnopfFehler("Kein OpenAI-Schlüssel – ohne ihn kann Nestor nichts auswerten.")
+        raise KnopfFehler("Kein KI-Schlüssel – ohne ihn kann Nestor nichts auswerten.")
     if k.laeuft:
         raise KnopfFehler(f"Nestor ist noch bei „{NAMEN[k.laeuft]}“ – bitte kurz warten.")
     k.laeuft, k.schritt, k.anteil, k.fehler = art, "transkribiere", 0.0, None
@@ -257,6 +257,14 @@ async def _regeln(coach, frage: str) -> dict:
     from . import regeln, themen
 
     m, k = coach.meeting, coach.knopf
+    if not coach.knopfdruck:
+        # Live: Fokus, Ton und Ergebnisse prüft Nestor laufend – die Karte fasst die Ampeln zusammen, ohne KI-Aufruf
+        punkte = [f"{r['titel']}: " + ("eingehalten" if r["farbe"] in ("gruen", "grau") else "Achtung")
+                  + (f" – {r['detail']}" if r["detail"] else "") for r in coach.schnappschuss()["regel_status"]]
+        karte = {"art": "regeln", "frage": NAMEN["regeln"], "titel": f"Regeln · Stand {mmss(m.jetzt())}",
+                 "punkte": punkte or ["Für dieses Meeting sind keine Gesprächsregeln gewählt."]}
+        coach._karte_ablegen(karte)
+        return karte
     jetzt = m.jetzt()
     ki = [r for r in m.regel_ids if r in KNOPF_REGELN]
     seit = k.regeln_bis
@@ -370,6 +378,18 @@ async def _protokoll(coach, frage: str) -> dict:
     return karte
 
 
+async def _ueberblick(coach, frage: str) -> dict:
+    """Überblick als Text (coach/ueberblick.py) – in beiden Stufen; legt zugleich eine Karte für den Verlauf ab."""
+    if not coach.meeting.transkript:
+        raise KnopfFehler("Noch nichts gesagt – für einen Überblick fehlt der Stoff.")
+    while coach._ueberblick_laeuft:  # läuft schon einer (Takt, Zuruf): abwarten, dann frisch
+        await asyncio.sleep(0.3)
+    u = await coach.ueberblick_bauen()
+    if u is None:
+        raise KnopfFehler(coach.onepager_fehler or "Der Überblick hat nicht geklappt.")
+    return {"version": coach.ueberblick_version}
+
+
 async def _bild(coach, frage: str) -> dict:
     if not coach.meeting.transkript:
         raise KnopfFehler("Noch nichts gesagt – für ein Bild fehlt der Stoff.")
@@ -382,7 +402,8 @@ async def _bild(coach, frage: str) -> dict:
     return {"version": coach.onepager_version}
 
 
-ANALYSEN = {"stand": _stand, "regeln": _regeln, "protokoll": _protokoll, "bild": _bild, "frage": _frage}
+ANALYSEN = {"stand": _stand, "regeln": _regeln, "ueberblick": _ueberblick, "protokoll": _protokoll, "bild": _bild,
+            "frage": _frage}
 
 
 # --- Verwerfen ------------------------------------------------------------------
@@ -402,6 +423,9 @@ async def verwerfen(coach, minuten: float | None) -> dict:
             m.block_texte.clear()
         # Was in der Zeit entstand, kann Inhalte daraus enthalten
         coach.karten = [c for c in coach.karten if c["zeit"] < seit]
+        if coach.ueberblick is not None and coach.ueberblick["stand"] >= seit:
+            coach.ueberblick = None
+            coach.ueberblick_version += 1  # das Dashboard nimmt den Überblick dann heraus
         if coach.onepager_stand is not None and coach.onepager_stand >= seit:
             coach.onepager_svg = coach.onepager_png = coach.onepager_analyse = coach.onepager_stand = None
             coach._onepager_voll = None

@@ -5,7 +5,10 @@ jemand zum Laptop muss. Die Handy-Seite `/handy` bietet keine neuen Funktionen, 
 Daumen:
 
 - Mikrofon übernehmen, mit Pegelanzeige;
-- Nestor fragen, stoppen und wieder zuhören lassen; stumm schalten;
+- „Nestor fragen“ **halten**: halten, fragen, loslassen – die Antwort kommt gesprochen und als Karte (Ticket #13;
+  hört das Handy nicht ohnehin zu, öffnet das Halten das Mikrofon nur für die Frage);
+- dieselben Knöpfe wie im Dashboard: Wo stehen wir? · Regeln eingehalten? · Überblick · Protokoll;
+- Nestor stoppen und wieder zuhören lassen; stumm schalten;
 - laufender Hinweis groß, Nestors letzte Antwort;
 - Verlauf: Hinweise, Nestor-Karten (antippen öffnet sie) und Transkript;
 - Meeting starten und beenden.

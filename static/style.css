@@ -484,3 +484,44 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .knopf-verwerfen .knopf-gefahr { color: var(--rot); border-color: var(--rot-weich); }
 .knopf-link { display: inline-block; margin-top: 4px; font-weight: 600; }
 @media (max-width: 700px) { .knopf-verwerfen { margin-left: 0; } }
+
+/* ---------- Überblick als Text (Ticket #13): Zonen wie im Live-Bild, Farben wie im Gestaltungssystem ---------- */
+.ueberblick { position: absolute; inset: 0; background: #fff; overflow: auto; padding: 22px 26px;
+  display: flex; flex-direction: column; gap: 14px; }
+.ub-kopf { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.ub-kopf h3 { margin: 0; font-size: 22px; color: var(--marke-2); }
+.ub-kern { margin: 4px 0 0; color: var(--text-2); font-size: 15px; }
+.ub-fokus { margin: 4px 0 0; color: var(--akzent); font-size: 13px; font-weight: 600; }
+.ub-stand { display: grid; justify-items: end; gap: 2px; font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.ub-stand strong { color: var(--text); font-size: 15px; }
+.ub-agenda { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.ub-agenda li { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--rand);
+  font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ub-agenda li b { margin-right: 6px; }
+.ub-agenda li.abgeschlossen { background: var(--gruen-weich); border-color: var(--gruen); color: var(--gruen); }
+.ub-agenda li.aktuell { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+.ub-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ub-block { border: 1px solid var(--rand); border-left: 5px solid var(--rand); border-radius: 10px; padding: 10px 14px; }
+.ub-block h4 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.ub-block ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14.5px; }
+.ub-block small { color: var(--text-3); }
+.ub-block.gruen { border-left-color: var(--gruen); }
+.ub-block.gruen h4 { color: var(--gruen); }
+.ub-block.bernstein { border-left-color: #D97706; }
+.ub-block.bernstein h4 { color: #B45309; }
+.ub-block.blau { border-left-color: var(--akzent); }
+.ub-block.blau h4 { color: var(--akzent); }
+.ub-block.grau { border-left-color: #94A3B8; border-style: dashed; border-left-style: solid; }
+.ub-block.grau h4 { color: var(--text-3); }
+.ub-leer { margin: 0; color: var(--text-3); font-size: 13.5px; font-style: italic; }
+.ub-neu { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--marke-weich); color: var(--marke-2); font-size: 13.5px; }
+@media (max-width: 900px) { .ub-raster { grid-template-columns: 1fr; } }
+
+/* Handy: Knöpfe wie im Dashboard, „Nestor fragen“ zum Halten */
+.h-knopfraster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.h-knopfraster button { padding: 12px 10px; white-space: normal; }
+.h-halten { width: 100%; margin-top: 10px; padding: 18px 12px; font-size: 17px; touch-action: none; user-select: none;
+  -webkit-user-select: none; -webkit-touch-callout: none; display: flex; align-items: center; justify-content: center;
+  gap: 10px; white-space: normal; }
+.h-halten .i svg { width: 24px; height: 24px; display: block; }
+.h-halten.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }

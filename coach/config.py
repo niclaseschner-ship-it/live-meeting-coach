@@ -101,7 +101,8 @@ class Einstellungen:
     assistent_name: str = os.getenv("LMC_ASSISTENT_NAME", "Nestor")
     # Schreibweisen, die die Texterkennung für den Namen liefern kann (Regex, ohne Wortgrenzen);
     # Abspieltest 05.10.: am Satzanfang kam „Nestor“ 3 von 4 Mal als „Mestor“ an
-    assistent_muster: str = os.getenv("LMC_ASSISTENT_MUSTER", r"[nm][eä]st[oeu]h?r")
+    # 08.10. (Voxtral, Basis): einmal „Westor“ → w dazu
+    assistent_muster: str = os.getenv("LMC_ASSISTENT_MUSTER", r"[nmw][eä]st[oeu]h?r")
     assistent_modell: str = os.getenv("LMC_ASSISTENT_MODELL", "gpt-5.4-mini")
     assistent_aufwand: str = os.getenv("LMC_ASSISTENT_AUFWAND", "low")  # gemessen: erster Satz nach ~1,2 s
     stimme_modell: str = os.getenv("LMC_STIMME_MODELL", "gpt-4o-mini-tts")
@@ -153,17 +154,78 @@ class Einstellungen:
     # Basisadresse des Worker (für den Rückruf aus dem Container, z. B. https://nestor.<konto>.workers.dev)
     worker_url: str = os.getenv("LMC_WORKER_URL", "")
 
+    # --- Stufen (Ticket #13, Lastenheft 3): „basis“ = nur Mistral (EU), „premium“ = OpenAI wie bisher ---
+    # Die Startseite wählt die Stufe je Meeting (POST /api/stufe); lokal gilt LMC_STUFE als Vorgabe.
+    stufe: str = os.getenv("LMC_STUFE", "premium")
+    basis_text_modell: str = os.getenv("LMC_BASIS_TEXT_MODELL", "mistral-medium-latest")  # Probe 08.10.: 12/12 Aktionen
+    # Zuordnung alle ~15 s (größter Posten der Textaufrufe, mit Medium ~0,37 $/h): Small war im Vergleich gleich gut
+    # (21/21 Zuordnung, 21/21 Ton, Demo-Wiederholung identisch; docs/messung_basis.md) und kostet ein Zehntel
+    basis_zuordnung_modell: str = os.getenv("LMC_BASIS_ZUORDNUNG_MODELL", "mistral-small-latest")
+    zuordnung_modell: str = os.getenv("LMC_ZUORDNUNG_MODELL", "")  # leer = analyse_modell
+    basis_live_modell: str = os.getenv("LMC_BASIS_LIVE_MODELL", "voxtral-mini-transcribe-realtime-2602")
+    basis_live_delay_ms: int = int(_zahl("LMC_BASIS_LIVE_DELAY_MS", 240))  # Text der Frage ~0,6 s nach Sprechende
+    basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch (Knopfdruck)
+    basis_stimme_modell: str = os.getenv("LMC_BASIS_STIMME_MODELL", "voxtral-mini-tts-latest")
+    basis_stimme: str = os.getenv("LMC_BASIS_STIMME", "01a1188b-54f4-71a8-86df-df69e318948c")  # Thorsten (voice_id)
+    richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.6)
+    richtwert_premium_eur: float = _zahl("LMC_RICHTWERT_PREMIUM_EUR", 2.0)
+
     def __post_init__(self) -> None:
         # Cloud: Abo-Wege (Codex/Claude über den Pi) sind nur für eigene Tests gedacht und in der Cloud nicht
         # erreichbar – unabhängig davon, was LMC_KI/LMC_BILD_ANBIETER versehentlich mitbekommen.
         if self.betrieb == "cloud":
             if self.ki != "openai":
                 object.__setattr__(self, "ki", "openai")
-            if self.bild_anbieter != "openai":
+            if self.bild_anbieter not in ("openai", "text"):
                 object.__setattr__(self, "bild_anbieter", "openai")
 
 
 EINST = Einstellungen()
+
+
+# --- Stufen: Nestor Basis (Mistral) und Nestor Premium (OpenAI) -------------------------------------------------------
+# Eine Stufe ist ein Satz Einstellungen. Premium = was beim Start aus Umgebung/.env kam (wie bisher); Basis tauscht
+# jedes Modell gegen sein Mistral-Gegenstück. Der Coach baut danach seinen Client neu (pipeline.Coach.stufe_setzen).
+STUFEN = ("basis", "premium")
+_STUFEN_FELDER = ("live_modell", "text_modell", "transkriptions_modell", "analyse_modell", "analyse_aufwand",
+                  "zuordnung_modell",
+                  "assistent_modell", "assistent_aufwand", "recherche_modell", "recherche_aufwand", "stimme_modell",
+                  "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden")
+_PREMIUM = {f: getattr(EINST, f) for f in _STUFEN_FELDER}
+
+
+def basis_werte() -> dict:
+    e = EINST
+    return {
+        "live_modell": e.basis_live_modell, "text_modell": e.basis_transkription,
+        "transkriptions_modell": e.basis_transkription,
+        "analyse_modell": e.basis_text_modell, "assistent_modell": e.basis_text_modell,
+        "recherche_modell": e.basis_text_modell, "zuordnung_modell": e.basis_zuordnung_modell,
+        "analyse_aufwand": "", "assistent_aufwand": "", "recherche_aufwand": "",  # Mistral kennt „low“ nicht
+        "stimme_modell": e.basis_stimme_modell, "stimme": e.basis_stimme,
+        # Nestor antwortet über Text + Sprachausgabe (kein Realtime-Gespräch): keine Rückfragen ohne Namen,
+        # kein Ins-Wort-Fallen (Ticket #13); statt des Live-Bilds der Überblick als Text (kein Bildmodell)
+        "assistent_modus": "text", "bild_anbieter": "text", "nachfrage_sekunden": 0.0,
+    }
+
+
+def stufe_setzen(stufe: str) -> None:
+    """Einstellungen der Stufe übernehmen. Was in Premium zur Laufzeit geändert wurde (Stimme, Gesprächsart …),
+    bleibt für die Rückkehr nach Premium gemerkt."""
+    if stufe not in STUFEN:
+        raise ValueError(f"Unbekannte Stufe: {stufe}")
+    if EINST.stufe == "premium":
+        _PREMIUM.update({f: getattr(EINST, f) for f in _STUFEN_FELDER})
+    for k, v in (basis_werte() if stufe == "basis" else _PREMIUM).items():
+        object.__setattr__(EINST, k, v)
+    object.__setattr__(EINST, "stufe", stufe)
+
+
+if EINST.stufe == "basis":
+    object.__setattr__(EINST, "stufe", "premium")  # Ausgangswerte oben sind die von Premium
+    stufe_setzen("basis")
+elif EINST.stufe not in STUFEN:
+    object.__setattr__(EINST, "stufe", "premium")
 
 
 # --- OpenAI-Schlüssel ----------------------------------------------------------
@@ -216,3 +278,16 @@ def schluessel_speichern(schluessel: str | None) -> None:
 def hat_openai_schluessel() -> bool:
     """LMC_OFFLINE=1 schaltet alle KI-Aufrufe ab (Demo ohne Kosten)."""
     return bool(openai_schluessel()) and os.getenv("LMC_OFFLINE") != "1"
+
+
+def mistral_schluessel() -> str | None:
+    """Nestor Basis: Niclas' Mistral-Schlüssel aus der Umgebung (Secret im Cloud-Betrieb). Kein Eintrag im Dashboard –
+    der eigene Schlüssel auf der Startseite ist ein OpenAI-Schlüssel und gilt nur für Premium."""
+    return os.getenv("LMC_MISTRAL_SCHLUESSEL") or os.getenv("MISTRAL_API_KEY") or None
+
+
+def ki_verfuegbar() -> bool:
+    """Gibt es für die gewählte Stufe einen Schlüssel (und ist der Offline-Modus aus)?"""
+    if os.getenv("LMC_OFFLINE") == "1":
+        return False
+    return bool(mistral_schluessel() if EINST.stufe == "basis" else openai_schluessel())

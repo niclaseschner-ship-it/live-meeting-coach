@@ -112,10 +112,13 @@ $("btn-einstellungen").onclick = () => { $("einstellungen").hidden = !$("einstel
 $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
 $("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
-$("btn-bild").onclick = () => (zustand?.modus === "knopfdruck" ? knopfDruecken("bild") : api("/api/onepager"));
+// Basis: kein Bildmodell – der Knopf schreibt den Überblick neu; Premium: Live-Bild (Knopfdruck gibt es nur in Basis)
+$("btn-bild").onclick = () => (basisStufe(zustand) ? knopfDruecken("ueberblick")
+  : zustand?.modus === "knopfdruck" ? knopfDruecken("bild") : api("/api/onepager"));
 $("btn-folie").onclick = () => api("/api/folie");
 $("tab-bild").onclick = () => { ansicht = "bild"; if (zustand) bildRendern(zustand); };
 $("tab-folie").onclick = () => { ansicht = "folie"; if (zustand) bildRendern(zustand); };
+$("tab-ueberblick").onclick = () => { ansicht = "ueberblick"; if (zustand) bildRendern(zustand); };
 $("btn-bild-png").onclick = () => bildAlsPng();
 // Handy koppeln: QR-Code mit Kopplungscode; das Handy kann dann das Mikrofon übernehmen
 let kopplungGeladen = false;
@@ -177,7 +180,7 @@ $("s-entfernen").onclick = () => schluesselSenden("");
 function schluesselRendern(z) {
   const s = z.schluessel ?? {};
   $("eigener-schluessel-pill").hidden = s.quelle !== "dashboard";  // dezenter Hinweis in der Kopfleiste
-  $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline;
+  $("schluessel-fehlt").hidden = !!s.vorhanden || !!s.offline || basisStufe(z); // Basis: Mistral-Schlüssel liegt am Server
   $("s-status").textContent = s.offline ? "Offline-Modus (LMC_OFFLINE=1): keine KI-Aufrufe."
     : !s.vorhanden ? "Noch kein Schlüssel – nur Demos möglich."
     : s.quelle === "dashboard" ? `Eingetragen (…${s.ende ?? ""}), gilt für alle Funktionen.`
@@ -190,6 +193,11 @@ const dollar = (v, stellen = 2) => `${(v ?? 0).toLocaleString("de-DE", { minimum
 function kostenRendern(z) {
   const k = z.kosten; if (!k) return;
   $("kosten-wert").textContent = dollar(k.meeting);
+  const basis = basisStufe(z);
+  $("btn-kosten").dataset.tip = `Geschätzte ${basis ? "Mistral" : "OpenAI"}-Kosten dieses Meetings – klicken für Details`;
+  $("k-anbieter").textContent = basis ? "Mistral" : "OpenAI";
+  $("k-abrechnung").href = basis ? "https://admin.mistral.ai/organization/usage" : "https://platform.openai.com/usage";
+  $("k-abrechnung").textContent = basis ? "admin.mistral.ai" : "platform.openai.com/usage";
   if ($("kosten").hidden) return;
   $("k-meeting").textContent = dollar(k.meeting);
   const teile = [];
@@ -208,8 +216,34 @@ function kostenRendern(z) {
 
 // ---------- Live-Bild ----------
 let bildVersion = 0;
-let ansicht = "bild"; // Live-Bild oder Recherche-Folie
+let ansicht = "bild"; // Live-Bild, Überblick (Text) oder Recherche-Folie
 let folieVersion = 0;
+let ueberblickVersion = 0;
+const basisStufe = (z) => z?.stufe === "basis";
+
+// Überblick als Text (Ticket #13): Kopf, Agenda, Entschieden / Offen / Aufgaben / Außerhalb, Neu seit dem letzten Stand
+function ueberblickBauen(u) {
+  const liste = (eintraege, leer, zeile) => eintraege.length ? el("ul", {}, ...eintraege.map((e) => el("li", {}, ...zeile(e))))
+    : el("p", { class: "ub-leer" }, leer);
+  const block = (klasse, zeichen, titel, inhalt) => el("section", { class: `ub-block ${klasse}` },
+    el("h4", {}, el("span", { class: "ub-zeichen", "aria-hidden": "true" }, zeichen), titel), inhalt);
+  $("ueberblick").replaceChildren(
+    el("div", { class: "ub-kopf" },
+      el("div", {}, el("h3", {}, u.titel), ...(u.kernaussage ? [el("p", { class: "ub-kern" }, u.kernaussage)] : []),
+        ...(u.fokus ? [el("p", { class: "ub-fokus" }, `Fokus: ${u.fokus}`)] : [])),
+      el("div", { class: "ub-stand" }, el("strong", {}, `Stand ${u.laufzeit}`), ...(u.punkt ? [el("span", {}, `jetzt ${u.punkt}`)] : []))),
+    ...(u.agenda?.length ? [el("ol", { class: "ub-agenda" }, ...u.agenda.map((p) =>
+      el("li", { class: p.status }, el("b", {}, String(p.nr)), p.titel)))] : []),
+    el("div", { class: "ub-raster" },
+      block("gruen", "✅", "Entschieden", liste(u.entschieden, "Noch nichts ausdrücklich beschlossen.", (e) => [e.was])),
+      block("bernstein", "🟡", "Offen", liste(u.offen, "Keine offenen Fragen genannt.", (e) => [e.was])),
+      block("blau", "📌", "Aufgaben", liste(u.aufgaben, "Noch keine Aufgaben verteilt.", (a) => [a.was,
+        el("small", {}, ` – ${a.wer ?? "wer: offen"}${a.bis ? ` · bis ${a.bis}` : ""}`)])),
+      block("grau", "↪", "Außerhalb der Agenda", liste(u.ausserhalb, "Keine Abschweifung.", (a) => [
+        ...(a.zeit ? [el("small", {}, `${a.zeit} `)] : []), a.was]))),
+    el("p", { class: "ub-neu" }, el("strong", {}, "Neu seit dem letzten Stand: "), u.neu.join(" · ")),
+  );
+}
 function folieBauen(f) {
   const quellen = f.quellen.length ? el("ol", {}, ...f.quellen.map((q) => el("li", {},
     el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel), el("small", {}, q.seite))))
@@ -247,24 +281,44 @@ function bildRendern(z) {
     img.src = `${z.onepager_format === "png" ? "/api/onepager.png" : "/api/onepager.svg"}?v=${bildVersion}`;
     $("btn-bild-analyse").hidden = false;
   }
-  // Recherche-Folie: neue Folie wird sofort gezeigt; Umschalter, sobald es eine gibt
+  // Recherche-Folie und Überblick: neue werden sofort gezeigt; Umschalter, sobald es mehr als eine Ansicht gibt
   if (z.folie && z.folie_version !== folieVersion) { folieVersion = z.folie_version; folieBauen(z.folie); ansicht = "folie"; }
-  const folieZeigen = ansicht === "folie" && !!z.folie;
-  $("ansicht-wahl").hidden = !z.folie;
-  $("bild-titel").hidden = !!z.folie;
-  $("tab-bild").classList.toggle("aktiv", !folieZeigen); $("tab-folie").classList.toggle("aktiv", folieZeigen);
-  $("folie").hidden = !folieZeigen;
-  $("live-bild").style.visibility = folieZeigen ? "hidden" : "";
-  $("bild-leer").style.visibility = folieZeigen ? "hidden" : "";
+  if ((z.ueberblick_version ?? 0) !== ueberblickVersion) {
+    ueberblickVersion = z.ueberblick_version ?? 0;
+    if (z.ueberblick) { ueberblickBauen(z.ueberblick); ansicht = "ueberblick"; } else $("ueberblick").replaceChildren();
+  }
+  const basis = basisStufe(z);
+  if (basis && ansicht === "bild") ansicht = "ueberblick"; // Basis: kein Live-Bild, der Überblick steht an seiner Stelle
+  if (ansicht === "folie" && !z.folie) ansicht = basis ? "ueberblick" : "bild";
+  if (ansicht === "ueberblick" && !z.ueberblick && !basis) ansicht = "bild";
+  const tabs = { bild: !basis, ueberblick: basis || !!z.ueberblick, folie: !!z.folie };
+  const mehrere = Object.values(tabs).filter(Boolean).length > 1;
+  $("ansicht-wahl").hidden = !mehrere;
+  $("bild-titel").hidden = mehrere;
+  $("bild-titel").firstChild.textContent = basis ? "Überblick " : "Live-Bild ";
+  for (const [art, da] of Object.entries(tabs)) {
+    $(`tab-${art}`).hidden = !da; $(`tab-${art}`).classList.toggle("aktiv", ansicht === art);
+  }
+  $("folie").hidden = ansicht !== "folie";
+  $("ueberblick").hidden = !(ansicht === "ueberblick" && z.ueberblick);
+  $("ueberblick-arbeitet").hidden = !(z.ueberblick_laeuft && ansicht !== "folie" && (basis || ansicht === "ueberblick"));
+  $("live-bild").style.visibility = ansicht === "bild" ? "" : "hidden";
+  const leer = (ansicht === "bild" && !bildVersion) || (ansicht === "ueberblick" && !z.ueberblick);
+  $("bild-leer").hidden = !leer;
   $("btn-folie").hidden = !z.recherche_da;
   $("btn-folie").disabled = !!z.folie_laeuft;
   $("folie-arbeitet").hidden = !z.folie_laeuft;
   $("bild-arbeitet").hidden = !z.onepager_laeuft;
-  if (!bildVersion) platzhalterRendern(z);
+  if (leer) platzhalterRendern(z);
   // Knopfdruck: das Transkript entsteht erst beim Knopf – zeichnen geht, sobald jemand gesprochen hat
-  $("btn-bild").disabled = !!z.onepager_laeuft || (knopfdruck(z) ? !z.hoeren || !!z.knopf?.laeuft : !z.segmente.length);
+  $("btn-bild").disabled = !!z.onepager_laeuft || !!z.ueberblick_laeuft
+    || (knopfdruck(z) ? !z.hoeren || !!z.knopf?.laeuft : !z.segmente.length);
+  $("btn-bild").dataset.tip = basis ? "Überblick jetzt neu schreiben (wenige Sekunden)" : "Bild jetzt neu zeichnen (ca. 1–2 min)";
+  $("btn-bild-png").hidden = basis;
+  if (basis) $("btn-bild-analyse").hidden = true;
   let status = z.onepager_stand != null ? `· Stand ${mmss(z.onepager_stand)}` : "";
   if (z.onepager_fokus) status += ` · Fokus: ${z.onepager_fokus}`;
+  if (basis) status = z.ueberblick ? `· Stand ${z.ueberblick.laufzeit}` : "";
   $("bild-status").textContent = z.onepager_fehler ? `· ${z.onepager_fehler}` : status;
 }
 
@@ -278,6 +332,17 @@ const SPRUECHE = [
 function platzhalterRendern(z) {
   const knopf = knopfdruck(z);
   document.querySelectorAll(".bl-tipp, .bl-kann").forEach((e) => { e.hidden = knopf; }); // Ansprache gibt es dort nicht
+  if (basisStufe(z) || ansicht === "ueberblick") { // Überblick als Text: kein Bild, das gezeichnet wird
+    $("bild-spruch").textContent = z.ueberblick_laeuft ? "Nestor schreibt euren Überblick …"
+      : "Hier erscheint euer Überblick: Entschiedenes, Offenes, Aufgaben.";
+    const takt = knopf ? 0 : (z.onepager_minuten ?? 0) * 60;
+    $("bild-weg").style.width = `${Math.round((takt ? Math.min(1, z.zeit / takt) : 0) * 100)}%`;
+    $("bild-weg").parentElement.hidden = !takt;
+    $("bild-wann").textContent = knopf ? "Knopf „Überblick“ oben drücken – Nestor transkribiert dann und fasst zusammen."
+      : "Knopf „Überblick“ oben oder „Nestor, zeig uns die Übersicht.“"
+        + (takt ? ` Sonst alle ${Math.round(takt / 60)} Minuten von selbst.` : "");
+    return;
+  }
   const spruch = knopf ? "Das Bild entsteht auf Knopfdruck."
     : !z.segmente.length ? SPRUECHE[0] : SPRUECHE[Math.floor(z.zeit / 60) % SPRUECHE.length];
   $("bild-spruch").textContent = z.onepager_laeuft ? "Nestor zeichnet euer erstes Bild …" : spruch;
@@ -293,14 +358,16 @@ function platzhalterRendern(z) {
     : rest > 1 ? `Das erste Bild kommt in ca. ${rest} Minuten.` : "Das erste Bild kommt gleich.";
 }
 
-// ---------- Modus „Auf Knopfdruck“ (Ticket #6, Lastenheft 4.2) ----------
-// Knopfleiste statt Nestor-Leiste. Ein Knopf antwortet sofort; Fortschritt kommt als {typ: "knopf"} über die
-// WebSocket, das Ergebnis als Karte (Wo stehen wir, Regeln, Protokoll, Frage) oder als Live-Bild.
-const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", protokoll: "/api/knopf/protokoll",
-  bild: "/api/knopf/bild", frage: "/api/knopf/frage" };
-const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", protokoll: "Protokoll", bild: "Bild", frage: "Nestor fragen" };
-Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll" });
-Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse" });
+// ---------- Knöpfe (Ticket #6; seit #13 in beiden Stufen gleich) ----------
+// Ein Knopf antwortet sofort; Fortschritt kommt als {typ: "knopf"} über die WebSocket, das Ergebnis als Karte
+// (Wo stehen wir, Regeln, Protokoll, Frage) oder im Bildbereich (Überblick, Live-Bild). Mit „Nur auf Knopfdruck“
+// (Basis) transkribiert der Knopf vorher den offenen Ton, und es gibt das Verwerfen.
+const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
+  protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage" };
+const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
+  bild: "Bild", frage: "Nestor fragen" };
+Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick" });
+Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse", ueberblick: "bild" });
 const knopfdruck = (z) => z?.modus === "knopfdruck";
 function knopfDruecken(art, daten = {}) {
   if (zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
@@ -333,10 +400,12 @@ function knopfOffenText(k) {
     : `${Math.round(k.seit_sekunden / 60)} Minuten noch nicht ausgewertet`;
 }
 function knopfRendern(z) {
-  const an = knopfdruck(z) && z.hoeren;
+  const an = !!z.hoeren;
   $("knopf-leiste").hidden = !an;
   if (!an) return;
   const k = z.knopf ?? {};
+  const nurKnopf = knopfdruck(z);
+  $("knopf-offen").hidden = !nurKnopf; $("knopf-verwerfen").hidden = !nurKnopf;
   $("knopf-offen").textContent = knopfOffenText(k);
   $("knopf-offen").dataset.tip = k.aeusserungen ? `${k.aeusserungen} Äußerungen, ${mmss(k.sprache_sekunden)} min Sprache – werden beim nächsten Knopf transkribiert` : "";
   const laeuft = !!k.laeuft;
@@ -386,7 +455,8 @@ function kartenRendern(z) {
   if (karteGesehen === null) { karteGesehen = neueste?.id ?? 0; return; } // beim Laden keine alten Karten aufpoppen
   if (neueste && neueste.id > karteGesehen) {
     karteGesehen = neueste.id;
-    if (neueste.art !== "folie") karteZeigen(neueste, true); // die Folie erscheint schon groß im Bildbereich
+    // Folie und Überblick erscheinen schon groß im Bildbereich
+    if (!["folie", "ueberblick"].includes(neueste.art)) karteZeigen(neueste, true);
   }
   if (!karten.length && karteOffen !== null) karteSchliessen(); // neues Meeting
 }
@@ -420,7 +490,9 @@ function rendern() {
   // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
   $("modus-pill").hidden = !z.modus;
   document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
-  $("modus-pill").textContent = z.modus === "knopfdruck" ? "Auf Knopfdruck" : "Live";
+  $("modus-pill").textContent = z.stufe === "basis" ? `Basis${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium";
+  $("modus-pill").dataset.tip = z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
+    : "Nestor Premium: OpenAI, Gespräch und Live-Bild";
   $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
   $("btn-mikro").classList.toggle("an", !!z.stumm);
@@ -627,6 +699,11 @@ function einstellungenRendern(e) {
   $("e-live-art").value = e.live_art;
   $("e-aufnahme").checked = !!e.aufnahme;
   $("e-live-hinweis").hidden = e.live_art !== "sparsam";
+  // Basis: nur Mistral – Gesprächsart, Stimme, Bildweg und der OpenAI-Schlüssel gehören zu Premium
+  const basis = e.stufe === "basis";
+  document.querySelectorAll("#einstellungen .nur-premium").forEach((x) => { x.hidden = basis; });
+  $("e-premium-schluessel").hidden = basis;
+  $("e-basis-hinweis").hidden = !basis;
 }
 
 // Pegel des ankommenden Tons (vom Handy oder Laptop-Mikro), vom Server ~5× pro Sekunde; fällt sanft ab

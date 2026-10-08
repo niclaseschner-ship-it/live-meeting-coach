@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/static/start.css">
 </head>
 <body>
-  <!-- Startseite (Ticket #1): Moduswahl, Kostenhinweis, Links auf die Rechtstexte. Sie-Form, wie im Lastenheft. -->
+  <!-- Startseite (Ticket #1, #13): Stufenwahl, Kostenhinweis, Links auf die Rechtstexte. Sie-Form, wie im Lastenheft. -->
   <header class="s-kopf">
     <span class="logo" aria-hidden="true">
       <svg viewBox="0 0 40 40" width="48" height="48">
@@ -29,35 +29,43 @@
   <main class="s-haupt">
     <h1 class="s-frage">Wie soll Nestor diesmal mithören?</h1>
 
+    <!-- Ticket #13: zwei Stufen statt zwei Modi. Gleiche Knöpfe an gleicher Stelle – Premium legt nur das Gespräch
+         und das Live-Bild darauf. „Nur auf Knopfdruck“ ist ein Schalter in Basis. -->
     <div class="s-karten">
-      <button id="karte-live" class="moduskarte">
-        <h2>Live</h2>
-        <ul>
-          <li>Live-Transkript, Fokus, Zeit und Agenda in Echtzeit im Blick</li>
-          <li>Nestor hört auf seinen Namen und antwortet gesprochen</li>
-          <li>Live-Bild alle 10 Minuten und auf Zuruf</li>
-          <li>Ein „Nein“ in der Begrüßung löscht sofort alles</li>
-        </ul>
-        <p class="s-datenhinweis">Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.</p>
-        <p class="s-kosten" id="kosten-live">etwa 2 € je Meetingstunde</p>
-      </button>
+      <div class="s-stufe">
+        <button id="karte-basis" class="moduskarte">
+          <h2>Nestor Basis <small>Einstieg · EU</small></h2>
+          <ul>
+            <li>Live-Transkript, Fokus, Zeit und Agenda im Blick</li>
+            <li>Nestor hört auf „Nestor, …“ und antwortet gesprochen, mit Karte – oder per Knopf, auch am Handy</li>
+            <li>Überblick als Text: Entschiedenes, Offenes, Aufgaben</li>
+            <li>Ein „Nein“ in der Begrüßung löscht sofort alles</li>
+          </ul>
+          <p class="s-datenhinweis">Alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU.</p>
+          <p class="s-kosten" id="kosten-basis">etwa 0,6 € je Meetingstunde</p>
+        </button>
+        <label class="s-schalter"><input type="checkbox" id="nur-knopfdruck">
+          <span><strong>Nur auf Knopfdruck</strong> – ohne Knopf geht nichts an Mistral. Ihr Ton liegt bis dahin nur
+            auf unserem Server in der EU und wird am Ende gelöscht; dazu „letzte 5 Minuten“ oder „alles verwerfen“.</span></label>
+      </div>
 
-      <button id="karte-knopfdruck" class="moduskarte">
-        <h2>Auf Knopfdruck</h2>
-        <ul>
-          <li>Zeit, Redeanteile, Überlappung und Monolog laufen lokal mit, ohne KI-Dienst</li>
-          <li>Transkript, Fokus, Ergebnisse und Live-Bild nur auf Knopfdruck</li>
-          <li>Nestor antwortet auf Knopfdruck, als Text</li>
-          <li>Zusätzlich: die letzten 5 Minuten oder alles verwerfen</li>
-        </ul>
-        <p class="s-datenhinweis">Ohne Ihren Knopfdruck gibt Nestor nichts an KI-Dienste weiter. Ihr Ton liegt bis
-          dahin nur auf unserem Server in der EU und wird am Ende gelöscht.</p>
-        <p class="s-kosten" id="kosten-knopfdruck">etwa 0,5 € je Meetingstunde</p>
-      </button>
+      <div class="s-stufe">
+        <button id="karte-premium" class="moduskarte">
+          <h2>Nestor Premium</h2>
+          <ul>
+            <li>Alles aus Basis – dieselben Knöpfe an derselben Stelle</li>
+            <li>Nestor als Gesprächspartner: Rückfragen ohne Namen, Reinreden macht ihn still</li>
+            <li>Dazu das Live-Bild alle 10 Minuten und auf Zuruf</li>
+          </ul>
+          <p class="s-datenhinweis">Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet.</p>
+          <p class="s-kosten" id="kosten-premium">etwa 2 € je Meetingstunde</p>
+        </button>
+      </div>
     </div>
+    <p id="stufe-fehlt" class="s-meldung" hidden></p>
 
     <details class="s-schluessel">
-      <summary>Eigenen OpenAI-Schlüssel verwenden (optional)</summary>
+      <summary>Eigenen OpenAI-Schlüssel verwenden (optional, nur Nestor Premium)</summary>
       <div class="s-schluessel-inhalt">
         <p class="s-datenhinweis">Dann laufen die KI-Kosten über Ihr eigenes OpenAI-Konto. Der Schlüssel liegt
           nur für dieses Meeting auf dem Server und wird am Ende gelöscht.</p>

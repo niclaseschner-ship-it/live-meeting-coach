@@ -25,6 +25,7 @@ export interface Env {
   COOKIE_GEHEIMNIS: string; // Secret – signiert das Kunden-Cookie
   WORKER_GEHEIMNIS: string; // Secret – beweist dem Coach, dass eine Anfrage vom Worker kommt
   OPENAI_API_KEY: string; // Secret – Niclas' Schlüssel, eigenes OpenAI-Projekt mit Ausgabenlimit
+  MISTRAL_API_KEY?: string; // Secret – Nestor Basis (Ticket #13); ohne ihn ist Basis auf der Startseite nicht wählbar
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
   // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
 }
@@ -45,6 +46,7 @@ export class Nestor extends Container<Env> {
       LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
       LMC_WORKER_URL: env.WORKER_URL,
       OPENAI_API_KEY: env.OPENAI_API_KEY,
+      LMC_MISTRAL_SCHLUESSEL: env.MISTRAL_API_KEY ?? "",
       // Startseite, Rechtstexte, Unterstützung – als Secrets gesetzt, damit nichts davon im Repo steht
       LMC_PAYPAL_ME: env.PAYPAL_ME ?? "",
       LMC_IMPRESSUM_NAME: env.IMPRESSUM_NAME ?? "",

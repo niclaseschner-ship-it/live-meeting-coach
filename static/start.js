@@ -1,6 +1,6 @@
 "use strict";
 
-// Startseite (Ticket #1): Richtwerte holen, Modus setzen, weiter zum Dashboard.
+// Startseite (Ticket #1, #13): Richtwerte holen, Stufe setzen (Basis/Premium), weiter zum Dashboard.
 // Eigenständig statt basis.js – das ist für Mikrofon und Nestors Stimme gedacht, hier braucht es das nicht.
 
 const $ = (id) => document.getElementById(id);
@@ -16,10 +16,12 @@ async function richtwerteHolen() {
 
 const euro = (betrag) => `etwa ${betrag.toLocaleString("de-DE", { maximumFractionDigits: 1 })} € je Meetingstunde`;
 
-async function modusWaehlen(modus) {
+async function stufeWaehlen(stufe) {
+  const nurKnopfdruck = stufe === "basis" && $("nur-knopfdruck").checked;
   try {
-    const r = await fetch("/api/modus", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modus }),
+    const r = await fetch("/api/stufe", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stufe, nur_knopfdruck: nurKnopfdruck }),
     });
     if (!r.ok && r.status !== 409) { alert(`Fehler: ${await r.text()}`); return; } // 409: Meeting läuft schon – trotzdem weiter
   } catch {
@@ -29,7 +31,7 @@ async function modusWaehlen(modus) {
 }
 
 // Eigener OpenAI-Schlüssel (optional, Abschnitt 6): ruft den vorhandenen /api/schluessel auf, der Dashboard-Eintrag
-// hat dort Vorrang vor OPENAI_API_KEY. Prüfen reicht hier – die Moduswahl darunter bleibt unverändert.
+// hat dort Vorrang vor OPENAI_API_KEY. Prüfen reicht hier – gilt nur für Nestor Premium (Basis nutzt Mistral).
 async function schluesselPruefen() {
   const wert = $("sk-eingabe").value.trim();
   if (!wert) return;
@@ -43,6 +45,7 @@ async function schluesselPruefen() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { m.textContent = d.detail ?? `Fehler ${r.status}`; return; }
     m.className = "s-meldung ok";
+    $("karte-premium").disabled = false; // mit eigenem Schlüssel ist Premium auch ohne Niclas' Schlüssel wählbar
     m.textContent = d.ende ? `Schlüssel …${d.ende} wird verwendet.` : "Schlüssel wird verwendet.";
   } catch {
     m.textContent = "Server gerade nicht erreichbar.";
@@ -53,10 +56,19 @@ async function schluesselPruefen() {
 
 (async () => {
   const d = await richtwerteHolen();
-  if (d.richtwert_live_eur != null) $("kosten-live").textContent = euro(d.richtwert_live_eur);
-  if (d.richtwert_knopfdruck_eur != null) $("kosten-knopfdruck").textContent = euro(d.richtwert_knopfdruck_eur);
-  $("karte-live").onclick = () => modusWaehlen("live");
-  $("karte-knopfdruck").onclick = () => modusWaehlen("knopfdruck");
+  if (d.richtwert_basis_eur != null) $("kosten-basis").textContent = euro(d.richtwert_basis_eur);
+  if (d.richtwert_premium_eur != null) $("kosten-premium").textContent = euro(d.richtwert_premium_eur);
+  // Fehlt der Schlüssel einer Stufe auf dem Server, ist sie nicht wählbar (Demos laufen trotzdem im Dashboard)
+  const fehlt = [];
+  if (d.basis_bereit === false) { $("karte-basis").disabled = true; fehlt.push("Basis"); }
+  if (d.premium_bereit === false) { $("karte-premium").disabled = true; fehlt.push("Premium"); }
+  if (fehlt.length) {
+    $("stufe-fehlt").hidden = false;
+    $("stufe-fehlt").textContent = `Nestor ${fehlt.join(" und ")} ist auf diesem Server gerade nicht eingerichtet (kein Schlüssel).`;
+  }
+  $("nur-knopfdruck").checked = d.stufe === "basis" && d.modus === "knopfdruck";
+  $("karte-basis").onclick = () => stufeWaehlen("basis");
+  $("karte-premium").onclick = () => stufeWaehlen("premium");
   $("sk-pruefen").onclick = schluesselPruefen;
   $("sk-eingabe").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); schluesselPruefen(); } };
 })();

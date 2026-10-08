@@ -29,8 +29,17 @@ def vorlesbar(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+MISTRAL_ZUSATZ = "\nNutze dafür die Websuche, auch wenn du die Antwort zu kennen glaubst.\n"
+
+
 async def recherchieren(client, frage: str, titel: str = "") -> dict:
     t0 = time.monotonic()
+    if hasattr(client, "websuche"):
+        # Nestor Basis: Mistral Conversations-API mit web_search (coach/mistral.py) – gleiche Rückgabe wie unten
+        erg = await client.websuche(EINST.recherche_modell,
+                                    AUFTRAG.format(frage=frage, titel=titel or "-") + MISTRAL_ZUSATZ)
+        return {"text": vorlesbar(erg["text"]), "quellen": erg["quellen"], "sekunden": round(time.monotonic() - t0, 1),
+                "tokens_rein": erg["tokens_rein"], "tokens_raus": erg["tokens_raus"], "suchen": erg["suchen"]}
     antwort = await client.responses.create(
         model=EINST.recherche_modell,
         tools=[{"type": "web_search"}],

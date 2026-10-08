@@ -72,6 +72,22 @@ Ihr seid bei Punkt zwei, dem Budget. Entschieden ist noch nichts, offen ist die 
 """
 
 
+BILD_ZEILE = "                            Sag dazu, dass das Bild etwa eine bis zwei Minuten dauert.\n"
+# Nestor Basis (und Überblick als Text): „AKTION: bild“ zeigt den Überblick als Text – er steht nach wenigen Sekunden
+BILD_ZEILE_TEXT = ("                            Nur bei dieser Aktion sagst du dazu, dass die Übersicht gleich im\n"
+                   "                            Dashboard erscheint.\n")
+UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
+
+
+def system_text() -> str:
+    """Systemanweisung für die gewählte Stufe: in Basis entsteht auf „AKTION: bild“ der Überblick als Text."""
+    s = SYSTEM.format(name=EINST.assistent_name)
+    if EINST.bild_anbieter == "text":
+        s = s.replace("visuelle Übersicht zeichnen lassen", "Übersicht ins Dashboard stellen").replace(
+            BILD_ZEILE, BILD_ZEILE_TEXT)
+    return s
+
+
 def angesprochen(text: str) -> bool:
     return bool(NAME_RE.search(text))
 
@@ -155,7 +171,7 @@ def agenda_kommentar(meeting) -> str:
     return f" {zahl} in {minuten} Minuten – {wertung}."
 
 
-def begruessungstext(meeting) -> tuple[str, str]:
+def begruessungstext(meeting, basis: bool | None = None) -> tuple[str, str]:
     """(Begrüßung mit Einwilligung, Startsatz).
 
     Die Begrüßung ist fest formuliert – sie trägt die Einwilligung, da darf nichts frei formuliert sein. Danach geht
@@ -173,9 +189,16 @@ def begruessungstext(meeting) -> tuple[str, str]:
              f"Wer nicht einverstanden ist, sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
-    start = (f"Ganz kurz, wie ihr mit mir klarkommt: Sagt einfach „{name}“ und eure Frage. Nachfragen geht dann "
-             "auch ohne Namen, und wenn ich zu viel rede, redet einfach rein."
-             f"{agenda_bitte(meeting)}{agenda_kommentar(meeting)}{erster}")
+    if basis is None:
+        basis = EINST.stufe == "basis"
+    if basis:
+        # Nestor Basis: keine Rückfragen ohne Namen, kein Ins-Wort-Fallen (Text + Sprachausgabe) – dafür die Knöpfe
+        wie = (f"Ganz kurz, wie ihr mit mir klarkommt: Sagt einfach „{name}“ und eure Frage – jedes Mal mit meinem "
+               "Namen. Oder ihr nehmt die Knöpfe auf dem Bildschirm oder am Handy.")
+    else:
+        wie = (f"Ganz kurz, wie ihr mit mir klarkommt: Sagt einfach „{name}“ und eure Frage. Nachfragen geht dann "
+               "auch ohne Namen, und wenn ich zu viel rede, redet einfach rein.")
+    start = f"{wie}{agenda_bitte(meeting)}{agenda_kommentar(meeting)}{erster}"
     return gruss, start
 
 
@@ -239,6 +262,7 @@ class Assistent:
         self._bild_ansage = False
         self.gespraech = None  # offene Realtime-Sitzung (coach/gespraech.py)
         self.letzte_aktion: dict | None = None
+        self.halten: tuple[float, float] | None = None  # „Nestor fragen“ gehalten: (von, bis) Meetingzeit
         self.letzte_quellen: list[dict] = []  # Quellen der letzten Recherche fürs Dashboard
 
     # --- Zustand nach außen ------------------------------------------------
@@ -318,9 +342,34 @@ class Assistent:
         if self.zustand in ("bereit", "spricht"):
             self.zustand = "angesprochen"
 
+    def halten_start(self) -> None:
+        """Knopf „Nestor fragen“ wird gehalten (Handy): was jetzt gesagt wird, ist die Frage – sie kommt als Aufnahme
+        (frage_beantworten), nicht über den Live-Text; dort wird sie ignoriert, sonst antwortete Nestor doppelt."""
+        jetzt = self.coach.meeting.jetzt()
+        self.halten = (jetzt, jetzt + 120)
+        if self.zustand in ("bereit", "spricht"):
+            self.zustand = "angesprochen"
+
+    def halten_ende(self) -> None:
+        if self.halten:
+            self.halten = (self.halten[0], self.coach.meeting.jetzt() + 2.5)  # Nachlauf: Pause + Live-Text-Verzug
+
+    def frage_beantworten(self, frage: str, ausloeser: str = "halten") -> None:
+        """Eine Frage, die nicht über den Namen kam (gehalten, getippt): gesprochen + Karte wie bei „Nestor, …“."""
+        if not self.aktiv or self.pausiert or self.coach._client is None:
+            return
+        self.messen(ausloeser)
+        self._angesprochen_bis = -1e9
+        if EINST.assistent_modus == "gespraech" and not (self.gespraech and self.gespraech.offen):
+            self._starten(self._gespraech_starten(frage))
+        else:
+            self._starten(self._antworten(frage))
+
     async def satz(self, text: str, ende: float) -> None:
         if not self.aktiv or self.pausiert or self.ansprache_aus:
             return
+        if self.halten and self.halten[0] - 0.5 <= ende <= self.halten[1]:
+            return  # gehört zur gehaltenen Frage – die kommt als Aufnahme
         jetzt = self.coach.meeting.jetzt()
         frisch = self._einwand_bis is not None and jetzt <= self._einwand_bis
         if (frisch and einwand(text)) or spaetes_nein(text):
@@ -419,11 +468,13 @@ class Assistent:
         try:
             erg = await recherchieren(c._client, frage, c.meeting.titel)
         except Exception as e:  # noqa: BLE001
+            from .mistral import ist_ueberlast
+
             log.warning("Recherche fehlgeschlagen: %s", type(e).__name__)
-            await self._sprechen_texte(["Die Recherche hat leider nicht geklappt."])
+            await self._sprechen_texte([UEBERLAST if ist_ueberlast(e) else "Die Recherche hat leider nicht geklappt."])
             return
         nutzung_loggen({"art": "recherche", "modell": EINST.recherche_modell, "tokens_rein": erg["tokens_rein"],
-                        "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"]})
+                        "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"], "suchen": erg.get("suchen")})
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "recherche", "frage": frage, "quellen": erg["quellen"],
                             "sekunden": erg["sekunden"]})
         c.recherche_merken(frage, erg)
@@ -460,6 +511,10 @@ class Assistent:
             z.append("Letzte Hinweise des Coaches: " + " | ".join(f"[{mmss(h.zeit)}] {h.text}" for h in hinweise))
         if c.onepager_analyse:
             z += ["", "Letzte Strukturanalyse des Live-Bilds (kann veraltet sein):", c.onepager_analyse[:2500]]
+        if getattr(c, "ueberblick", None):
+            from .ueberblick import als_markdown
+
+            z += ["", "Letzter Überblick im Dashboard (kann veraltet sein):", als_markdown(c.ueberblick)[:2500]]
         transkript = "\n".join(f"[{mmss(s.start)}] {s.sprecher}: {s.text}" for s in m.transkript if s.text)
         z += ["", "Transkript (neuester Teil):", transkript[-9000:] or "(noch nichts)"]
         for f, a in self.verlauf[-2:]:
@@ -478,7 +533,7 @@ class Assistent:
         try:
             strom = await c._client.chat.completions.create(
                 model=EINST.assistent_modell, stream=True, stream_options={"include_usage": True},
-                messages=[{"role": "system", "content": SYSTEM.format(name=EINST.assistent_name)},
+                messages=[{"role": "system", "content": system_text()},
                           {"role": "user", "content": self.kontext(frage)}],
                 **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {}))
             nutzung = None
@@ -516,8 +571,14 @@ class Assistent:
             sprecher.cancel()
             raise
         except Exception as e:  # noqa: BLE001
+            from .mistral import ist_ueberlast
+
             log.warning("Assistent-Antwort fehlgeschlagen: %s", type(e).__name__)
-            await saetze.put("Entschuldigung, das hat gerade nicht geklappt.")
+            # Überlast (HTTP 429 auch nach Wiederholungen): ehrlich sagen, statt zu hängen (Ticket #13)
+            satz = UEBERLAST if ist_ueberlast(e) else "Entschuldigung, das hat gerade nicht geklappt."
+            if not gesprochen:
+                gesprochen.append(satz)
+            await saetze.put(satz)
             await saetze.put(None)
         antwort = " ".join(gesprochen)
         self.letzte = {"frage": frage, "antwort": antwort, "zeit": c.meeting.jetzt(), "aktion": aktion}

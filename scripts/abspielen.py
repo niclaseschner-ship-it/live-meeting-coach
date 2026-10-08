@@ -69,7 +69,7 @@ async def main() -> None:
     dauer = time.monotonic() - t0
     # Nachlauf: Abschlussbild, Ergebnisprüfung, letzte Karten
     for _ in range(240):
-        if not (coach._onepager_laeuft or coach._folie_laeuft):
+        if not (coach._onepager_laeuft or coach._folie_laeuft or coach._ueberblick_laeuft):
             break
         await asyncio.sleep(1)
     await asyncio.sleep(25 if os.getenv("LMC_KI") == "codex" else 8)  # Ergebnisprüfung des letzten Punkts abwarten
@@ -93,6 +93,9 @@ async def main() -> None:
             print(f"  {mmss(e['zeit'])} Überlappung (Stimmen-Mischung)")
     for h in m.hinweise:
         print(f"  HINWEIS {mmss(h.zeit)} [{h.art}] {h.text[:110]}")
+    if coach.ueberblick:
+        from coach.ueberblick import als_markdown
+        print(als_markdown(coach.ueberblick))
     print("Fehler:", coach.fehler)
     print("Bericht:", ziel)
 
