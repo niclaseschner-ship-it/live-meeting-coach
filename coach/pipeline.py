@@ -743,7 +743,10 @@ class Coach:
             hintergrund(self._ergebnis_pruefen(self.meeting.aktiver_punkt))  # Regel 10 auch für den letzten Punkt
         if self.onepager_am_ende and not self.knopfdruck:
             if basis:  # Abschluss-Überblick; entsteht gerade einer (Zuruf, Takt), wird er danach nachgeholt
-                self.ueberblick_starten(nachholen=True)
+                frisch = (self.ueberblick is not None and not self._ueberblick_laeuft
+                          and self.meeting.jetzt() - self.ueberblick["stand"] < 30)
+                if not frisch:  # ein Überblick aus den letzten 30 s ist schon der Endstand
+                    self.ueberblick_starten(nachholen=True)
             else:
                 self.onepager_starten()  # Abschlussbild (FR-13); entsteht gerade eins, wird es danach nachgeholt
         if self.archiv and not self.archiv.fertig:

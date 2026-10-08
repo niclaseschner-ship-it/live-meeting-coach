@@ -167,7 +167,7 @@ class Einstellungen:
     basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch (Knopfdruck)
     basis_stimme_modell: str = os.getenv("LMC_BASIS_STIMME_MODELL", "voxtral-mini-tts-latest")
     basis_stimme: str = os.getenv("LMC_BASIS_STIMME", "01a1188b-54f4-71a8-86df-df69e318948c")  # Thorsten (voice_id)
-    richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.6)
+    richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.7)  # 10 Fragen + 2 Recherchen ≈ 0,72 $/h (#15)
     richtwert_premium_eur: float = _zahl("LMC_RICHTWERT_PREMIUM_EUR", 2.0)
 
     def __post_init__(self) -> None:

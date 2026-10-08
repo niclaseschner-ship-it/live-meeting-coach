@@ -13,7 +13,7 @@ Gemessen auf dem Pi (BuddyBoard), der nebenher ausgelastet war (Lastmittel ~10 a
 | „Person N“ in Antworten | 0 von 24 | 1 von 12 |
 | „Nestor“ erkannt | 10/10 (Schritt 0), 11/12 im Coach – einmal „Westor“, jetzt mit erkannt | wie bisher |
 | Kein Aufruf an OpenAI | nachgewiesen: Nutzungsprotokoll nur `mistral-*` und `voxtral-*` (Demo, Zurufe, Knopfdruck) | – |
-| Kosten je Stunde | **~0,45–0,6 $** (gerechnet aus gemessenen Aufrufen, unten) | ~2 $ |
+| Kosten je Stunde | **~0,7 $** bei 10 Fragen und 2 Recherchen, Grundlast ~0,5 $ (neu gerechnet nach dem Cloud-Lauf, Ticket #15, unten) | ~2 $ |
 | Parallele Meetings | **24 gleichzeitig ohne 429**, Antwortzeiten fast unverändert | **8 gleichzeitig ohne 429** (mehr nicht getestet, Kostendeckel) |
 
 ## Schritt 0: Sprechende → Thorstens erster Ton (Stoppregel 2,5 s)
@@ -136,9 +136,74 @@ Je Aufruf gemessen (Nutzungsprotokoll der Läufe oben):
 | Ergebnisse je Punkt, Begrüßung | | | ~0,02 |
 | **Summe** | | | **~0,55 $** (ohne Fragen ~0,45 $; mit Medium-Zuordnung ~0,9 $) |
 
-Richtwert auf der Startseite: **0,6 €** je Stunde. Mit „Nur auf Knopfdruck“: Voxtral-Batch 0,003 $/min Sprache
+Richtwert auf der Startseite: ~~0,6 €~~ **0,7 €** je Stunde (korrigiert mit Ticket #15, siehe unten). Mit „Nur auf Knopfdruck“: Voxtral-Batch 0,003 $/min Sprache
 (~0,1–0,2 $ je Stunde) plus wenige Cent je Knopf – deutlich unter den bisherigen 0,4 $/h (dort Transkription bei
 OpenAI und Bild). Beides ist gerechnet, kein 60-Minuten-Lauf.
+
+## Nachtrag Ticket #15: erster Cloud-Lauf (08.10.) und lokale Nachstellung
+
+Der Cloud-Lauf in Basis (`logs/cloudtest/cloud_basis_1/`, Material `testbibliothek/cloudtest/`) zeigte vier
+Fehler. Nachgestellt ohne Browser mit [`scripts/cloudtest_lokal.py`](../scripts/cloudtest_lokal.py): Abspielmodus mit
+echtem Mistral, ohne automatische Übernahme von Agenda-Vorschlägen und mit dem Filter für Nestors eigene Sprache wie
+live. Vorher (Stand main) zeigte der lokale Lauf dieselben Fehler wie die Cloud.
+
+| | vorher | nachher |
+|---|---|---|
+| Wechsel auf Punkt 2 (Ansage ab 152,8 s, Satz „Wir wechseln jetzt …“ endet bei 176 s) | keiner | **176 s, durch Ansage** |
+| Wechsel auf Punkt 3 (Ansage 478,8 s) | keiner (Satz fehlt im Transkript) | **483 s, durch Ansage** |
+| „Nestor, mach uns die visuelle Übersicht“ (~580 s) | `AKTION: folie` – Recherche-Folie statt Überblick | **`AKTION: bild` → Überblick** |
+| Überblick im Takt | keiner (Takt 10 min, Meeting 9:52) | **bei 5:02**, dazu Zuruf und Ende |
+| Fragen an Nestor beantwortet | 4 von 6 | 5 von 6 („Ja, mach dazu eine Folie“ ohne Namen bleibt in Basis ohne Antwort – so gewollt) |
+| Paket | transkript, agenda, hinweise | dazu **protokoll.md** und **ueberblick.md** |
+
+**Ursachen**
+1. *Ansage*: Voxtral schreibt „Wir wechseln jetzt ausdrücklich zu **Agenda Punkt 2**“ (OpenAI: „Agendapunkt zwei“).
+   Das Muster kannte nur „Agendapunkt“ in einem Wort und „wechseln wir“, nicht „wir wechseln jetzt“. Die zweite
+   Ansage fiel ganz aus dem Transkript: Thorsten las noch die Zusammenfassung vor (456–484 s), und alles, was
+   überwiegend in Nestors Sprechzeit fällt, galt als Echo seiner eigenen Stimme – ebenso die Förderungs-Frage und
+   „Ja, mach uns dazu eine Folie“ während der vorgelesenen Recherche. Premium spricht kürzer, deshalb fiel es dort
+   nicht auf. Jetzt gilt ein Satz nur noch als Echo, wenn mindestens die Hälfte seiner Wörter in Nestors gesagtem
+   Text vorkommt (`assistent.echo`); ohne bekannten Text (Realtime-Gespräch) bleibt es bei der Zeitregel.
+2. *Überblick*: Auf Zuruf wählte Mistral nach einer Recherche die Folie („visuelle Übersicht“ ≈ Folie mit Quellen).
+   Systemanweisung in Basis klarer (Übersicht = Meeting, auch bei „visuelle Übersicht“/„Bild“; Folie nur, wenn
+   ausdrücklich gewünscht), dazu eine feste Prüfung (`aktion_pruefen`: Folie ohne das Wort „Folie“, aber mit
+   „Übersicht/Bild“ → Überblick). Die 12 Zurufe der Probe danach wieder 12/12, die „visuelle Übersicht“ nach einer
+   Recherche richtig. Im Takt kam der erste Überblick erst nach 10 min – in einem 10-Minuten-Meeting also nie; in
+   der Cloud lag das letzte Bildschirmfoto (9:30) zudem vor dem Zuruf. Entscheidung: in Basis der erste nach 5 min,
+   dann alle 10 (ein Überblick kostet ~0,005–0,015 $); Zuruf und Knopf setzen den Takt zurück; der Abschluss-
+   Überblick wird nachgeholt, wenn gerade einer entsteht, und entfällt, wenn einer aus den letzten 30 s da ist.
+3. *Kosten*: siehe unten – kein Fehler in der Abrechnung, sondern die Dichte des Testmaterials plus eine zu knappe
+   Hochrechnung (Sprachausgabe und Überblick waren unterschätzt).
+4. *protokoll.md*: In Premium ist das Protokoll die Analyse hinter dem Abschlussbild (`archiv.py`); Basis hat kein
+   Bild, also gab es ohne Knopf „Protokoll“ keins. Eine Lücke gegenüber Lastenheft 4.4. Jetzt läuft in Basis am
+   Meetingende der Protokoll-Knopf selbst (Regel 10 je Agendapunkt, ~0,003 $ je Punkt), und das Paket enthält auch
+   `ueberblick.md`. Mit „Nur auf Knopfdruck“ bleibt es bei „nur wenn gedrückt“.
+
+**Kosten aufgeschlüsselt** (lokaler Lauf nachher, 9:52 min, Nutzungsprotokoll je Art):
+
+| Art | Aufrufe | $ |
+|---|---|---|
+| Live-Text (Voxtral Realtime, 0,006 $/min) | 1 | 0,059 |
+| Recherche (Medium + Websuche, ~7.000 Tokens Suchergebnis + 0,03 $ je Suche) | 2 | 0,084 |
+| Sprachausgabe (Thorsten, 16 $ je Mio. Zeichen; Begrüßung allein 808 Zeichen = 0,013 $) | 21 | 0,043 |
+| Nestor-Antworten (Medium, 1.900–3.900 Tokens Kontext) | 5 | 0,024 |
+| Überblick (Medium) | 3 | 0,022 |
+| Ergebnisse für das Protokoll am Ende | 3 | 0,008 |
+| Karten | 4 | 0,004 |
+| Zuordnung (Small) | 19 | 0,003 |
+| **Summe** | | **0,247 $ = 1,5 $/h** |
+
+Im Cloud-Lauf 0,17 $ (vorher lokal 0,168 $ – gleich; dort fehlten Förderungs-Recherche, Takt-Überblick und
+Protokoll). Hochgerechnet ist das kein Stundenwert: Das Material enthält sechs Zurufe mit zwei Recherchen in zehn
+Minuten, also 36 Zurufe und 12 Recherchen je Stunde.
+
+Neu gerechnet je Posten: **Grundlast ~0,50 $/h** (Live-Text 0,36, Überblick nach 5 min und dann alle 10 ~0,09, das
+Protokoll am Ende ~0,03, Zuordnung 0,02, Begrüßung 0,013), **~0,01 $ je Frage** (Antwort, Karte, Sprachausgabe),
+**~0,06 $ je Recherche** (davon 0,03 $ angenommene Suchgebühr – Mistral nennt keinen Preis, auf der Preisseite am
+08.10. erneut nicht gefunden). Mit 10 Fragen und 2 Recherchen ~0,72 $/h ≈ **0,66 €**. Richtwert deshalb **0,7 €**
+statt 0,6 € (`LMC_RICHTWERT_BASIS_EUR`, Startseite, Lastenheft 3). Gesenkt wurde nur, was nichts kostet: kein
+doppelter Abschluss-Überblick. Der größte feste Posten, der Live-Text, ließe sich nur senken, wenn in Pausen kein
+Ton an Voxtral geht – das ändert die Erkennung und gehört in einen eigenen Test.
 
 ## Parallele Meetings: wo liegt die Grenze?
 
