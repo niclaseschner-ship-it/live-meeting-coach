@@ -44,7 +44,7 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 2. **Zuhören ohne Einmischen.** Ampeln und Hinweise laufen wie bisher still im Dashboard. Gesprochen wird
    nur auf Ansprache.
 3. **Ansprache:** „Nestor, …“ irgendwo im Satz, oder Knopf „Nestor fragen“ (dann ohne Namen). Kommt nur
-   der Name, antwortet er „Ja?“ und wartet auf die Frage. Bis 15 s nach einer Antwort geht eine Rückfrage
+   der Name, antwortet er „Ja?“ (aus dem Zwischenspeicher) und wartet auf die Frage. Bis 15 s nach einer Antwort geht eine Rückfrage
    auch ohne Namen, wenn sie als Frage endet.
 4. **Antwort** gesprochen, kurz (meist 1–3 Sätze), dazu als Text in der Assistenten-Leiste.
    **Aktionen** auf Zuruf:
@@ -57,6 +57,45 @@ Stand 05.10.2026 · Ausbaustufe 2: Der Coach lässt sich mit Namen ansprechen un
 | „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | Recherche im Web: „Ich schau kurz nach“, dann gesprochene Zusammenfassung; danach bietet Nestor an, das Ergebnis mit Quellen auf einer Folie zusammenzustellen |
 | „Ja, mach eine Folie“ (nach einer Recherche) | Recherche-Folie im Dashboard: Titel, Kernaussage, Stichpunkte, Offenes, Quellen als Links (~3 s) |
 | „Nestor, hör bitte nicht mehr zu“ | Pause (wieder an per Knopf) |
+
+## Sofort bestätigen, sichtbar arbeiten (Ticket #21)
+
+- **Eine Stelle für Antworten:** Was Nestor sagt, steht immer im **Nestor-Feld oben im mittleren Feld**
+  (`#nestor-feld`): dunkles Indigo mit goldenem N. Agenda/Zeit links und die rechte Spalte bleiben frei. Der frühere
+  Untertitel und die Pop-up-Karte sind weg; die Karte (Titel, Stichpunkte, Quellen) erscheint nach dem Sprechen an
+  derselben Stelle. Hinweise (Regeln, Zeit) bleiben im Bernstein-/Rot-Band über den Spalten.
+- **Text läuft mit:** Realtime schickt die Transkript-Stücke (`response.output_audio_transcript.delta`), der Text-Weg
+  (auch Basis) den Satz unmittelbar vor seinem Ton – als `{"typ": "nestor_text"}` an alle Dashboards. Der
+  Lautsprecher-Tab zeigt jedes Stück, wenn der Ton davor abgespielt ist; andere Tabs schätzen ~15 Zeichen/s.
+- **Bestätigung:** Jeder Auftrag bekommt sofort eine wechselnde Floskel („Okay, kleinen Moment“, „Schau ich mir an“ …).
+  Lange Aufgaben (Bild, Folie, Recherche, Überblick) sagen zusätzlich: „Mach ich, braucht ein bisschen. Macht ruhig
+  schon weiter, ich zeig's euch hier gleich. Wenn ihr noch was braucht, sprecht mich einfach an.“ – sobald das
+  Modell die Aufgabe wirklich anstößt (Aktionszeile bzw. Werkzeug). Die Floskeln werden je Stimme einmal erzeugt
+  (Premium gpt-4o-mini-tts, Basis Voxtral/Thorsten), Stille vorn und hinten gekürzt und unter `cache/floskeln/`
+  abgelegt (`LMC_FLOSKEL_ORDNER`); danach kosten sie nichts. Erzeugt werden sie beim Meetingstart im Hintergrund.
+  `LMC_BESTAETIGUNG=0` schaltet das ab.
+- **Messung 08.10.** (`scripts/bestaetigung_messen.py`, ab dem Satz mit „Nestor“, ohne den Verzug des Live-Texts):
+
+| Weg | erster Ton |
+|---|---|
+| Floskel aus dem Zwischenspeicher (beide Stufen) | < 0,01 s bis zum ersten Tonstück, im Ende-zu-Ende-Lauf 0,07 s |
+| Premium Realtime, neue Sitzung (Verbindung + status_abfragen + Antwort) | Median 1,58 s (1,39–2,08) |
+| Premium Realtime, offene Sitzung | Median 0,82 s (0,73–1,04) |
+| Basis, mistral-medium erster Satz + Voxtral | Median 1,23 s (1,20–1,61) |
+
+  **Entscheidung:** Neue Sitzung und Text-Weg (Basis, Kurzantwort): Floskel sofort, die Antwort folgt nahtlos danach.
+  In der offenen Realtime-Sitzung keine kurze Floskel – das Modell spricht selbst nach ~0,8 s, eine Floskel hielte den
+  Inhalt nur auf (`LMC_BESTAETIGUNG_IM_GESPRAECH=1` schaltet sie trotzdem ein); lange Aufgaben bekommen die lange
+  Ansage beim Werkzeugaufruf (~0,4–0,5 s). Die Anweisungen sagen dem Modell, dass es nicht selbst mit „Okay“ beginnt.
+  Die lange Ansage aus der Frage zu raten wurde verworfen: im Probelauf kündigte Nestor eine Recherche an, das Modell
+  bot dann ein Bild an.
+- **Arbeitssymbol und Warteschlange:** Im Feld dreht sich ein goldener Ring um das N, solange Nestor angesprochen ist,
+  denkt, recherchiert oder ein Auftrag läuft. Darunter die Aufträge mit „läuft“/„wartet“ und ✕
+  (`POST /api/assistent/abbrechen {id}`). Per Stimme: „Nestor, lass die Recherche“, „Nestor, brich das Bild ab“,
+  „Nestor, vergiss die Folie“ → „Okay, lass ich.“ Eine zweite Recherche wartet, bis die erste fertig ist; während
+  einer Recherche kann die Runde Nestor im Gespräch weiter fragen.
+- **Hineinreden (#20):** Auch im normalen Gespräch verstummt Nestor, solange sein Ton im Dashboard noch läuft, nicht
+  nur während der Erzeugung; das Modell erfährt per `conversation.item.truncate`, wie weit es zu hören war.
 
 ## Architektur
 
@@ -71,7 +110,7 @@ Mikrofon ─► Live-Text (läuft ohnehin) ─► Satz mit „Nestor“ ─► R
 Mikrofon ──────────────────────────────────────────────────► geht direkt in die offene Sitzung
                                                                (Modell hört Rückfragen, Gesagtes, Tonfall)
 Live-Text: Name oder Rückfrage „…?“ kurz nach der Antwort ──► Coach löst die nächste Antwort aus
-Jemand redet hinein ──► Modell bricht ab, Dashboard verstummt sofort
+Jemand redet hinein ──► Dashboard verstummt sofort (auch nach response.done), truncate an das Modell
 20 s Ruhe oder „danke, das war's“ ──► Sitzung zu, Nestor hört wieder nur auf seinen Namen
 Werkzeuge: bild_zeichnen(fokus), agendapunkt_wechseln(nummer), recherchieren(frage), folie_erstellen, zuhoeren_pausieren,
            gespraech_beenden
@@ -114,12 +153,12 @@ gesprochener Überblick ~11 s nach der Frage, ~2 Cent je Recherche. In Basis: Mi
 Werkzeug `web_search` (`store: false`), gemessen ~5 s mit 2 Quellen; kommt eine Antwort ohne Quellen, wird die Suche
 einmal erzwungen. Kosten ~3 Cent (Suchergebnisse zählen bei Mistral als Eingabe-Tokens).
 
-**Nestor-Karten** (`coach/karten.py`): Was Nestor sagt, erscheint zusätzlich als Pop-up über dem Bildbereich –
+**Nestor-Karten** (`coach/karten.py`): Was Nestor sagt, erscheint nach dem Sprechen im Nestor-Feld oben im mittleren Feld (Ticket #21) –
 Titel, die Frage, 2–4 Stichpunkte, bei Recherchen die Quellen. GPT-5.4-mini verdichtet die gesprochene Antwort
 (gemessen 1,3–2,5 s, Frist 6 s, sonst die ersten Sätze) und lässt Bestätigungen, Rückfragen und Smalltalk weg.
 Bei Aktionen (Bild, Agenda-Wechsel, Pause, Folie) gibt es keine Karte, weil das Dashboard das Ergebnis selbst
 zeigt. Automatisch geöffnete Karten treten nach einer Minute zurück; alle bleiben im Verlauf (Reiter „Nestor“)
-und lassen sich dort wieder öffnen. Solange eine Karte offen ist, entfällt der Untertitel.
+und lassen sich dort wieder öffnen. Den Untertitel gibt es nicht mehr; der Text läuft im selben Feld mit.
 
 **Recherche-Folie** (`coach/folie.py`): auf Zuruf oder per Knopf im Live-Bild-Bereich. GPT-5.4-mini macht aus
 dem Rechercheergebnis Titel, Kernaussage, 3–5 Stichpunkte und Offenes – ohne neue Suche, ohne Transkript. Die

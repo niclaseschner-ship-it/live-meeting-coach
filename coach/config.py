@@ -135,6 +135,11 @@ class Einstellungen:
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
     nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich
+    # Ticket #21: jeden Auftrag sofort kurz bestätigen – mit vorab erzeugten, je Stimme zwischengespeicherten Floskeln
+    bestaetigung: bool = os.getenv("LMC_BESTAETIGUNG", "1") == "1"
+    floskel_ordner: str = os.getenv("LMC_FLOSKEL_ORDNER", str(WURZEL / "cache" / "floskeln"))
+    # Auch im offenen Realtime-Gespräch zuerst die Floskel (Rückfragen, „Nestor, …“ in der Sitzung)
+    bestaetigung_im_gespraech: bool = os.getenv("LMC_BESTAETIGUNG_IM_GESPRAECH", "0") == "1"
     einwand_sekunden: float = _zahl("LMC_EINWAND_SEKUNDEN", 7)  # so lange wartet die Begrüßung auf ein „Nein“
 
     # Entscheider: gleicher Hinweis frühestens nach so vielen Sekunden erneut

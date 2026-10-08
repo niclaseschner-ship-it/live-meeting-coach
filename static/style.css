@@ -129,7 +129,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   box-shadow: 0 12px 40px rgba(11, 19, 36, .18); }
 .klappfenster h3 { margin: 0; }
 
-/* Hinweis-Band und Nestor-Untertitel */
+/* Hinweis-Band: Bernstein/Rot mit Symbol – bewusst anders als Nestors Antworten (dunkles Feld in der Mitte) */
 .hinweis-band { display: flex; align-items: center; gap: 14px; margin: 14px 22px 0; padding: 14px 18px;
   border-radius: var(--radius); font-size: 19px; font-weight: 600; background: var(--gelb-weich); color: #7A3F00;
   border: 2px solid var(--gelb); animation: auftauchen .35s ease-out; }
@@ -138,11 +138,6 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .hinweis-band #hinweis-text { flex: 1; }
 .hinweis-band .icon { background: transparent; border-color: transparent; color: inherit; }
 @keyframes auftauchen { from { transform: translateY(-6px); opacity: 0; } }
-.untertitel { margin: 14px 22px 0; padding: 14px 18px; border-radius: var(--radius); background: var(--marke-2);
-  color: #fff; font-size: 19px; line-height: 1.45; box-shadow: var(--schatten); }
-.untertitel .wer { color: var(--gold); font-weight: 700; margin-right: 8px; }
-.untertitel .quellen { display: block; margin-top: 6px; font-size: 14px; color: #C7CBF5; }
-.untertitel .quellen a { color: #fff; }
 .fehler { margin: 14px 22px 0; padding: 12px 16px; border-radius: 12px; background: var(--rot-weich); color: #8A0F1F; font-weight: 600; }
 
 /* ---------- Karten ---------- */
@@ -163,6 +158,9 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .agenda-eingabe-gross .agenda-eingabe { align-items: stretch; }
 .agenda-eingabe-gross .agenda-knoepfe { flex-direction: column; }
 .agenda-eingabe-gross .agenda-knoepfe button { flex: 1; min-width: 110px; }
+/* Mikrofon neben dem Einladungsfeld (Ticket #21 Punkt 4): eigene, feste Größe statt flex: 1 – in der Spalte wurde
+   es sonst zum flachen Streifen zusammengedrückt */
+.agenda-eingabe-gross .agenda-knoepfe .icon { flex: none; width: auto; min-width: 110px; height: 46px; }
 .agenda-eingabe { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
 .agenda-eingabe textarea { flex: 1; resize: vertical; min-height: 42px; }
 .agenda-knoepfe { display: flex; gap: 8px; flex: none; }
@@ -348,7 +346,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .kopf-knoepfe { grid-column: 1 / -1; flex-wrap: wrap; }
   .zwei, .f-punkt { grid-template-columns: 1fr; }
   .einrichtung { padding: 16px; }
-  .hinweis-band, .untertitel, .fehler { margin-left: 16px; margin-right: 16px; }
+  .hinweis-band, .fehler { margin-left: 16px; margin-right: 16px; }
   .arbeitsflaeche { padding: 16px; }
 }
 
@@ -362,6 +360,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .agenda-eingabe { flex-direction: column; }
   .agenda-eingabe-gross .agenda-knoepfe { flex-direction: row; }
   .agenda-eingabe-gross .agenda-knoepfe button { min-width: 0; }
+  .agenda-eingabe-gross .agenda-knoepfe .icon { flex: none; width: 52px; min-width: 52px; }
   .agenda-zeile { grid-template-columns: 1fr !important; }
   .agenda-reihenfolge { justify-self: start; }
   .regelwahl { grid-template-columns: 1fr; }
@@ -429,27 +428,70 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .folie-quellen small { display: block; color: var(--text-3); font-weight: 500; }
 .folie-fuss { font-size: 12.5px; color: var(--text-3); border-top: 1px solid var(--rand); padding-top: 9px; }
 
-/* Nestor-Karte (Pop-up) – groß genug für den Beamer, über dem Bildbereich */
-.nestor-karte { position: fixed; z-index: 28; top: 150px; left: 50%; transform: translateX(-50%);
-  width: min(760px, 94vw); max-height: calc(100vh - 190px); overflow: auto; display: grid; gap: 10px;
-  background: var(--flaeche); border-radius: 16px; padding: 18px 24px 22px; border-top: 7px solid var(--marke);
-  box-shadow: 0 24px 60px rgba(11, 19, 36, .28); animation: auftauchen .3s ease-out; }
-.nk-kopf { display: flex; align-items: center; gap: 12px; }
-.nk-art { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--marke); }
-.nk-art i { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-style: normal;
-  font-size: 13px; letter-spacing: 0; color: var(--gold); background: linear-gradient(135deg, #4F46E5, #1E1B4B); }
-.nk-zeit { margin-left: auto; font-size: 13px; color: var(--text-3); font-weight: 600; }
-.nestor-karte h3 { margin: 0; font-size: 27px; line-height: 1.2; }
-.nk-frage { margin: -4px 0 0; color: var(--text-3); font-size: 15px; }
-.nk-punkte { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 9px; }
+/* Nestor-Feld (Ticket #21): Antworten immer hier, oben im mittleren Feld über dem Bild (auch auf kleinen Bildschirmen
+   ohne Scrollen sichtbar) – dunkles Indigo mit goldenem N. Hinweise (Regeln, Zeit) stehen im Bernstein-/Rot-Band
+   über den Spalten, damit beides nie verwechselt wird. */
+.nestor-feld { position: absolute; left: 14px; right: 14px; top: 14px; z-index: 5; max-height: calc(100% - 28px);
+  overflow: auto; display: grid; gap: 12px; padding: 16px 20px 18px; border-radius: 16px; color: #fff;
+  background: linear-gradient(160deg, #1E1B4B 0%, #272372 100%); box-shadow: 0 18px 50px rgba(11, 19, 36, .35);
+  border-top: 5px solid var(--gold); animation: auftauchen .3s ease-out; text-align: left; }
+/* Was gerade entsteht, steht in der Warteschlange des Felds – die kleine Plakette wäre doppelt */
+.bildflaeche:has(.nestor-feld:not([hidden])) .bild-arbeitet { display: none; }
+.nf-kopf { display: flex; align-items: center; gap: 14px; }
+.nf-titel { display: grid; min-width: 0; flex: 1; }
+.nf-titel strong { font-size: 19px; letter-spacing: .01em; }
+.nf-frage { font-size: 15px; color: #C7CBF5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nestor-feld .nk-zeit { color: #A5ABE8; margin-left: auto; font-size: 13px; font-weight: 600; }
+.nestor-feld .icon { background: transparent; border-color: rgba(255,255,255,.25); color: #fff; }
+.nestor-feld .icon:hover { border-color: #fff; }
+/* Arbeitssymbol: das N mit goldenem, umlaufendem Ring, solange Nestor angesprochen ist, denkt, recherchiert oder ein
+   Auftrag läuft; beim Sprechen pulsiert es */
+.nf-symbol { position: relative; flex: none; width: 52px; height: 52px; display: grid; place-items: center; }
+.nf-symbol i { position: relative; z-index: 1; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+  font-style: normal; font-weight: 800; font-size: 22px; color: var(--gold); background: linear-gradient(135deg, #4F46E5, #1E1B4B);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.18); }
+.nf-symbol::before { content: ""; position: absolute; inset: -3px; border-radius: 17px; opacity: 0;
+  background: conic-gradient(from 0deg, transparent 0 55%, var(--gold) 80%, #fff 100%); }
+.nestor-feld.arbeitet .nf-symbol::before { opacity: 1; animation: drehen 1.1s linear infinite; }
+.nestor-feld.arbeitet .nf-symbol i { animation: atmen 1.4s ease-in-out infinite; }
+.nestor-feld.spricht .nf-symbol i { animation: sprechen .7s ease-in-out infinite; }
+@keyframes atmen { 50% { transform: scale(.9); } }
+@keyframes sprechen { 50% { box-shadow: 0 0 0 7px rgba(245, 179, 1, .35); } }
+.nf-text { margin: 0; font-size: 22px; line-height: 1.45; font-weight: 500; }
+/* Warteschlange: läuft / wartet, jede Aufgabe mit ✕ */
+.nf-auftraege { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nf-auftraege li { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 10px; border-radius: 10px;
+  background: rgba(255,255,255,.08); font-size: 15px; min-width: 0; }
+.nf-auftraege li strong { flex: none; }
+.nf-auftrag-titel { flex: 1; min-width: 0; color: #C7CBF5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nf-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.nf-auftraege li.laeuft .nf-chip { background: var(--gold); color: var(--marke-2); }
+.nf-auftraege li.laeuft .nf-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  animation: puls 1s infinite; }
+.nf-auftraege li.wartet .nf-chip { border: 1px solid rgba(255,255,255,.5); color: #E0E3FF; }
+/* Karte im Feld: Titel, Stichpunkte, Quellen – nach dem Sprechen an derselben Stelle */
+.nf-karte { display: grid; gap: 8px; }
+.nk-art { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.nestor-feld h3 { margin: 0; font-size: 24px; line-height: 1.2; color: #fff; }
+.nk-frage { margin: -4px 0 0; color: #C7CBF5; font-size: 15px; }
+.nk-punkte { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 8px; }
 .nk-punkte li { display: flex; gap: 11px; font-size: 19px; line-height: 1.4; }
 .nk-punkte li::before { content: ""; flex: none; width: 10px; height: 10px; margin-top: 9px; border-radius: 50%; background: var(--gold); }
-.nk-quellen { padding: 10px 14px; border-radius: 10px; background: var(--marke-weich); font-size: 14px; display: grid; gap: 4px; }
-.nk-quellen strong { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--marke); }
-.nk-quellen a { color: var(--text); font-weight: 600; }
-.nk-quellen small { color: var(--text-3); }
-#karte-folie { justify-self: start; }
+.nk-quellen { padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 14px; display: grid; gap: 4px; }
+.nk-quellen strong { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.nk-quellen a { color: #fff; font-weight: 600; }
+.nk-quellen small { color: #A5ABE8; }
+.nestor-feld .knopf-link { color: #fff; }
+#karte-folie { justify-self: start; color: #fff; border-color: rgba(255,255,255,.4); }
+@media (max-width: 480px) {
+  .nestor-feld { left: 8px; right: 8px; top: 8px; padding: 12px 14px 14px; gap: 10px; }
+  .nf-symbol { width: 44px; height: 44px; } .nf-symbol i { width: 38px; height: 38px; font-size: 19px; }
+  .nf-titel strong { font-size: 17px; }
+  .nf-text { font-size: 18px; }
+  .nk-punkte li { font-size: 16px; }
+  .nestor-feld h3 { font-size: 20px; }
+}
 
 /* Verlauf: Nestors Karten */
 .karten-liste { list-style: none; margin: 0; padding: 12px 16px; overflow-y: auto; flex: 1; display: grid; gap: 8px; align-content: start; }

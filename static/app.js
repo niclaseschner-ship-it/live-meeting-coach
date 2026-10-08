@@ -99,14 +99,14 @@ $("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/st
 $("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
 $("btn-mikro").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
 $("btn-fragen").onclick = () => { stimme.bereit(); api("/api/assistent/fragen"); };
-$("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
+$("btn-still").onclick = () => { stimme.stopp(); nestorStopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-transkript").onclick = () => { leisteOffen = !leisteOffen; rendern(); };
 $("leiste-zu").onclick = () => { leisteOffen = false; rendern(); };
 $("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
 $("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
 $("reiter-nestor").onclick = () => { reiter = "nestor"; rendern(); };
-$("karte-zu").onclick = () => karteSchliessen();
+$("karte-zu").onclick = () => { feld.zu = true; feldRendern(); };
 // Kopfleiste entschlackt (Ticket #17 Punkt 4): Handy koppeln und Einstellungen stecken im „Mehr“-Menü – beides
 // seltene, vorbereitende Aktionen statt Aktionen je Minute. Ein Klick darauf wählt aus und schließt das Menü.
 $("btn-mehr").onclick = () => { $("mehr-menu").hidden = !$("mehr-menu").hidden; $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true; };
@@ -427,17 +427,54 @@ function knopfRendern(z) {
   $("knopf-fehler").textContent = k.fehler ?? "";
 }
 
-// ---------- Nestor-Karten (Pop-up) ----------
-let karteOffen = null;      // id der gezeigten Karte
-let karteGesehen = null;    // höchste id, die schon automatisch gezeigt wurde
-let karteTimer = null;
+// ---------- Nestor-Feld (Ticket #21) ----------
+// Antworten stehen immer an derselben Stelle und in derselben Form: im mittleren Feld. Was Nestor sagt, läuft mit,
+// sobald er spricht (Realtime: Transkript-Stücke, Text-Weg/Basis: der Satz vor seinem Ton) – im Takt der Wiedergabe:
+// Jedes Textstück erscheint, wenn der Ton, der vor ihm ankam, abgespielt ist. Danach die Stichpunkte der Karte.
+// Dazu das Arbeitssymbol (angesprochen / denkt / recherchiert) und die Warteschlange der Aufträge mit ✕.
+const feld = { frage: "", text: "", wartend: [], karte: null, zu: true, fest: false, seit: 0, schaetzEnde: 0 };
+let karteGesehen = null;    // höchste Karten-id, die schon im Feld stand
+const jetztS = () => performance.now() / 1000;
+// Wann ist dieses Textstück zu hören? Spielt dieser Tab den Ton, nach dessen Zeitachse; sonst geschätzt (~15 Zeichen/s)
+function feldZeitpunkt(text) {
+  const c = stimme.ctx;
+  if (c && lautsprecher && c.state === "running") return jetztS() + Math.max(0, stimme.naechste - c.currentTime);
+  const t = Math.max(jetztS(), feld.schaetzEnde);
+  feld.schaetzEnde = t + (text?.length ?? 0) / 15;
+  return t;
+}
+function nestorText(d) {
+  if (d.neu) feld.schaetzEnde = 0;
+  feld.wartend.push({ ...d, t: feldZeitpunkt(d.text) });
+  feldTakt();
+}
+function feldTakt() {
+  const jetzt = jetztS();
+  let geaendert = false;
+  while (feld.wartend.length && feld.wartend[0].t <= jetzt + 0.02) {
+    const d = feld.wartend.shift();
+    if (d.neu) Object.assign(feld, { frage: d.frage ?? "", text: "", karte: null, zu: false, fest: false });
+    feld.text += d.delta || !feld.text ? d.text : ` ${d.text}`;
+    feld.seit = jetzt; geaendert = true;
+  }
+  if (geaendert) feldRendern();
+}
+setInterval(feldTakt, 80);
+function nestorStopp() { // Hineinreden oder „still“: was noch nicht zu hören war, erscheint auch nicht
+  feld.wartend = [];
+  if (feld.text && !feld.text.endsWith("…")) feld.text += " …";
+  feldRendern();
+}
+const spricht = () => feld.wartend.length > 0 || (!!stimme.ctx && stimme.naechste > stimme.ctx.currentTime + 0.05);
 function karteZeigen(k, automatisch) {
-  karteOffen = k.id;
+  feld.karte = k; feld.zu = false; feld.fest = !automatisch; feld.seit = jetztS();
+  if (!automatisch || !feld.text) { feld.frage = k.frage && k.frage !== k.titel ? k.frage : ""; feld.text = ""; }
+  feldRendern();
+}
+function karteFuellen(k) {
   $("karte-art").textContent = KARTEN_ART[k.art] ?? "Nestor";
   $("karte-zeit").textContent = mmss(k.zeit);
   $("karte-titel").textContent = k.titel;
-  $("karte-frage").textContent = k.frage && k.frage !== k.titel ? `„${k.frage}“` : "";
-  $("karte-frage").hidden = !$("karte-frage").textContent;
   $("karte-punkte").replaceChildren(...(k.punkte ?? []).map((p) => el("li", {}, p)));
   const q = k.quellen ?? [];
   $("karte-quellen").hidden = !q.length;
@@ -445,13 +482,45 @@ function karteZeigen(k, automatisch) {
     el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.titel), " ", el("small", {}, x.seite))));
   $("karte-folie").hidden = k.art !== "folie";
   $("karte-protokoll").hidden = k.art !== "protokoll" || !zustand?.knopf?.protokoll;
-  $("karte-folie").onclick = () => { folieBauen(k.folie); ansicht = "folie"; karteSchliessen(); if (zustand) bildRendern(zustand); };
-  $("karte").hidden = false;
-  clearTimeout(karteTimer);
-  // automatisch geöffnete Karten treten nach einer Minute zurück in den Verlauf; selbst geöffnete bleiben
-  if (automatisch) karteTimer = setTimeout(karteSchliessen, 60000);
+  $("karte-folie").onclick = () => { folieBauen(k.folie); ansicht = "folie"; feld.zu = true; if (zustand) bildRendern(zustand); feldRendern(); };
 }
-function karteSchliessen() { $("karte").hidden = true; karteOffen = null; clearTimeout(karteTimer); }
+const ARBEITET = ["angesprochen", "denkt", "recherchiert"];
+const AUFTRAG_ZUSTAND = { laeuft: "läuft", wartet: "wartet" };
+function feldRendern() {
+  const z = zustand; if (!z) return;
+  const a = z.assistent ?? {};
+  const aktiv = z.laeuft || z.simulation || z.hoeren;
+  const auftraege = a.auftraege ?? [];
+  const arbeitet = !!a.aktiv && ARBEITET.includes(a.zustand);
+  const redet = spricht();
+  const frisch = feld.fest || redet || jetztS() - feld.seit < 60;  // automatisch Gezeigtes tritt nach 1 min zurück
+  const inhalt = !feld.zu && frisch && !!(feld.text || feld.karte);
+  const zeigen = !!aktiv && (arbeitet || auftraege.length > 0 || inhalt);
+  $("nestor-feld").hidden = !zeigen;
+  if (!zeigen) return;
+  const laeuft = auftraege.some((x) => x.zustand === "laeuft");
+  $("nestor-feld").className = `nestor-feld${arbeitet || laeuft ? " arbeitet" : ""}${redet ? " spricht" : ""}`;
+  const name = a.name ?? "Nestor";
+  $("nf-zustand").textContent = arbeitet ? `${name} ${NESTOR_TEXT[a.zustand]}` : redet ? `${name} spricht`
+    : laeuft ? `${name} arbeitet …` : name;
+  $("nf-frage").textContent = inhalt && feld.frage ? `„${feld.frage}“` : "";
+  $("nf-frage").hidden = !$("nf-frage").textContent;
+  $("karte-zu").hidden = !inhalt;
+  // Warteschlange: läuft / wartet, jede Aufgabe per ✕ abbrechbar (oder „Nestor, lass die Recherche“)
+  $("nf-auftraege").hidden = !auftraege.length;
+  $("nf-auftraege").replaceChildren(...auftraege.map((x) => el("li", { class: x.zustand },
+    el("span", { class: "nf-chip" }, AUFTRAG_ZUSTAND[x.zustand] ?? x.zustand),
+    el("strong", {}, x.name), el("span", { class: "nf-auftrag-titel" }, x.titel ? `„${x.titel}“` : ""),
+    el("button", { class: "icon klein", "data-tip": `${x.name} abbrechen`, "aria-label": `${x.name} abbrechen`,
+      onclick: () => api("/api/assistent/abbrechen", { id: x.id }) }, icon("zu")))));
+  // Text, solange er läuft (oder keine Karte kommt); danach die Karte mit Stichpunkten an derselben Stelle
+  const karteStatt = inhalt && feld.karte && !redet;
+  $("nf-text").hidden = !inhalt || !feld.text || karteStatt;
+  $("nf-text").textContent = feld.text;
+  $("karte").hidden = !karteStatt;
+  $("karte-zeit").hidden = !karteStatt;
+  if (karteStatt) karteFuellen(feld.karte);
+}
 function kartenRendern(z) {
   const karten = z.karten ?? [];
   const neueste = karten.at(-1);
@@ -461,7 +530,7 @@ function kartenRendern(z) {
     // Folie und Überblick erscheinen schon groß im Bildbereich
     if (!["folie", "ueberblick"].includes(neueste.art)) karteZeigen(neueste, true);
   }
-  if (!karten.length && karteOffen !== null) karteSchliessen(); // neues Meeting
+  if (!karten.length && feld.karte) { feld.karte = null; feld.zu = true; } // neues Meeting
 }
 
 // ---------- Darstellung ----------
@@ -534,14 +603,6 @@ function rendern() {
     $("nestor").className = `nestor ${a.zustand}`;
     $("nestor-zustand").textContent = `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}`;
   }
-  // Untertitel: was Nestor gerade gesagt hat – nur kurz, damit nicht zu viel zu lesen ist
-  const l = a?.letzte;
-  const frisch = aktiv && l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
-  $("untertitel").hidden = !frisch || karteOffen !== null; // die Karte zeigt es schon, nicht doppelt lesen
-  if (frisch) $("untertitel").replaceChildren(el("span", { class: "wer" }, a.name), l.antwort,
-    ...((l.quellen ?? []).length ? [el("span", { class: "quellen" }, "Quellen: ",
-      ...l.quellen.flatMap((q, i) => [i ? " · " : "", el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel)]))] : []));
-
   // Hinweis-Band: neuester Hinweis, 45 s lang sichtbar
   const h = z.hinweise.at(-1);
   const zeigen = h && h.id !== hinweisWeg && z.zeit - h.zeit < 45 && aktiv;
@@ -558,6 +619,7 @@ function rendern() {
   kostenRendern(z);
   schluesselRendern(z);
   kartenRendern(z);
+  feldRendern();
 }
 
 function liveRendern(z) {
@@ -732,7 +794,8 @@ function verbinden() {
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return stimme.abspielen(d.pcm);
-    if (d.typ === "stimme_stopp") return stimme.stopp();
+    if (d.typ === "stimme_stopp") { stimme.stopp(); return nestorStopp(); }
+    if (d.typ === "nestor_text") return nestorText(d);
     if (d.typ === "pegel") { pegelAnzeigen(d.wert); return; }
     if (d.typ === "knopf") { knopfMeldung(d); return; }
     zustand = d; formAusServer(d); rendern(); einstellungenRendern(d.einstellungen);
