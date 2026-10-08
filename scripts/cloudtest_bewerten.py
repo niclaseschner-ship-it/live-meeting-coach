@@ -51,6 +51,15 @@ def ws_frames_laden(ordner: Path) -> list[dict]:
     return aus
 
 
+def nur_knopfdruck_aus_bericht(bericht: dict) -> bool:
+    """Ticket #17 Punkt 7: neuere Berichte tragen das Feld direkt (scripts/cloudtest.py pruefliste_bauen());
+    ältere (vor dieser Änderung) nur über den Text in messwerte.modus ("… · nur auf Knopfdruck")."""
+    wert = bericht["messwerte"].get("nur_knopfdruck")
+    if wert is not None:
+        return bool(wert)
+    return "knopfdruck" in bericht["messwerte"].get("modus", "").lower()
+
+
 def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[dict], float | None] | None:
     """Frisch aus dem WS-Mitschnitt + referenz.json (mit Versatz-Korrektur). None, wenn das nicht geht
     (keine ws.jsonl oder referenz_datei unbekannt/fehlt) - dann übernimmt main() die gespeicherte Prüfliste."""
@@ -65,7 +74,8 @@ def pruefliste_neu_berechnen(bericht: dict, frames: list[dict]) -> tuple[list[di
     karten = ct._karten_dedup(zustaende)
     stimme = ct.nachrichten_aus_frames(frames, "stimme")
     offline_lauf = bool((zustaende[-1].get("schluessel") or {}).get("offline"))
-    return ct.pruefpunkte_berechnen(referenz, zustaende, hinweise, karten, stimme, offline_lauf)
+    return ct.pruefpunkte_berechnen(referenz, zustaende, hinweise, karten, stimme, offline_lauf,
+                                    nur_knopfdruck_aus_bericht(bericht))
 
 
 def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], versatz: float | None) -> dict:
@@ -290,6 +300,17 @@ async def main() -> None:
     urteile = None if args.ohne_urteil else await urteile_holen(kennzahlen, bilder)
     bewertung_schreiben(ordner, bericht, kennzahlen, urteile, schlimmste)
     print(f"Bewertung: {ordner / 'bewertung.md'}")
+
+    # Ticket #19: HTML-Testbericht (Audio+Zeitstrahl+Screenshots) ist seitdem Standard für jeden Lauf - hier am
+    # Ende statt doppelt von Hand aufgerufen. Lazy-Import (erst hier, nicht oben), weil cloudtest_bericht.py
+    # umgekehrt diese Datei importiert (nur_knopfdruck_aus_bericht()) - ein Import an dieser Stelle vermeidet
+    # jede Unklarheit über die Reihenfolge beim zirkulären Import.
+    import cloudtest_bericht
+    try:
+        html_pfad = cloudtest_bericht.erzeugen(ordner)
+        print(f"Bericht: {html_pfad} ({html_pfad.stat().st_size / 1_000_000:.1f} MB)")
+    except Exception as e:  # noqa: BLE001 - ffmpeg/Audio kann je nach Lauf fehlen; Kennzahlen/Urteil bleiben gültig
+        print(f"HTML-Bericht nicht erzeugt ({type(e).__name__}: {e}) - bewertung.md/bericht.md stehen trotzdem.")
 
 
 if __name__ == "__main__":
