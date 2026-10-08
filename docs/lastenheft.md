@@ -12,6 +12,12 @@ Nestor begleitet Präsenzmeetings (3–8 Personen, Deutsch). Er behält Agenda, 
 antwortet auf Ansprache und hält fest, was besprochen und entschieden wurde. **Die Gruppe entscheidet,
 Nestor zeigt nur an.**
 
+**Grundregel: Nestor spricht nur, wenn er gefragt wird.** Gesprochen wird auf Ansprache (Name, Rückfrage direkt
+nach seiner Antwort) oder auf einen Knopf. Will Nestor von sich aus auf etwas aufmerksam machen (Zeit, Thema,
+Lücken, fünf Minuten vor Schluss), tut er das **still**: Einblendung, Pop-up mit Knöpfen oder Ampel – nie mit
+Stimme. Einzige Ausnahme ist die Begrüßung mit der Einwilligung zu Beginn (Niclas, 08.10.2026). Neue Funktionen
+halten sich daran; wer gegen die Regel verstößt, ist ein Fehler.
+
 Nestor gibt es in **zwei Stufen** (Abschnitt 3): **Nestor Basis** nutzt nur Mistral AI (Frankreich, Verarbeitung in
 der EU) – für Runden, bei denen der Einsatz sonst am Datenschutz scheitert („kein OpenAI“). **Nestor Premium** nutzt
 OpenAI und legt Gespräch und Live-Bild darauf. Der Name bleibt in beiden Stufen Nestor.
