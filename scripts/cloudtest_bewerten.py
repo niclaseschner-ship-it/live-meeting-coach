@@ -56,7 +56,10 @@ def kennzahlen_bauen(bericht: dict, ws: list[dict]) -> dict:
     # Fehlauslöser: Grenzfälle, die NICHT reagieren sollten, aber reagiert haben ("erwartet: kein_..." + fehlt)
     fehlausloeser = [p for p in fehlt if "erwartet: kein" in p["detail"] or "erwartet: keine_antwort" in p["detail"]]
     verpasst = [p for p in fehlt if p not in fehlausloeser]
-    verzuege = [float(m.group(1)) for p in pl for m in [VERZUG_RE.search(p["detail"])] if m]
+    # "Antwortzeit" meint Nestors Reaktion auf eine Anweisung/einen Grenzfall, nicht den Verzug einer
+    # Ereignis-Erkennung (z. B. Monolog) - sonst mischen sich zwei verschiedene Dinge in einer Kennzahl.
+    antwort_pruefpunkte = [p for p in pl if p["name"].startswith(("Nestor-Anweisung", "Grenzfall"))]
+    verzuege = [float(m.group(1)) for p in antwort_pruefpunkte for m in [VERZUG_RE.search(p["detail"])] if m]
 
     hinweise_gesamt = 0
     gesehen = set()
@@ -192,6 +195,10 @@ NOTEN_NAMEN = {"antwortguete": "Antwortgüte", "verstaendlichkeit": "Verständli
               "gesamteindruck": "Gesamteindruck"}
 
 
+def _s(wert) -> str:
+    return "–" if wert is None else f"{wert} s"
+
+
 def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: dict | None,
                         schlimmste: list[dict]) -> None:
     z = [f"# Bewertung – {bericht['messwerte'].get('modus', '?')}", "",
@@ -204,12 +211,12 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         f"| Fehlauslöser | {kennzahlen['fehlausloeser']} |",
         f"| Dokumentiert (kein klares Richtig/Falsch) | {kennzahlen['beobachtet']} |",
         f"| Übersprungen (offline) | {kennzahlen['uebersprungen_offline']} |",
-        f"| Antwortzeit, Median | {kennzahlen['antwortzeit_median_s']} s |",
-        f"| Antwortzeit, am längsten | {kennzahlen['antwortzeit_max_s']} s |",
+        f"| Antwortzeit, Median | {_s(kennzahlen['antwortzeit_median_s'])} |",
+        f"| Antwortzeit, am längsten | {_s(kennzahlen['antwortzeit_max_s'])} |",
         f"| Hinweise insgesamt / je 10 min | {kennzahlen['hinweise_gesamt']} / {kennzahlen['hinweise_je_10min']} |",
         f"| Kosten gesamt / je Stunde | {kennzahlen['kosten_usd']:.4f} $ / {kennzahlen['kosten_je_stunde_usd']:.3f} $ |",
-        f"| Kaltstart Startseite | {kennzahlen['kaltstart_s']} s |",
-        f"| Wartezeit bis Abschlusspaket fertig | {kennzahlen['ablage_wartezeit_s']} s |",
+        f"| Kaltstart Startseite | {_s(kennzahlen['kaltstart_s'])} |",
+        f"| Wartezeit bis Abschlusspaket fertig | {_s(kennzahlen['ablage_wartezeit_s'])} |",
         "", "## Urteile (1–5)", ""]
     if urteile is None:
         z += ["Übersprungen – kein Codex-Urteil möglich (siehe Protokoll). Screenshots liegen unter "

@@ -787,7 +787,7 @@ async def lauf(args: argparse.Namespace) -> Bericht:
         seite.on("console", lambda m: bericht.fehler.append(f"Konsole ({m.type}): {m.text}")
                  if m.type == "error" else None)
         seite.on("requestfailed", lambda r: bericht.fehler.append(
-            f"Netzanfrage fehlgeschlagen: {r.method} {r.url} ({(r.failure or {}).get('errorText', '?')})"))
+            f"Netzanfrage fehlgeschlagen: {r.method} {r.url} ({r.failure or '?'})"))
         seite.on("dialog", lambda d: (bericht.notieren(f"Dialog automatisch bestätigt: {d.message}"),
                                       asyncio.ensure_future(d.accept())))
         spur = WsSpur(bericht.ordner, lauf_start)
