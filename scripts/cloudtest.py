@@ -857,6 +857,42 @@ def ereignis_pruefen(ereignis: dict, zustaende: list[dict], hinweise: list[dict]
     return False, "kein passendes Signal (aktiver_punkt/Hinweis/Ergebnis) im Mitschnitt"
 
 
+ABSCHWEIFUNG_ZIEL_S = 25.0  # Ticket #24
+
+
+def abschweifung_kennzahl(referenz: dict, segmente: list[dict], hinweise: list[dict],
+                          ohne_themen: bool = False) -> list[dict]:
+    """Kennzahl Regel 3 (Ticket #24) je eingebauter Abschweifung: Verzug vom Beginn (Referenzzeit, schon
+    versatzkorrigiert) bis zum ersten Fokus-Hinweis, Ziel ≤ 25 s, und kein Fokus-Hinweis nach der Rückkehr. Die
+    Rückkehr ist das Ende des letzten Satzes der Abschweifung („Gut, zurück zur Datenbank.“) im Mitschnitt.
+    `ohne_themen`: Offline oder nur auf Knopfdruck – dann läuft keine Themen-Zuordnung, nur beobachten."""
+    aus = []
+    for e in referenz.get("ereignisse", []):
+        if e["ereignis"] != "abschweifung":
+            continue
+        name = f"Kennzahl Verzug Abschweifung → Hinweis ({e['zeit_s']:.0f}s)"
+        if ohne_themen:
+            aus.append({"name": name, "status": "beobachtet", "detail": "keine Themen-Zuordnung in diesem Lauf"})
+            continue
+        beginn = e["zeit_s"]
+        saetze = [s for s in re.split(r"(?<=[.!?])\s+", e.get("text", "")) if s.strip()]
+        seg = segment_match(segmente, saetze[-1]) if saetze else None
+        rueckkehr = seg["ende"] if seg and (seg.get("ende") or 0) > beginn else None
+        fokus = sorted(h["zeit"] for h in hinweise if h.get("art") == "fokus" and h.get("zeit") is not None)
+        erster = next((t for t in fokus if beginn - 5 <= t <= (rueckkehr or beginn + 90)), None)
+        veraltet = [t for t in fokus if rueckkehr is not None and rueckkehr < t <= rueckkehr + 60]
+        teile = [f"Verzug {erster - beginn:+.0f}s (Ziel ≤ {ABSCHWEIFUNG_ZIEL_S:.0f}s)" if erster is not None
+                 else "kein Fokus-Hinweis während der Abschweifung"]
+        if rueckkehr is None:
+            teile.append("Rückkehr-Satz nicht im Mitschnitt gefunden")
+        else:
+            teile.append(f"Rückkehr bei {rueckkehr:.0f}s, " + (f"{len(veraltet)} Hinweis(e) danach (veraltet, bei "
+                         + ", ".join(f"{t:.0f}s" for t in veraltet) + ")" if veraltet else "kein Hinweis danach"))
+        ok = erster is not None and erster - beginn <= ABSCHWEIFUNG_ZIEL_S and not veraltet
+        aus.append({"name": name, "status": "ok" if ok else "fehlt", "detail": "; ".join(teile)})
+    return aus
+
+
 def nestor_reaktion(start: float, ende_fenster: float, zustaende: list[dict], hinweise: list[dict],
                     karten: list[dict], stimme_frames: list[dict], bild: bool) -> tuple[bool, str]:
     """Für eine Nestor-Anweisung/einen Grenzfall: erste Reaktion im Fenster [start, ende_fenster] – erster Ton
@@ -912,6 +948,8 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
             continue
         erkannt, begruendung = ereignis_pruefen(e, zustaende, hinweise)
         pruefen(name, "ok" if erkannt else "fehlt", begruendung)
+    for p in abschweifung_kennzahl(referenz, segmente, hinweise, offline_lauf or nur_knopfdruck):
+        pruefen(p["name"], p["status"], p["detail"])
 
     # #9-Schema (Nestor-Anweisungen) - weiter unterstützt, falls referenz.json das alte Format hat.
     for n in referenz.get("nestor", []):

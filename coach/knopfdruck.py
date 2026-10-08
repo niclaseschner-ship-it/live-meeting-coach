@@ -423,6 +423,7 @@ async def verwerfen(coach, minuten: float | None) -> dict:
         # Ein Satz, der in den Zeitraum hineinreicht, gehört dazu
         m.transkript = [s for s in m.transkript if s.ende <= seit]
         coach._abschnitt = [s for s in coach._abschnitt if s.ende <= seit]
+        coach._vorlauf = [s for s in coach._vorlauf if s.ende <= seit]  # Fensteranfang und Kontext der Zuordnung
         m.teiltext = ""
         if not seit:
             m.block_texte.clear()

@@ -72,8 +72,17 @@ class Einstellungen:
     # Überlappung im Stimmstrom: Fenster passt zu keiner Person sicher, aber zu zweien mittelmäßig
     mischung_max: float = _zahl("LMC_MISCHUNG_MAX", 0.45)
     mischung_zweit_min: float = _zahl("LMC_MISCHUNG_ZWEIT_MIN", 0.25)
-    # Strom 4 Kontext: so viel Gesprochenes wird je Themen-Zuordnung gesammelt
+    # Strom 4 Themen-Zuordnung (Ticket #24): gleitende Fenster. Eingeordnet wird jeweils das Gesprochene der letzten
+    # `abschnitt_sekunden` (Fenster), neu angestoßen alle `abschnitt_schritt_sekunden` neuer Sprache – oder nach Zeit:
+    # `abschnitt_ruhe_sekunden` Stille nach dem letzten Satz bzw. `abschnitt_max_sekunden` seit dem ersten neuen
+    # Satz, dann aber nur mit mindestens `abschnitt_min_sekunden` neuer Sprache (ein „Gut.“ allein zählt nicht).
+    # Vorher: feste Abschnitte von 15 s Sprechzeit, die erst mit dem nächsten Satz schlossen – Cloud-Lauf 08.10.:
+    # Abschweifung 5:32–6:03, Hinweis erst bei 6:48, nach der Rückkehr.
     abschnitt_sekunden: float = _zahl("LMC_ABSCHNITT_SEKUNDEN", 15)
+    abschnitt_schritt_sekunden: float = _zahl("LMC_ABSCHNITT_SCHRITT_SEKUNDEN", 10)
+    abschnitt_ruhe_sekunden: float = _zahl("LMC_ABSCHNITT_RUHE_SEKUNDEN", 5)
+    abschnitt_max_sekunden: float = _zahl("LMC_ABSCHNITT_MAX_SEKUNDEN", 15)
+    abschnitt_min_sekunden: float = _zahl("LMC_ABSCHNITT_MIN_SEKUNDEN", 4)
     # Live-Bild als One-Pager (FR-10), gezeichnet von Claude über das Abo (claude -p)
     # Tests ohne API-Kosten: Text-KI über das ChatGPT-Abo (coach/ki_abo.py), Transkript aus dem Zwischenspeicher,
     # keine Sprachausgabe. Im echten Meeting bleiben alle drei aus.

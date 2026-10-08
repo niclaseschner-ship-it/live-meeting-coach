@@ -122,7 +122,13 @@ hört, kann der Coach nicht melden. Die Erkennung bleibt deshalb unsicher und h�
 ### Regel 3 – Beim Thema bleiben
 
 **Vorhanden:** Fokus-Ampel. Die Themen-Zuordnung (GPT-5.4-mini) erkennt einen Abschnitt, der zu keinem
-Agendapunkt passt, nach ≥ 20 s.
+Agendapunkt passt. Seit Ticket #24 in überlappenden Fenstern: Eingeordnet werden jeweils die letzten ~15 s
+Gesprochenes, neu angestoßen alle 10 s neuer Sprache oder nach Zeit (5 s Stille, spätestens 15 s nach dem
+ersten offenen Satz; mindestens 4 s neue Sprache, ein einzelnes „Gut.“ zählt nicht). Fällt eine
+Rückkehr-Ansage („Gut, zurück zur Datenbank“), wird die Ampel grün und ein noch ausstehender Hinweis
+verworfen. Nachlauf auf dem Cloud-Lauf `premium_grenz2`: Hinweis 16 s nach Beginn der Abschweifung (vorher
+76 s, nach der Rückkehr). Kennzahl im Cloudtest: „Verzug Abschweifung → Hinweis“, Ziel ≤ 25 s, kein Hinweis
+nach der Rückkehr (`scripts/nachlauf_fokus.py` misst dasselbe auf einem vorhandenen Mitschnitt).
 
 **Bekannte Schwächen:**
 - Ein kurzes Fremdthema, das ohne Pause zwischen Agenda-Rede liegt, wird unzuverlässig erkannt

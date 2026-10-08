@@ -43,12 +43,14 @@ TON = (
 TON_ARTEN = ("kraftausdruck", "angriff")
 
 
-def nachricht(meeting: Meeting, abschnitt: str) -> str:
+def nachricht(meeting: Meeting, abschnitt: str, kontext: list[str] | None = None) -> str:
+    """`kontext`: was davor gesprochen wurde (ohne Überschneidung mit dem Abschnitt); ohne Angabe die letzten zwei
+    gesammelten Abschnitte."""
     zeilen = [f"Ziel des Meetings: {meeting.ziel or '(nicht angegeben)'}", "", "Agenda:"]
     for i, p in enumerate(meeting.agenda, start=1):
         zeilen.append(f"{i}. {p.titel}" + (f" – {p.ziel}" if p.ziel else ""))
     zeilen += ["", f"Aktiver Punkt: {meeting.aktiver_punkt + 1}"]
-    kontext = meeting.block_texte[-2:]
+    kontext = meeting.block_texte[-2:] if kontext is None else kontext
     if kontext:
         zeilen += ["", "Vorheriger Verlauf (nur Kontext):", *kontext]
     zeilen += ["", "Neuer Abschnitt:", abschnitt]
@@ -75,12 +77,12 @@ def normalisieren(roh: dict, anzahl_punkte: int) -> dict:
 
 
 async def zuordnen(client, modell: str, meeting: Meeting, abschnitt: str, aufwand: str = "",
-                   ton: bool = False) -> tuple[dict, dict]:
+                   ton: bool = False, kontext: list[str] | None = None) -> tuple[dict, dict]:
     extra = {"reasoning_effort": aufwand} if aufwand else {}
     antwort = await client.chat.completions.create(
         model=modell,
         messages=[{"role": "system", "content": SYSTEM + (TON if ton else "")},
-                  {"role": "user", "content": nachricht(meeting, abschnitt)}],
+                  {"role": "user", "content": nachricht(meeting, abschnitt, kontext)}],
         response_format={"type": "json_object"},
         **extra,
     )
