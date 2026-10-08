@@ -102,6 +102,7 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
             referenz = ct.takt.referenz_auf_meetinguhr(referenz, plan)
         spannweite = ct.versatz_spannweite(referenz, ct._segmente_dedup(zustaende))
 
+    kosten = max(bericht["messwerte"].get("kosten_usd", 0.0), ct.meeting_kosten(zustaende))
     return {
         "treffer": len(ok), "verpasst": len(verpasst), "fehlausloeser": len(fehlausloeser),
         "beobachtet": len([p for p in pruefliste if p["status"] == "beobachtet"]),
@@ -109,8 +110,8 @@ def kennzahlen_bauen(bericht: dict, frames: list[dict], pruefliste: list[dict], 
         "antwortzeit_median_s": sorted(verzuege)[len(verzuege) // 2] if verzuege else None,
         "antwortzeit_max_s": max(verzuege) if verzuege else None,
         "hinweise_gesamt": hinweise_gesamt, "hinweise_je_10min": round(hinweise_gesamt / dauer_min * 10, 1),
-        "kosten_usd": bericht["messwerte"].get("kosten_usd", 0.0),
-        "kosten_je_stunde_usd": round(bericht["messwerte"].get("kosten_usd", 0.0) / dauer_min * 60, 3) if dauer_min else 0,
+        "kosten_usd": kosten,
+        "kosten_je_stunde_usd": round(kosten / dauer_min * 60, 3) if dauer_min else 0,
         "ablage_wartezeit_s": bericht["messwerte"].get("ablage_wartezeit_s"),
         "kaltstart_s": bericht["messwerte"].get("kaltstart_s"),
         "versatz_s": round(versatz, 1) if versatz is not None else None,

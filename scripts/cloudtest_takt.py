@@ -141,8 +141,16 @@ def referenz_kuerzen(referenz: dict, bis_s: float | None) -> dict:
 # ---------- Zeitabbildung Quellzeit -> Meetinguhr ----------
 def uhr_versatz(zustaende: list[dict]) -> float | None:
     """Meetinguhr − Laufachse: Median aus (zustand.zeit − Empfangszeit) über alle Zustände während des
-    Hörens. Laufachse = ws.jsonl-Zeit `t` = Zeitplan-Zeiten der Regie (beide relativ zum Laufstart)."""
-    d = sorted(z["zeit"] - z["_t"] for z in zustaende if z.get("hoeren") and z.get("zeit", 0) > 0)
+    Hörens. Laufachse = ws.jsonl-Zeit `t` = Zeitplan-Zeiten der Regie (beide relativ zum Laufstart). Nur
+    Meldungen, deren Uhr seit der vorigen weitergelaufen ist: steht der Server (Cloudlauf 08.10.: Meetinguhr
+    blieb ab 217,6 s stehen, die Seite bekam weiter denselben Stand), würden die alten Stände den Median
+    verziehen."""
+    d, vorige = [], None
+    for z in zustaende:
+        if z.get("hoeren") and z.get("zeit", 0) > 0 and z["zeit"] != vorige:
+            d.append(z["zeit"] - z["_t"])
+        vorige = z.get("zeit")
+    d.sort()
     return d[len(d) // 2] if d else None
 
 
@@ -361,6 +369,8 @@ def takt_pruefpunkte(takt: dict, zustaende: list[dict], stimme_platzierung: list
             teile.append(f"{p['stopps']}× stimme_stopp")
         if p["ergebnis"] == "zeitlimit":
             pruefen(name, "fehlt", "Zeitlimit erreicht, Nestor nicht fertig – " + ", ".join(teile))
+        elif p["ergebnis"] in ("abgebrochen", "kein_hoeren"):
+            pruefen(name, "fehlt", f"{p['ergebnis']} (Meetinguhr steht bzw. Hörstrom aus) – " + ", ".join(teile))
         elif p["ergebnis"] == "keine_reaktion":
             pruefen(name, "beobachtet", f"keine Reaktion binnen {REAKTION_FRIST_S:.0f} s – " + ", ".join(teile))
         else:
@@ -480,6 +490,7 @@ class Regie:
         self.zeitplan: list[dict] = []
         self.pausen: list[dict] = []
         self.fertig = False
+        self.abbrechen = False  # aufzeichnen() setzt das, wenn die Meetinguhr steht
         self.screenshot_ziele: list[float] = []  # Laufachse; aufzeichnen() rechnet auf die Meetinguhr um
         self._aufgaben: list[asyncio.Future] = []
         self.rueckfragen = {g["id"] for g in referenz.get("grenzfaelle", []) if g.get("nach")}
@@ -527,6 +538,9 @@ class Regie:
                 break
             if jetzt - t0 >= limit_s:
                 ergebnis = "zeitlimit"
+                break
+            if self.abbrechen:
+                ergebnis = "abgebrochen"
                 break
             await asyncio.sleep(TAKT_S)
         t_ende = self.jetzt()
@@ -576,6 +590,9 @@ class Regie:
                 await self.abwarten("begruessung", True, self.jetzt(), BEGRUESSUNG_LIMIT_S, BEGRUESSUNG_REAKTION_S,
                                     {})
             for a in self.abschnitte:
+                if self.abbrechen:
+                    self.notieren("Takt: abgebrochen (Meetinguhr steht) – keine weiteren Abschnitte.")
+                    break
                 s = await self.stand()
                 if not s["hoeren"]:
                     self.notieren("Takt: Hörstrom ist aus – Abspielen beendet.")

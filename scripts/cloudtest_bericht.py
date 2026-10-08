@@ -108,6 +108,9 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
         referenz_roh = ct.takt.referenz_auf_meetinguhr(referenz_roh, plan)
     referenz = ct.referenz_verschieben(referenz_roh, versatz or 0.0)
 
+    # Die Prüfliste ist in Referenz-Reihenfolge (Ereignisse, Anweisungen, Grenzfälle); Kennzahl-Punkte dazwischen
+    # (#24: „Kennzahl Verzug Abschweifung …“) haben keine eigene Referenzzeile und würden sonst alles verrücken.
+    pruefliste = [p for p in pruefliste if not p["name"].startswith("Kennzahl")]
     marken: list[dict] = []
     i = 0
     for e in referenz.get("ereignisse", []):
@@ -124,7 +127,8 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
         marken.append({"t": g["start"], "art": "grenzfall", "label": f"Grenzfall {g['id']} ({g['erwartet']})",
                       "status": p["status"], "detail": p["detail"]})
     if plan:  # wo der Test auf Nestor gewartet hat (#25)
-        status = {"fertig": "ok", "zeitlimit": "fehlt", "keine_reaktion": "beobachtet"}
+        status = {"fertig": "ok", "zeitlimit": "fehlt", "abgebrochen": "fehlt", "kein_hoeren": "fehlt",
+                  "keine_reaktion": "beobachtet"}
         for pa in (bericht["messwerte"].get("takt") or {}).get("pausen", []):
             name = "Begrüßung abgewartet" if pa["art"] == "begruessung" else f"Nestor abgewartet nach {pa.get('id')}"
             marken.append({"t": pa["t_bezug"] + uhr, "art": "pause", "label": name,

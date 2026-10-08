@@ -490,6 +490,7 @@ def ereignis_hinweisarten(ereignis: str) -> tuple[str, ...]:
     }.get(ereignis, ())
 
 
+UHR_STEHT_S = 90.0  # so lange darf zustand.zeit stillstehen, bevor der Lauf das als Hänger wertet
 LOKAL_OHNE_KI = {"monolog"}  # läuft auch mit LMC_OFFLINE (lokale VAD/Diarisierung, Lastenheft §3)
 
 
@@ -512,6 +513,7 @@ async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht
         schutz = referenz["dauer_s"] + takt.BEGRUESSUNG_LIMIT_S + 75 * len(regie.abschnitte) + 60
         ziele = [float(t) for t in range(0, int(schutz), int(SCREENSHOT_TAKT))]
         lauf_zu_meeting = regie.lauf_start - meeting_start  # Laufachse → (grob) Meetinguhr
+    uhr_laeuft_seit = time.monotonic()
     regie_genommen: set[float] = set()
     regie_ende: float | None = None
     naechster_screenshot = iter(ziele)
@@ -537,6 +539,16 @@ async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht
         if t < letzte_zeit - 2.0:
             bericht.notieren(f"Meetingzeit sprang von {letzte_zeit:.0f}s auf {t:.0f}s zurück – "
                              "Mikrofon-Datei ist wohl in Schleife gelaufen, beende den Lauf jetzt.")
+            break
+        if t != letzte_zeit:
+            uhr_laeuft_seit = time.monotonic()
+        elif time.monotonic() - uhr_laeuft_seit > UHR_STEHT_S:
+            # Der Server rechnet nicht mehr (Cloudlauf 08.10.: Meetinguhr blieb bei 217,6 s stehen, kein Pegel,
+            # die Seite bekam weiter denselben Stand) - statt bis zum Notausgang zu warten, Befund und Schluss.
+            bericht.pruefen("Meetinguhr läuft bis zum Ende", "fehlt",
+                            f"steht seit {UHR_STEHT_S:.0f} s bei {t:.1f} s – Server verarbeitet nichts mehr")
+            if regie is not None:
+                regie.abbrechen = True
             break
         letzte_zeit = t
         verlauf.append(z)
@@ -1076,6 +1088,12 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
     return aus, versatz
 
 
+def meeting_kosten(zustaende: list[dict]) -> float:
+    """Höchster Stand von kosten.meeting im Mitschnitt – nicht der letzte: nach „Fertig“ lädt der Lauf ein neues,
+    leeres Meeting (Kosten 0), dessen Stand sonst als Kosten des Laufs im Bericht landete (Cloudlauf 08.10.)."""
+    return max(((z.get("kosten") or {}).get("meeting") or 0.0 for z in zustaende), default=0.0)
+
+
 def meeting_plan(messwerte: dict, zustaende: list[dict]) -> tuple[list[dict] | None, float | None]:
     """(Zeitplan auf der Meetinguhr, Versatz Meetinguhr − Laufachse) für einen Lauf mit abwechselndem Reden
     (#25); (None, None) für einen Lauf am Stück oder ältere Berichte."""
@@ -1138,7 +1156,7 @@ def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", be
         bericht.messwerte["takt_kennzahlen"] = takt_kennzahlen
 
     if zustaende:
-        bericht.messwerte["kosten_usd"] = zustaende[-1].get("kosten", {}).get("meeting", 0.0)
+        bericht.messwerte["kosten_usd"] = meeting_kosten(zustaende)
         bericht.messwerte["meeting_s"] = round(zustaende[-1].get("zeit", 0.0), 1)
     elif verlauf:
         bericht.messwerte["kosten_usd"] = verlauf[-1].get("kosten", {}).get("meeting", 0.0)
@@ -1289,7 +1307,8 @@ async def lauf(args: argparse.Namespace) -> Bericht:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", required=True)
-    ap.add_argument("--passwort", default=None)
+    ap.add_argument("--passwort", default=os.environ.get("LMC_CLOUDTEST_PASSWORT"),
+                    help="Kundenpasswort (oder Umgebung LMC_CLOUDTEST_PASSWORT – dann steht es nicht in der Prozessliste)")
     ap.add_argument("--stufe", required=True, choices=["basis", "premium"], help="Ticket #13: Nestor Basis/Premium")
     ap.add_argument("--nur-knopfdruck", action="store_true",
                     help="nur zusammen mit --stufe basis: der frühere Modus „Auf Knopfdruck“")
