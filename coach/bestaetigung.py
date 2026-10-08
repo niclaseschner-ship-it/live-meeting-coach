@@ -31,7 +31,9 @@ RATE = 24000
 
 # --- Floskeln ---------------------------------------------------------------------------------------------
 # Ticket #27: zwei bis drei Varianten je Art, für Knopf, Zuruf und Sprechtaste gleich.
-KURZ = ["Bin dran.", "Moment, kommt gleich.", "Schau ich mir an, komme gleich zurück."]
+# Kurze Bögen sind meist nach ein bis drei Sekunden fertig. Die Bestätigung darf deshalb
+# keinen längeren Arbeitsgang versprechen; dafür gibt es ausschließlich LANGE.
+KURZ = ["Mhm.", "Moment.", "Bin dran."]
 LANGE = ["Nehme ich mit, dauert ein bisschen. Macht ruhig weiter.",
          "Mach ich, das dauert einen Moment. Redet ruhig weiter."]
 LANG = LANGE[0]
@@ -80,6 +82,22 @@ def stille_kuerzen(pcm: bytes, schwelle: int = 500, vorne: float = 0.03, hinten:
 
 def ist_lang(frage: str) -> bool:
     return bool(LANG_RE.search(frage or ""))
+
+
+RECHERCHE_AUFTRAG_RE = re.compile(
+    r"\b(?:recherchier\w*|such\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?(?:nach\s+)?|"
+    r"schau\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?nach\b)",
+    re.IGNORECASE,
+)
+
+
+def recherche_auftrag(frage: str) -> bool:
+    """Explizite Suchaufträge vor dem Sprachmodell erkennen.
+
+    Reine Wissensfragen bleiben normale Fragen; nur Verben wie „recherchier“, „such … nach“
+    oder „schau … nach“ starten sicher die Websuche.
+    """
+    return bool(RECHERCHE_AUFTRAG_RE.search(frage or ""))
 
 
 def bestaetigen(frage: str) -> bool:

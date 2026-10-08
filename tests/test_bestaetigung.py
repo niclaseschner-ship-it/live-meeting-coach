@@ -113,6 +113,8 @@ def test_kurze_floskeln_wechseln():
     f = B.Floskeln("/nicht/da")
     folge = [f.kurz() for _ in range(20)]
     assert all(x != y for x, y in zip(folge, folge[1:])) and len(set(folge)) >= 3
+    assert all(len(x.split()) <= 2 for x in B.KURZ)
+    assert all("gleich zurück" not in x.lower() for x in B.KURZ)
 
 
 def test_lange_aufgaben_und_kein_auftrag_erkennen():
@@ -122,6 +124,27 @@ def test_lange_aufgaben_und_kein_auftrag_erkennen():
     assert not B.ist_lang("wo stehen wir gerade?")
     assert not B.bestaetigen("danke, das war's") and not B.bestaetigen("stopp")
     assert B.bestaetigen("was ist beim Budget noch offen?")
+    assert B.recherche_auftrag("Recherchier bitte die NIS2-Vorgaben.")
+    assert B.recherche_auftrag("Such mal im Netz nach den NIS2-Vorgaben.")
+    assert B.recherche_auftrag("Schau bitte kurz nach, was NIS2 verlangt.")
+    assert not B.recherche_auftrag("Was verlangt NIS2?")
+
+
+def test_explizite_recherche_umgeht_die_aktionswahl_des_modells():
+    async def ablauf():
+        c, _, _ = _coach(["AKTION: keine\nDazu weiß ich nichts."])
+        gestartet = []
+
+        async def lang(art, titel, fokus="", bogen=None):
+            gestartet.append((art, titel))
+            return True
+
+        c.assistent.lang_annehmen = lang
+        c.assistent.frage_beantworten("Recherchier bitte die NIS2-Vorgaben.", "taste")
+        await c.assistent.bogen.task
+        return gestartet
+
+    assert asyncio.run(ablauf()) == [("recherche", "Recherchier bitte die NIS2-Vorgaben.")]
 
 
 # --- Text-Weg (Basis und Premium „Kurzantwort“) ----------------------------------------------------------------

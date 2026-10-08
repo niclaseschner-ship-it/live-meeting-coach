@@ -570,7 +570,8 @@ button.luecke:hover { border-color: var(--rot); }
   text-align: center; }
 .vl-neu { margin-left: auto; padding: 5px 12px; border-radius: 999px; font-size: 14px; background: var(--gold);
   border-color: var(--gold); color: var(--marke-2); animation: auftauchen .3s ease-out; }
-.vl-buehne { flex: 1; min-width: 0; touch-action: pan-y; }
+.vl-buehne { flex: 1; min-width: 0; min-height: 0; max-height: min(68vh, 760px); overflow: auto;
+  overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable; }
 .vk { display: grid; gap: 10px; align-content: start; padding: 18px 22px 20px; border-radius: 16px; min-height: 100%;
   background: var(--flaeche-2); border: 1px solid var(--rand); border-top: 5px solid var(--marke); min-width: 0; }
 .vk.still { border-top-color: #94A3B8; }
@@ -642,6 +643,7 @@ button.luecke:hover { border-color: var(--rot); }
   .band-eintrag { font-size: 16px; padding: 8px 8px 8px 12px; gap: 8px; flex-wrap: wrap; }
   .band-zu { margin-left: auto; }
   .vk { padding: 14px 14px 16px; }
+  .vl-buehne { max-height: 58vh; }
   .vk h3 { font-size: 21px; }
   .vk-punkte li { font-size: 17px; }
   .art { font-size: 15.5px; }

@@ -694,6 +694,8 @@ class Assistent:
         if B.abbruch_wunsch(frage) and (self.auftraege.liste or B.abbruch_art(frage)):
             self._starten(self._abbruch_per_stimme(frage))  # „Nestor, lass die Recherche“ (Ticket #21)
             return None
+        if B.recherche_auftrag(frage):
+            return self.bogen_starten("recherche", frage, quelle, sprecher)
         return self.bogen_starten(BG.karten_art(frage) or "frage", frage, quelle, sprecher)
 
     def bogen_starten(self, art: str, frage: str = "", quelle: str = "knopf", sprecher: str | None = None,
