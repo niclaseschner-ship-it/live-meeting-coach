@@ -291,3 +291,8 @@ def ki_verfuegbar() -> bool:
     if os.getenv("LMC_OFFLINE") == "1":
         return False
     return bool(mistral_schluessel() if EINST.stufe == "basis" else openai_schluessel())
+
+
+# Anfragen des Containers an den eigenen Worker: Cloudflare weist die Standardkennung von urllib
+# („Python-urllib/…“) mit „error code: 1010“ ab (Cloud-Lauf 08.10.) – deshalb eine eigene.
+WORKER_USER_AGENT = "Nestor-Container/1.0"

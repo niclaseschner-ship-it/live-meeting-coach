@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from . import zugang
 from .abschluss import OrdnerAblage, paket, spenden_dateien, stufen
 from .ablage_r2 import AblageFehler, R2Ablage
-from .config import EINST, schluessel_info, schluessel_speichern
+from .config import EINST, WORKER_USER_AGENT, schluessel_info, schluessel_speichern
 
 router = APIRouter()
 _ablage = R2Ablage() if EINST.betrieb == "cloud" else OrdnerAblage()
@@ -56,7 +56,8 @@ def worker_melden(pfad: str, daten: dict) -> dict | None:
     body = json.dumps(daten).encode("utf-8")
     anfrage = urllib.request.Request(
         f"{EINST.worker_url.rstrip('/')}{pfad}", data=body, method="POST",
-        headers={"Content-Type": "application/json", "X-Nestor-Geheimnis": EINST.worker_geheimnis},
+        headers={"Content-Type": "application/json", "X-Nestor-Geheimnis": EINST.worker_geheimnis,
+                 "User-Agent": WORKER_USER_AGENT},
     )
     try:
         with urllib.request.urlopen(anfrage, timeout=10) as r:

@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 
 from .abschluss import Ablage
-from .config import EINST
+from .config import EINST, WORKER_USER_AGENT
 
 
 class AblageFehler(RuntimeError):
@@ -43,7 +43,7 @@ def _multipart(dateien: dict[str, bytes]) -> tuple[bytes, str]:
 def _hochladen(url: str, body: bytes, grenze: str, geheimnis: str) -> None:
     anfrage = urllib.request.Request(
         url, data=body, method="POST",
-        headers={"Content-Type": f"multipart/form-data; boundary={grenze}",
+        headers={"Content-Type": f"multipart/form-data; boundary={grenze}", "User-Agent": WORKER_USER_AGENT,
                  "X-Nestor-Geheimnis": geheimnis, "Content-Length": str(len(body))},
     )
     try:
