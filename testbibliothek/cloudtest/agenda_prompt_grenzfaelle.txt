@@ -1,0 +1,14 @@
+Betreff: Incident-Review – Ausfall Kundenportal, heute 16 Uhr
+
+Hallo zusammen,
+
+wir gehen heute um 16 Uhr den Ausfall vom Montag durch. Teilnehmende: Mara, Jonas, Sofie, Tarek.
+
+Agenda:
+1. Ablauf des Ausfalls (ca. 2 Min.) - Zeitlinie rekonstruieren und klären, wer den Ausfall wann bemerkt und bearbeitet hat.
+2. Ursache (ca. 2 Min.) - Zusammenhang zwischen Datenbank-Migration, Kubernetes-Deployment und fehlendem Rollback klären.
+3. Maßnahmen (ca. 1 Min.) - Sofort- und Folgemaßnahmen mit konkreten Fristen festlegen.
+4. Kommunikation an Kunden (ca. 1 Min.) - Inhalt und Zeitpunkt der Kundeninformation abstimmen.
+
+Bis später!
+Mara
