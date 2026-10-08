@@ -3,6 +3,8 @@
 __pycache__/
 node_modules/
 .venv/
+# Ticket #21: vorab erzeugte Floskeln je Stimme (coach/bestaetigung.py)
+cache/
 *.wav
 *.mp3
 recordings/

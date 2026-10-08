@@ -164,30 +164,13 @@
     </div>
   </div>
 
-  <!-- Hinweis-Band: der neueste Hinweis, farbig und groß -->
+  <!-- Hinweis-Band: der neueste Hinweis (Regeln, Zeit) – Bernstein/Rot mit Symbol, bewusst anders als Nestors
+       Antworten (Ticket #21), die nur im mittleren Feld stehen -->
   <div id="hinweis-band" class="hinweis-band" hidden>
     <span id="hinweis-icon" class="hb-icon"></span>
     <span id="hinweis-text"></span>
     <button id="hinweis-zu" class="icon klein" data-tip="Ausblenden"></button>
   </div>
-
-  <!-- Nestor-Untertitel: was er gerade sagt -->
-  <div id="untertitel" class="untertitel" hidden></div>
-
-  <!-- Nestor-Karte: was Nestor sagt, als Pop-up mit Stichpunkten; ältere Karten im Verlauf -->
-  <section id="karte" class="nestor-karte" hidden aria-live="polite">
-    <div class="nk-kopf">
-      <span class="nk-art"><i>N</i><span id="karte-art">Nestor</span></span>
-      <span id="karte-zeit" class="nk-zeit"></span>
-      <button id="karte-zu" class="icon klein" data-tip="Schließen – bleibt im Verlauf unter „Nestor“"></button>
-    </div>
-    <h3 id="karte-titel"></h3>
-    <p id="karte-frage" class="nk-frage"></p>
-    <ul id="karte-punkte" class="nk-punkte"></ul>
-    <div id="karte-quellen" class="nk-quellen" hidden></div>
-    <a id="karte-protokoll" class="knopf-link" href="/api/knopf/protokoll.md" target="_blank" hidden>Ganzes Protokoll öffnen</a>
-    <button id="karte-folie" class="leise klein" hidden>Als Folie im Bildbereich zeigen</button>
-  </section>
 
   <div id="fehler" class="fehler" hidden></div>
   <div id="mikro-weg" class="fehler" hidden></div>
@@ -325,6 +308,32 @@
           </ul>
         </div>
         <div id="bild-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor zeichnet …</div>
+
+        <!-- Nestor-Feld (Ticket #21): Antworten stehen immer hier, in derselben Form – der Text läuft mit, sobald
+             Nestor spricht, danach die Stichpunkte. Dazu das Arbeitssymbol und die Warteschlange der Aufträge.
+             Agenda/Zeit links und die rechte Spalte bleiben frei. -->
+        <section id="nestor-feld" class="nestor-feld" hidden aria-live="polite">
+          <div class="nf-kopf">
+            <span id="nf-symbol" class="nf-symbol" aria-hidden="true"><i>N</i></span>
+            <div class="nf-titel">
+              <strong id="nf-zustand">Nestor</strong>
+              <span id="nf-frage" class="nf-frage"></span>
+            </div>
+            <span id="karte-zeit" class="nk-zeit"></span>
+            <button id="karte-zu" class="icon klein" data-tip="Ausblenden – bleibt im Verlauf unter „Nestor“"></button>
+          </div>
+          <ol id="nf-auftraege" class="nf-auftraege" hidden></ol>
+          <p id="nf-text" class="nf-text" hidden></p>
+          <div id="karte" class="nf-karte" hidden>
+            <span id="karte-art" class="nk-art"></span>
+            <h3 id="karte-titel"></h3>
+            <p id="karte-frage" class="nk-frage" hidden></p>
+            <ul id="karte-punkte" class="nk-punkte"></ul>
+            <div id="karte-quellen" class="nk-quellen" hidden></div>
+            <a id="karte-protokoll" class="knopf-link" href="/api/knopf/protokoll.md" target="_blank" hidden>Ganzes Protokoll öffnen</a>
+            <button id="karte-folie" class="leise klein" hidden>Als Folie im Bildbereich zeigen</button>
+          </div>
+        </section>
       </div>
     </section>
 
