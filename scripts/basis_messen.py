@@ -370,6 +370,63 @@ async def knopfdruck_lauf() -> None:
         print("KARTE", k["art"], "|", k["titel"], "|", " / ".join(k["punkte"] or [])[:300])
 
 
+# --- Zuordnung: Medium gegen Small (Ticket: Small nur übernehmen, wenn gleich gut) -----------------------------------
+# Abschnitte der Messe-Demo ohne die Ansagen („weiter zu Punkt zwei“), damit das Modell den Wechsel aus dem Inhalt
+# erkennen muss. Wahrheit je Abschnitt: (Punkt oder None für fremd, Kraftausdruck ja/nein).
+ZUORDNUNG_FAELLE = [
+    (["Die Messe ist vom 14. bis 16. April in Stuttgart.",
+      "Ich würde einen Stand mit vierzig Quadratmetern nehmen, damit wir die neue Maschine zeigen können.",
+      "Vierzig ist gut, aber dann brauchen wir einen Eckstand, sonst sieht uns da keiner."], 0, 1, False),
+    (["Übrigens, habt ihr gestern das Spiel gesehen?", "Der Elfmeter in der Nachspielzeit war ja unglaublich.",
+      "Ja, Wahnsinn. Aber der Schiedsrichter lag komplett daneben. Das war nie ein Foul."], 0, None, False),
+    (["Für Stand, Aufbau und Reisen haben wir letztes Jahr 22.000 Euro gebraucht.", "So ein Scheiß!",
+      "Die Standmiete ist dieses Jahr schon wieder um zwanzig Prozent teurer geworden."], 0, 2, True),
+    (["Deshalb schlage ich fünfundzwanzigtausend Euro als Obergrenze vor.", "Gibt es Einwände?",
+      "Gut, dann ist beschlossen: höchstens 25.000 Euro."], 1, 2, False),
+    (["Ich kümmere mich um den Standbau und hole bis Ende Oktober drei Angebote ein.",
+      "Ich übernehme die Flyer und die Einladungen an unsere Kunden.", "Offen ist noch, wer die Hotels bucht."], 1, 3, False),
+    (["Hat jemand schon Urlaub für die Sommerferien gebucht?", "Wir fahren wieder an die Ostsee, wie jedes Jahr.",
+      "Wir überlegen noch, vielleicht Italien."], 2, None, False),
+    (["Wer bucht denn jetzt die Hotels?", "Das kann ich machen, ich buche bis Mittwoch zwei Doppelzimmer.",
+      "Super, dann ist das auch erledigt."], 2, 3, False),
+]
+
+
+async def zuordnung_vergleich(laeufe: int) -> None:
+    from coach import themen
+
+    config.stufe_setzen("basis")
+    c = client_fuer("basis")
+    d = json.loads((WURZEL / "demo" / "messeplanung.json").read_text(encoding="utf-8"))
+    erg = {}
+    for modell in ("mistral-medium-latest", "mistral-small-latest"):
+        richtig = ton_richtig = n = 0
+        zeiten, fehl = [], []
+        for _ in range(laeufe):
+            for zeilen, aktiv, wahr, kraft in ZUORDNUNG_FAELLE:
+                from coach.zustand import Agendapunkt, Meeting
+
+                m = Meeting(titel=d["titel"], ziel=d["ziel"],
+                            agenda=[Agendapunkt(p["titel"], p["ziel"], p["minuten"]) for p in d["agenda"]])
+                m.aktiver_punkt = aktiv
+                t0 = time.monotonic()
+                e, _ = await themen.zuordnen(c, modell, m, "\n".join(f"Person {k % 3 + 1}: {z}" for k, z in
+                                                                     enumerate(zeilen)), "", ton=True)
+                zeiten.append(time.monotonic() - t0)
+                ok = (e["art"] == "neu") if wahr is None else (e["punkt"] == wahr - 1 and e["art"] != "neu")
+                richtig += ok
+                ton_richtig += bool(e["ton"]) == kraft
+                n += 1
+                if not ok:
+                    fehl.append((zeilen[0][:40], e["art"], e["punkt"]))
+                await asyncio.sleep(0.3)
+        erg[modell] = {"zuordnung_richtig": f"{richtig}/{n}", "ton_richtig": f"{ton_richtig}/{n}",
+                       "sekunden_median": round(statistics.median(zeiten), 2), "fehler": fehl}
+        print(modell, erg[modell], flush=True)
+    await c.schliessen()
+    (AUSGABE / "zuordnung_vergleich.json").write_text(json.dumps(erg, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 # --- Aktionen ------------------------------------------------------------------------------------------------------------
 async def aktionen(stufe: str, laeufe: int) -> None:
     c = client_fuer(stufe)
@@ -437,7 +494,7 @@ def main() -> None:
     for laut in ("httpx", "httpx2", "httpcore", "httpcore2", "openai", "websockets"):
         logging.getLogger(laut).setLevel(logging.WARNING)
     ap = argparse.ArgumentParser()
-    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben", "pipeline", "knopfdruck"])
+    ap.add_argument("was", choices=["zurufe", "kette", "aktionen", "hoerproben", "pipeline", "knopfdruck", "zuordnung"])
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--stufe", default="basis", choices=["basis", "premium"])
     ap.add_argument("--laeufe", type=int, default=1)
@@ -447,6 +504,8 @@ def main() -> None:
         asyncio.run(zurufe())
     elif a.was == "kette":
         asyncio.run(kette(a.n))
+    elif a.was == "zuordnung":
+        asyncio.run(zuordnung_vergleich(a.laeufe))
     elif a.was == "knopfdruck":
         asyncio.run(knopfdruck_lauf())
     elif a.was == "pipeline":

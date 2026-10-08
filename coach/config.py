@@ -101,7 +101,8 @@ class Einstellungen:
     assistent_name: str = os.getenv("LMC_ASSISTENT_NAME", "Nestor")
     # Schreibweisen, die die Texterkennung für den Namen liefern kann (Regex, ohne Wortgrenzen);
     # Abspieltest 05.10.: am Satzanfang kam „Nestor“ 3 von 4 Mal als „Mestor“ an
-    assistent_muster: str = os.getenv("LMC_ASSISTENT_MUSTER", r"[nm][eä]st[oeu]h?r")
+    # 08.10. (Voxtral, Basis): einmal „Westor“ → w dazu
+    assistent_muster: str = os.getenv("LMC_ASSISTENT_MUSTER", r"[nmw][eä]st[oeu]h?r")
     assistent_modell: str = os.getenv("LMC_ASSISTENT_MODELL", "gpt-5.4-mini")
     assistent_aufwand: str = os.getenv("LMC_ASSISTENT_AUFWAND", "low")  # gemessen: erster Satz nach ~1,2 s
     stimme_modell: str = os.getenv("LMC_STIMME_MODELL", "gpt-4o-mini-tts")
@@ -157,8 +158,9 @@ class Einstellungen:
     # Die Startseite wählt die Stufe je Meeting (POST /api/stufe); lokal gilt LMC_STUFE als Vorgabe.
     stufe: str = os.getenv("LMC_STUFE", "premium")
     basis_text_modell: str = os.getenv("LMC_BASIS_TEXT_MODELL", "mistral-medium-latest")  # Probe 08.10.: 12/12 Aktionen
-    # Zuordnung alle ~15 s (größter Posten der Textaufrufe): eigenes Modell möglich, Vergleich in docs/messung_basis.md
-    basis_zuordnung_modell: str = os.getenv("LMC_BASIS_ZUORDNUNG_MODELL", "mistral-medium-latest")
+    # Zuordnung alle ~15 s (größter Posten der Textaufrufe, mit Medium ~0,37 $/h): Small war im Vergleich gleich gut
+    # (21/21 Zuordnung, 21/21 Ton, Demo-Wiederholung identisch; docs/messung_basis.md) und kostet ein Zehntel
+    basis_zuordnung_modell: str = os.getenv("LMC_BASIS_ZUORDNUNG_MODELL", "mistral-small-latest")
     zuordnung_modell: str = os.getenv("LMC_ZUORDNUNG_MODELL", "")  # leer = analyse_modell
     basis_live_modell: str = os.getenv("LMC_BASIS_LIVE_MODELL", "voxtral-mini-transcribe-realtime-2602")
     basis_live_delay_ms: int = int(_zahl("LMC_BASIS_LIVE_DELAY_MS", 240))  # Text der Frage ~0,6 s nach Sprechende

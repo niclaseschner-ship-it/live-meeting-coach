@@ -521,5 +521,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .h-knopfraster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .h-knopfraster button { padding: 12px 10px; white-space: normal; }
 .h-halten { width: 100%; margin-top: 10px; padding: 18px 12px; font-size: 17px; touch-action: none; user-select: none;
-  -webkit-user-select: none; -webkit-touch-callout: none; }
+  -webkit-user-select: none; -webkit-touch-callout: none; display: flex; align-items: center; justify-content: center;
+  gap: 10px; white-space: normal; }
+.h-halten .i svg { width: 24px; height: 24px; display: block; }
 .h-halten.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }
