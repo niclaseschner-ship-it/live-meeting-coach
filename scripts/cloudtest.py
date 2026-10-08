@@ -1,13 +1,15 @@
 r"""Cloud-Testlauf (Ticket „Cloudtest", Lastenheft: alles, bes. 2, 3, 4.2-4.6): ein echter Browser durchläuft
-Nestor wie ein echter Kunde – Anmelden (falls --passwort gesetzt), Modus wählen, Agenda per Prompt einrichten,
-zehn Minuten in Echtzeit zuhören (Mikrofon aus einer Datei, kein Vorspulen), im Modus Knopfdruck die Knöpfe zu
-festen Zeiten drücken, Abschluss mit Paket, Feedback und Datenspende. Mitgeschnitten wird aus der Seite selbst
-(sie hält ihren Zustand ohnehin über die gleiche WebSocket wie das Dashboard aktuell, siehe static/basis.js);
-ein zweiter eigener /ws-Mitschnitt wäre nur eine doppelte Quelle für dieselbe Information.
+Nestor wie ein echter Kunde – Anmelden (falls --passwort gesetzt), Stufe wählen (Ticket #13: Basis/Premium
+statt der früheren Modi live/Knopfdruck), Agenda per Prompt einrichten, zehn Minuten in Echtzeit zuhören
+(Mikrofon aus einer Datei, kein Vorspulen), mit --nur-knopfdruck (nur in Basis) die Knöpfe zu festen Zeiten
+drücken, Abschluss mit Paket, Feedback und Datenspende. Mitgeschnitten wird aus der Seite selbst (sie hält
+ihren Zustand ohnehin über die gleiche WebSocket wie das Dashboard aktuell, siehe static/basis.js); ein
+zweiter eigener /ws-Mitschnitt wäre nur eine doppelte Quelle für dieselbe Information.
 
-    ~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --modus live
+    ~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --stufe premium
+    ~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --stufe basis
     ~/.venvs/lmc/bin/python scripts/cloudtest.py --url https://nestor.example.workers.dev \
-        --passwort geheim --modus knopfdruck --bericht logs/cloudtest/lauf1
+        --passwort geheim --stufe basis --nur-knopfdruck --bericht logs/cloudtest/lauf1
 
 Playwright mit dem System-Chromium (kein `playwright install`): --use-fake-ui-for-media-stream und
 --use-file-for-fake-audio-capture=<meeting.wav> lassen Chromium die Aufnahme wie ein echtes Mikrofon in
@@ -245,11 +247,22 @@ async def anmelden(seite: Page, url: str, passwort: str, bericht: Bericht) -> No
     bericht.messwerte["kaltstart_s"] = round(time.monotonic() - t0, 1)
 
 
-async def startseite(seite: Page, modus: str, bericht: Bericht) -> None:
+async def startseite(seite: Page, stufe: str, nur_knopfdruck: bool, bericht: Bericht) -> None:
     await schritt_oder_abbrechen(seite, bericht, "Startseite geladen",
-                                 "() => !!document.getElementById('karte-live')", 20.0)
+                                 "() => !!document.getElementById('karte-basis')", 20.0)
+    if nur_knopfdruck:
+        await seite.locator("#nur-knopfdruck").check()
     await bericht.screenshot(seite, "startseite")
-    knopf = seite.locator("#karte-live" if modus == "live" else "#karte-knopfdruck")
+    knopf = seite.locator("#karte-basis" if stufe == "basis" else "#karte-premium")
+    if await knopf.is_disabled():
+        # Ticket #13: ohne Schlüssel (Mistral für Basis, OpenAI für Premium) ist die Karte deaktiviert -
+        # unabhängig von LMC_OFFLINE (coach/api_start.py prüft nur, ob ein Schlüssel-String vorhanden ist).
+        # Für den offline-Probelauf braucht es einen Platzhalter-Schlüssel in der Umgebung/.env; ein echter
+        # KI-Aufruf bleibt trotzdem aus, weil coach/pipeline.py ki_verfuegbar() zuerst LMC_OFFLINE prüft.
+        await bericht.screenshot(seite, "fehler_stufe_deaktiviert")
+        bericht.pruefen(f"Stufe {stufe} wählbar", "fehlt",
+                        "Karte deaktiviert – kein Schlüssel (OPENAI_API_KEY/MISTRAL_API_KEY) in der Umgebung")
+        raise SchrittFehler(f"Stufe {stufe} ist auf diesem Server nicht eingerichtet (kein Schlüssel)")
     await knopf.click()
     await schritt_oder_abbrechen(seite, bericht, "Weiter zu /meeting", "() => location.pathname === '/meeting'", 15.0)
     await seite.wait_for_selector("#einrichtung", state="visible", timeout=15000)
@@ -277,9 +290,10 @@ def ereignis_hinweisarten(ereignis: str) -> tuple[str, ...]:
 LOKAL_OHNE_KI = {"monolog"}  # läuft auch mit LMC_OFFLINE (lokale VAD/Diarisierung, Lastenheft §3)
 
 
-async def aufzeichnen(seite: Page, referenz: dict, modus: str, bericht: Bericht, meeting_start: float) -> list[dict]:
+async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht: Bericht,
+                      meeting_start: float) -> list[dict]:
     """Zustand alle 2 s aus der Seite lesen (sie hält ihn über ihre eigene /ws aktuell) – Mitschnitt für die
-    Prüfliste, Verzugsmessung je Nestor-Anweisung und für die Knöpfe im Modus Knopfdruck."""
+    Prüfliste, Verzugsmessung je Nestor-Anweisung und für die Knöpfe mit --nur-knopfdruck."""
     verlauf: list[dict] = []
     letzte_zeit = -1.0
     soll_dauer = referenz["dauer_s"] + 20
@@ -310,7 +324,7 @@ async def aufzeichnen(seite: Page, referenz: dict, modus: str, bericht: Bericht,
             await bericht.screenshot(seite, f"dashboard_{ss_name.replace(':', '')}")
             ss_name, ss_zeit = next(naechster_screenshot, (None, None))
 
-        if modus == "knopfdruck":
+        if nur_knopfdruck:
             offline = bool((z.get("schluessel") or {}).get("offline"))
             if "stand" not in geknopft and t >= KNOPF_ZEITEN["stand"]:
                 geknopft.add("stand")
@@ -422,7 +436,7 @@ async def abschluss(seite: Page, bericht: Bericht, offline: bool) -> None:
 
 
 # ---------- Prüfliste gegen referenz.json ----------
-def pruefliste_bauen(referenz: dict, verlauf: list[dict], modus: str, bericht: Bericht) -> None:
+def pruefliste_bauen(referenz: dict, verlauf: list[dict], bericht: Bericht) -> None:
     offline_lauf = bool(verlauf) and bool((verlauf[-1].get("schluessel") or {}).get("offline"))
 
     for e in referenz["ereignisse"]:
@@ -488,7 +502,8 @@ async def chromium_starten(pw, args: argparse.Namespace, bericht: Bericht, versu
 async def lauf(args: argparse.Namespace) -> Bericht:
     referenz = json.loads(Path(args.referenz).read_text(encoding="utf-8"))
     bericht = Bericht(Path(args.bericht))
-    bericht.messwerte.update(modus=args.modus, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"])
+    stufe_text = f"{args.stufe}" + (" · nur auf Knopfdruck" if args.nur_knopfdruck else "")
+    bericht.messwerte.update(modus=stufe_text, gestartet=jetzt(), soll_dauer_s=referenz["dauer_s"])
 
     async with async_playwright() as pw:
         browser = await chromium_starten(pw, args, bericht)
@@ -504,19 +519,19 @@ async def lauf(args: argparse.Namespace) -> Bericht:
         verlauf: list[dict] = []
         try:
             await anmelden(seite, args.url, args.passwort, bericht)
-            await startseite(seite, args.modus, bericht)
+            await startseite(seite, args.stufe, args.nur_knopfdruck, bericht)
             meeting_start = await meeting_starten(seite, Path(args.agenda_prompt).read_text(encoding="utf-8"),
                                                   bericht)
-            verlauf = await aufzeichnen(seite, referenz, args.modus, bericht, meeting_start)
+            verlauf = await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start)
             z_letzt = verlauf[-1] if verlauf else {}
             offline = bool((z_letzt.get("schluessel") or {}).get("offline"))
             await abschluss(seite, bericht, offline)
-            pruefliste_bauen(referenz, verlauf, args.modus, bericht)
+            pruefliste_bauen(referenz, verlauf, bericht)
         except SchrittFehler as e:
             bericht.fehler.append(f"Lauf abgebrochen: {e}")
             bericht.notieren(f"Abgebrochen: {e}")
             if verlauf:  # trotz Abbruch die bis dahin gesammelten Prüfpunkte gegen die Referenz auswerten
-                pruefliste_bauen(referenz, verlauf, args.modus, bericht)
+                pruefliste_bauen(referenz, verlauf, bericht)
         finally:
             await context.close()
             await browser.close()
@@ -529,15 +544,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", required=True)
     ap.add_argument("--passwort", default=None)
-    ap.add_argument("--modus", required=True, choices=["live", "knopfdruck"])
+    ap.add_argument("--stufe", required=True, choices=["basis", "premium"], help="Ticket #13: Nestor Basis/Premium")
+    ap.add_argument("--nur-knopfdruck", action="store_true",
+                    help="nur zusammen mit --stufe basis: der frühere Modus „Auf Knopfdruck“")
     ap.add_argument("--bericht", default=None)
     ap.add_argument("--referenz", default=str(CLOUDTEST / "referenz.json"))
     ap.add_argument("--audio", default=str(CLOUDTEST / "meeting.wav"))
     ap.add_argument("--agenda-prompt", default=str(CLOUDTEST / "agenda_prompt.txt"))
     ap.add_argument("--chromium", default=CHROMIUM)
     args = ap.parse_args()
+    if args.nur_knopfdruck and args.stufe != "basis":
+        ap.error("--nur-knopfdruck gibt es nur mit --stufe basis (Ticket #13).")
     if not args.bericht:
-        args.bericht = str(WURZEL / "logs" / "cloudtest" / f"{datetime.now():%Y-%m-%d_%H%M}_{args.modus}")
+        name = f"{args.stufe}-knopfdruck" if args.nur_knopfdruck else args.stufe
+        args.bericht = str(WURZEL / "logs" / "cloudtest" / f"{datetime.now():%Y-%m-%d_%H%M}_{name}")
     asyncio.run(lauf(args))
 
 

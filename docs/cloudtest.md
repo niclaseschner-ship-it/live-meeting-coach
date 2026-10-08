@@ -13,12 +13,24 @@ die Knöpfe zu festen Zeiten und geht am Ende durch den Abschluss. Läuft gegen 
 ln -s /home/buddy/repos/live-meeting-coach/modelle modelle   # falls noch nicht vorhanden
 
 python -m coach &   # Server lokal starten (oder gegen eine laufende Adresse testen)
-~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --modus live
-~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --modus knopfdruck
+~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --stufe premium
+~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --stufe basis
+~/.venvs/lmc/bin/python scripts/cloudtest.py --url http://127.0.0.1:8000 --stufe basis --nur-knopfdruck
 ```
+
+Seit Ticket #13 wählt die Startseite eine **Stufe** (`--stufe basis|premium`) statt eines Modus; der frühere
+Modus „Auf Knopfdruck“ ist der Schalter `--nur-knopfdruck` in Basis (nur dort gültig). Die Knopfleiste (Wo
+stehen wir, Regeln, Überblick, Protokoll, Nestor fragen) gibt es in beiden Stufen; nur mit `--nur-knopfdruck`
+geht ohne Knopf nichts an einen KI-Dienst und es gibt zusätzlich „Verwerfen“.
 
 Gegen die Cloud zusätzlich `--passwort <Kundenpasswort>`; ohne `--passwort` wird die Anmeldeseite
 übersprungen (nur lokal möglich, dort prüft `coach/zugang.py` ohnehin "am Laptop selbst").
+
+**Für einen lokalen Probelauf mit `LMC_OFFLINE=1` braucht es trotzdem einen (beliebigen) Schlüssel-String**
+in der Umgebung bzw. `.env` (`OPENAI_API_KEY` für Premium, `MISTRAL_API_KEY`/`LMC_MISTRAL_SCHLUESSEL` für
+Basis) – die Startseite blendet eine Stufe ohne Schlüssel-String ganz aus (`coach/api_start.py`), unabhängig
+von `LMC_OFFLINE`. Ein echter KI-Aufruf bleibt trotzdem aus: `coach/pipeline.py` prüft `LMC_OFFLINE` vor dem
+Schlüssel. `.env` ist gitignored.
 
 Weitere Optionen: `--bericht <ordner>` (Standard `logs/cloudtest/<datum_uhrzeit>_<modus>/`), `--referenz`,
 `--audio`, `--agenda-prompt` (Standard: die Dateien unter `testbibliothek/cloudtest/`), `--chromium`
