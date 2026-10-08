@@ -16,6 +16,12 @@ WebAudio-Quelle, die der Test abschnittsweise füttert und anhält:
 - Ein Zeitplan (Quellzeit ↔ Laufachse) wird mitgeschrieben; damit rechnen Bewertung und HTML-Bericht die
   Referenzzeiten auf die tatsächliche Meetinguhr um, und die Tonspur im Bericht enthält die Pausen.
 
+Ticket #27: In Nestor Basis (Funkgerät) hört Nestor nicht auf seinen Namen – die Regie hält die Sprechtaste
+(Leertaste) während jeder Ansprache an Nestor gedrückt; das Material bleibt dasselbe (die Sätze beginnen weiter mit
+„Nestor, …“). Jeder Druck auf eine Taste oder einen Knopf landet als `bedienung` im Bericht – Sprechtaste mit Dauer
+und Satz, Knöpfe („Wo stehen wir?“, „Zusammenfassen“), der Band-Knopf „Zusammenfassen ›“, ✕ und „Still“ – und wird
+mit Nestors Reaktion (Bestätigung, Karte, Ton) ausgewertet (`bedienung_auswerten`).
+
 Reine Funktionen hier (Abschnitte, Zeitabbildung, Prüfungen), die Browser-Regie unten in `Regie`.
 """
 
@@ -57,6 +63,98 @@ WARTEN_STANDARD = {
 
 def warten_von(g: dict):
     return g.get("warten", WARTEN_STANDARD.get(g.get("erwartet"), False))
+
+
+# ---------- Sprechtaste (Basis = Funkgerät, Ticket #27) ----------
+# Bei diesen Erwartungen ist der Satz an Nestor gerichtet – in Basis wird dafür die Sprechtaste gehalten. Fehlauslöser,
+# späte Rückfragen und „Nein“ im Normalsatz bleiben ohne Taste (sie sollen gerade nichts auslösen).
+TASTE_ERWARTET = {"antwort", "ja_dann_antwort", "antwort_mit_quellen", "antwort_erwuenscht_dokumentieren", "folie",
+                  "nachfrage_oder_bild_mit_fokus", "nestor_verstummt"}
+TASTE_VOR_S = 0.3   # drücken kurz vor dem Satz
+TASTE_NACH_S = 0.4  # loslassen kurz nach dem Satz
+
+
+def taste_fenster(referenz: dict) -> list[dict]:
+    """Wann die Sprechtaste gehalten wird (Quellzeit): jede Nestor-Anweisung (#9-Schema) und jeder Teil eines
+    Grenzfalls, der an Nestor gerichtet ist (`taste` in der Referenz überschreibt die Erwartung)."""
+    aus = []
+    for i, n in enumerate(referenz.get("nestor", [])):
+        aus.append({"start": n["start"], "ende": n["ende"], "text": n["text"], "id": f"anweisung_{i + 1}"})
+    for g in referenz.get("grenzfaelle", []):
+        if not g.get("taste", g.get("erwartet") in TASTE_ERWARTET):
+            continue
+        for i, t in enumerate(g.get("teile") or [{"start": g["start"], "ende": g["ende"], "text": ""}]):
+            aus.append({"start": t["start"], "ende": t["ende"], "text": t.get("text", ""), "id": g["id"], "teil": i})
+    return sorted(aus, key=lambda f: f["start"])
+
+
+# ---------- Bedienung: Knöpfe, die der Test drückt (Ticket #27) ----------
+BEDIEN_NAMEN = {"taste": "Sprechtaste", "stand": "Wo stehen wir?", "zusammenfassen": "Zusammenfassen",
+                "band": "Band „Zusammenfassen ›“", "abbrechen": "✕ Auftrag abbrechen", "still": "Still"}
+
+
+def bedienung_auswerten(bedienung: list[dict], frames: list[dict], versatz: float | None,
+                        fenster_s: float = 30.0) -> list[dict]:
+    """Je Druck: Meetinguhr, Name, Satz (Sprechtaste) und Nestors Reaktion ab dem Bezugspunkt (Sprechtaste: loslassen,
+    sonst der Klick) – Bestätigung (erster mitlaufender Text bzw. Ton), erster Ton, neue Karte im Verlauf; bei ✕ ob der
+    Auftrag weg ist, bei „Still“ ob die Stimme stoppt. [{t, zeit, name, satz, dauer_s, bestaetigung_s, ton_s, karte_s,
+    karte, ergebnis}]"""
+    texte = [f for f in frames if f["richtung"] == "empfangen" and isinstance(f["daten"], dict)
+             and f["daten"].get("typ") == "nestor_text"]
+    stimme = [f for f in frames if f["richtung"] == "empfangen" and isinstance(f["daten"], dict)
+              and f["daten"].get("typ") == "stimme"]
+    stopps = [f for f in frames if f["richtung"] == "empfangen" and isinstance(f["daten"], dict)
+              and f["daten"].get("typ") == "stimme_stopp"]
+    zust = [f for f in frames if f["richtung"] == "empfangen" and isinstance(f["daten"], dict)
+            and "assistent" in f["daten"]]
+    aus = []
+    for b in bedienung:
+        bezug = b.get("t_los", b["t"])
+        bis = bezug + fenster_s
+        erster_text = next((f["t"] for f in texte if bezug - 0.3 <= f["t"] <= bis), None)
+        erster_ton = next((f["t"] for f in stimme if bezug - 0.3 <= f["t"] <= bis), None)
+        vorher = {k["id"] for f in zust if f["t"] <= b["t"] for k in (f["daten"].get("karten") or [])}
+        karte = None
+        for f in zust:
+            if f["t"] < b["t"] or f["t"] > bezug + 90:
+                continue
+            neu = [k for k in (f["daten"].get("karten") or []) if k["id"] not in vorher]
+            if neu:
+                karte = (f["t"], neu[-1])
+                break
+        zeile = {"t": round(b["t"], 2), "zeit": round(b["t"] + versatz, 1) if versatz is not None else None,
+                 "art": b["art"], "name": b.get("name") or BEDIEN_NAMEN.get(b["art"], b["art"]),
+                 "satz": b.get("satz", ""), "dauer_s": b.get("dauer_s"),
+                 "bestaetigung_s": round(min(x for x in (erster_text, erster_ton) if x is not None) - bezug, 2)
+                 if (erster_text or erster_ton) else None,
+                 "ton_s": round(erster_ton - bezug, 2) if erster_ton else None,
+                 "karte_s": round(karte[0] - bezug, 1) if karte else None,
+                 "karte": f"{karte[1].get('art')}: {karte[1].get('titel', '')[:50]}" if karte else None,
+                 "ergebnis": b.get("ergebnis")}
+        if b["art"] == "still":
+            zeile["ergebnis"] = "Stimme gestoppt" if any(b["t"] - 0.2 <= f["t"] <= b["t"] + 3 for f in stopps) \
+                else "kein stimme_stopp gesehen"
+        if b["art"] == "abbrechen":
+            nach = [f for f in zust if b["t"] <= f["t"] <= b["t"] + 5]
+            vor_n = b.get("auftraege_vorher", 0)
+            weg = any(len((f["daten"].get("assistent") or {}).get("auftraege") or []) < vor_n for f in nach)
+            zeile["ergebnis"] = "Auftrag entfernt" if weg else "Auftrag blieb"
+        aus.append(zeile)
+    return aus
+
+
+def bedienung_text(z: dict) -> str:
+    """Reaktion als kurzer Text für Bericht und bewertung.md."""
+    teile = []
+    if z.get("bestaetigung_s") is not None:
+        teile.append(f"Bestätigung nach {z['bestaetigung_s']:.1f} s")
+    if z.get("ton_s") is not None and z.get("ton_s") != z.get("bestaetigung_s"):
+        teile.append(f"Ton nach {z['ton_s']:.1f} s")
+    if z.get("karte"):
+        teile.append(f"Karte nach {z['karte_s']:.1f} s ({z['karte']})")
+    if z.get("ergebnis"):
+        teile.append(str(z["ergebnis"]))
+    return ", ".join(teile) or "keine Reaktion im Fenster"
 
 
 # ---------- Material ----------
@@ -509,7 +607,7 @@ class Regie:
     der Laufachse (Sekunden seit Laufstart, wie ws.jsonl)."""
 
     def __init__(self, seite, spur, pcm: np.ndarray, abschnitte: list[dict], lauf_start: float,
-                 notieren, referenz: dict) -> None:
+                 notieren, referenz: dict, stufe: str = "premium", nur_knopfdruck: bool = False) -> None:
         self.seite, self.spur, self.pcm, self.abschnitte = seite, spur, pcm, abschnitte
         self.lauf_start, self.notieren, self.referenz = lauf_start, notieren, referenz
         self.zeitplan: list[dict] = []
@@ -519,6 +617,11 @@ class Regie:
         self.screenshot_ziele: list[float] = []  # Laufachse; aufzeichnen() rechnet auf die Meetinguhr um
         self._aufgaben: list[asyncio.Future] = []
         self.rueckfragen = {g["id"] for g in referenz.get("grenzfaelle", []) if g.get("nach")}
+        # Ticket #27: Basis = Funkgerät – Sprechtaste statt Name; jeder Druck wird mitgeschrieben
+        self.stufe, self.nur_knopfdruck = stufe, nur_knopfdruck
+        self.taste = taste_fenster(referenz) if stufe == "basis" and not nur_knopfdruck else []
+        self.bedienung: list[dict] = []
+        self.bedient: set[str] = set()
 
     def jetzt(self) -> float:
         return time.monotonic() - self.lauf_start
@@ -588,6 +691,10 @@ class Regie:
         t_start = (vor + self.jetzt()) / 2
         self.zeitplan.append({"nr": a["nr"], "von": a["von"], "bis": a["bis"], "t_start": round(t_start, 3),
                               "t_ende": round(t_start + dauer, 3)})
+        tasten = [asyncio.ensure_future(self._taste_halten(
+                      t_start + f["start"] - a["von"] - TASTE_VOR_S,
+                      t_start + min(f["ende"], a["bis"]) - a["von"] + TASTE_NACH_S, f))
+                  for f in self.taste if a["von"] - 0.2 <= f["start"] < a["bis"]]
         # Screenshot-Ziele: jedes Ereignis/jeder Grenzfall in diesem Abschnitt, auf der Laufachse
         for zeit in ([e["zeit_s"] for e in self.referenz.get("ereignisse", [])]
                      + [n["start"] for n in self.referenz.get("nestor", [])]
@@ -598,6 +705,74 @@ class Regie:
         await asyncio.sleep(max(0.0, dauer - 0.5))
         while (await self.seite.evaluate("() => window.__testMikro.stand().laeuft")):
             await asyncio.sleep(0.05)
+        if tasten:
+            await asyncio.gather(*tasten, return_exceptions=True)
+
+    async def _taste_halten(self, t_druck: float, t_los: float, f: dict) -> None:
+        """Sprechtaste (Leertaste) um einen an Nestor gerichteten Satz herum halten (Basis, Ticket #27)."""
+        await asyncio.sleep(max(0.0, t_druck - self.jetzt()))
+        # Die Leertaste wirkt nur, wenn kein Eingabefeld oder Knopf den Fokus hat (static/app.js)
+        await self.seite.evaluate("() => document.activeElement && document.activeElement.blur && "
+                                  "document.activeElement.blur()")
+        t0 = self.jetzt()
+        await self.seite.keyboard.down("Space")
+        await asyncio.sleep(max(0.0, t_los - self.jetzt()))
+        await self.seite.keyboard.up("Space")
+        t1 = self.jetzt()
+        self.bedienung.append({"t": round(t0, 3), "t_los": round(t1, 3), "art": "taste", "name": "Sprechtaste",
+                               "dauer_s": round(t1 - t0, 2), "satz": f["text"], "id": f["id"]})
+
+    async def klicken(self, art: str, selektor: str, warten: bool = True, **extra) -> dict | None:
+        """Einen Knopf drücken, mitschreiben und (wie nach einer Frage) abwarten, bis Nestor fertig ist."""
+        knopf = self.seite.locator(selektor).first
+        try:
+            if not await knopf.is_visible() or await knopf.is_disabled():
+                return None
+            t = self.jetzt()
+            await knopf.click(timeout=5000)
+        except Exception as e:  # noqa: BLE001 – ein fehlender Knopf ist ein Befund, kein Abbruch
+            self.notieren(f"Bedienung {art}: nicht möglich ({type(e).__name__})")
+            return None
+        b = {"t": round(t, 3), "art": art, "name": BEDIEN_NAMEN.get(art, art), **extra}
+        self.bedienung.append(b)
+        self.notieren(f"Bedienung: {b['name']} gedrückt")
+        if warten:
+            p = await self.abwarten("knopf", True, t, ZEITLIMIT_S, REAKTION_FRIST_S, {"id": art})
+            b["ergebnis"] = p["ergebnis"]
+        return b
+
+    async def bedienen(self, a: dict, letzter: bool) -> None:
+        """Bedienplan (Ticket #27): einmal „Wo stehen wir?“, den Band-Knopf „Zusammenfassen ›“, sobald er erscheint
+        (sonst am Ende den Knopf „Zusammenfassen“), und ✕ an einem langen Auftrag, sobald einer läuft."""
+        if self.nur_knopfdruck:
+            return
+        if "stand" not in self.bedient and a["bis"] >= 120:
+            self.bedient.add("stand")
+            await self.klicken("stand", '.knopf-art[data-knopf="stand"]')
+        if "band" not in self.bedient and await self.seite.locator(".band-eintrag.fuenf .band-knopf").count():
+            self.bedient.add("band")
+            await self.klicken("band", ".band-eintrag.fuenf .band-knopf")
+        if "abbrechen" not in self.bedient and await self.seite.locator("#arbeitsring:not([hidden])").count():
+            n = await self.seite.evaluate("() => (zustand?.assistent?.auftraege || []).length")
+            if n and await self.klicken("abbrechen_ring", "#arbeitsring", warten=False):
+                self.bedienung.pop()  # das Öffnen des Rings zählt nicht als eigener Druck
+                await asyncio.sleep(0.4)
+                if await self.klicken("abbrechen", "#arbeit-liste button", warten=False, auftraege_vorher=n):
+                    self.bedient.add("abbrechen")
+        if letzter and "band" not in self.bedient and "zusammenfassen" not in self.bedient:
+            self.bedient.add("zusammenfassen")
+            await self.klicken("zusammenfassen", '.knopf-art[data-knopf="zusammenfassen"]')
+
+    async def still_druecken(self, t_frage: float) -> None:
+        """„Still“ während einer Antwort: 1,5 s nach dem ersten Ton (einmal je Lauf)."""
+        for _ in range(int(REAKTION_FRIST_S / 0.25)):
+            letzte = self.spur.letzte_stimme_t
+            if letzte is not None and letzte >= t_frage:
+                await asyncio.sleep(1.5)
+                if await self.klicken("still", "#btn-still", warten=False):
+                    self.bedient.add("still")
+                return
+            await asyncio.sleep(0.25)
 
     def segmente_seit(self, t: float) -> int:
         """Wie viele neue Segmente das Transkript seit Laufzeit t bekam (läuft das Meeting weiter?)."""
@@ -630,7 +805,13 @@ class Regie:
                 info = {"id": w["id"], "teil": w["teil"], "erwartet": w["erwartet"], "quelle_s": w["quelle_s"],
                         "rueckfrage": w["id"] in self.rueckfragen}
                 limit = ZEITLIMIT_S
+                still = None
+                if ("still" not in self.bedient and not self.nur_knopfdruck and w["modus"] is True
+                        and w["quelle_s"] >= 450 and w.get("erwartet") == "antwort"):
+                    still = asyncio.ensure_future(self.still_druecken(t_frage))  # einmal „Still“ mitten in eine Antwort
                 p = await self.abwarten("grenzfall", w["modus"], t_frage, limit, REAKTION_FRIST_S, info)
+                if still is not None:
+                    await asyncio.gather(still, return_exceptions=True)
                 zust = self.spur.zustaende()
                 stimme = self.spur.nachrichten("stimme") + self.spur.nachrichten("nestor_text")
                 stimme.sort(key=lambda s: s["_t"])
@@ -638,6 +819,7 @@ class Regie:
                 rest = sum(b["bis"] - b["von"] for b in self.abschnitte[a["nr"] + 1:])
                 if p["rueckfrage"] and rest >= 5.0:  # läuft das Meeting nach der Rückfrage weiter?
                     self._aufgaben.append(asyncio.ensure_future(self._weiter_messen(p, p["t_ende"])))
+                await self.bedienen(a, a["nr"] == len(self.abschnitte) - 2)
         finally:
             self.fertig = True
 
@@ -646,6 +828,6 @@ class Regie:
         p["weiter_segmente"] = self.segmente_seit(t_weiter)
 
     def ergebnis(self) -> dict:
-        return {"zeitplan": self.zeitplan, "pausen": self.pausen,
+        return {"zeitplan": self.zeitplan, "pausen": self.pausen, "bedienung": self.bedienung,
                 "abschnitte": [{k: v for k, v in a.items() if k != "warten"} | {"warten": bool(a.get("warten"))}
                                for a in self.abschnitte]}

@@ -1,6 +1,6 @@
 # Gesprächsregeln: was der Coach prüfen kann – und wie wir es testen
 
-Stand 05.10.2026 · Entwurf zur Diskussion
+Stand 08.10.2026 (Ticket #27: nur gewählte Regeln sind sichtbar; Regel 10 still) · Entwurf zur Diskussion
 
 ## 1. Ausgangslage
 
@@ -19,6 +19,11 @@ Leitplanken:
   Regeln wie „respektvoller Ton“ gehen über das MVP hinaus. Wir formulieren sie deshalb als
   beobachtbares Ereignis („ein Kraftausdruck ist gefallen“), nicht als Urteil („Person X ist respektlos“).
 - **Nur vereinbarte Regeln:** Der Coach prüft nur, was die Gruppe zu Beginn ausgewählt hat. Der Mensch entscheidet.
+  Seit Ticket #27 gilt das ausnahmslos: Eine nicht gewählte Regel ist **unsichtbar** – kein Band-Hinweis, keine Ampel,
+  keine Prüfung. Bis dahin kamen Fokus, Zeit, Monolog und Überlappung immer. Was keine Regel ist, bleibt: Uhr und
+  Countdown, Redeanteile, Gesprächsdynamik und der Agenda-Vorschlag „Weiter zu …?“.
+- **Still:** Regel-Hinweise stehen im Band oben (verschwinden von selbst, höchstens ein Knopf), nie mit Stimme
+  (Lastenheft 1, Grundregel). Ein Hinweis zu einem Agendapunkt verschwindet, sobald ein anderer Punkt aktiv ist.
 - **Einsatz in einer Firma:** Ein System, das Verhalten einzelner Beschäftigter auswertet, ist
   mitbestimmungspflichtig (§ 87 Abs. 1 Nr. 6 BetrVG) und datenschutzrelevant. Personenbezogene
   Regelauswertungen – wer unterbricht wen, wer flucht – deshalb nur für die Moderation, nicht
@@ -121,8 +126,10 @@ hört, kann der Coach nicht melden. Die Erkennung bleibt deshalb unsicher und h�
 
 ### Regel 3 – Beim Thema bleiben
 
-**Vorhanden:** Fokus-Ampel. Die Themen-Zuordnung (GPT-5.4-mini) erkennt einen Abschnitt, der zu keinem
-Agendapunkt passt. Seit Ticket #24 in überlappenden Fenstern: Eingeordnet werden jeweils die letzten ~15 s
+**Vorhanden:** Fokus-Ampel (nur mit dieser Regel; die Themen-Zuordnung läuft trotzdem, weil sie auch den
+Agenda-Vorschlag „Weiter zu …?“ liefert). Die Themen-Zuordnung (GPT-5.4-mini) erkennt einen Abschnitt, der zu keinem
+Agendapunkt passt. Eine Zuordnung, die während eines Punktwechsels unterwegs war, wird verworfen (Cloudlauf 08.10.:
+das Band nannte nach der Rückwärts-Ansage Punkt 3, während Punkt 1 aktiv war). Seit Ticket #24 in überlappenden Fenstern: Eingeordnet werden jeweils die letzten ~15 s
 Gesprochenes, neu angestoßen alle 10 s neuer Sprache oder nach Zeit (5 s Stille, spätestens 15 s nach dem
 ersten offenen Satz; mindestens 4 s neue Sprache, ein einzelnes „Gut.“ zählt nicht). Fällt eine
 Rückkehr-Ansage („Gut, zurück zur Datenbank“), wird die Ampel grün und ein noch ausstehender Hinweis
@@ -252,19 +259,22 @@ Beides geht über das Sprachmodell im Kontext-Strom.
 
 ### Regel 10 – Ergebnisse festhalten: wer macht was bis wann
 
-**Verfahren (seit Ticket #26, 08.10.2026):** Die Regel baut auf den Meeting-Artefakten auf
+**Verfahren (Ticket #26, Ablauf seit Ticket #27):** Die Regel baut auf den Meeting-Artefakten auf
 (`coach/artefakte.py`, Lastenheft 4.9) statt auf einer eigenen Prüfung je Agendapunkt:
-- Live und unabhängig von der Agenda erkennt ein Sprachmodell Aufgaben, Entscheidungen, offene Punkte und Risiken –
-  etwa je Minute Sprache (Basis je zwei), mit den schon festgehaltenen Artefakten als Kontext, damit es ergänzt statt
-  doppelt anlegt. Jedes Artefakt kennt seine Lücken (Aufgabe ohne Wer oder Termin, nur „wir“, Entscheidung nur als
-  Vorschlag, offener Punkt ohne Zuständige und Wiedervorlage, Risiko ohne Beobachter oder hohes Risiko ohne Maßnahme).
-- Ist die Regel gewählt, fragt Nestor beim Punktwechsel kurz und gebündelt nach – eine Frage je unvollständigem
-  Artefakt mit konkretem Vorschlag („Ich hab notiert: Statusseite-Zusammenfassung. Wer übernimmt das, bis wann?“),
-  höchstens zwei gesprochen. Bei Vollständigkeit schweigt er. Kein Hinweis mehr „kein Ergebnis“: Agendapunkte müssen
-  keine Entscheidung haben (Entscheidung Niclas, 08.10.).
-- Je Artefakt nur eine Nachfrage; abgelehnt („brauchen wir nicht“, Knopf „Nicht nötig“) heißt nie wieder.
-- Die Ampel „Ergebnisse festhalten“ wird gelb, sobald nach einer Lücke gefragt wurde und sie noch offen ist.
-- Fünf Minuten vor dem geplanten Ende fragt Nestor immer (auch ohne diese Regel), ob er zusammenfassen soll.
+- Ein Sprachmodell erkennt Aufgaben, Entscheidungen, offene Punkte und Risiken – nicht mehr ständig, sondern still je
+  Abschnitt (Punktwechsel, 20 Minuten am selben Punkt, ohne Agenda alle 20 Minuten) und auf Anfrage (Zusammenfassen,
+  Was fehlt, Protokoll: nur der laufende Abschnitt). Die schon festgehaltenen Artefakte gehen als Kontext mit, damit es
+  ergänzt statt doppelt anlegt. Jedes Artefakt kennt seine Lücken (Aufgabe ohne Wer oder Termin, nur „wir“,
+  Entscheidung nur als Vorschlag, offener Punkt ohne Zuständige und Wiedervorlage, Risiko ohne Beobachter oder hohes
+  Risiko ohne Maßnahme).
+- Zu jedem Abschnitt kommt still eine Karte „Punkt 2 · Budget“ in den Verlauf – mit und ohne diese Regel.
+- **Mit der Regel** sind die Lücken in diesen Karten rot markiert, und im Band steht „2 Aufgaben ohne Verantwortliche
+  in „Budget“ · Zur Karte ›“. Ohne Regel: keine Markierung, kein Band. Nestor fragt nicht mehr mit der Stimme nach
+  (bis #27 tat er das beim Punktwechsel – das verstieß gegen die Grundregel).
+- Geschlossen wird eine Lücke per Klick in der Karte oder als kurzer Bogen („Nestor, Anna macht das bis Freitag“,
+  Basis per Sprechtaste) – Nestor sagt „Notiert.“, die Karte wird grün. „Nicht nötig“ heißt: nie wieder markiert.
+- Die Ampel „Ergebnisse festhalten“ ist gelb, solange markierte Lücken offen sind.
+- Fünf Minuten vor dem geplanten Ende steht immer (auch ohne diese Regel) „Noch 5 Minuten · Zusammenfassen ›“ im Band.
 
 **Test:**
 - `stadtrat` enthält 6 Abstimmungen mit bekanntem Ergebnis (einstimmig, mehrheitlich mit 1 Enthaltung …).
@@ -275,7 +285,8 @@ Beides geht über das Sprachmodell im Kontext-Strom.
 
 ## 4. Konsequenz für das Dashboard
 
-Das Freifeld wird zu einer **Auswahl der zehn Regeln**. Neben jeder Regel steht, was der Coach leisten kann:
+Das Freifeld wird zu einer **Auswahl der zehn Regeln**. Neben jeder Regel steht, was der Coach leisten kann; im
+Meeting erscheint nur, was gewählt ist (Ticket #27):
 
 | Stufe | Bedeutung | Regeln |
 |---|---|---|

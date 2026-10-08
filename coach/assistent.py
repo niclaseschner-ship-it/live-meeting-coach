@@ -357,6 +357,7 @@ class Assistent:
         self.gespraech = None  # offene Realtime-Sitzung (coach/gespraech.py)
         self.letzte_aktion: dict | None = None
         self.halten: tuple[float, float] | None = None  # Sprechtaste gehalten: (von, bis) Meetingzeit
+        self._taste_gehalten = False
         self.letzte_quellen: list[dict] = []
         # Ticket #21/#27: Floskeln, lange Aufträge (Stau 2/3), Text läuft mit
         self.floskeln = B.Floskeln()
@@ -376,7 +377,7 @@ class Assistent:
                 "letzte": self.letzte, "auftraege": self.auftraege.schnappschuss(),
                 "bogen": {"art": b.art, "name": BG.NAMEN.get(b.art, b.art), "quelle": b.quelle} if b else None,
                 "hoert_bis": round(hoert, 1) if hoert else None,
-                "funkgeraet": self.funkgeraet, "taste": self.halten is not None}
+                "funkgeraet": self.funkgeraet, "taste": self._taste_gehalten}
 
     @property
     def pausiert(self) -> bool:
@@ -450,6 +451,9 @@ class Assistent:
         self._einwand_bis = max(self._einwand_bis, ende + EINST.einwand_sekunden)
         if vorstellung:  # Ticket #27: kein Startsatz mehr danach – Nestor ordnet die Namen still zu
             self.vorstellung_bis = ende + EINST.vorstellung_sekunden
+        if self.zustand in ("begruessung", "spricht"):
+            self.zustand = "bereit"
+            await self.coach.melden()
 
     async def _begruessen_frei(self) -> bool:
         """Premium (Ticket #23): Begrüßung frei im Realtime-Gespräch. False = nicht zustande gekommen, dann spricht
@@ -544,6 +548,7 @@ class Assistent:
         Frage – sie kommt als Aufnahme (frage_beantworten), nicht über den Live-Text. Die Taste unterbricht Nestor."""
         jetzt = self.coach.meeting.jetzt()
         self.halten = (jetzt, jetzt + 120)
+        self._taste_gehalten = True
         if self.bogen is not None:
             self._bogen_abloesen()
         elif self.zustand == "spricht":
@@ -553,7 +558,15 @@ class Assistent:
         if not self.pausiert and self.zustand != "begruessung":
             self.zustand = "taste"
 
+    def halten_abbrechen(self) -> None:
+        """Sprechtaste ohne brauchbare Frage (zu kurz, nichts verstanden): wieder zuhören. Das Zeitfenster der
+        Taste bleibt, damit das Gesagte nicht noch über den Live-Text kommt."""
+        self._taste_gehalten = False
+        if self.zustand in ("taste", "denkt") and self.bogen is None:
+            self.zustand = "gespraech" if self.gespraech and self.gespraech.offen else "bereit"
+
     def halten_ende(self) -> None:
+        self._taste_gehalten = False
         if self.halten:
             self.halten = (self.halten[0], self.coach.meeting.jetzt() + 2.5)  # Nachlauf: Pause + Live-Text-Verzug
         if self.zustand == "taste":
@@ -713,7 +726,7 @@ class Assistent:
                 self.bogen = None
                 if not self.pausiert:
                     self.zustand = "gespraech" if self.gespraech and self.gespraech.offen else "bereit"
-                if not b.abgeloest and self.nachfrage_moeglich and self.halten is None:
+                if not b.abgeloest and self.nachfrage_moeglich and not self._taste_gehalten:
                     jetzt = c.meeting.jetzt()
                     ende = max(jetzt, self.sprechzeiten[-1][1] if self.sprechzeiten else jetzt)
                     self._nachfrage_ab = ende - 1.0  # ein Satz, der mit Nestors letztem Wort endet, zählt mit

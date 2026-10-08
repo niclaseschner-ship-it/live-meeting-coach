@@ -69,9 +69,6 @@ const icon = (name) => {
   s.innerHTML = PFADE[name] ?? ""; return s;
 };
 const iconSetzen = (id, name) => $(id).replaceChildren(icon(name));
-// Hinweisart → Icon und Farbe des Hinweis-Bands
-const HINWEIS_ICON = { ton: "ton", ausreden: "ausreden", ueberlappung: "ausreden", fokus: "thema", zeit: "zeit",
-  monolog: "kurz", alle: "alle", ergebnisse: "ergebnisse" };
 
 // ---------- Ton: Nestors Stimme ----------
 // Nur der Tab, der das Meeting gestartet oder die Aufnahme abgespielt hat, spielt ab (sonst doppelt, Test 05.10.).
@@ -172,7 +169,7 @@ const mikro = {
   },
 };
 
-// ---------- „Nestor fragen“ halten (Ticket #13) ----------
+// ---------- Sprechtaste halten (Ticket #13, Funkgerät seit #27) ----------
 // Halten, fragen, loslassen: der Ton der Frage geht als WAV an /api/frage/audio. Hört dieses Gerät ohnehin zu, wird
 // der laufende Mikrofonstrom mitgeschnitten; sonst öffnet das Halten das Mikrofon nur für die Frage.
 const halten = {
@@ -223,11 +220,8 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
   return b;
 }
 
-const KARTEN_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie", stand: "Wo stehen wir?",
-  regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick" };
-const KARTEN_ICON = { antwort: "frage", recherche: "suche", folie: "folie" };
 const NESTOR_TEXT = {
   bereit: "hört zu", angesprochen: "hört dir zu …", denkt: "denkt nach …", spricht: "spricht",
   begruessung: "begrüßt die Runde", einwand: "wartet auf ein Nein …", pausiert: "hört nicht mit",
-  recherchiert: "recherchiert …", gespraech: "im Gespräch",
+  recherchiert: "recherchiert …", gespraech: "im Gespräch", taste: "hört zu (Sprechtaste)",
 };

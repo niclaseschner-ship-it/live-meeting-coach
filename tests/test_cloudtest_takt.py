@@ -173,3 +173,34 @@ def test_takt_pruefpunkte_zeitlimit_und_rueckfrage():
     assert status["Takt: Nestor abgewartet nach a"] == "fehlt"
     assert status["Takt: Rückfrage im Redefluss r"] == "ok"
     assert k["zeitlimits"] == 1 and k["erster_ton_max_s"] == 2.0
+
+
+# --- Ticket #27: Sprechtaste (Basis) und Bedienung ------------------------------------------------------------------
+def test_sprechtaste_um_jede_ansprache_an_nestor():
+    r = _referenz()
+    r["grenzfaelle"].append({"id": "fehl", "erwartet": "kein_fehlausloeser", "start": 35.0, "ende": 36.0,
+                             "teile": [{"text": "Das Nest ist leer.", "start": 35.0, "ende": 36.0}]})
+    f = takt.taste_fenster(r)
+    assert [(x["id"], x.get("teil"), x["start"], x["ende"]) for x in f] == [
+        ("frage", 0, 10.0, 12.0), ("zwei", 0, 20.0, 21.0), ("zwei", 1, 22.0, 24.0), ("rein", 0, 30.0, 31.0)]
+    assert f[0]["text"] == "Nestor, wie spät?"  # dieselben Sätze wie in Premium, vorher die Taste
+
+
+def test_bedienung_mit_nestors_reaktion():
+    def frame(t, daten):
+        return {"t": t, "richtung": "empfangen", "daten": daten}
+
+    frames = [
+        frame(9.0, {"assistent": {"auftraege": []}, "karten": []}),
+        frame(10.4, {"typ": "nestor_text", "text": "Bin dran.", "neu": True}),
+        frame(10.5, {"typ": "stimme", "pcm": "", "floskel": True}),
+        frame(14.0, {"assistent": {"auftraege": []}, "karten": [{"id": 1, "art": "zusammenfassung", "titel": "Z"}]}),
+        frame(20.1, {"typ": "stimme_stopp"}),
+    ]
+    bedienung = [{"t": 8.0, "t_los": 10.0, "art": "taste", "name": "Sprechtaste", "dauer_s": 2.0,
+                  "satz": "Nestor, fass zusammen."},
+                 {"t": 20.0, "art": "still", "name": "Still"}]
+    a, b = takt.bedienung_auswerten(bedienung, frames, versatz=100.0)
+    assert a["zeit"] == 108.0 and a["bestaetigung_s"] == 0.4 and a["ton_s"] == 0.5 and a["karte_s"] == 4.0
+    assert "zusammenfassung" in a["karte"] and "Bestätigung nach 0.4 s" in takt.bedienung_text(a)
+    assert b["ergebnis"] == "Stimme gestoppt"

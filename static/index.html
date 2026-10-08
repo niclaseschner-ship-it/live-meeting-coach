@@ -46,9 +46,14 @@
       <button id="btn-kosten" class="kosten-knopf" data-tip="Geschätzte OpenAI-Kosten dieses Meetings – klicken für Details"><span id="kosten-icon"></span><span id="kosten-wert">0,00 $</span></button>
       <button id="btn-mikro" class="icon" data-tip="Mikro stumm schalten – nichts wird gehört oder ausgewertet" hidden></button>
       <button id="btn-fragen" class="icon" data-tip="Nestor fragen (statt „Nestor, …“ zu sagen)" hidden></button>
-      <button id="btn-still" class="icon" data-tip="Nestor unterbrechen" hidden></button>
+      <button id="btn-still" class="icon" data-tip="Nestor unterbrechen – ein laufender Auftrag kommt trotzdem still in den Verlauf" hidden></button>
+      <!-- Arbeitsring (Ticket #27): lange Aufträge (Bild, Recherche) – „1 läuft · 1 wartet“, antippen zeigt beide, ✕ bricht ab -->
+      <div class="kopf-arbeit">
+        <button id="arbeitsring" class="arbeitsring" hidden><span class="kreisel"></span><span id="arbeit-text"></span></button>
+        <ol id="arbeit-liste" class="arbeit-liste" hidden></ol>
+      </div>
       <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
-      <button id="btn-transkript" class="icon" data-tip="Verlauf: Transkript, Hinweise und Nestors Karten"></button>
+      <button id="btn-transkript" class="icon" data-tip="Transkript und alle Hinweise"></button>
       <button id="btn-mikro-quelle" class="pill mikro-quelle" hidden><span id="mq-text"></span><span class="pegel-mini" aria-hidden="true"><i id="mq-pegel"></i></span></button>
       <div class="kopf-mehr">
         <button id="btn-mehr" class="icon" data-tip="Weiteres: Handy koppeln, Einstellungen"></button>
@@ -63,20 +68,25 @@
     </div>
   </header>
 
-  <!-- Knopfleiste (Ticket #6, seit #13 in beiden Stufen gleich): dieselben Knöpfe an derselben Stelle. Mit „Nur auf
-       Knopfdruck“ geht ohne Knopf nichts an einen KI-Dienst; dann gibt es zusätzlich das Verwerfen. -->
+  <!-- Knopfleiste (Ticket #6, seit #13 in beiden Stufen gleich, seit #27 jeder Knopf ein Antwortbogen): dieselben Knöpfe
+       an derselben Stelle. Während Nestor einen Bogen spricht, sind sie gesperrt. Basis: die Sprechtaste (Funkgerät). -->
   <section id="knopf-leiste" class="knopf-leiste" hidden>
     <div class="knopf-knoepfe">
+      <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – halten</span></button>
       <button class="knopf-art" data-knopf="stand">Wo stehen wir?</button>
-      <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
-      <button class="knopf-art" data-knopf="ueberblick">Überblick</button>
+      <button class="knopf-art" data-knopf="zusammenfassen">Zusammenfassen</button>
+      <button class="knopf-art" data-knopf="fehlt">Was fehlt?</button>
       <button class="knopf-art" data-knopf="protokoll">Protokoll</button>
+      <button class="knopf-art" data-knopf="ueberblick">Überblick</button>
+      <button class="knopf-art" data-knopf="bild">Bild</button>
+      <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
       <form id="knopf-frage-form" class="knopf-frage">
         <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
         <button id="knopf-fragen" class="primaer">Fragen</button>
       </form>
     </div>
     <div class="knopf-zeile">
+      <span id="knopf-bogen" class="knopf-bogen" hidden></span>
       <span id="knopf-offen" class="knopf-offen"></span>
       <div id="knopf-fortschritt" class="knopf-fortschritt" hidden>
         <span class="knopf-balken"><i id="knopf-balken"></i></span>
@@ -158,19 +168,12 @@
         <option value="openai">OpenAI – wie ChatGPT, ~8 ct/Bild</option>
         <option value="claude">Claude-Abo – kostenlos, einfacher</option>
       </select></label>
-    <div class="zwei">
-      <label>Live-Bild alle <small>min, 0 = nur auf Wunsch</small><input id="e-bild" type="number" min="0" max="60"></label>
-      <label>Monolog ab <small>Sekunden</small><input id="e-monolog" type="number" min="20" max="300" step="5"></label>
-    </div>
+    <label>Monolog ab <small>Sekunden</small><input id="e-monolog" type="number" min="20" max="300" step="5"></label>
   </div>
 
-  <!-- Hinweis-Band: der neueste Hinweis (Regeln, Zeit) – Bernstein/Rot mit Symbol, bewusst anders als Nestors
-       Antworten (Ticket #21), die nur im mittleren Feld stehen -->
-  <div id="hinweis-band" class="hinweis-band" hidden>
-    <span id="hinweis-icon" class="hb-icon"></span>
-    <span id="hinweis-text"></span>
-    <button id="hinweis-zu" class="icon klein" data-tip="Ausblenden"></button>
-  </div>
+  <!-- Band (Ticket #27): Regel-Hinweise und Nestors stille Angebote an die Runde („Noch 5 Minuten · Zusammenfassen ›“,
+       „Weiter zu …?“, Lücken, „Erkannt: …“). Verschwindet von selbst, höchstens ein Knopf. -->
+  <div id="band" class="band" hidden aria-live="polite"></div>
 
   <div id="fehler" class="fehler" hidden></div>
   <div id="mikro-weg" class="fehler" hidden></div>
@@ -218,8 +221,8 @@
       <button id="btn-person-neu" class="leise klein">+ Person</button>
 
       <label class="schalter nestor-wahl"><input type="checkbox" id="f-assistent" checked>
-        <span><strong>Nestor spricht mit</strong> – begrüßt die Runde, fragt nach Einverständnis und antwortet,
-        wenn ihr ihn mit „Nestor, …“ ansprecht.</span></label>
+        <span><strong>Nestor spricht mit</strong> – begrüßt die Runde, fragt nach Einverständnis und antwortet, wenn ihr
+        ihn fragt (Premium: „Nestor, …“, Basis: Sprechtaste). Von sich aus spricht er nicht.</span></label>
 
       <details class="test">
         <summary>Testen ohne Runde</summary>
@@ -242,7 +245,7 @@
 
   <!-- Live -->
   <main id="live" class="arbeitsflaeche" hidden>
-    <!-- links: alles zur Zeit an einer Stelle -->
+    <!-- links: Zeit, Agenda und die gewählten Regeln -->
     <aside class="spalte">
       <section class="karte zeit">
         <div class="zeit-kopf"><span class="etikett">Jetzt</span><span id="laufzeit" class="laufzeit" data-tip="Laufzeit des Meetings"></span></div>
@@ -251,116 +254,38 @@
         <div class="balken-zeit"><span id="zeit-fortschritt"></span></div>
         <p id="prognose" class="prognose"></p>
       </section>
-      <div id="vorschlag" class="vorschlag" hidden></div>
       <section class="karte">
         <h2>Agenda</h2>
         <ol id="agenda" class="agenda"></ol>
       </section>
-      <!-- Meeting-Artefakte (Ticket #26): live erkannt, unabhängig von der Agenda. Unauffällig; was fehlt, steht rot
-           dabei. Klick öffnet die Bearbeitung – was die Runde hier setzt, gilt als bestätigt. -->
-      <section id="artefakte-karte" class="karte artefakte-karte" hidden>
-        <div class="art-kopf">
-          <h2>Festgehalten <span id="art-zahl" class="leise-text"></span></h2>
-          <button id="art-neu" class="icon klein" data-tip="Von Hand eintragen"></button>
-        </div>
-        <ul id="artefakte" class="artefakte"></ul>
-      </section>
-    </aside>
-
-    <!-- Mitte: Live-Bild -->
-    <section class="karte bildkarte">
-      <div class="bildkopf">
-        <div class="ansicht-kopf">
-          <h2 id="bild-titel">Live-Bild <span id="bild-status" class="leise-text"></span></h2>
-          <div id="ansicht-wahl" class="ansicht-wahl" hidden>
-            <button id="tab-bild" class="aktiv">Live-Bild</button>
-            <button id="tab-ueberblick">Überblick</button>
-            <button id="tab-folie">Recherche-Folie</button>
-          </div>
-        </div>
-        <div class="werkzeuge">
-          <button id="btn-folie" class="icon" data-tip="Letzte Recherche mit Quellen als Folie zusammenstellen" hidden></button>
-          <button id="btn-bild" class="icon" data-tip="Bild jetzt neu zeichnen (ca. 1–2 min)"></button>
-          <button id="btn-bild-png" class="icon" data-tip="Als PNG speichern" disabled></button>
-          <a id="btn-bild-analyse" class="icon" href="/api/onepager.md" target="_blank" data-tip="Strukturanalyse hinter dem Bild" hidden></a>
-        </div>
-      </div>
-      <div class="bildflaeche">
-        <img id="live-bild" alt="Live-Bild des Meetings" hidden>
-        <article id="folie" class="folie" hidden></article>
-        <!-- Überblick als Text (Ticket #13): in Basis statt des Live-Bilds, in Premium umschaltbar -->
-        <article id="ueberblick" class="ueberblick" hidden></article>
-        <div id="ueberblick-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor schreibt den Überblick …</div>
-        <div id="folie-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor baut die Folie …</div>
-        <div id="bild-leer" class="bild-leer">
-          <div class="bl-logo" aria-hidden="true">
-            <svg viewBox="0 0 40 40" width="104" height="104">
-              <defs><linearGradient id="nlg2" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#1E1B4B"/></linearGradient></defs>
-              <rect width="40" height="40" rx="11" fill="url(#nlg2)"/>
-              <path d="M9.5 28.5a13 13 0 0 1-1.6-13.8M30.5 28.5a13 13 0 0 0 1.6-13.8" stroke="#FBBF24" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-              <path d="M8 19.5l-2.4-1.2M8.6 24.2l-2.6.2M32 19.5l2.4-1.2M31.4 24.2l2.6.2" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
-              <path d="M14 27V13l12 14V13" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <p id="bild-spruch" class="bl-spruch">Legt los – Nestor hört zu und zeichnet mit.</p>
-          <div class="bl-weg"><span id="bild-weg"></span></div>
-          <p id="bild-wann" class="bl-wann"></p>
-          <p class="bl-tipp">Sprecht Nestor einfach an, zum Beispiel:</p>
-          <ul class="bl-kann">
-            <li data-icon="bild">„Nestor, zeig uns die Übersicht.“</li>
-            <li data-icon="zeit">„Nestor, wo stehen wir gerade?“</li>
-            <li data-icon="transkript">„Nestor, fass den Punkt kurz zusammen.“</li>
-            <li data-icon="ergebnisse">„Nestor, wo fehlen noch Entscheidungen?“</li>
-            <li data-icon="weiter">„Nestor, weiter zum nächsten Punkt.“</li>
-            <li data-icon="suche">„Nestor, gib uns einen Überblick zu …“</li>
-          </ul>
-        </div>
-        <div id="bild-arbeitet" class="bild-arbeitet" hidden><span class="kreisel"></span> Nestor zeichnet …</div>
-
-        <!-- Nestor-Feld (Ticket #21): Antworten stehen immer hier, in derselben Form – der Text läuft mit, sobald
-             Nestor spricht, danach die Stichpunkte. Dazu das Arbeitssymbol und die Warteschlange der Aufträge.
-             Agenda/Zeit links und die rechte Spalte bleiben frei. -->
-        <section id="nestor-feld" class="nestor-feld" hidden aria-live="polite">
-          <div class="nf-kopf">
-            <span id="nf-symbol" class="nf-symbol" aria-hidden="true"><i>N</i></span>
-            <div class="nf-titel">
-              <strong id="nf-zustand">Nestor</strong>
-              <span id="nf-frage" class="nf-frage"></span>
-            </div>
-            <span id="karte-zeit" class="nk-zeit"></span>
-            <button id="karte-zu" class="icon klein" data-tip="Ausblenden – bleibt im Verlauf unter „Nestor“"></button>
-          </div>
-          <ol id="nf-auftraege" class="nf-auftraege" hidden></ol>
-          <!-- Rückfrage von Nestor (Ticket #26): Fünf-Minuten-Frage oder Nachfrage nach Lücken – mit Knöpfen, solange
-               sie offen ist; antworten geht auch per Stimme -->
-          <div id="nf-rueckfrage" class="nf-rueckfrage" hidden>
-            <span id="nf-rueckfrage-art" class="nk-art"></span>
-            <p id="nf-rueckfrage-text"></p>
-            <ul id="nf-rueckfrage-liste" class="nf-rk-liste"></ul>
-            <div id="nf-rueckfrage-knoepfe" class="nf-rk-knoepfe"></div>
-          </div>
-          <p id="nf-text" class="nf-text" hidden></p>
-          <div id="karte" class="nf-karte" hidden>
-            <span id="karte-art" class="nk-art"></span>
-            <h3 id="karte-titel"></h3>
-            <p id="karte-frage" class="nk-frage" hidden></p>
-            <ul id="karte-punkte" class="nk-punkte"></ul>
-            <div id="karte-quellen" class="nk-quellen" hidden></div>
-            <a id="karte-protokoll" class="knopf-link" href="/api/knopf/protokoll.md" target="_blank" hidden>Ganzes Protokoll öffnen</a>
-            <button id="karte-folie" class="leise klein" hidden>Als Folie im Bildbereich zeigen</button>
-          </div>
-        </section>
-      </div>
-    </section>
-
-    <!-- rechts: Regeln als Ampeln, Redeanteile -->
-    <aside class="spalte">
-      <section class="karte">
+      <!-- Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte -->
+      <section id="regeln-karte" class="karte">
         <h2>Regeln</h2>
         <div id="regel-ampeln" class="regel-ampeln"></div>
         <div id="erinnerungen" class="erinnerungen"></div>
       </section>
+    </aside>
+
+    <!-- Mitte: Nestor und der Verlauf (Ticket #27) – alles Inhaltliche als Karte, neueste vorn, ‹ › zum Blättern -->
+    <section class="karte verlauf-karte">
+      <div id="nestor-zeile" class="nestor-zeile">
+        <span id="nz-symbol" class="nz-symbol" aria-hidden="true"><i>N</i></span>
+        <div class="nz-text">
+          <strong id="nz-zustand">Nestor</strong>
+          <span id="nz-gesagt" class="nz-gesagt"></span>
+        </div>
+      </div>
+      <div class="vl-nav">
+        <button id="vl-zurueck" class="icon klein" data-tip="Ältere Karte" aria-label="Ältere Karte">‹</button>
+        <span id="vl-zaehler" class="vl-zaehler"></span>
+        <button id="vl-vor" class="icon klein" data-tip="Neuere Karte" aria-label="Neuere Karte">›</button>
+        <button id="vl-neu" class="vl-neu" hidden></button>
+      </div>
+      <div id="vl-buehne" class="vl-buehne"></div>
+    </section>
+
+    <!-- rechts: Redeanteile, Gesprächsdynamik -->
+    <aside class="spalte">
       <section class="karte">
         <h2>Redeanteile</h2>
         <div id="redeanteile" class="redeanteile"></div>
@@ -379,16 +304,15 @@
       <div class="reiter">
         <button id="reiter-transkript" class="aktiv">Transkript</button>
         <button id="reiter-hinweise">Hinweise</button>
-        <button id="reiter-nestor">Nestor</button>
       </div>
       <button id="leiste-zu" class="icon klein" data-tip="Schließen"></button>
     </div>
     <ol id="transkript" class="transkript"></ol>
     <ol id="hinweise" class="hinweis-liste" hidden></ol>
-    <ol id="nestor-verlauf" class="karten-liste" hidden></ol>
   </aside>
 
   <script src="/static/basis.js"></script>
+  <script src="/static/verlauf.js"></script>
   <script src="/static/agenda.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/feedback.js"></script>

@@ -135,6 +135,13 @@ def marken_und_versatz(bericht: dict, frames: list[dict]) -> tuple[list[dict], f
                           "status": status.get(pa["ergebnis"], "beobachtet"),
                           "detail": f"{pa['ergebnis']}, {pa['dauer_s']:.0f} s gewartet, Nestor sprach "
                                     f"{pa.get('ton_dauer_s', 0):.0f} s"})
+        # Ticket #27: jeder Knopfdruck des Tests als eigene Marke (Sprechtaste mit Dauer und Satz, Knöpfe, Band, ✕, Still)
+        for b in ct.takt.bedienung_auswerten((bericht["messwerte"].get("takt") or {}).get("bedienung") or [],
+                                             frames, uhr):
+            label = b["name"] + (f" {b['dauer_s']:.1f} s" if b.get("dauer_s") else "") + (
+                f": „{b['satz'][:70]}“" if b.get("satz") else "")
+            marken.append({"t": b["zeit"], "art": "bedienung", "label": label, "status": "bedienung",
+                           "detail": ct.takt.bedienung_text(b)})
     marken.sort(key=lambda m: m["t"])
     return marken, versatz
 
@@ -231,8 +238,9 @@ def meeting_wav_zu(referenz_pfad: Path) -> Path:
 
 
 # ---------- HTML ----------
-STATUS_FARBE = {"ok": "#2e7d32", "fehlt": "#c62828", "beobachtet": "#6b6b6b", "offline": "#b8860b"}
-STATUS_ZEICHEN = {"ok": "✅", "fehlt": "❌", "beobachtet": "📝", "offline": "⏭️"}
+STATUS_FARBE = {"ok": "#2e7d32", "fehlt": "#c62828", "beobachtet": "#6b6b6b", "offline": "#b8860b",
+                "bedienung": "#7c3aed"}
+STATUS_ZEICHEN = {"ok": "✅", "fehlt": "❌", "beobachtet": "📝", "offline": "⏭️", "bedienung": "👆"}
 
 
 def _esc(text) -> str:
@@ -285,7 +293,8 @@ def marken_html(marken: list[dict], dauer_s: float) -> str:
         farbe = STATUS_FARBE.get(m["status"], "#888")
         zeichen = STATUS_ZEICHEN.get(m["status"], "•")
         titel = f"{m['label']} – {ct.mmss(m['t'])} – {zeichen} {m['detail']}"
-        aus.append(f"<button type='button' class='marke marke-ereignis' style='left:{prozent:.3f}%;"
+        klasse = "marke marke-ereignis" + (" marke-bedienung" if m.get("art") == "bedienung" else "")
+        aus.append(f"<button type='button' class='{klasse}' style='left:{prozent:.3f}%;"
                    f"--farbe:{farbe}' data-t='{m['t']:.2f}' data-label='{_esc(m['label'])}' "
                    f"data-status='{_esc(m['status'])}' data-detail='{_esc(m['detail'])}' "
                    f"title='{_esc(titel)}'>{zeichen}</button>")
@@ -321,10 +330,12 @@ section.karte h2{font-size:1rem;margin:0 0 10px;}
 #viewer{width:100%;display:block;background:#000;}
 audio{width:100%;margin-top:10px;}
 #zeitstrahl-wrap{overflow-x:auto;margin-top:14px;padding-bottom:6px;}
-#zeitstrahl{position:relative;height:54px;min-width:100%;}
+#zeitstrahl{position:relative;height:80px;min-width:100%;}
 .spur{position:absolute;left:0;right:0;height:6px;background:var(--spur);border-radius:3px;}
 .spur-screenshots{top:6px;}
 .spur-ereignisse{top:32px;}
+.spur-bedienung{top:58px;}
+.marke-ereignis.marke-bedienung{top:50px;border-radius:5px;}
 .marke{position:absolute;transform:translateX(-50%);border:none;cursor:pointer;padding:0;
   background:none;font-size:13px;line-height:1;}
 .marke-screenshot{top:2px;width:10px;height:10px;border-radius:50%;background:var(--akzent);
@@ -400,13 +411,14 @@ def html_bauen(*, bericht: dict, bewertung: dict | None, marken: list[dict], das
       <div id="zeitstrahl">
         <div class="spur spur-screenshots"></div>
         <div class="spur spur-ereignisse"></div>
+        <div class="spur spur-bedienung"></div>
         {dashboard_marken_html(dashboard, dauer_s)}
         {marken_html(marken, dauer_s)}
         <div id="vorschau" hidden><img id="vorschau-bild" alt=""><span id="vorschau-zeit"></span></div>
       </div>
     </div>
     <div id="status-zeile">Bereit – Zeitstrahl: Screenshots (blaue Punkte), Ereignisse/Grenzfälle
-      (✅/❌/📝/⏭️).</div>
+      (✅/❌/📝/⏭️), Bedienung des Tests (👆 violett: Sprechtaste, Knöpfe, Band, ✕, Still).</div>
     <div class="legende">{legende}</div>
   </section>
 

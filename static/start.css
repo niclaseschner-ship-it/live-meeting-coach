@@ -67,3 +67,7 @@ body { background: var(--bg); }
 
 .s-fuss { display: flex; justify-content: center; gap: 18px; padding: 0 22px 32px; font-size: 13.5px; color: var(--text-3); }
 .s-fuss a { color: var(--text-3); text-decoration: underline; }
+
+/* Ticket #27: Telefon (Premium) und Funkgerät (Basis), je ein Satz */
+.s-analogie { margin: 0 0 10px; font-size: 15px; line-height: 1.45; color: var(--text-2); font-weight: 500; text-align: left; }
+.s-analogie strong { color: var(--marke); }

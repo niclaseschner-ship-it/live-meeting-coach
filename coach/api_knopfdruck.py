@@ -117,8 +117,9 @@ async def frage_halten(daten: dict) -> dict:
         raise HTTPException(409, "Es läuft kein Meeting.")
     if daten.get("an"):
         coach.assistent.halten_start()
-    else:
+    else:  # losgelassen ohne Aufnahme (zu kurz): wieder zuhören
         coach.assistent.halten_ende()
+        coach.assistent.halten_abbrechen()
     await coach.melden()
     return {"ok": True}
 
@@ -138,7 +139,7 @@ async def frage_audio(request: Request) -> dict:
     wav = await request.body()
     coach.assistent.halten_ende()
     if not 44 < len(wav) <= MAX_FRAGE_BYTES:
-        coach.assistent.halten = None
+        coach.assistent.halten_abbrechen()
         raise HTTPException(400, "Keine oder zu lange Aufnahme.")
     sekunden = (len(wav) - 44) / 2 / 24000
     try:
@@ -146,14 +147,14 @@ async def frage_audio(request: Request) -> dict:
             model=EINST.text_modell, file=("frage.wav", wav, "audio/wav"), language=EINST.sprache,
             prompt=f"Frage an den Moderationsassistenten {EINST.assistent_name}.")
     except Exception as e:  # noqa: BLE001
-        coach.assistent.halten = None
+        coach.assistent.halten_abbrechen()
         raise HTTPException(502, f"Transkription fehlgeschlagen ({fehlertext(e)}).") from e
     nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(sekunden, 1), "knopf": "halten"})
     from .assistent import frage_aus
 
     frage = frage_aus((getattr(antwort, "text", "") or "").strip())
     if len(frage.split()) < 2:
-        coach.assistent.halten = None
+        coach.assistent.halten_abbrechen()
         await coach.melden()
         return {"ok": False, "frage": frage, "grund": "Nichts verstanden – bitte noch einmal halten und fragen."}
     if coach.knopfdruck:

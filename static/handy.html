@@ -47,8 +47,8 @@
     <div id="ton-fehlt" class="h-warnung" hidden>Nestor hat keinen Lautsprecher und bleibt still.
       <button id="btn-ton-hier" class="klein">Hier abspielen</button></div>
 
-    <!-- Laufender Hinweis, groß -->
-    <div id="hinweis" class="h-hinweis" hidden><span id="hinweis-icon"></span><span id="hinweis-text"></span></div>
+    <!-- Band (Ticket #27): Regel-Hinweise und Nestors stille Angebote, je mit höchstens einem Knopf -->
+    <div id="band" class="band" hidden aria-live="polite"></div>
 
     <!-- Nestor -->
     <section class="h-karte h-nestor">
@@ -61,16 +61,31 @@
         <button id="btn-still" class="gross" hidden><span class="i"></span>Stopp</button>
         <button id="btn-fortsetzen" class="gross warn" hidden><span class="i"></span>Wieder zuhören</button>
       </div>
-      <!-- Ticket #13: dieselben Knöpfe wie im Dashboard, in beiden Stufen; „Nestor fragen“ zum Halten -->
-      <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Nestor fragen – halten und sprechen</span></button>
+      <!-- Ticket #13/#27: die Sprechtaste (Funkgerät; in Premium die Alternative zum Namen) und dieselben Knöpfe wie
+           im Dashboard – jeder Knopf ein Antwortbogen, gesperrt, solange Nestor spricht -->
+      <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Sprechtaste – halten und sprechen</span></button>
       <div class="h-knopfraster">
         <button class="h-knopf" data-knopf="stand">Wo stehen wir?</button>
-        <button class="h-knopf" data-knopf="regeln">Regeln eingehalten?</button>
-        <button class="h-knopf" data-knopf="ueberblick">Überblick</button>
+        <button class="h-knopf" data-knopf="zusammenfassen">Zusammenfassen</button>
+        <button class="h-knopf" data-knopf="fehlt">Was fehlt?</button>
         <button class="h-knopf" data-knopf="protokoll">Protokoll</button>
+        <button class="h-knopf" data-knopf="ueberblick">Überblick</button>
+        <button class="h-knopf" data-knopf="bild">Bild</button>
       </div>
       <p id="knopf-stand" class="leise" hidden></p>
-      <p id="antwort" class="h-antwort" hidden></p>
+      <p id="gesagt" class="h-antwort" hidden></p>
+    </section>
+
+    <!-- Verlauf (Ticket #27): alles Inhaltliche als Karte, neueste vorn – wischen oder ‹ › zum Blättern -->
+    <section class="h-karte h-verlauf">
+      <div class="vl-nav">
+        <h2>Verlauf</h2>
+        <button id="vl-zurueck" class="icon klein" aria-label="Ältere Karte">‹</button>
+        <span id="vl-zaehler" class="vl-zaehler"></span>
+        <button id="vl-vor" class="icon klein" aria-label="Neuere Karte">›</button>
+        <button id="vl-neu" class="vl-neu" hidden></button>
+      </div>
+      <div id="vl-buehne" class="vl-buehne"></div>
     </section>
 
     <!-- Mikrofon -->
@@ -89,17 +104,16 @@
       </div>
     </section>
 
-    <!-- Verlauf -->
-    <section class="h-karte h-verlauf">
+    <!-- Transkript und alle Hinweise -->
+    <details class="h-karte h-mehr">
+      <summary>Transkript und Hinweise</summary>
       <div class="reiter">
-        <button id="r-hinweise" class="aktiv">Hinweise</button>
-        <button id="r-nestor">Nestor</button>
-        <button id="r-transkript">Transkript</button>
+        <button id="r-transkript" class="aktiv">Transkript</button>
+        <button id="r-hinweise">Hinweise</button>
       </div>
-      <ol id="l-hinweise" class="h-liste"></ol>
-      <ol id="l-nestor" class="h-liste" hidden></ol>
-      <ol id="l-transkript" class="h-liste h-transkript" hidden></ol>
-    </section>
+      <ol id="l-transkript" class="h-liste h-transkript"></ol>
+      <ol id="l-hinweise" class="h-liste" hidden></ol>
+    </details>
 
     <!-- Meeting -->
     <section class="h-karte h-meeting">
@@ -111,18 +125,8 @@
     </section>
   </main>
 
-  <!-- Nestor-Karte als Blatt von unten -->
-  <div id="karte" class="h-blatt" hidden>
-    <div class="h-blatt-innen">
-      <div class="h-zeile"><span id="karte-art" class="nk-art-text"></span><button id="karte-zu" class="icon klein"></button></div>
-      <h3 id="karte-titel"></h3>
-      <p id="karte-frage" class="leise"></p>
-      <ul id="karte-punkte"></ul>
-      <div id="karte-quellen" class="h-quellen"></div>
-    </div>
-  </div>
-
   <script src="/static/basis.js"></script>
+  <script src="/static/verlauf.js"></script>
   <script src="/static/handy.js"></script>
 </body>
 </html>

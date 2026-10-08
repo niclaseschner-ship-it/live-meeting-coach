@@ -293,6 +293,14 @@ def bewertung_schreiben(ordner: Path, bericht: dict, kennzahlen: dict, urteile: 
         zeichen = {"ok": "✅", "fehlt": "❌", "beobachtet": "📝", "offline": "⏭️"}
         z += ["", "## Abwechselnd reden (#25)", "", "| Prüfpunkt | Status | Detail |", "|---|---|---|"]
         z += [f"| {p['name'].removeprefix('Takt: ')} | {zeichen[p['status']]} | {p['detail']} |" for p in takt_punkte]
+    bedienung = (takt_kennzahlen or {}).get("bedienung") or []
+    if bedienung:  # Ticket #27: jeder Druck des Tests mit Nestors Reaktion – wie bei den Zurufen
+        z += ["", "## Bedienung", "", "| Zeit | Knopf | Satz | Reaktion von Nestor |", "|---|---|---|---|"]
+        for b in bedienung:
+            zeit = ct.mmss(b["zeit"]) if b.get("zeit") is not None else f"Lauf {b['t']:.0f}s"
+            name = b["name"] + (f" ({b['dauer_s']:.1f} s)" if b.get("dauer_s") else "")
+            satz = f"„{b['satz']}“" if b.get("satz") else "–"
+            z.append(f"| {zeit} | {name} | {satz} | {ct.takt.bedienung_text(b)} |")
     (ordner / "bewertung.md").write_text("\n".join(z), encoding="utf-8")
 
 
@@ -325,7 +333,7 @@ async def main() -> None:
     # gehören trotzdem zu den schlimmsten Stellen.
     schlimmste = schlimmste_stellen(pruefliste + [p for p in takt_punkte if p["status"] == "fehlt"], bericht)
     if takt_kennzahlen:
-        print(f"Takt: {json.dumps(takt_kennzahlen, ensure_ascii=False)}")
+        print(f"Takt: {json.dumps({k: v for k, v in takt_kennzahlen.items() if k != 'bedienung'}, ensure_ascii=False)}")
     bilder = bilder_auswaehlen(ordner, bericht)
     print(f"Kennzahlen: {json.dumps(kennzahlen, ensure_ascii=False)}")
     print(f"{len(bilder)} Screenshots für das Urteil ausgewählt: {[b.name for b in bilder]}")

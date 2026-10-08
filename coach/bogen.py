@@ -198,7 +198,7 @@ def luecken_text(liste: list) -> str:
     if ohne_bis:
         teile.append(f"{ohne_bis} ohne Termin")
     if rest:
-        teile.append(f"{rest} weitere Lücke{'n' if rest > 1 else ''}")
+        teile.append(f"{rest} {'weitere ' if teile else ''}Lücke{'n' if rest > 1 else ''}")
     return " · ".join(teile)
 
 

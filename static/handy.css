@@ -65,15 +65,15 @@ button.warn { background: var(--gelb); border-color: var(--gelb); color: #fff; }
 .h-code-zeile input { flex: 1; min-width: 0; font-size: 20px; letter-spacing: .1em; text-transform: uppercase; }
 .h-fehler { color: var(--rot); font-weight: 600; }
 
-/* Karte als Blatt von unten */
-.h-blatt { position: fixed; inset: 0; z-index: 30; background: rgba(11, 19, 36, .35); display: flex; align-items: flex-end; }
-.h-blatt-innen { width: 100%; max-height: 80vh; overflow: auto; background: var(--flaeche); border-radius: 18px 18px 0 0;
-  padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(11, 19, 36, .2); }
-.h-blatt-innen h3 { margin: 6px 0 4px; font-size: 19px; }
-.h-blatt-innen ul { padding-left: 20px; margin: 10px 0; display: grid; gap: 6px; font-size: 16px; }
-.nk-art-text { color: var(--marke); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
-.h-quellen { display: grid; gap: 6px; font-size: 14px; }
 .h-mikro, button.gross { white-space: normal; text-align: left; }
 main, .h-karte { min-width: 0; }
 .pill.verbunden { color: var(--gruen); background: var(--gruen-weich); border-color: transparent; }
 .pill.verbunden::before { background: var(--gruen); }
+
+/* Ticket #27: Band und Verlauf am Handy (Darstellung aus style.css), Transkript zum Aufklappen */
+#app .band { margin: 0; }
+.h-verlauf .vl-nav h2 { margin: 0 auto 0 0; }
+.h-verlauf .vk { min-height: 0; }
+.h-mehr summary { cursor: pointer; font-weight: 700; color: var(--text-2); }
+.h-mehr .reiter button { flex: 1; padding: 8px 6px; }
+.h-knopfraster button:disabled { opacity: .5; }

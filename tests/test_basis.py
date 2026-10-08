@@ -89,7 +89,9 @@ def test_startseite_nennt_mistral_und_openai():
     # Ticket #18: Premium (OpenAI) ist der Standard, Basis (Mistral) das Downgrade für DSGVO-Nähe/weniger Kosten.
     assert "KI nur bei Mistral (Frankreich), Verarbeitung in der EU" in text
     assert "US-Anbieter (OpenAI)" in text
-    assert "Nur auf Knopfdruck" in text
+    assert "Nur auf Knopfdruck" in text  # Code bleibt …
+    assert '<label class="s-schalter" hidden>' in text  # … aber vorerst aus dem Angebot (Ticket #27)
+    assert "Wie ein Telefon" in text and "Wie ein Funkgerät" in text
 
 
 def test_begruessung_basis_ohne_rueckfragen_ohne_namen():

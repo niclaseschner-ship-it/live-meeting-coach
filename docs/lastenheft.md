@@ -1,6 +1,6 @@
 # Nestor – Lastenheft
 
-**Stand:** 08.10.2026 (Ticket #13: zwei Stufen; Ticket #26: Meeting-Artefakte) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
+**Stand:** 08.10.2026 (Ticket #13: zwei Stufen; Ticket #26: Meeting-Artefakte; Ticket #27: Bedienlogik) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
 **Vorgänger:** [archiv/spezifikation_v2.md](archiv/spezifikation_v2.md) (Laptop-Fassung, Messungen bis 05.10.)
 
 Diese Datei beschreibt verbindlich, was Nestor tut. Wer etwas Nennenswertes ändert, trägt es hier im selben
@@ -12,11 +12,16 @@ Nestor begleitet Präsenzmeetings (3–8 Personen, Deutsch). Er behält Agenda, 
 antwortet auf Ansprache und hält fest, was besprochen und entschieden wurde. **Die Gruppe entscheidet,
 Nestor zeigt nur an.**
 
-**Grundregel: Nestor spricht nur, wenn er gefragt wird.** Gesprochen wird auf Ansprache (Name, Rückfrage direkt
-nach seiner Antwort) oder auf einen Knopf. Will Nestor von sich aus auf etwas aufmerksam machen (Zeit, Thema,
-Lücken, fünf Minuten vor Schluss), tut er das **still**: Einblendung, Pop-up mit Knöpfen oder Ampel – nie mit
-Stimme. Einzige Ausnahme ist die Begrüßung mit der Einwilligung zu Beginn (Niclas, 08.10.2026). Neue Funktionen
-halten sich daran; wer gegen die Regel verstößt, ist ein Fehler.
+**Grundregel (Ticket #27): Nestor spricht nur in einem Antwortbogen, den die Runde ausgelöst hat.** Ein Bogen
+ist ein Auftrag und eine Antwort: sofort eine kurze Bestätigung, dann eine Karte im Verlauf, dann ein bis zwei Sätze
+zu dem, was auffällt – nie das, was auf der Karte steht (Abschnitt 4.10). Was Nestor von sich aus merkt (Zeit, Thema,
+Lücken, fünf Minuten vor Schluss, ein abgeschlossener Agendapunkt), kommt **still**: als Zeile im Band oben oder als
+Karte im Verlauf – nie mit Stimme, nie als Pop-up. Einzige Ausnahme ist die Begrüßung mit der Einwilligung (Niclas,
+08.10.2026). Neue Funktionen halten sich daran; wer gegen die Regel verstößt, ist ein Fehler.
+
+Es gibt drei Orte und sonst nichts: **oben das Band** (Regel-Hinweise und Nestors stille Angebote, verschwindet von
+selbst, höchstens ein Knopf), **in der Mitte der Verlauf** (alles Inhaltliche als Karte, neueste vorn, zurückblättern
+wie durch Bilder in einer Chatgruppe) und **die Stimme** (nur im Bogen).
 
 Nestor gibt es in **zwei Stufen** (Abschnitt 3): **Nestor Basis** nutzt nur Mistral AI (Frankreich, Verarbeitung in
 der EU) – für Runden, bei denen der Einsatz sonst am Datenschutz scheitert („kein OpenAI“). **Nestor Premium** nutzt
@@ -35,13 +40,15 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 1. **Zugang:** Jeder Kunde bekommt einen Link und ein eigenes Passwort. Ein Kunde kann mehrere Meetings
    gleichzeitig führen.
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Stufen Basis und Premium (Abschnitt 3) mit je einem
-   Satz zur Verarbeitung und den erwarteten Kosten je Stunde, in Basis der Schalter „Nur auf Knopfdruck“, und der
-   Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und Datenschutz.
+   Satz, wie man mit Nestor spricht (Premium wie ein Telefon, Basis wie ein Funkgerät), zur Verarbeitung und den
+   erwarteten Kosten je Stunde, und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und
+   Datenschutz. Der Schalter „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (Ticket #27; der Code bleibt).
 3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
    eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
-4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen; Premium zeigt zusätzlich
-   das Live-Bild und spricht im Gespräch.
+4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen: links Zeit, Agenda und die
+   gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile und Gesprächsdynamik, oben das Band
+   (Abschnitt 4.10). Premium kann zusätzlich ein Live-Bild zeichnen und spricht im Realtime-Gespräch.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite, eingeleitet mit einem Abschluss-Kopf – „Danke!
    11 Minuten · 4 Punkte · 2 Entscheidungen“, mit demselben Logo wie im Dashboard – und drei Angeboten:
    - **Eigenes Paket** herunterladen (Abschnitt 4.4).
@@ -73,25 +80,26 @@ Live-Bild.
 | Ton | läuft zum Server und in Echtzeit zu OpenAI | läuft zum Server und in Echtzeit zu Mistral (Voxtral Realtime) |
 | Live-Transkript, Fokus, Ton, Ergebnisse | live | live |
 | Monolog, Redeanteile, Überlappung, Zeit | live, lokal auf dem Server | live, lokal auf dem Server |
-| Nestor ansprechen | „Nestor, …“ wie im Gespräch, und die Knöpfe | „Nestor, …“ per Zuruf und die Knöpfe (auch am Handy) |
-| Nestors Antwort | Realtime-Gespräch: Rückfragen ohne Namen, Reinreden macht ihn still | gesprochen mit der Stimme **Thorsten** (Thorsten-Voice, CC0) und als Karte; keine Rückfragen ohne Namen, kein Ins-Wort-Fallen |
-| Überblick | Überblick als Text per Knopf **und** Live-Bild alle 10 min und auf Zuruf | **Überblick als Text** (Abschnitt 4.7) nach 5 min, dann alle 10 min, auf Zuruf („zeig uns die Übersicht“) und per Knopf; kein Bildmodell |
-| Knöpfe | Wo stehen wir? · Regeln eingehalten? · Überblick · Protokoll · Nestor fragen (am Handy: halten) | dieselben |
-| Löschen | „Nein“ in der Begrüßung löscht alles | „Nein“ in der Begrüßung löscht alles |
+| Nestor ansprechen | **wie ein Telefon:** „Nestor, …“; direkt nach dem Bogen eine Nachfrage ohne Namen; am Handy auch die Sprechtaste; die Knöpfe | **wie ein Funkgerät:** Sprechtaste halten, sprechen, loslassen (Laptop: Knopf oder Leertaste, Handy: großer Knopf); auf „Nestor“ reagiert Basis nicht; die Knöpfe |
+| Nestors Antwort | Antwortbogen im Realtime-Gespräch; Reinreden macht ihn still | Antwortbogen mit der Stimme **Thorsten** (Thorsten-Voice, CC0); er redet aus, die Sprechtaste unterbricht |
+| Bild / Überblick | Live-Bild auf Zuruf und per Knopf (langer Auftrag, kommt still) und am Ende; Überblick als Text per Knopf | **Überblick als Text** (Abschnitt 4.7) auf Zuruf und per Knopf und am Ende; kein Bildmodell |
+| Knöpfe | Wo stehen wir? · Zusammenfassen · Was fehlt? · Protokoll · Überblick · Bild · Regeln eingehalten? (nur mit Regeln) · Nestor fragen | dieselben ohne Bild, dazu die Sprechtaste |
+| Löschen | „Nein“ in der Begrüßung oder später „Nestor, nein“ löscht alles | dasselbe – Einwilligung und Nein bleiben per Stimme |
 | Kosten (Richtwert) | ~2 € je Stunde | ~0,7 € je Stunde |
 
-**Schalter „Nur auf Knopfdruck“ (nur Basis):** der frühere Modus „Auf Knopfdruck“. Ohne Knopf geht nichts an
-Mistral: Der Ton bleibt auf dem Server, Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf
-Knopfdruck (Abschnitt 4.2), Nestor hört nicht auf Zuruf und antwortet als Karte. Zeit, Redeanteile, Überlappung und
-Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je
-Stunde (Voxtral-Transkription der Sprache plus wenige Cent je Knopf, gerechnet).
+**Schalter „Nur auf Knopfdruck“ (nur Basis):** vorerst aus dem Angebot (Ticket #27) – auf der Startseite
+ausgeblendet, der Code bleibt. Ohne Knopf geht dann nichts an Mistral: Der Ton bleibt auf dem Server, Transkript,
+Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf Knopfdruck (Abschnitt 4.2), Nestor spricht nicht und
+antwortet als Karte. Zeit, Redeanteile, Überlappung und Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten
+verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je Stunde.
 
-Die Startseite zeigt je Stufe zwei Plus- und zwei Minus-Stichpunkte statt Fließtext (kein Ganzsatz, Ticket #18).
-**Premium**: „+ Natürliches Gespräch: Rückfragen ohne Namen, ihr könnt reinreden“, „+ Live-Bild alle 10 Minuten und
-auf Zuruf“, „− US-Anbieter (OpenAI)“, „− etwa 2 € je Meetingstunde“ (Richtwert). **Basis**: „+ KI nur bei Mistral
-(Frankreich), Verarbeitung in der EU“, „+ etwa 0,7 € je Meetingstunde“ (Richtwert), „− Ansprache immer mit Namen,
-kein Reinreden“, „− Überblick als Text statt Live-Bild“. Zum Schalter wörtlich: „Nur auf Knopfdruck – ohne Knopf
-geht nichts an Mistral. Euer Ton liegt bis dahin nur auf unserem Server in der EU und wird am Ende gelöscht.“
+Die Startseite zeigt je Stufe einen Satz, wie man mit Nestor spricht, und zwei Plus- und zwei Minus-Stichpunkte
+(Ticket #18/#27). **Premium**: „Wie ein Telefon: Ihr sagt „Nestor, …“, fragt direkt danach ohne Namen nach und könnt
+ihm jederzeit ins Wort fallen.“, „+ Natürliches Gespräch: Nachfrage ohne Namen, ihr könnt reinreden“, „+ Live-Bild
+auf Zuruf“, „− US-Anbieter (OpenAI)“, „− etwa 2 € je Meetingstunde“ (Richtwert). **Basis**: „Wie ein Funkgerät: Ihr
+haltet die Sprechtaste, sprecht und lasst los – Nestor redet dann aus.“, „+ KI nur bei Mistral (Frankreich),
+Verarbeitung in der EU“, „+ etwa 0,7 € je Meetingstunde“ (Richtwert), „− Fragen per Sprechtaste statt mit Namen,
+kein Reinreden“, „− Überblick als Text statt Live-Bild“.
 
 Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir sehen nichts von deinen Meetingdaten und
 nutzen nichts davon – außer du erlaubst es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
@@ -135,51 +143,40 @@ Untertitel „Nestor liest sie zu Beginn vor – prüfen kann er sie nicht“), 
 Nestor das nur einmal am Anfang vorliest – höchstens drei Punkte wörtlich, sonst zusammengefasst mit „und N
 weitere, die ihr auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinnerung für die Runde, kein Signal.
 
-### 4.2 Die Knöpfe – Analysen auf Knopfdruck
+### 4.2 Die Knöpfe – jeder Knopf ein Antwortbogen
 
-Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leiste unter der Kopfzeile) und am Handy:
+Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leiste unter der Kopfleiste) und am Handy.
+Jeder Knopf löst einen Antwortbogen aus wie ein Zuruf (Abschnitt 4.10): Bestätigung, Karte im Verlauf, ein bis zwei
+Sätze. Während ein Bogen läuft, sind die Knöpfe gesperrt (sichtbar: „Nestor ist bei „Wo stehen wir?“ …“).
 
-- **Wo stehen wir?** Stand der Agenda und Vorschlag für den nächsten Schritt (Karte)
-- **Regeln eingehalten?** Prüfung der vereinbarten Gesprächsregeln (Karte)
-- **Überblick:** Überblick als Text (Abschnitt 4.7)
-- **Protokoll:** wertet aus, was noch nicht auf Meeting-Artefakte geprüft ist (Abschnitt 4.9), und zeigt das
-  Protokoll je Agendapunkt mit Entscheidungen, Aufgaben, offenen Punkten und Risiken; Lücken stehen als „fehlt“ dabei.
-- **Nestor fragen:** im Dashboard getippt, am Handy **gehalten**: halten, fragen, loslassen – der Ton der Frage wird
-  transkribiert und wie „Nestor, …“ beantwortet, gesprochen und als Karte. Freie Fragen schließen Recherche („gib uns
-  einen Überblick zu …“) und das Arbeiten mit dem Transkript ein („such mir raus, was zum Budget gesagt wurde“).
-  Was während des Haltens gesagt wird, löst nicht zusätzlich eine Antwort über den Zuruf aus.
+- **Wo stehen wir?** Stand der Agenda, Zeit, Festgehaltenes, Offenes und ein Vorschlag für den nächsten Schritt
+  (Karte); ein Aufruf liefert Karte und Satz. Schlägt er einen Punktwechsel vor, steht „Weiter zu …?“ im Band.
+- **Zusammenfassen:** holt den laufenden Abschnitt nach (Abschnitt 4.9) und zeigt Entscheidungen, Aufgaben und
+  Offenes als Karte; ein kleiner Modellaufruf formuliert den Satz („Hier ist sie. Zwei Aufgaben haben noch niemanden,
+  der sich kümmert.“).
+- **Was fehlt?** die Lücken als Karte, Satz wie oben.
+- **Protokoll:** die Karte „Festgehalten“ (alle Artefakte, Lücken rot und antippbar, „+ Eintragen“, Link auf das
+  ganze Protokoll); die Liste steht nicht mehr dauerhaft in der linken Spalte.
+- **Überblick:** Überblick als Text (Abschnitt 4.7) als Karte, „Hier ist der Überblick.“
+- **Bild** (nur Premium): langer Auftrag (Abschnitt 4.10) – „Nehme ich mit …“, das Bild kommt still in den Verlauf.
+- **Regeln eingehalten?** nur, wenn Regeln gewählt sind; fasst die Ampeln zusammen, ohne KI-Aufruf.
+- **Nestor fragen:** getippt im Dashboard; gesprochen per Sprechtaste (Basis am Laptop und Handy, Premium am Handy) –
+  halten, fragen, loslassen; der Ton der Frage wird transkribiert und wie „Nestor, …“ beantwortet. Was während des
+  Haltens gesagt wird, löst nicht zusätzlich eine Antwort über den Live-Text aus.
 
-Ohne „Nur auf Knopfdruck“ liegt das Transkript schon vor, ein Knopf braucht dann nur die Analyse (gemessen 1–4 s);
-„Regeln eingehalten?“ fasst dann die laufenden Ampeln zusammen, ohne KI-Aufruf.
-
-Mit **„Nur auf Knopfdruck“** (Basis) transkribiert ein Knopfdruck zuerst den bisher noch nicht transkribierten Ton
-(fertige Teile bleiben gespeichert) und führt dann die Analyse aus; „Nestor fragen“ antwortet als Karte. Bis die
-Antwort kommt, sieht man den Fortschritt. In Basis gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)):
-1,8–3,9 s je Knopf. Die folgende Messung stammt noch aus dem früheren Modus mit OpenAI-Transkription und Codex
-(Ticket #7, 60-Minuten-Probe, [docs/messung_knopfdruck.md](messung_knopfdruck.md)):
-
-| Meetingzeit | Knopf | Transkription | Analyse (Codex) | Gesamt | Kosten |
-|---|---|---|---|---|---|
-| 15 min | Stand | 28,0 s | 10,4 s | 38,4 s | 0,044 $ |
-| 30 min | Regeln | 26,2 s | 14,6 s | 40,8 s | 0,044 $ |
-| 60 min | Protokoll | 52,2 s | 10,4 s | 62,6 s | 0,088 $ |
-| einmalig | Bild | – | 50,1 s | 50,1 s | 0,074 $ |
-
-Die Analysezeit ist hier die des ChatGPT-Abos (`LMC_KI=codex`, ~8–15 s je Aufruf); über die echte API maß der
-Vergleichslauf 2,6 s für denselben Aufruf (Begründung und Zahlen im Messbericht) – kostet dafür ein bis zwei
-Cent statt nichts. Die Transkriptionszeit wächst mit der Menge offener Sprache (seit dem letzten Knopf), nicht
-mit der Meetingdauer selbst; bei „Protokoll“ war sie am größten, weil seit „Regeln“ 30 Minuten statt 15
-aufgelaufen waren.
-
-Weitere Regeln mit „Nur auf Knopfdruck“:
-- Agendawechsel nur per Klick (Ansagen kämen erst beim nächsten Knopf an).
-- Am Meetingende keine automatische Auswertung; Protokoll und Überblick gibt es, wenn vorher gedrückt wurde.
-- **Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete (Karten, Überblick, Protokoll, Befunde) aus dem
-  Zeitraum; die Aufnahme wird dort zu Stille. Redeanteile bleiben, sie enthalten keine Inhalte.
-- Erster Probelauf (3 min, 4 Knöpfe): je Knopf 9–15 s, davon Transkription 1–6 s; 0,009 $ Transkription.
-  Ausführliche Messung über 60 Minuten: siehe Tabelle oben.
+Mit **„Nur auf Knopfdruck“** (Basis, vorerst aus dem Angebot) transkribiert ein Knopfdruck zuerst den bisher noch
+nicht transkribierten Ton und führt dann die Analyse aus; die Antwort kommt als Karte ohne Stimme, Zusammenfassen und
+Was fehlt sind dort das Protokoll. Gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)): 1,8–3,9 s je
+Knopf. Weitere Regeln dieses Modus: Agendawechsel nur per Klick; am Meetingende keine automatische Auswertung;
+**Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete aus dem Zeitraum (die Aufnahme wird dort zu
+Stille), Redeanteile bleiben. Ältere Messung mit OpenAI-Transkription und Codex: [messung_knopfdruck.md](messung_knopfdruck.md).
 
 ### 4.3 Signale und ihre Verlässlichkeit
+
+**Nur gewählte Regeln sind sichtbar (Ticket #27).** Eine Regel, die die Runde nicht gewählt hat, hat kein Band,
+keine Ampel und keine Prüfung – das gilt für Fokus, Zeit, Monolog und Überlappung genauso wie für die anderen (bis
+#27 kamen diese vier immer). Was keine Regel ist, bleibt: die Uhr und der Countdown links, die Redeanteile, die
+Gesprächsdynamik und der Agenda-Vorschlag „Weiter zu …?“ (ein Band-Hinweis mit Knopf).
 
 Jedes Signal ist im Dashboard als **verlässlich** oder **Beta** gekennzeichnet (Schlüssel im Katalog/Code
 weiterhin „experimentell“, Ticket #10 ändert nur den Anzeige-Text). Bei Beta-Signalen steht in einem Satz
@@ -203,6 +200,8 @@ Regel-Ampeln im Dashboard.
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
 | Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s | – |
+| Nachfrage ohne Namen (Premium) | verlässlich | MESS_EINORDNUNG | – |
+| Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | MESS_NAMEN | – |
 
 ### 4.4 Paket zum Herunterladen
 
@@ -253,13 +252,13 @@ Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (gr�
 📌 Aufgaben (wer, bis wann), ↪ Außerhalb der Agenda (grau) und „Neu seit dem letzten Stand“. Inhalte aus einem
 Textaufruf über Agenda, die festgestellten Ergebnisse je Punkt (Regel 10) und das Transkript. Nichts wird gemalt:
 Jede Zahl muss im Material vorkommen, sonst entfällt der Eintrag; „Person N“ erscheint nicht. In Basis ersetzt der
-Überblick das Live-Bild (nach 5 min, dann alle 10 min, auf Zuruf, am Ende, per Knopf), in Premium ist er neben dem Live-Bild
-umschaltbar. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
+Überblick das Live-Bild (auf Zuruf, per Knopf und am Ende – seit Ticket #27 nicht mehr im 10-Minuten-Takt), in Premium
+gibt es ihn per Knopf; beides als Karte im Verlauf. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
 (55.000 € statt 25.000 €, Wortsalat, Bilddatei bei Microsoft Azure) – deshalb in Basis kein Bildmodell.
 
-### 4.9 Meeting-Artefakte (Ticket #26)
+### 4.9 Meeting-Artefakte (Ticket #26, Ablauf seit Ticket #27)
 
-Nestor erkennt **unabhängig von der Agenda** im Live-Text vier Artefakte und führt sie über das ganze Meeting
+Nestor erkennt **unabhängig von der Agenda** vier Artefakte und führt sie über das ganze Meeting
 (`coach/artefakte.py`, Grundlage [meeting_artefakte_2026-10-08.md](meeting_artefakte_2026-10-08.md)).
 Agendapunkte müssen keine Entscheidung haben.
 
@@ -273,37 +272,99 @@ Agendapunkte müssen keine Entscheidung haben.
 - **Datenmodell:** je Artefakt Typ, Felder, Lücken (daraus „vollständig“), Konfidenz, Quelle (Zeit, Satz, Sprecher),
   Agendapunkt zur Zeit der Quelle, bestätigt ja/nein (Stimme oder Klick), nachgefragt, abgelehnt. Daraus abgeleitet:
   die Ergebnisse je Agendapunkt (Nestors Kontext, Überblick, Protokoll, Abschluss-Kopf) und die Standardgliederung.
-- **Erkennung live:** etwa je Minute Sprache (Basis je zwei Minuten) ein Aufruf mit den neuen Sätzen, etwas Kontext
-  und den schon festgehaltenen Artefakten mit Nummer – das Modell ergänzt, statt doppelt anzulegen. Zusätzlich beim
-  Punktwechsel, vor der Zusammenfassung, auf den Protokoll-Knopf und am Ende. Premium `gpt-5.4-mini`, Basis
-  `mistral-medium-latest` (`mistral-small` war im Vergleich deutlich schlechter: Aufgaben für Nestor, falsche
-  Zuständige). Unter Konfidenz 0,4 wird nichts festgehalten, unter 0,5 nicht nachgefragt.
-- **Anzeige:** linke Spalte unter der Agenda, „Festgehalten“ – unauffällig, je Eintrag Typ-Zeichen, Inhalt, wer · bis;
-  was fehlt, steht als kleines rotes Etikett dabei („wer?“, „bis wann?“). Klick öffnet die Bearbeitung (Typ, Was, Wer,
-  Bis wann, bei Entscheidungen der Status, bei Risiken die Reaktion), „+“ trägt von Hand ein. Was die Runde setzt, gilt
-  als bestätigt und wird von der Erkennung nicht überschrieben.
-- **Prüfung beim Punktwechsel** (nur mit der Regel „Ergebnisse festhalten“): Nestor fragt kurz und gebündelt, eine
-  Frage je unvollständigem Artefakt mit konkretem Vorschlag („Ich hab notiert: Statusseite-Zusammenfassung. Wer
-  übernimmt das, bis wann?“), höchstens zwei gesprochen, der Rest steht im Dashboard. Ist alles vollständig, schweigt er.
-  Nach jedem Artefakt fragt er nur einmal; eine abgelehnte Nachfrage („brauchen wir nicht“, Knopf „Nicht nötig“)
-  kommt nie wieder, auch nicht am Ende.
+- **Erkennung bei Bedarf, nicht ständig:** Erkannt wird still je **Abschnitt** – wenn ein Agendapunkt endet, nach
+  20 Minuten am selben Punkt und ohne Agenda alle 20 Minuten (`LMC_ABSCHNITT_MINUTEN`) – und nur über diesen
+  Abschnitt. Auf Anfrage (Zusammenfassen, Was fehlt, Protokoll) wird nur der laufende Abschnitt nachgeholt, in
+  parallelen Stücken (höchstens 6 000 Zeichen je Aufruf), damit der Bogen unter 15 s bleibt. Das Modell sieht die
+  schon festgehaltenen Artefakte mit Nummer und ergänzt, statt doppelt anzulegen. Premium `gpt-5.4-mini`, Basis
+  `mistral-medium-latest` (`mistral-small` war deutlich schlechter). Unter Konfidenz 0,4 wird nichts festgehalten,
+  unter 0,5 nichts markiert. Gemessen nach 60 Minuten Meeting: MESS_ZUSAMMENFASSEN.
+- **Zusammenfassung je Abschnitt (still):** eine Karte „Punkt 2 · Budget“ bzw. „Zwischenstand“ im Verlauf –
+  entschieden, Aufgaben, offen, Risiken. Keine Stimme, keine Nachfrage.
+- **Regel „Ergebnisse festhalten“** heißt nur noch: Lücken in diesen Karten rot markieren plus ein Band-Hinweis
+  („2 Aufgaben ohne Verantwortliche in „Budget“ · Zur Karte ›“, der Knopf springt zur Karte). Ohne Regel keine
+  Markierung und kein Band – die Karte kommt trotzdem. Die Ampel der Regel wird gelb, solange markierte Lücken offen
+  sind.
+- **Anzeige und Bearbeiten:** in den Karten des Verlaufs (Zusammenfassung, Was fehlt, Festgehalten, Punkt-Karte) je
+  Eintrag Typ-Zeichen, Inhalt, wer · bis; was fehlt, steht als rotes Etikett dabei. Antippen öffnet die Bearbeitung
+  an Ort und Stelle (Typ, Was, Wer, Bis wann, Status, Reaktion; „Nicht nötig“, „Löschen“). Die Karten zeigen immer den
+  aktuellen Stand: Eine Lücke, die die Runde schließt, wird in derselben Karte grün – es entsteht keine neue Karte.
+  Was die Runde setzt, gilt als bestätigt und wird von der Erkennung nicht überschrieben.
+- **Lücke korrigieren per Stimme** ist ein normaler kurzer Bogen: Premium „Nestor, Anna macht das bis Freitag“
+  (Realtime-Werkzeug `artefakt_eintragen`), Basis dasselbe per Sprechtaste (`AKTION: eintragen`) – Nestor sagt nur
+  „Notiert.“
 - **Fünf Minuten vor dem geplanten Ende** (immer, auch ohne Regel; geplantes Ende = Summe der Agendaminuten, bei
-  Meetings unter zehn Minuten zur Hälfte): Rückfrage im Nestor-Feld mit „Ja, zusammenfassen“ / „Nein, danke“ und
-  gesprochen: „Noch fünf Minuten. Soll ich zusammenfassen und die letzten Aufgaben verteilen?“. Bei Ja (Stimme oder
-  Knopf): Zusammenfassung aus den Artefakten (nichts frei Formuliertes) plus höchstens drei Lücken – zuerst Aufgaben
-  ohne Wer, dann ohne Termin, dann unklare Entscheidungen bzw. hohe Risiken; dazu eine Karte im Nestor-Feld.
-- **Lücken schließen:** Nach einer Nachfrage gilt ein Satz ohne Namen 30 s lang als Antwort („Sofie übernimmt die
-  Statusseite bis Freitag“) – ein kleiner Aufruf trägt ein, Nestor bestätigt kurz („Eingetragen: Sofie, bis Freitag.“).
-  Mit Namen geht es jederzeit: Premium über das Realtime-Werkzeug `artefakt_eintragen`, Basis über
-  `AKTION: eintragen`. Dazu Klick und Bearbeiten im Dashboard.
-- **Nur auf Knopfdruck:** keine automatische Erkennung; Artefakte entstehen nur über den Protokoll-Knopf. Die
-  Fünf-Minuten-Rückfrage erscheint still im Nestor-Feld; ihr Ja wirkt wie der Protokoll-Knopf.
+  kurzen Meetings zur Hälfte): still ins Band, als Angebot ohne Frage: „Noch 5 Minuten · Zusammenfassen ›“. Der Knopf
+  löst den Bogen „Zusammenfassen“ aus (Zusammenfassung aus den Artefakten plus höchstens drei Lücken – zuerst
+  Aufgaben ohne Wer, dann ohne Termin, dann unklare Entscheidungen bzw. hohe Risiken). Ein bloßes „Ja“ in den Raum
+  wirkt nicht; in Premium geht „Nestor, gib mir die Zusammenfassung“, in Basis die Sprechtaste.
+- **Nur auf Knopfdruck:** keine automatische Erkennung; Artefakte entstehen nur über den Protokoll-Knopf; der
+  Band-Knopf „Zusammenfassen ›“ wirkt dort wie der Protokoll-Knopf.
 - **Standardgliederung** (`meeting.json`, für Abschluss und Export #22): Kopf (Titel, Datum, Dauer, Ziel, „Ziel
   erreicht?“ – offen, bis die Korrekturansicht aus #22 es abfragt), Entscheidungen, Aufgaben (Was/Wer/Bis wann, Lücken),
   offene Punkte, Risiken, Parkplatz, Agenda Soll/Ist. Das Dokument selbst (Grafik, Regelanalyse, Anhang) kommt mit #22.
-- **Kosten:** Premium etwa +0,2 $ je Stunde (≈ 50 Aufrufe à ~1 600 Tokens rein, ~450 raus), Basis etwa +0,15 $ je
-  Stunde (≈ 27 Aufrufe à ~1 800/350 mit mistral-medium); gemessen auf zwei dichten 10-Minuten-Transkripten 0,13–0,17 $/h
-  (Premium) und 0,14–0,24 $/h (Basis). Die frühere Ergebnisprüfung je Punkt entfällt dafür.
+- **Kosten:** deutlich weniger Aufrufe als die frühere Erkennung je Minute Sprache (Premium etwa +0,2 $/h, Basis
+  +0,15 $/h): je Abschnitt ein bis drei Aufrufe, dazu die Aufrufe auf Anfrage – MESS_KOSTEN_ARTEFAKTE.
+
+### 4.10 Bedienlogik: Antwortbogen, Verlauf, Band (Ticket #27)
+
+**Der Antwortbogen.** Ein Auftrag, ein Bogen, höchstens ~15 s (`coach/assistent.py`, `coach/bogen.py`):
+1. sofort eine kurze Bestätigung aus dem Floskel-Vorrat – zwei bis drei Varianten je Art, für Zuruf, Sprechtaste und
+   Knopf gleich („Bin dran.“, „Moment, kommt gleich.“, „Schau ich mir an, komme gleich zurück.“), je Stimme einmal
+   erzeugt und zwischengespeichert;
+2. dann erscheint die Karte im Verlauf;
+3. dann ein bis zwei Sätze zu dem, was auffällt („Hier ist sie. Zwei Aufgaben haben noch niemanden, der sich
+   kümmert. Schaut kurz drauf.“) – **nie vorlesen, was auf der Karte steht**. Für Zusammenfassen und Was fehlt
+   formuliert ein kleiner Modellaufruf den Satz, bei Wo stehen wir liefert ihn derselbe Aufruf wie die Karte. Kurze
+   Fragen („Wie viel Zeit noch?“): Antwort in einem Satz, die Karte trägt die Einzelheiten aus dem Meeting-Stand.
+   Seh-Inhalte (Folie, Überblick, Liste): Bestätigung plus „Hier ist die Folie.“ – kein Inhalt gesprochen.
+
+**Nur ein Bogen zur Zeit.** Knöpfe sind währenddessen gesperrt (sichtbar). Ein Zuruf bzw. die Sprechtaste unterbricht
+den laufenden Bogen (Premium: Reinreden oder „Nestor, …“, Basis: die Sprechtaste) und startet den neuen – nie zwei
+parallel. **Unterbrechen stoppt nur die Stimme, nicht die Arbeit:** Die Karte des ersten Auftrags kommt trotzdem
+still in den Verlauf (im Realtime-Gespräch wird die Antwort fertig erzeugt, das Modell erfährt per
+`conversation.item.truncate`, wie weit sie zu hören war). Gemessen: MESS_BOEGEN.
+
+**Lange Aufträge sind kein Bogen:** Bild (~60 s) und Recherche (20–60 s). Nestor sagt nur „Nehme ich mit, dauert ein
+bisschen. Macht ruhig weiter.“; das Ergebnis kommt später **still** in den Verlauf (Bild-Karte, Recherche-Karte mit
+Quellen), ohne „ist fertig“. Erklären lassen geht über einen neuen Auftrag („Nestor, erklär das Bild“). **Stau:**
+höchstens zwei – einer läuft, einer wartet („Ich bin noch am Bild, die Recherche mache ich danach.“), ein dritter wird
+abgewehrt („Ich hab gerade zwei Sachen auf dem Zettel. Fragt mich gleich nochmal.“). Oben rechts der Arbeitsring
+„1 läuft · 1 wartet“; antippen zeigt beide, ✕ bricht ab. Kurze Fragen laufen neben langen Aufträgen sofort.
+
+**Verlauf (Mitte):** Alles, was Inhalt ist, ist eine Karte – Antwort, Zusammenfassung, Was fehlt, Festgehalten,
+Recherche mit Quellen, Folie, Bild, Überblick, Punkt-Zusammenfassung. Neueste vorn; mit ‹ › (am Handy wischen, am
+Laptop auch die Pfeiltasten) blättert man zurück. Nichts muss man wegklicken. Ein Ergebnis eines Bogens springt nach
+vorn und leuchtet kurz. Still Geliefertes (Bild, Recherche, Abschnitts-Zusammenfassung, unterbrochener Bogen) springt
+nur nach vorn, wenn die vordere Karte älter als ~60 s ist – sonst reiht es sich dahinter ein, mit dem Merker
+„1 neu ›“. Im leeren Verlauf steht eine Karte mit vier Beispielen, wie man Nestor nutzt (je Stufe passend). Über dem
+Verlauf Nestors Zeile mit dem N: dreht sich, solange er arbeitet; darunter läuft mit, was er gerade sagt.
+
+**Band (oben):** Regel-Hinweise (nur gewählte Regeln), Agenda-Vorschlag „Weiter zu …? · Weiter ›“, „Noch 5 Minuten ·
+Zusammenfassen ›“, der Lücken-Hinweis mit Sprung zur Karte, „Erkannt: Anna, David …“ nach der Namensrunde und in
+Basis „Sprechtaste halten, dann fragen“ (wenn jemand „Nestor“ sagt, höchstens einmal je Minute). Höchstens drei
+Zeilen; jede verschwindet von selbst; ein Hinweis zu einem Agendapunkt verschwindet, sobald ein anderer Punkt aktiv
+ist.
+
+**Premium = Telefon.** Anfangen mit „Nestor, …“ (am Handy alternativ die Sprechtaste). Nach dem Bogen ist 15 s lang
+eine Nachfrage ohne Namen möglich, sichtbar als Ring „Ich höre zu“, der abläuft (Follow-up-Modus wie bei
+Sprachassistenten): **nur der erste Satz** danach kann eine Nachfrage sein; ist er nicht an Nestor gerichtet, schließt
+das Fenster sofort. Entschieden wird in drei Stufen, im Zweifel schweigt Nestor: (1) spricht der Satz eine Person der
+Runde an („Anna, …“, „…, oder Tarek?“) → nicht an Nestor; (2) eine klare Anschlussfrage oder ein Auftrag („Und bis
+wann?“, „Zeig …“, „Kannst du …“) → an Nestor; (3) sonst ein schneller Text-Klassifikator (gpt-5.4-mini) mit Nestors
+letzter Antwort: Frage an Nestor / an Nestor ohne Antwort („Passt“) / nicht an Nestor. Dieselbe Person wie die
+Fragende ist nur ein Plus-Signal. Unterbrechen durch Reinreden.
+
+**Basis = Funkgerät.** Anfangen nur mit der Sprechtaste: halten, sprechen, loslassen (Laptop: Knopf oder Leertaste,
+Handy: großer Knopf). Basis hört nicht auf „Nestor“ – keine Ansprache per Name, kein Rückfrage-Fenster, keine
+Echo-Probleme. Nestor redet aus; die Taste unterbricht ihn. Einwilligung und „Nein“ bleiben per Stimme („Nestor,
+nein“ löscht auch in Basis alles).
+
+**Begrüßung und Namen.** Nestor sagt in der Begrüßung alles (Einwilligung, Regeln, wie man ihn anspricht –
+Telefon bzw. Funkgerät –, Agenda-Bitte, Start mit Punkt eins) und endet mit „Wenn ihr mögt, sagt kurz eure Namen,
+dann schreibe ich das Protokoll mit Namen.“ Danach spricht er nicht mehr von sich aus; er ordnet die Namen still zu
+(Name mit dem Stimm-Fingerabdruck der Vorstellung, zugeordnet, sobald die Stimme im Register sicher bekannt ist) und
+zeigt oben „Erkannt: Anna, David …“. Gemessen: MESS_NAMEN.
 
 ## 5. Rahmenbedingungen
 

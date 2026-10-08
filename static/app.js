@@ -83,7 +83,6 @@ const einrichten = () => api("/api/einrichten", formularDaten());
 let einrichtungOffen = false;
 let leisteOffen = false;
 let reiter = "transkript";
-let hinweisWeg = 0; // id des zuletzt weggeklickten Hinweises
 
 $("btn-person-neu").onclick = () => personZeile();
 $("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
@@ -105,23 +104,12 @@ $("btn-transkript").onclick = () => { leisteOffen = !leisteOffen; rendern(); };
 $("leiste-zu").onclick = () => { leisteOffen = false; rendern(); };
 $("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
 $("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
-$("reiter-nestor").onclick = () => { reiter = "nestor"; rendern(); };
-$("karte-zu").onclick = () => { feld.zu = true; feldRendern(); };
 // Kopfleiste entschlackt (Ticket #17 Punkt 4): Handy koppeln und Einstellungen stecken im „Mehr“-Menü – beides
 // seltene, vorbereitende Aktionen statt Aktionen je Minute. Ein Klick darauf wählt aus und schließt das Menü.
 $("btn-mehr").onclick = () => { $("mehr-menu").hidden = !$("mehr-menu").hidden; $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true; };
 $("btn-einstellungen").onclick = () => { $("mehr-menu").hidden = true; $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = $("handy-fenster").hidden = true; };
 $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = $("mehr-menu").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
-$("hinweis-zu").onclick = () => { hinweisWeg = zustand?.hinweise.at(-1)?.id ?? 0; rendern(); };
-// Basis: kein Bildmodell – der Knopf schreibt den Überblick neu; Premium: Live-Bild (Knopfdruck gibt es nur in Basis)
-$("btn-bild").onclick = () => (basisStufe(zustand) ? knopfDruecken("ueberblick")
-  : zustand?.modus === "knopfdruck" ? knopfDruecken("bild") : api("/api/onepager"));
-$("btn-folie").onclick = () => api("/api/folie");
-$("tab-bild").onclick = () => { ansicht = "bild"; if (zustand) bildRendern(zustand); };
-$("tab-folie").onclick = () => { ansicht = "folie"; if (zustand) bildRendern(zustand); };
-$("tab-ueberblick").onclick = () => { ansicht = "ueberblick"; if (zustand) bildRendern(zustand); };
-$("btn-bild-png").onclick = () => bildAlsPng();
 // Handy koppeln: QR-Code mit Kopplungscode; das Handy kann dann das Mikrofon übernehmen
 let kopplungGeladen = false;
 async function handyFensterZeigen() {
@@ -150,13 +138,13 @@ document.addEventListener("click", (e) => {
   if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
   if (!$("kosten").hidden && !$("kosten").contains(e.target) && !$("btn-kosten").contains(e.target)) $("kosten").hidden = true;
   if (!$("mehr-menu").hidden && !$("mehr-menu").contains(e.target) && !$("btn-mehr").contains(e.target)) $("mehr-menu").hidden = true;
+  if (!$("arbeit-liste").hidden && !$("arbeit-liste").contains(e.target) && !$("arbeitsring").contains(e.target)) $("arbeit-liste").hidden = true;
 });
 // Einstellungen: jede Änderung sofort an den Server
 const einstellen = (feld, wert) => api("/api/einstellungen", { [feld]: wert });
 $("e-assistent").onchange = (e) => einstellen("assistent", e.target.checked);
 $("e-modus").onchange = (e) => einstellen("modus", e.target.value);
 $("e-stimme").onchange = (e) => einstellen("stimme", e.target.value);
-$("e-bild").onchange = (e) => einstellen("bild_minuten", Number(e.target.value));
 $("e-monolog").onchange = (e) => einstellen("monolog_sekunden", Number(e.target.value));
 $("e-bild-anbieter").onchange = (e) => einstellen("bild_anbieter", e.target.value);
 $("e-aufnahme").onchange = (e) => einstellen("aufnahme", e.target.checked);
@@ -217,165 +205,22 @@ function kostenRendern(z) {
   $("k-gesamt").textContent = dollar(k.gesamt);
 }
 
-// ---------- Live-Bild ----------
-let bildVersion = 0;
-let ansicht = "bild"; // Live-Bild, Überblick (Text) oder Recherche-Folie
-let folieVersion = 0;
-let ueberblickVersion = 0;
+// ---------- Stufe ----------
 const basisStufe = (z) => z?.stufe === "basis";
-
-// Überblick als Text (Ticket #13): Kopf, Agenda, Entschieden / Offen / Aufgaben / Außerhalb, Neu seit dem letzten Stand
-function ueberblickBauen(u) {
-  const liste = (eintraege, leer, zeile) => eintraege.length ? el("ul", {}, ...eintraege.map((e) => el("li", {}, ...zeile(e))))
-    : el("p", { class: "ub-leer" }, leer);
-  const block = (klasse, zeichen, titel, inhalt) => el("section", { class: `ub-block ${klasse}` },
-    el("h4", {}, el("span", { class: "ub-zeichen", "aria-hidden": "true" }, zeichen), titel), inhalt);
-  $("ueberblick").replaceChildren(
-    el("div", { class: "ub-kopf" },
-      el("div", {}, el("h3", {}, u.titel), ...(u.kernaussage ? [el("p", { class: "ub-kern" }, u.kernaussage)] : []),
-        ...(u.fokus ? [el("p", { class: "ub-fokus" }, `Fokus: ${u.fokus}`)] : [])),
-      el("div", { class: "ub-stand" }, el("strong", {}, `Stand ${u.laufzeit}`), ...(u.punkt ? [el("span", {}, `jetzt ${u.punkt}`)] : []))),
-    ...(u.agenda?.length ? [el("ol", { class: "ub-agenda" }, ...u.agenda.map((p) =>
-      el("li", { class: p.status }, el("b", {}, String(p.nr)), p.titel)))] : []),
-    el("div", { class: "ub-raster" },
-      block("gruen", "✅", "Entschieden", liste(u.entschieden, "Noch nichts ausdrücklich beschlossen.", (e) => [e.was])),
-      block("bernstein", "🟡", "Offen", liste(u.offen, "Keine offenen Fragen genannt.", (e) => [e.was])),
-      block("blau", "📌", "Aufgaben", liste(u.aufgaben, "Noch keine Aufgaben verteilt.", (a) => [a.was,
-        el("small", {}, ` – ${a.wer ?? "wer: offen"}${a.bis ? ` · bis ${a.bis}` : ""}`)])),
-      block("grau", "↪", "Außerhalb der Agenda", liste(u.ausserhalb, "Keine Abschweifung.", (a) => [
-        ...(a.zeit ? [el("small", {}, `${a.zeit} `)] : []), a.was]))),
-    el("p", { class: "ub-neu" }, el("strong", {}, "Neu seit dem letzten Stand: "), u.neu.join(" · ")),
-  );
-}
-function folieBauen(f) {
-  const quellen = f.quellen.length ? el("ol", {}, ...f.quellen.map((q) => el("li", {},
-    el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel), el("small", {}, q.seite))))
-    : el("p", {}, "Keine Quellen gemeldet.");
-  $("folie").replaceChildren(
-    el("div", { class: "folie-kopf" }, el("span", { class: "marke-klein" }, el("i", {}, "N"), "Recherche · Nestor"), el("span", {}, f.datum)),
-    el("h3", {}, f.titel),
-    el("p", { class: "kern" }, f.kernaussage),
-    el("div", { class: "folie-inhalt" },
-      el("div", {}, el("ul", { class: "folie-punkte" }, ...f.punkte.map((p) => el("li", {}, p))),
-        ...(f.offen ? [el("div", { class: "folie-offen" }, "Offen: ", f.offen)] : [])),
-      el("div", { class: "folie-quellen" }, el("h4", {}, "Quellen"), quellen)),
-    el("div", { class: "folie-fuss" }, `Frage: „${f.frage}“ · Websuche, Stand ${f.datum} – Angaben ohne Gewähr, Quellen prüfen.`),
-  );
-}
-function bildAlsPng() {
-  const img = $("live-bild");
-  if (!img.naturalWidth) return;
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth * 1.5; c.height = img.naturalHeight * 1.5;
-  const g = c.getContext("2d"); g.fillStyle = "#F8FAFC"; g.fillRect(0, 0, c.width, c.height);
-  g.drawImage(img, 0, 0, c.width, c.height);
-  c.toBlob((blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `live-bild-${bildVersion}.png`; a.click(); });
-}
-function bildRendern(z) {
-  if (!z.onepager_version && bildVersion) { // Bild verworfen (Knopfdruck „verwerfen“): wieder der Platzhalter
-    bildVersion = 0;
-    $("live-bild").hidden = true; $("bild-leer").hidden = false; $("btn-bild-png").disabled = true;
-    $("btn-bild-analyse").hidden = true;
-  }
-  if (z.onepager_version && z.onepager_version !== bildVersion) {
-    bildVersion = z.onepager_version; ansicht = "bild"; // neues Live-Bild wird gezeigt
-    const img = $("live-bild");
-    img.onload = () => { img.hidden = false; $("bild-leer").hidden = true; $("btn-bild-png").disabled = false; };
-    img.src = `${z.onepager_format === "png" ? "/api/onepager.png" : "/api/onepager.svg"}?v=${bildVersion}`;
-    $("btn-bild-analyse").hidden = false;
-  }
-  // Recherche-Folie und Überblick: neue werden sofort gezeigt; Umschalter, sobald es mehr als eine Ansicht gibt
-  if (z.folie && z.folie_version !== folieVersion) { folieVersion = z.folie_version; folieBauen(z.folie); ansicht = "folie"; }
-  if ((z.ueberblick_version ?? 0) !== ueberblickVersion) {
-    ueberblickVersion = z.ueberblick_version ?? 0;
-    if (z.ueberblick) { ueberblickBauen(z.ueberblick); ansicht = "ueberblick"; } else $("ueberblick").replaceChildren();
-  }
-  const basis = basisStufe(z);
-  if (basis && ansicht === "bild") ansicht = "ueberblick"; // Basis: kein Live-Bild, der Überblick steht an seiner Stelle
-  if (ansicht === "folie" && !z.folie) ansicht = basis ? "ueberblick" : "bild";
-  if (ansicht === "ueberblick" && !z.ueberblick && !basis) ansicht = "bild";
-  const tabs = { bild: !basis, ueberblick: basis || !!z.ueberblick, folie: !!z.folie };
-  const mehrere = Object.values(tabs).filter(Boolean).length > 1;
-  $("ansicht-wahl").hidden = !mehrere;
-  $("bild-titel").hidden = mehrere;
-  $("bild-titel").firstChild.textContent = basis ? "Überblick " : "Live-Bild ";
-  for (const [art, da] of Object.entries(tabs)) {
-    $(`tab-${art}`).hidden = !da; $(`tab-${art}`).classList.toggle("aktiv", ansicht === art);
-  }
-  $("folie").hidden = ansicht !== "folie";
-  $("ueberblick").hidden = !(ansicht === "ueberblick" && z.ueberblick);
-  $("ueberblick-arbeitet").hidden = !(z.ueberblick_laeuft && ansicht !== "folie" && (basis || ansicht === "ueberblick"));
-  $("live-bild").style.visibility = ansicht === "bild" ? "" : "hidden";
-  const leer = (ansicht === "bild" && !bildVersion) || (ansicht === "ueberblick" && !z.ueberblick);
-  $("bild-leer").hidden = !leer;
-  $("btn-folie").hidden = !z.recherche_da;
-  $("btn-folie").disabled = !!z.folie_laeuft;
-  $("folie-arbeitet").hidden = !z.folie_laeuft;
-  $("bild-arbeitet").hidden = !z.onepager_laeuft;
-  if (leer) platzhalterRendern(z);
-  // Knopfdruck: das Transkript entsteht erst beim Knopf – zeichnen geht, sobald jemand gesprochen hat
-  $("btn-bild").disabled = !!z.onepager_laeuft || !!z.ueberblick_laeuft
-    || (knopfdruck(z) ? !z.hoeren || !!z.knopf?.laeuft : !z.segmente.length);
-  $("btn-bild").dataset.tip = basis ? "Überblick jetzt neu schreiben (wenige Sekunden)" : "Bild jetzt neu zeichnen (ca. 1–2 min)";
-  $("btn-bild-png").hidden = basis;
-  if (basis) $("btn-bild-analyse").hidden = true;
-  let status = z.onepager_stand != null ? `· Stand ${mmss(z.onepager_stand)}` : "";
-  if (z.onepager_fokus) status += ` · Fokus: ${z.onepager_fokus}`;
-  if (basis) status = z.ueberblick ? `· Stand ${z.ueberblick.laufzeit}` : "";
-  $("bild-status").textContent = z.onepager_fehler ? `· ${z.onepager_fehler}` : status;
-}
-
-// Platzhalter vor dem ersten Bild: einladend statt leer – zeigt, dass das Bild kommt
-const SPRUECHE = [
-  "Legt los – Nestor hört zu und zeichnet mit.",
-  "Ihr redet, Nestor skizziert.",
-  "Jeder Gedanke zählt – hier entsteht euer Meeting-Bild.",
-  "Gute Gespräche ergeben gute Bilder. Eures entsteht gerade.",
-];
-function platzhalterRendern(z) {
-  const knopf = knopfdruck(z);
-  document.querySelectorAll(".bl-tipp, .bl-kann").forEach((e) => { e.hidden = knopf; }); // Ansprache gibt es dort nicht
-  if (basisStufe(z) || ansicht === "ueberblick") { // Überblick als Text: kein Bild, das gezeichnet wird
-    $("bild-spruch").textContent = z.ueberblick_laeuft ? "Nestor schreibt euren Überblick …"
-      : "Hier erscheint euer Überblick: Entschiedenes, Offenes, Aufgaben.";
-    const takt = knopf ? 0 : (z.onepager_minuten ?? 0) * 60;
-    $("bild-weg").style.width = `${Math.round((takt ? Math.min(1, z.zeit / takt) : 0) * 100)}%`;
-    $("bild-weg").parentElement.hidden = !takt;
-    $("bild-wann").textContent = knopf ? "Knopf „Überblick“ oben drücken – Nestor transkribiert dann und fasst zusammen."
-      : "Knopf „Überblick“ oben oder „Nestor, zeig uns die Übersicht.“"
-        + (takt ? ` Sonst alle ${Math.round(takt / 60)} Minuten von selbst.` : "");
-    return;
-  }
-  const spruch = knopf ? "Das Bild entsteht auf Knopfdruck."
-    : !z.segmente.length ? SPRUECHE[0] : SPRUECHE[Math.floor(z.zeit / 60) % SPRUECHE.length];
-  $("bild-spruch").textContent = z.onepager_laeuft ? "Nestor zeichnet euer erstes Bild …" : spruch;
-  const takt = knopf ? 0 : (z.onepager_minuten ?? 0) * 60; // kein Bild im Takt
-  const weg = takt ? Math.min(1, z.zeit / takt) : 0;
-  $("bild-weg").style.width = `${z.onepager_laeuft ? 100 : Math.round(weg * 100)}%`;
-  $("bild-weg").parentElement.hidden = !takt;
-  const rest = Math.ceil((takt - z.zeit) / 60);
-  $("bild-wann").textContent = z.onepager_laeuft ? "gleich da – ca. 1 Minute"
-    : knopf ? "Knopf „Bild“ oben drücken – Nestor transkribiert dann und zeichnet."
-    : !takt ? "Das Bild entsteht, sobald ihr es euch wünscht."
-    : !z.segmente.length ? `Das erste Bild kommt nach ${Math.round(takt / 60)} Minuten Gespräch.`
-    : rest > 1 ? `Das erste Bild kommt in ca. ${rest} Minuten.` : "Das erste Bild kommt gleich.";
-}
-
-// ---------- Knöpfe (Ticket #6; seit #13 in beiden Stufen gleich) ----------
-// Ein Knopf antwortet sofort; Fortschritt kommt als {typ: "knopf"} über die WebSocket, das Ergebnis als Karte
-// (Wo stehen wir, Regeln, Protokoll, Frage) oder im Bildbereich (Überblick, Live-Bild). Mit „Nur auf Knopfdruck“
-// (Basis) transkribiert der Knopf vorher den offenen Ton, und es gibt das Verwerfen.
-const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
-  protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage" };
-const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
-  bild: "Bild", frage: "Nestor fragen" };
-Object.assign(KARTEN_ART, { stand: "Wo stehen wir?", regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick",
-  zusammenfassung: "Zusammenfassung" });
-Object.assign(KARTEN_ICON, { stand: "zeit", regeln: "ton", protokoll: "ergebnisse", ueberblick: "bild",
-  zusammenfassung: "ergebnisse" });
 const knopfdruck = (z) => z?.modus === "knopfdruck";
+
+// ---------- Knöpfe (Ticket #6; seit #13 in beiden Stufen gleich; seit #27 jeder Knopf ein Antwortbogen) ----------
+// Ein Knopf startet einen Bogen: Bestätigung, Karte im Verlauf, ein bis zwei Sätze. Während ein Bogen läuft, sind die
+// Knöpfe gesperrt. Mit „Nur auf Knopfdruck“ (Basis) transkribiert der Knopf vorher den offenen Ton, die Antwort kommt
+// als Karte ohne Stimme, und es gibt das Verwerfen.
+const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
+  protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage",
+  zusammenfassen: "/api/knopf/zusammenfassen", fehlt: "/api/knopf/fehlt" };
+const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
+  bild: "Bild", frage: "Nestor fragen", zusammenfassen: "Zusammenfassen", fehlt: "Was fehlt?" };
 function knopfDruecken(art, daten = {}) {
-  if (zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
+  if (knopfdruck(zustand) && zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
+  if (!knopfdruck(zustand) && zustand?.assistent) zustand.assistent = { ...zustand.assistent, bogen: { art, name: KNOPF_NAME[art] } };
   knopfRendern(zustand);
   return api(KNOPF_PFAD[art], daten).then(() => true, () => false); // Fehler zeigt api() schon an
 }
@@ -384,6 +229,7 @@ $("knopf-frage-form").onsubmit = (e) => {
   e.preventDefault();
   const text = $("knopf-frage").value.trim();
   if (!text) return;
+  stimme.bereit();
   knopfDruecken("frage", { text }).then((ok) => { if (ok) $("knopf-frage").value = ""; });
 };
 $("knopf-verwerfen-5").onclick = () => api("/api/knopf/verwerfen", { minuten: 5 });
@@ -410,15 +256,26 @@ function knopfRendern(z) {
   if (!an) return;
   const k = z.knopf ?? {};
   const nurKnopf = knopfdruck(z);
+  const basis = basisStufe(z);
+  const a = z.assistent ?? {};
   $("knopf-offen").hidden = !nurKnopf; $("knopf-verwerfen").hidden = !nurKnopf;
   $("knopf-offen").textContent = knopfOffenText(k);
   $("knopf-offen").dataset.tip = k.aeusserungen ? `${k.aeusserungen} Äußerungen, ${mmss(k.sprache_sekunden)} min Sprache – werden beim nächsten Knopf transkribiert` : "";
-  const laeuft = !!k.laeuft;
+  // Basis: kein Bildmodell (der Überblick steht für das Bild); Regeln-Knopf nur, wenn Regeln gewählt sind (Ticket #27)
+  document.querySelector('#knopf-leiste [data-knopf="bild"]').hidden = basis;
+  document.querySelector('#knopf-leiste [data-knopf="regeln"]').hidden = !(z.regel_ids ?? []).length;
+  // Nur auf Knopfdruck kennt nur das Protokoll – Zusammenfassen und Was fehlt sind dort dasselbe
+  document.querySelector('#knopf-leiste [data-knopf="zusammenfassen"]').hidden = nurKnopf;
+  document.querySelector('#knopf-leiste [data-knopf="fehlt"]').hidden = nurKnopf;
+  const bogen = !nurKnopf && a.bogen;
+  const laeuft = nurKnopf ? !!k.laeuft : !!bogen;
   document.querySelectorAll("#knopf-leiste .knopf-art, #knopf-fragen").forEach((b) => {
-    b.disabled = laeuft; b.classList.toggle("knopf-aktiv", b.dataset.knopf === k.laeuft);
+    b.disabled = laeuft; b.classList.toggle("knopf-aktiv", (nurKnopf ? k.laeuft : bogen?.art) === b.dataset.knopf);
   });
-  $("knopf-fortschritt").hidden = !laeuft;
-  if (laeuft) {
+  $("knopf-bogen").hidden = !bogen;
+  $("knopf-bogen").textContent = bogen ? `Nestor ist bei „${bogen.name}“ …` : "";
+  $("knopf-fortschritt").hidden = !(nurKnopf && k.laeuft);
+  if (nurKnopf && k.laeuft) {
     const transkribiert = k.schritt === "transkribiere";
     $("knopf-balken").style.width = `${Math.round((transkribiert ? (k.anteil ?? 0) : 1) * 100)}%`;
     $("knopf-balken").parentElement.classList.toggle("denkt", !transkribiert);
@@ -427,17 +284,84 @@ function knopfRendern(z) {
   }
   $("knopf-fehler").hidden = laeuft || !k.fehler;
   $("knopf-fehler").textContent = k.fehler ?? "";
+  // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
+  const tasteDa = basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
+  $("btn-taste").hidden = !tasteDa;
+  if (!taste.aktiv) $("taste-text").textContent = tasteMeldung ?? "Sprechtaste – halten (oder Leertaste)";
 }
 
-// ---------- Nestor-Feld (Ticket #21) ----------
-// Antworten stehen immer an derselben Stelle und in derselben Form: im mittleren Feld. Was Nestor sagt, läuft mit,
-// sobald er spricht (Realtime: Transkript-Stücke, Text-Weg/Basis: der Satz vor seinem Ton) – im Takt der Wiedergabe:
-// Jedes Textstück erscheint, wenn der Ton, der vor ihm ankam, abgespielt ist. Danach die Stichpunkte der Karte.
-// Dazu das Arbeitssymbol (angesprochen / denkt / recherchiert) und die Warteschlange der Aufträge mit ✕.
-const feld = { frage: "", text: "", wartend: [], karte: null, zu: true, fest: false, seit: 0, schaetzEnde: 0 };
-let karteGesehen = null;    // höchste Karten-id, die schon im Feld stand
+// ---------- Sprechtaste (Funkgerät, Ticket #27) ----------
+// Halten, sprechen, loslassen: der Ton der Frage geht als WAV an /api/frage/audio; drücken unterbricht Nestor.
+const taste = { aktiv: false };
+let tasteMeldung = null;
+async function tasteAn(e) {
+  e?.preventDefault?.();
+  if (taste.aktiv || $("btn-taste").hidden) return;
+  taste.aktiv = true;
+  stimme.bereit(); stimme.stopp(); nestorStopp();
+  $("btn-taste").classList.add("haelt"); $("taste-text").textContent = "Ich höre … loslassen zum Senden";
+  try {
+    await halten.start();
+    await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
+  } catch (err) {
+    taste.aktiv = false; halten.teile = null; $("btn-taste").classList.remove("haelt");
+    tasteMeldung = `Mikrofon nicht verfügbar: ${err.message ?? err}`; knopfRendern(zustand);
+  }
+}
+async function tasteAus() {
+  if (!taste.aktiv) return;
+  taste.aktiv = false;
+  $("btn-taste").classList.remove("haelt");
+  const wav = await halten.ende();
+  if (wav.byteLength < 44 + RATE * 2 * 0.5) { // unter einer halben Sekunde: versehentlich getippt
+    fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: false }) });
+    tasteMeldung = "Zum Fragen halten, sprechen, dann loslassen.";
+  } else {
+    tasteMeldung = "Nestor hört die Frage …";
+    knopfRendern(zustand);
+    try {
+      const r = await fetch("/api/frage/audio", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+      const d = await r.json().catch(() => ({}));
+      tasteMeldung = !r.ok ? (d.detail ?? `Fehler ${r.status}`) : !d.ok ? d.grund : `„${d.frage}“`;
+    } catch { tasteMeldung = "Server nicht erreichbar."; }
+  }
+  knopfRendern(zustand);
+  setTimeout(() => { tasteMeldung = null; if (zustand) knopfRendern(zustand); }, 6000);
+}
+$("btn-taste").addEventListener("pointerdown", tasteAn);
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-taste").addEventListener(ev, tasteAus);
+$("btn-taste").addEventListener("contextmenu", (e) => e.preventDefault());
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.repeat || e.target.closest?.("input, textarea, select, button")) return;
+  if ($("btn-taste").hidden) return;
+  e.preventDefault(); tasteAn();
+});
+document.addEventListener("keyup", (e) => { if (e.code === "Space" && taste.aktiv) { e.preventDefault(); tasteAus(); } });
+
+// ---------- Arbeitsring: lange Aufträge (Ticket #27) ----------
+const AUFTRAG_ZUSTAND = { laeuft: "läuft", wartet: "wartet" };
+$("arbeitsring").onclick = () => { $("arbeit-liste").hidden = !$("arbeit-liste").hidden; };
+function arbeitRendern(z) {
+  const auftraege = z.assistent?.auftraege ?? [];
+  const laeuft = auftraege.filter((x) => x.zustand === "laeuft").length;
+  const wartet = auftraege.length - laeuft;
+  $("arbeitsring").hidden = !auftraege.length;
+  if (!auftraege.length) $("arbeit-liste").hidden = true;
+  $("arbeit-text").textContent = [laeuft ? `${laeuft} läuft` : "", wartet ? `${wartet} wartet` : ""].filter(Boolean).join(" · ");
+  $("arbeitsring").dataset.tip = "Lange Aufträge – antippen zeigt sie, ✕ bricht ab";
+  $("arbeit-liste").replaceChildren(...auftraege.map((x) => el("li", { class: x.zustand },
+    el("span", { class: "nf-chip" }, AUFTRAG_ZUSTAND[x.zustand] ?? x.zustand),
+    el("strong", {}, x.name), el("span", { class: "nf-auftrag-titel" }, x.titel ? `„${x.titel}“` : ""),
+    el("button", { class: "icon klein", "data-tip": `${x.name} abbrechen`, "aria-label": `${x.name} abbrechen`,
+      onclick: () => api("/api/assistent/abbrechen", { id: x.id }) }, icon("zu")))));
+}
+
+// ---------- Nestor-Zeile (Ticket #21/#27) ----------
+// Über dem Verlauf: Nestors Zustand mit dem N – Ring dreht sich, solange er arbeitet; in Premium nach einem Bogen der
+// Ring „Ich höre zu“ (Nachfrage ohne Namen, läuft in 15 s ab). Darunter läuft mit, was er gerade sagt – im Takt der
+// Wiedergabe: Jedes Textstück erscheint, wenn der Ton, der vor ihm ankam, abgespielt ist.
+const feld = { text: "", wartend: [], seit: 0, schaetzEnde: 0 };
 const jetztS = () => performance.now() / 1000;
-// Wann ist dieses Textstück zu hören? Spielt dieser Tab den Ton, nach dessen Zeitachse; sonst geschätzt (~15 Zeichen/s)
 function feldZeitpunkt(text) {
   const c = stimme.ctx;
   if (c && lautsprecher && c.state === "running") return jetztS() + Math.max(0, stimme.naechste - c.currentTime);
@@ -455,182 +379,50 @@ function feldTakt() {
   let geaendert = false;
   while (feld.wartend.length && feld.wartend[0].t <= jetzt + 0.02) {
     const d = feld.wartend.shift();
-    if (d.neu) Object.assign(feld, { frage: d.frage ?? "", text: "", karte: null, zu: false, fest: false });
-    feld.text += d.delta || !feld.text ? d.text : ` ${d.text}`;
+    if (d.neu) feld.text = "";
+    // ein Stück eines Realtime-Transkripts (delta) direkt anhängen, sonst – und nach einer Floskel – mit Leerzeichen
+    const direkt = d.delta && feld.letztesDelta;
+    feld.text += direkt || !feld.text ? d.text : ` ${d.text.trimStart()}`;
+    feld.letztesDelta = !!d.delta;
     feld.seit = jetzt; geaendert = true;
   }
-  if (geaendert) feldRendern();
+  if (geaendert && zustand) nestorZeileRendern(zustand);
 }
 setInterval(feldTakt, 80);
-function nestorStopp() { // Hineinreden oder „still“: was noch nicht zu hören war, erscheint auch nicht
+setInterval(() => { if (zustand) nestorZeileRendern(zustand); }, 500);
+function nestorStopp() { // Hineinreden, Sprechtaste oder „Stopp“: was noch nicht zu hören war, erscheint auch nicht
   feld.wartend = [];
   if (feld.text && !feld.text.endsWith("…")) feld.text += " …";
-  feldRendern();
+  if (zustand) nestorZeileRendern(zustand);
 }
 const spricht = () => feld.wartend.length > 0 || (!!stimme.ctx && stimme.naechste > stimme.ctx.currentTime + 0.05);
-function karteZeigen(k, automatisch) {
-  feld.karte = k; feld.zu = false; feld.fest = !automatisch; feld.seit = jetztS();
-  if (!automatisch || !feld.text) { feld.frage = k.frage && k.frage !== k.titel ? k.frage : ""; feld.text = ""; }
-  feldRendern();
-}
-function karteFuellen(k) {
-  $("karte-art").textContent = KARTEN_ART[k.art] ?? "Nestor";
-  $("karte-zeit").textContent = mmss(k.zeit);
-  $("karte-titel").textContent = k.titel;
-  $("karte-punkte").replaceChildren(...(k.punkte ?? []).map((p) => el("li", {}, p)));
-  const q = k.quellen ?? [];
-  $("karte-quellen").hidden = !q.length;
-  $("karte-quellen").replaceChildren(el("strong", {}, "Quellen"), ...q.map((x) => el("div", {},
-    el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.titel), " ", el("small", {}, x.seite))));
-  $("karte-folie").hidden = k.art !== "folie";
-  $("karte-protokoll").hidden = k.art !== "protokoll" || !zustand?.knopf?.protokoll;
-  $("karte-folie").onclick = () => { folieBauen(k.folie); ansicht = "folie"; feld.zu = true; if (zustand) bildRendern(zustand); feldRendern(); };
-}
-const ARBEITET = ["angesprochen", "denkt", "recherchiert"];
-const AUFTRAG_ZUSTAND = { laeuft: "läuft", wartet: "wartet" };
-function feldRendern() {
-  const z = zustand; if (!z) return;
+function nestorZeileRendern(z) {
   const a = z.assistent ?? {};
   const aktiv = z.laeuft || z.simulation || z.hoeren;
-  const auftraege = a.auftraege ?? [];
-  const arbeitet = !!a.aktiv && ARBEITET.includes(a.zustand);
-  const redet = spricht();
-  const frisch = feld.fest || redet || jetztS() - feld.seit < 60;  // automatisch Gezeigtes tritt nach 1 min zurück
-  const inhalt = !feld.zu && frisch && !!(feld.text || feld.karte);
-  const rueckfrage = rueckfrageRendern(z);  // Ticket #26: bleibt stehen, bis sie beantwortet ist
-  const zeigen = !!aktiv && (arbeitet || auftraege.length > 0 || inhalt || rueckfrage);
-  $("nestor-feld").hidden = !zeigen;
-  if (!zeigen) return;
-  const laeuft = auftraege.some((x) => x.zustand === "laeuft");
-  $("nestor-feld").className = `nestor-feld${arbeitet || laeuft ? " arbeitet" : ""}${redet ? " spricht" : ""}`;
   const name = a.name ?? "Nestor";
-  $("nf-zustand").textContent = arbeitet ? `${name} ${NESTOR_TEXT[a.zustand]}` : redet ? `${name} spricht`
-    : laeuft ? `${name} arbeitet …` : name;
-  $("nf-frage").textContent = inhalt && feld.frage ? `„${feld.frage}“` : "";
-  $("nf-frage").hidden = !$("nf-frage").textContent;
-  $("karte-zu").hidden = !inhalt;
-  // Warteschlange: läuft / wartet, jede Aufgabe per ✕ abbrechbar (oder „Nestor, lass die Recherche“)
-  $("nf-auftraege").hidden = !auftraege.length;
-  $("nf-auftraege").replaceChildren(...auftraege.map((x) => el("li", { class: x.zustand },
-    el("span", { class: "nf-chip" }, AUFTRAG_ZUSTAND[x.zustand] ?? x.zustand),
-    el("strong", {}, x.name), el("span", { class: "nf-auftrag-titel" }, x.titel ? `„${x.titel}“` : ""),
-    el("button", { class: "icon klein", "data-tip": `${x.name} abbrechen`, "aria-label": `${x.name} abbrechen`,
-      onclick: () => api("/api/assistent/abbrechen", { id: x.id }) }, icon("zu")))));
-  // Text, solange er läuft (oder keine Karte kommt); danach die Karte mit Stichpunkten an derselben Stelle
-  const karteStatt = inhalt && feld.karte && !redet;
-  $("nf-text").hidden = !inhalt || !feld.text || karteStatt;
-  $("nf-text").textContent = feld.text;
-  $("karte").hidden = !karteStatt;
-  $("karte-zeit").hidden = !karteStatt;
-  if (karteStatt) karteFuellen(feld.karte);
-}
-function kartenRendern(z) {
-  const karten = z.karten ?? [];
-  const neueste = karten.at(-1);
-  if (karteGesehen === null) { karteGesehen = neueste?.id ?? 0; return; } // beim Laden keine alten Karten aufpoppen
-  if (neueste && neueste.id > karteGesehen) {
-    karteGesehen = neueste.id;
-    // Folie und Überblick erscheinen schon groß im Bildbereich
-    if (!["folie", "ueberblick"].includes(neueste.art)) karteZeigen(neueste, true);
-  }
-  if (!karten.length && feld.karte) { feld.karte = null; feld.zu = true; } // neues Meeting
-}
-
-// ---------- Meeting-Artefakte (Ticket #26) ----------
-// Live erkannt (coach/artefakte.py), unauffällig in der linken Spalte: je Eintrag Typ, Inhalt, wer · bis; was fehlt,
-// steht rot dabei. Klick öffnet die Bearbeitung an Ort und Stelle – gespeichert gilt als bestätigt.
-const ART_ZEICHEN = { aufgabe: "☐", entscheidung: "✓", offen: "?", risiko: "!" };
-const ART_TYP = { aufgabe: "Aufgabe", entscheidung: "Entscheidung", offen: "Offener Punkt", risiko: "Risiko" };
-const ART_LUECKE = { was: "was genau?", wer: "wer?", bis: "bis wann?", status: "beschlossen?", reaktion: "Reaktion?" };
-let artEdit = null;  // id des Eintrags in Bearbeitung, "neu" für einen neuen
-function artFeld(name, wert, platzhalter) {
-  return el("input", { name, value: wert ?? "", placeholder: platzhalter, autocomplete: "off" });
-}
-function artFormular(a) {
-  const typ = el("select", { name: "typ" }, ...Object.entries(ART_TYP).map(([k, t]) =>
-    el("option", { value: k, ...(k === (a?.typ ?? "aufgabe") ? { selected: "" } : {}) }, t)));
-  const status = el("select", { name: "status" }, ...[["endgueltig", "beschlossen"], ["vorlaeufig", "vorläufig"],
-    ["vorschlag", "nur Vorschlag"]].map(([k, t]) => el("option", { value: k, ...(k === (a?.status ?? "endgueltig") ? { selected: "" } : {}) }, t)));
-  const f = el("form", { class: "art-form" }, typ, artFeld("was", a?.was, "Was?"),
-    el("div", { class: "art-zwei" }, artFeld("wer", a?.wer, "Wer?"), artFeld("bis", a?.bis, "Bis wann?")),
-    status, artFeld("reaktion", a?.reaktion, "Reaktion (vermeiden, verringern, in Kauf nehmen)"),
-    el("div", { class: "art-knoepfe" },
-      el("button", { class: "primaer klein", type: "submit" }, "Speichern"),
-      ...(a ? [el("button", { class: "klein", type: "button", onclick: async () => {
-        artEdit = null; await api("/api/artefakte/loeschen", { id: a.id }); } }, "Löschen")] : []),
-      el("button", { class: "klein leise", type: "button", onclick: () => { artEdit = null; artefakteRendern(zustand, true); } }, "Abbrechen")));
-  const sichtbar = () => {  // Status nur bei Entscheidungen, Reaktion nur bei Risiken
-    status.hidden = typ.value !== "entscheidung"; f.reaktion.hidden = typ.value !== "risiko";
-  };
-  typ.onchange = sichtbar; sichtbar();
-  f.onsubmit = async (e) => {
-    e.preventDefault();
-    const d = { typ: typ.value, was: f.was.value.trim(), wer: f.wer.value.trim(), bis: f.bis.value.trim() };
-    if (typ.value === "entscheidung") d.status = status.value;
-    if (typ.value === "risiko") d.reaktion = f.reaktion.value.trim();
-    if (!d.was) { f.was.focus(); return; }
-    artEdit = null;
-    await api(a ? "/api/artefakte/bearbeiten" : "/api/artefakte/neu", a ? { id: a.id, ...d } : d);
-  };
-  return f;
-}
-function artZeile(a) {
-  const luecken = a.luecken ?? [];
-  const meta = [];
-  if (a.typ !== "entscheidung" || a.wer) meta.push(a.wer && !luecken.includes("wer") ? el("span", {}, a.wer) : null);
-  if (a.bis) meta.push(el("span", {}, `bis ${a.bis}`));
-  if (a.typ === "entscheidung" && a.status === "vorlaeufig") meta.push(el("span", {}, "vorläufig"));
-  if (a.typ === "risiko" && a.reaktion) meta.push(el("span", {}, a.reaktion));
-  if (a.ausserhalb) meta.push(el("span", { class: "art-park" }, "Parkplatz"));
-  const fehlt = luecken.map((l) => el("span", { class: `luecke${a.abgelehnt ? " still" : ""}`,
-    "data-tip": a.abgelehnt ? "Die Runde wollte das offen lassen" : "Fehlt noch – klicken zum Eintragen" }, ART_LUECKE[l] ?? l));
-  const unsicher = a.konfidenz < 0.6 && !a.bestaetigt;
-  return el("li", { class: `art ${a.typ}${luecken.length ? " unvollstaendig" : ""}${unsicher ? " unsicher" : ""}${a.erledigt ? " erledigt" : ""}`,
-      tabindex: "0", "data-tip": `${ART_TYP[a.typ]} · ${a.zeit_text}${a.zitat ? ` · „${a.zitat}“` : ""}${unsicher ? " · unsicher erkannt" : ""}`,
-      onclick: () => { artEdit = a.id; artefakteRendern(zustand, true); },
-      onkeydown: (e) => { if (e.key === "Enter") { artEdit = a.id; artefakteRendern(zustand, true); } } },
-    el("span", { class: "art-zeichen", "aria-label": ART_TYP[a.typ] }, ART_ZEICHEN[a.typ]),
-    el("span", { class: "art-inhalt" }, el("span", { class: "art-was" }, a.was, ...(a.bestaetigt ? [el("span", { class: "art-ok", "data-tip": "von der Runde bestätigt" }, " ✓")] : [])),
-      el("span", { class: "art-meta" }, ...meta.filter(Boolean), ...fehlt)));
-}
-function artefakteRendern(z, erzwingen = false) {
-  const art = z.artefakte ?? { liste: [] };
-  const liste = art.liste ?? [];
-  $("artefakte-karte").hidden = !liste.length && artEdit === null;
-  $("art-zahl").textContent = liste.length ? `${liste.length}${art.luecken ? ` · ${art.luecken} Lücke${art.luecken > 1 ? "n" : ""}` : ""}` : "";
-  // Nicht neu zeichnen, während jemand tippt – sonst verschwindet die Eingabe beim nächsten Stand
-  if (!erzwingen && artEdit !== null && $("artefakte").contains(document.activeElement)) return;
-  const zeilen = liste.map((a) => (a.id === artEdit ? el("li", { class: "art bearbeiten" }, artFormular(a)) : artZeile(a)));
-  if (artEdit === "neu") zeilen.unshift(el("li", { class: "art bearbeiten" }, artFormular(null)));
-  if (artEdit !== null && artEdit !== "neu" && !liste.some((a) => a.id === artEdit)) artEdit = null;
-  $("artefakte").replaceChildren(...zeilen);
-  if (erzwingen) $("artefakte").querySelector(".art-form input[name=was]")?.focus();
-}
-$("art-neu").onclick = () => { artEdit = "neu"; if (zustand) artefakteRendern(zustand, true); };
-function artBearbeiten(id) {  // aus Nestors Rückfrage: den Eintrag in der linken Spalte öffnen
-  artEdit = id; if (!zustand) return;
-  artefakteRendern(zustand, true);
-  $("artefakte-karte").scrollIntoView({ behavior: "smooth", block: "center" });
-}
-// Rückfrage im Nestor-Feld: Fünf-Minuten-Frage (Ja/Nein) oder Nachfrage nach Lücken (Eintragen/Nicht nötig)
-function rueckfrageRendern(z) {
-  const r = z.artefakte?.rueckfrage;
-  $("nf-rueckfrage").hidden = !r;
-  if (!r) return false;
-  const fuenf = r.art === "fuenf_minuten";
-  $("nf-rueckfrage-art").textContent = fuenf ? "Gleich Schluss" : "Kurz nachgefragt";
-  $("nf-rueckfrage-text").textContent = fuenf ? r.text : "Was fehlt noch?";
-  const liste = (z.artefakte.liste ?? []).filter((a) => r.ids.includes(a.id));
-  $("nf-rueckfrage-liste").hidden = fuenf || !liste.length;
-  $("nf-rueckfrage-liste").replaceChildren(...liste.map((a) => el("li", {},
-    el("span", { class: "nf-rk-was" }, a.was, " ", ...(a.luecken ?? []).map((l) => el("span", { class: "luecke" }, ART_LUECKE[l] ?? l))),
-    el("button", { class: "klein", onclick: () => artBearbeiten(a.id) }, "Eintragen"),
-    el("button", { class: "klein leise", onclick: () => api("/api/artefakte/ablehnen", { id: a.id }) }, "Nicht nötig"))));
-  $("nf-rueckfrage-knoepfe").replaceChildren(...(fuenf
-    ? [el("button", { class: "primaer klein", onclick: () => api("/api/artefakte/antwort", { antwort: "ja" }) }, "Ja, zusammenfassen"),
-      el("button", { class: "klein", onclick: () => api("/api/artefakte/antwort", { antwort: "nein" }) }, "Nein, danke")]
-    : [el("button", { class: "klein", onclick: () => api("/api/artefakte/antwort", { antwort: "nein" }) }, "Später")]));
-  return true;
+  const redet = spricht();
+  const hoertNoch = a.hoert_bis ? a.hoert_bis - z.zeit : 0;
+  const arbeitet = !!a.bogen || ["angesprochen", "denkt", "recherchiert"].includes(a.zustand);
+  const zeile = $("nestor-zeile");
+  zeile.className = `nestor-zeile${arbeitet ? " arbeitet" : ""}${redet ? " spricht" : ""}${hoertNoch > 0 && !redet && !arbeitet ? " hoert" : ""}`
+    + `${a.taste ? " taste" : ""}${a.zustand === "pausiert" || !a.aktiv ? " aus" : ""}`;
+  zeile.style.setProperty("--rest", String(Math.max(0, Math.min(1, hoertNoch / 15))));
+  const basis = basisStufe(z);
+  let text;
+  if (!aktiv) text = name;
+  else if (!a.aktiv || knopfdruck(z)) text = `${name} · auf Knopfdruck`;
+  else if (a.zustand === "pausiert") text = `${name} hört nicht mit`;
+  else if (a.taste) text = "Ich höre – loslassen zum Senden";
+  else if (redet) text = `${name} spricht`;
+  else if (a.bogen) text = `Bin dran: ${a.bogen.name}`;
+  else if (arbeitet) text = `${name} ${NESTOR_TEXT[a.zustand] ?? "denkt nach …"}`;
+  else if (hoertNoch > 0) text = "Ich höre zu – fragt ruhig nach";
+  else if (a.zustand === "begruessung") text = `${name} begrüßt die Runde`;
+  else text = basis ? `${name} hört mit · Sprechtaste halten zum Fragen` : `${name} hört mit · „${name}, …“ zum Fragen`;
+  $("nz-zustand").textContent = text;
+  const frisch = redet || jetztS() - feld.seit < 8;
+  $("nz-gesagt").textContent = frisch ? feld.text : "";
+  $("nz-gesagt").hidden = !frisch || !feld.text;
 }
 
 // ---------- Darstellung ----------
@@ -696,30 +488,21 @@ function rendern() {
   const nestorDa = a?.aktiv && z.hoeren && !knopfdruck(z);
   knopfRendern(z);
   $("nestor").hidden = !nestorDa;
-  $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert";
+  $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert" || basisStufe(z); // Basis: Sprechtaste
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
   $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";
   if (nestorDa) {
     $("nestor").className = `nestor ${a.zustand}`;
     $("nestor-zustand").textContent = `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}`;
   }
-  // Hinweis-Band: neuester Hinweis, 45 s lang sichtbar
-  const h = z.hinweise.at(-1);
-  const zeigen = h && h.id !== hinweisWeg && z.zeit - h.zeit < 45 && aktiv;
-  $("hinweis-band").hidden = !zeigen;
-  if (zeigen) {
-    const rot = h.art === "ton" || h.stufe === "warnung";
-    $("hinweis-band").className = `hinweis-band${rot ? " rot" : ""}`;
-    $("hinweis-icon").replaceChildren(icon(HINWEIS_ICON[h.art] ?? "achtung"));
-    $("hinweis-text").textContent = h.text;
-  }
+  // Band (Ticket #27): Regel-Hinweise und stille Angebote, je mit höchstens einem Knopf
+  bandRendern(z, $("band"));
+  arbeitRendern(z);
 
   if (!vorbereitung) liveRendern(z);
   leisteRendern(z);
   kostenRendern(z);
   schluesselRendern(z);
-  kartenRendern(z);
-  feldRendern();
 }
 
 function liveRendern(z) {
@@ -753,18 +536,6 @@ function liveRendern(z) {
       ...(p.ergebnis?.ergebnis ? [el("span", { class: "punkt-ergebnis" }, p.ergebnis.ergebnis)] : [])),
     el("span", { class: "min" }, p.status === "offen" ? `${p.minuten} min` : `${mmss(p.genutzt)} / ${p.minuten}`))));
 
-  const v = z.vorschlag;
-  $("vorschlag").hidden = !v;
-  if (v) {
-    const vk = signal(z, "agenda_ohne"); // Agendawechsel ohne Ansage: automatisch erkannt, nicht angesagt
-    $("vorschlag").replaceChildren(
-      el("span", { "data-tip": vk?.stufe === "experimentell" ? vk.kurzsatz : "" },
-        `Weiter zu „${v.titel}“?`, ...(vk?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
-      el("div", { class: "knoepfe" },
-        el("button", { class: "klein primaer", onclick: () => api("/api/punkt", { index: v.punkt }) }, "Ja, weiter"),
-        el("button", { class: "klein", onclick: () => api("/api/vorschlag/verwerfen") }, "Nein")));
-  }
-
   // Regeln als Ampeln (Zeit steht nur links); kommen schon verlässlich-vorn sortiert aus regel_status
   // (Backend, einzige Quelle: coach/regeln.py). Räumlich getrennt wie die Kacheln in der Einrichtung
   // (Ticket #10): Beta-Ampeln stehen unter einer eigenen kleinen Überschrift.
@@ -779,6 +550,8 @@ function liveRendern(z) {
     ...regelStatus.filter((r) => r.stufe !== "experimentell").map(ampel),
     ...(beta.length ? [el("p", { class: "etikett ampel-beta-titel" }, "Beta"), ...beta.map(ampel)] : []));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
+  // Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte
+  $("regeln-karte").hidden = !regelStatus.length && !(z.regeln ?? []).length;
 
   // Redeanteile, ohne Bewertung
   const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);
@@ -790,8 +563,8 @@ function liveRendern(z) {
     el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
 
   dynamikRendern(z);
-  bildRendern(z);
-  artefakteRendern(z);
+  nestorZeileRendern(z);
+  verlaufRendern(z);
 }
 
 const KLIMA_HOEHE = { ruhig: 30, lebhaft: 65, hitzig: 100 };
@@ -831,15 +604,8 @@ function leisteRendern(z) {
   if (!leisteOffen) return;
   $("reiter-transkript").classList.toggle("aktiv", reiter === "transkript");
   $("reiter-hinweise").classList.toggle("aktiv", reiter === "hinweise");
-  $("reiter-nestor").classList.toggle("aktiv", reiter === "nestor");
   $("transkript").hidden = reiter !== "transkript";
   $("hinweise").hidden = reiter !== "hinweise";
-  $("nestor-verlauf").hidden = reiter !== "nestor";
-  const karten = z.karten ?? [];
-  $("nestor-verlauf").replaceChildren(...(karten.length ? [...karten].reverse().map((k) =>
-    el("li", { onclick: () => karteZeigen(k, false), title: "Karte wieder öffnen" }, icon(KARTEN_ICON[k.art] ?? "frage"),
-      el("strong", {}, k.titel), el("span", {}, `${mmss(k.zeit)} · ${KARTEN_ART[k.art] ?? "Nestor"}`)))
-    : [el("li", { class: "leer" }, el("span", {}, "Noch keine Karten – sie entstehen, wenn Nestor etwas erklärt oder recherchiert."))]));
   const tr = $("transkript");
   const unten = tr.scrollTop + tr.clientHeight >= tr.scrollHeight - 20;
   const zeilen = z.segmente.map((s) => el("li", {},
@@ -863,7 +629,6 @@ function einstellungenRendern(e) {
   $("e-assistent").checked = e.assistent;
   $("e-modus").value = e.modus;
   $("e-stimme").value = e.stimme;
-  $("e-bild").value = e.bild_minuten;
   $("e-monolog").value = e.monolog_sekunden;
   $("e-bild-anbieter").value = e.bild_anbieter;
   $("e-live-art").value = e.live_art;
@@ -910,11 +675,9 @@ function verbinden() {
   iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-mehr", "mehr");
   // btn-handy/btn-einstellungen stecken jetzt im „Mehr“-Menü mit sichtbarem Label (Ticket #17) – Icon davor, Label bleibt stehen
   $("btn-einstellungen").prepend(icon("einstellungen")); $("btn-handy").prepend(icon("handy"));
-  iconSetzen("btn-bild", "neu"); iconSetzen("btn-bild-png", "speichern"); iconSetzen("btn-bild-analyse", "datei");
-  iconSetzen("kosten-icon", "muenze"); iconSetzen("btn-folie", "folie");
-  document.querySelectorAll(".bl-kann li").forEach((li) => li.prepend(icon(li.dataset.icon)));
-  iconSetzen("hinweis-zu", "zu"); iconSetzen("leiste-zu", "zu"); iconSetzen("karte-zu", "zu");
-  iconSetzen("art-neu", "plus");
+  iconSetzen("kosten-icon", "muenze"); iconSetzen("leiste-zu", "zu");
+  document.querySelector("#btn-taste .i").replaceChildren(icon("mikro"));
+  verlaufVerdrahten({ buehne: $("vl-buehne"), zaehler: $("vl-zaehler"), zurueck: $("vl-zurueck"), vor: $("vl-vor"), neu: $("vl-neu") });
   $("f-titel").value = "Testmeeting";
   agendaPunkte = [
     { titel: "Ziel und Ablauf klären", ziel: "Gemeinsames Verständnis, worüber heute entschieden wird", minuten: 2 },

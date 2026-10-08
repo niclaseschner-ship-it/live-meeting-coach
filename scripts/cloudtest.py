@@ -645,6 +645,7 @@ async def fertig_und_neues_meeting(seite: Page, url: str, cloud: bool, bericht: 
     Meeting-Lauf dafür nötig: `coach/api_abschluss.py` setzt bei "Fertig" zurück auf ein leeres Meeting
     (`coach.einrichten({})`) und löscht in der Cloud das Meeting-Cookie - beides lässt sich ohne zehn weitere
     Minuten Mikrofon-Mitschnitt prüfen, indem man die Seite einfach neu lädt."""
+    vorher = {c["name"]: c["value"] for c in await seite.context.cookies()}
     await seite.locator("#btn-fertig").click()
     zurueck = await warten_auf(seite, "() => location.pathname === '/'", 15.0)
     if not zurueck:
@@ -654,10 +655,15 @@ async def fertig_und_neues_meeting(seite: Page, url: str, cloud: bool, bericht: 
     bericht.pruefen("„Fertig“ führt zurück zur Startseite", "ok")
 
     if cloud:
-        cookies = await seite.context.cookies()
-        noch_da = any(c["name"] == _MEETING_COOKIE for c in cookies)
+        # Ticket #27: Die Startseite „/“ bekommt vom Worker sofort ein NEUES Meeting-Cookie (neues Meeting). Geprüft
+        # wird deshalb, dass das alte Cookie weg ist – nicht, dass gar keins mehr da ist (der frühere Befund
+        # „noch gesetzt“ im Cloudlauf 08.10. war das neue Cookie).
+        alt = vorher.get(_MEETING_COOKIE)
+        jetzt_wert = {c["name"]: c["value"] for c in await seite.context.cookies()}.get(_MEETING_COOKIE)
+        noch_da = alt is not None and jetzt_wert == alt
         bericht.pruefen("Meeting-Cookie nach „Fertig“ entfernt (Cloud)", "fehlt" if noch_da else "ok",
-                        f"Cookie „{_MEETING_COOKIE}“ " + ("noch gesetzt" if noch_da else "weg"))
+                        f"Cookie „{_MEETING_COOKIE}“ " + ("noch dasselbe" if noch_da else
+                                                          "neu (neues Meeting)" if jetzt_wert else "weg"))
 
     # "Ein neuer Aufruf bekommt ein neues Meeting": erneut auf die Seite gehen (kein Meeting starten, keine
     # KI-Kosten) und prüfen, dass der Server-Zustand leer ist statt das gerade beendete Meeting zu zeigen.
@@ -1115,8 +1121,12 @@ def takt_auswerten(messwerte: dict, frames: list[dict]) -> tuple[list[dict], dic
     zustaende = zustaende_aus_frames(frames)
     _, versatz = meeting_plan(messwerte, zustaende)
     offline = bool(zustaende) and bool((zustaende[-1].get("schluessel") or {}).get("offline"))
-    return takt.takt_pruefpunkte(t, zustaende, stimme_platzieren(frames), nachrichten_aus_frames(frames, "stimme"),
-                                 versatz, offline, takt.nestor_texte(frames))
+    punkte, kennzahlen = takt.takt_pruefpunkte(t, zustaende, stimme_platzieren(frames),
+                                               nachrichten_aus_frames(frames, "stimme"), versatz, offline,
+                                               takt.nestor_texte(frames))
+    if t.get("bedienung"):  # Ticket #27: jeder Druck mit Nestors Reaktion (bewertung.md „Bedienung“, HTML-Zeitstrahl)
+        kennzahlen["bedienung"] = takt.bedienung_auswerten(t["bedienung"], frames, versatz)
+    return punkte, kennzahlen
 
 
 def pruefliste_bauen(referenz_roh: dict, verlauf: list[dict], spur: "WsSpur", bericht: Bericht,
@@ -1205,7 +1215,8 @@ async def abwechselnd_aufzeichnen(seite: Page, spur: WsSpur, pcm, referenz: dict
     abschnitte = takt.abschnitte_bauen(referenz, pcm, args.bis, ohne_warten=args.nur_knopfdruck)
     bericht.notieren(f"Takt: {len(abschnitte)} Abschnitte, gewartet wird nach "
                      f"{', '.join(a['warten']['id'] for a in abschnitte if a.get('warten')) or '—'}")
-    regie = takt.Regie(seite, spur, pcm, abschnitte, lauf_start, bericht.notieren, referenz)
+    regie = takt.Regie(seite, spur, pcm, abschnitte, lauf_start, bericht.notieren, referenz, args.stufe,
+                       args.nur_knopfdruck)
     aufgabe = asyncio.ensure_future(regie.lauf())
     try:
         return await aufzeichnen(seite, referenz, args.nur_knopfdruck, bericht, meeting_start, regie)

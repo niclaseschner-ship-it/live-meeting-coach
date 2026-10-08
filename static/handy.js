@@ -4,10 +4,9 @@
 // Listen wie am Dashboard, für den Daumen. Lehren aus Teachbuddy/xbuddy: Wake Lock nach jedem Verdecken neu,
 // AudioContext immer wieder aufwecken, ein verlorenes Mikrofon sichtbar melden statt es für Stille zu halten.
 
-let reiter = "hinweise";
+let reiter = "transkript";
 let mikroGewollt = false;   // der Mensch will, dass dieses Handy zuhört – bei Abriss neu verbinden
 let laufzeit = null;        // ms Hin und zurück zum Laptop
-let karteGesehen = null;
 let wachSperre = null;
 let wachStand = "";         // "an" | "fehlt" | "aus"
 
@@ -37,7 +36,7 @@ function verbinden() {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return lautsprecher && stimme.abspielen(d.pcm);
     if (d.typ === "stimme_stopp") return stimme.stopp();
-    if (d.typ === "nestor_text") return; // Nestors Text läuft im Dashboard mit (Ticket #21), nicht am Handy
+    if (d.typ === "nestor_text") return handyText(d); // was Nestor gerade sagt – kurz unter der Sprechtaste
     if (d.typ === "pong") { laufzeit = Math.round(performance.now() - d.t); return chipsRendern(); }
     zustand = d; rendern();
   };
@@ -101,8 +100,9 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 
 // ---------- Knöpfe ----------
 // nur das zuhörende Handy übernimmt die Stimme – ein zweites Handy als reine Fernbedienung nimmt sie nicht weg
-// „Nestor fragen“ halten (Ticket #13): halten, fragen, loslassen → Antwort gesprochen und als Karte. Mit „Nur auf
-// Knopfdruck“ kommt die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf.
+// Sprechtaste (Ticket #13/#27): halten, fragen, loslassen → ein Antwortbogen wie bei „Nestor, …“; drücken unterbricht
+// Nestor. In Basis der einzige Weg (Funkgerät), in Premium die Alternative zum Namen. Mit „Nur auf Knopfdruck“ kommt
+// die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf.
 let haelt = false;
 async function haltenAn(e) {
   e.preventDefault();
@@ -110,6 +110,7 @@ async function haltenAn(e) {
   haelt = true;
   $("btn-fragen").classList.add("haelt"); $("fragen-text").textContent = "Ich höre … loslassen zum Senden";
   if (mikro.laeuft()) stimme.bereit();
+  stimme.stopp(); // die Taste unterbricht Nestor
   try {
     await halten.start();
     await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
@@ -119,7 +120,7 @@ async function haltenAn(e) {
   }
 }
 function haltenText() {
-  $("btn-fragen").classList.remove("haelt"); $("fragen-text").textContent = "Nestor fragen – halten und sprechen";
+  $("btn-fragen").classList.remove("haelt"); $("fragen-text").textContent = "Sprechtaste – halten und sprechen";
 }
 async function haltenAus() {
   if (!haelt) return;
@@ -142,9 +143,7 @@ async function haltenAus() {
 $("btn-fragen").addEventListener("pointerdown", haltenAn);
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-fragen").addEventListener(ev, haltenAus);
 $("btn-fragen").addEventListener("contextmenu", (e) => e.preventDefault());
-const HANDY_KNOPF = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
-  protokoll: "/api/knopf/protokoll" };
-document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = () => api(HANDY_KNOPF[b.dataset.knopf]); });
+document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = () => { stimme.bereit(); api(`/api/knopf/${b.dataset.knopf}`); }; });
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-ton-hier").onclick = () => stimme.bereit();
@@ -158,9 +157,16 @@ $("btn-stopp").onclick = async () => {
   await mikroStoppen();
   await api("/api/stopp");
 };
-for (const r of ["hinweise", "nestor", "transkript"]) $(`r-${r}`).onclick = () => { reiter = r; rendern(); };
-$("karte-zu").onclick = () => { $("karte").hidden = true; };
-$("karte").onclick = (e) => { if (e.target === $("karte")) $("karte").hidden = true; };
+for (const r of ["hinweise", "transkript"]) $(`r-${r}`).onclick = () => { reiter = r; rendern(); };
+
+// Was Nestor gerade sagt (nestor_text), kurz unter der Sprechtaste
+let gesagt = { text: "", seit: 0 };
+function handyText(d) {
+  gesagt.text = d.neu ? d.text : gesagt.text + (d.delta ? d.text : ` ${d.text}`);
+  gesagt.seit = Date.now();
+  $("gesagt").hidden = false; $("gesagt").textContent = gesagt.text;
+}
+setInterval(() => { if (!$("gesagt").hidden && Date.now() - gesagt.seit > 12000) $("gesagt").hidden = true; }, 1000);
 
 // ---------- Installieren ----------
 let installieren = null;
@@ -181,16 +187,6 @@ function chipsRendern() {
   $("laufzeit").textContent = laufzeit === null ? "–" : `${laufzeit} ms`;
   $("laufzeit").className = `chip ${laufzeit === null ? "" : laufzeit < 80 ? "gut" : laufzeit < 250 ? "warn" : "schlecht"}`;
   $("laufzeit").title = "Laufzeit zum Laptop, hin und zurück";
-}
-
-function karteOeffnen(k) {
-  $("karte-art").textContent = `${KARTEN_ART[k.art] ?? "Nestor"} · ${mmss(k.zeit)}`;
-  $("karte-titel").textContent = k.titel;
-  $("karte-frage").textContent = k.frage && k.frage !== k.titel ? `„${k.frage}“` : "";
-  $("karte-punkte").replaceChildren(...(k.punkte ?? []).map((p) => el("li", {}, p)));
-  $("karte-quellen").replaceChildren(...(k.quellen ?? []).map((q) =>
-    el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel)));
-  $("karte").hidden = false;
 }
 
 function rendern() {
@@ -216,15 +212,8 @@ function rendern() {
   $("warnung").hidden = !warnung; $("warnung").textContent = warnung ?? "";
   $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
 
-  // Hinweis
-  const h = z.hinweise.at(-1);
-  const zeigen = h && aktiv && z.zeit - h.zeit < 45;
-  $("hinweis").hidden = !zeigen;
-  if (zeigen) {
-    $("hinweis").className = `h-hinweis${h.art === "ton" || h.stufe === "warnung" ? " rot" : ""}`;
-    $("hinweis-icon").replaceChildren(icon(HINWEIS_ICON[h.art] ?? "achtung"));
-    $("hinweis-text").textContent = h.text;
-  }
+  // Band (Ticket #27)
+  bandRendern(z, $("band"));
 
   // Nestor
   const a = z.assistent;
@@ -235,14 +224,17 @@ function rendern() {
   const nurKnopf = z.modus === "knopfdruck";
   const fragenDa = z.hoeren && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
   $("btn-fragen").disabled = !fragenDa && !haelt;
-  document.querySelectorAll(".h-knopf").forEach((b) => { b.disabled = !z.hoeren || !!z.knopf?.laeuft; });
-  if (z.knopf?.laeuft) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor arbeitet …"; }
+  const bogen = !nurKnopf && a?.bogen;
+  document.querySelectorAll(".h-knopf").forEach((b) => {
+    b.disabled = !z.hoeren || !!z.knopf?.laeuft || !!bogen;
+    if (b.dataset.knopf === "bild") b.hidden = z.stufe === "basis"; // Basis: kein Bildmodell
+    if (["zusammenfassen", "fehlt"].includes(b.dataset.knopf)) b.hidden = nurKnopf;
+  });
+  if (bogen) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = `Nestor ist bei „${bogen.name}“ …`; }
+  else if (z.knopf?.laeuft) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor arbeitet …"; }
   else if (z.knopf?.fehler) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = z.knopf.fehler; }
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
   $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";
-  const l = a?.letzte;
-  const frisch = aktiv && l && (z.zeit - l.zeit < 25 || ["spricht", "gespraech"].includes(a.zustand));
-  $("antwort").hidden = !frisch; if (frisch) $("antwort").textContent = l.antwort;
 
   // Mikrofon
   const hier = mikro.laeuft();
@@ -261,16 +253,12 @@ function rendern() {
   $("meeting-text").textContent = aktiv ? "" : beendet ? "Meeting beendet – Zusammenfassung am Laptop. Neues Meeting dort einrichten."
     : "Agenda und Personen am Laptop einrichten; starten geht auch hier.";
 
-  // Verlauf
-  for (const r of ["hinweise", "nestor", "transkript"]) { $(`r-${r}`).classList.toggle("aktiv", reiter === r); $(`l-${r}`).hidden = reiter !== r; }
+  // Verlauf (Ticket #27): dieselben Karten wie im Dashboard, wischen zum Blättern
+  verlaufRendern(z);
+  for (const r of ["hinweise", "transkript"]) { $(`r-${r}`).classList.toggle("aktiv", reiter === r); $(`l-${r}`).hidden = reiter !== r; }
   $("l-hinweise").replaceChildren(...(z.hinweise.length ? [...z.hinweise].reverse().map((x) =>
     el("li", { class: x.art === "ton" || x.stufe === "warnung" ? "rot" : "" }, el("span", { class: "wann" }, mmss(x.zeit)), x.text))
     : [el("li", { class: "leer" }, "Noch keine Hinweise.")]));
-  const karten = z.karten ?? [];
-  $("l-nestor").replaceChildren(...(karten.length ? [...karten].reverse().map((k) =>
-    el("li", { class: "tippbar", onclick: () => karteOeffnen(k) }, el("span", { class: "wann" }, mmss(k.zeit)),
-      el("strong", {}, k.titel), el("small", {}, KARTEN_ART[k.art] ?? "Nestor")))
-    : [el("li", { class: "leer" }, "Noch keine Karten – sie entstehen, wenn Nestor etwas erklärt oder recherchiert.")]));
   if (reiter === "transkript") {
     const tr = $("l-transkript");
     const unten = tr.scrollTop + tr.clientHeight >= tr.scrollHeight - 20;
@@ -280,11 +268,6 @@ function rendern() {
     tr.replaceChildren(...(zeilen.length ? zeilen : [el("li", { class: "leer" }, "Noch nichts gesagt.")]));
     if (unten) tr.scrollTop = tr.scrollHeight;
   }
-  // neue Karte: einmal von selbst aufklappen (nicht beim Laden alte)
-  const neu = karten.at(-1);
-  if (karteGesehen === null) karteGesehen = neu?.id ?? 0;
-  else if (neu && neu.id > karteGesehen) { karteGesehen = neu.id; karteOeffnen(neu); }
-
   if (aktiv || hier) wachHalten();
   chipsRendern();
 }
@@ -293,8 +276,8 @@ function rendern() {
 (function pegel() { $("pegel").style.width = `${Math.min(100, Math.round(mikro.pegel * 140))}%`; requestAnimationFrame(pegel); })();
 
 // Start
-iconSetzen("karte-zu", "zu");
-document.querySelector("#btn-fragen .i").replaceChildren(icon("frage"));
+verlaufVerdrahten({ buehne: $("vl-buehne"), zaehler: $("vl-zaehler"), zurueck: $("vl-zurueck"), vor: $("vl-vor"), neu: $("vl-neu") });
+document.querySelector("#btn-fragen .i").replaceChildren(icon("mikro"));
 document.querySelector("#btn-still .i").replaceChildren(icon("stopp"));
 document.querySelector("#btn-fortsetzen .i").replaceChildren(icon("weiter"));
 pruefen().catch(() => { $("status").textContent = "Laptop nicht erreichbar"; setTimeout(() => location.reload(), 5000); });

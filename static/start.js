@@ -66,7 +66,8 @@ async function schluesselPruefen() {
     $("stufe-fehlt").hidden = false;
     $("stufe-fehlt").textContent = `Nestor ${fehlt.join(" und ")} ist auf diesem Server gerade nicht eingerichtet (kein Schlüssel).`;
   }
-  $("nur-knopfdruck").checked = d.stufe === "basis" && d.modus === "knopfdruck";
+  // „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (Ticket #27) – der Schalter bleibt ausgeblendet und aus
+  $("nur-knopfdruck").checked = false;
   $("karte-basis").onclick = () => stufeWaehlen("basis");
   $("karte-premium").onclick = () => stufeWaehlen("premium");
   $("sk-pruefen").onclick = schluesselPruefen;

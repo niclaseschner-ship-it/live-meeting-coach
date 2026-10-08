@@ -40,14 +40,17 @@
 
     <!-- Ticket #13/#18: zwei Stufen statt zwei Modi. Premium (OpenAI) ist der Standard, Basis (Mistral) das
          Downgrade für DSGVO-Nähe und weniger Kosten – deshalb Premium zuerst, größer und mit Vor-/Nachteilen auf
-         einen Blick statt Fließtext; „Nur auf Knopfdruck“ bleibt ein Schalter in Basis. -->
+         einen Blick statt Fließtext. Ticket #27: Premium ist wie ein Telefon, Basis wie ein Funkgerät – je ein Satz.
+         „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (der Schalter bleibt im Code, ausgeblendet). -->
     <div class="s-karten">
       <div class="s-stufe s-stufe-premium">
         <button id="karte-premium" class="moduskarte moduskarte-premium">
           <h2>Nestor Premium <small>Standard</small></h2>
+          <p class="s-analogie"><strong>Wie ein Telefon:</strong> Ihr sagt „Nestor, …“, fragt direkt danach ohne Namen
+            nach und könnt ihm jederzeit ins Wort fallen.</p>
           <ul class="s-plus">
-            <li>Natürliches Gespräch: Rückfragen ohne Namen, ihr könnt reinreden</li>
-            <li>Live-Bild alle 10 Minuten und auf Zuruf</li>
+            <li>Natürliches Gespräch: Nachfrage ohne Namen, ihr könnt reinreden</li>
+            <li>Live-Bild auf Zuruf</li>
           </ul>
           <ul class="s-minus">
             <li>US-Anbieter (OpenAI)</li>
@@ -59,16 +62,18 @@
       <div class="s-stufe s-stufe-basis">
         <button id="karte-basis" class="moduskarte">
           <h2>Nestor Basis <small>Downgrade · EU</small></h2>
+          <p class="s-analogie"><strong>Wie ein Funkgerät:</strong> Ihr haltet die Sprechtaste, sprecht und lasst los –
+            Nestor redet dann aus.</p>
           <ul class="s-plus">
             <li>KI nur bei Mistral (Frankreich), Verarbeitung in der EU</li>
             <li id="kosten-basis">etwa 0,7 € je Meetingstunde</li>
           </ul>
           <ul class="s-minus">
-            <li>Ansprache immer mit Namen, kein Reinreden</li>
+            <li>Fragen per Sprechtaste statt mit Namen, kein Reinreden</li>
             <li>Überblick als Text statt Live-Bild</li>
           </ul>
         </button>
-        <label class="s-schalter"><input type="checkbox" id="nur-knopfdruck">
+        <label class="s-schalter" hidden><input type="checkbox" id="nur-knopfdruck">
           <span><strong>Nur auf Knopfdruck</strong> – ohne Knopf geht nichts an Mistral. Euer Ton liegt bis dahin nur
             auf unserem Server in der EU und wird am Ende gelöscht; dazu „letzte 5 Minuten“ oder „alles verwerfen“.</span></label>
       </div>
