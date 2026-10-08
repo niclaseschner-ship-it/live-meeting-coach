@@ -181,13 +181,17 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .agenda-zeile { grid-template-columns: auto 1fr; }
   .agenda-eingabe { flex-wrap: wrap; }
 }
-/* Regeln getrennt nach Verlässlichkeit (Ticket #10, Lastenheft 4.3): zwei Gruppen untereinander, Beta in
-   eigener, zurückhaltender Farbe statt Alarm-Rot – sie ist nicht falsch, nur noch nicht durchweg verlässlich. */
+/* Regeln getrennt nach Verlässlichkeit (Ticket #10, Lastenheft 4.3): drei Gruppen untereinander – verlässlich,
+   Beta in eigener, zurückhaltender Farbe statt Alarm-Rot (sie ist nicht falsch, nur noch nicht durchweg
+   verlässlich), und „Weitere Regeln“ neutral und gestrichelt, weil Nestor die nur vorliest statt prüft. */
 .regelgruppen { display: grid; gap: 18px; margin-bottom: 4px; }
 .regelgruppe-titel { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--text-3);
   text-transform: uppercase; letter-spacing: .04em; }
 .regelgruppe-titel small { text-transform: none; font-weight: 600; letter-spacing: 0; margin-left: 6px; }
-.regelwahl { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+/* minmax angehoben (230→250px) und grid-auto-rows: 1fr (Rückmeldung 08.10.2026, Ticket-Nachtrag): breitere statt
+   höhere Kacheln vermeiden Zeilenumbrüche im Titel, und 1fr lässt JEDE Zeile auf die Höhe der höchsten strecken –
+   nicht nur innerhalb einer Zeile, sondern obere und untere Reihe gleich hoch. */
+.regelwahl { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
 .regel { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center;
   padding: 12px 14px; border: 2px solid var(--rand); border-radius: 12px; cursor: pointer; font-weight: 600;
   color: var(--text); background: var(--flaeche); }
@@ -198,17 +202,21 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .regel .r-stufe { font-size: 12px; font-weight: 600; color: var(--text-3); }
 .regel:has(input:checked) { border-color: var(--marke); background: var(--marke-weich); }
 .regel:has(input:checked) .r-icon { background: var(--marke); color: #fff; }
-.regel.folgt { cursor: default; opacity: .5; }
 .regelgruppe.beta .regel { border-color: #E6D9AE; }
 .regelgruppe.beta .regel .r-icon { background: #F4ECD7; color: #8A6D1E; }
 .regelgruppe.beta .regel:has(input:checked) { border-color: #D9B64A; background: #FBF2D9; }
 .regelgruppe.beta .regel:has(input:checked) .r-icon { background: #D9B64A; color: #fff; }
-/* „Weitere Regeln“ (ersetzt „Eigene Regeln“): eigene Kachel im selben Raster, zwei Spalten breit, damit der
-   Freitext Platz hat; kein Kästchen zum Ankreuzen. */
-.regel-weitere { cursor: default; grid-template-rows: auto 1fr; grid-column: span 2; }
-.regel-weitere .r-weitere-titel { font-size: 14px; }
+/* „Weitere Regeln“ (ersetzt „Eigene Regeln“): eigene, neutrale Gruppe statt Kachel bei den prüfbaren Regeln
+   (Rückmeldung 08.10.2026) – gestrichelter Rahmen statt fester Rahmenfarbe, kein Kästchen zum Ankreuzen, damit
+   auf einen Blick klar ist, dass Nestor das nur vorliest und nicht wie die anderen Kacheln prüft. */
+.regelgruppe.weitere .regelgruppe-titel { color: var(--text-3); }
+.regel-weitere { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: default;
+  padding: 12px 14px; border: 2px dashed var(--rand); border-radius: 12px; background: var(--flaeche-2); }
+.regel-weitere .r-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
+  background: var(--flaeche); color: var(--text-3); }
+.regel-weitere .r-icon svg { width: 20px; height: 20px; }
 .regel-weitere textarea { resize: vertical; min-height: 56px; border: 1px solid var(--rand); border-radius: 8px;
-  padding: 6px 8px; font-size: 13px; font-family: inherit; }
+  padding: 6px 8px; font-size: 13px; font-family: inherit; background: var(--flaeche); color: var(--text); }
 .nestor-wahl { margin-top: 22px; padding: 14px 16px; border-radius: 12px; background: var(--marke-weich); border: 2px solid #C7CCF7; }
 .test { margin-top: 18px; color: var(--text-2); }
 .test summary { cursor: pointer; font-weight: 600; font-size: 14px; }
@@ -357,7 +365,6 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .agenda-zeile { grid-template-columns: 1fr !important; }
   .agenda-reihenfolge { justify-self: start; }
   .regelwahl { grid-template-columns: 1fr; }
-  .regel-weitere { grid-column: span 1; }
   .mehr-menu { right: -10px; }
 }
 

@@ -21,35 +21,34 @@ function teilnehmendeSetzen(namen) {
   (namen.length ? namen : ["", ""]).forEach((n) => personZeile(n));
 }
 // Eine Regel-Kachel – gleiche Einstufung wie im Dashboard (verlässlich/Beta) statt eigener Prüfstufen-Texte;
-// Kurzsatz aus Lastenheft 4.3 im Tipp, wenn Beta (Schlüssel bleibt "experimentell", coach/regeln.py).
+// Kurzsatz aus Lastenheft 4.3 im Tipp, wenn Beta (Schlüssel bleibt "experimentell", coach/regeln.py). Nur
+// umgesetzte Regeln kommen überhaupt hier an (regelwahl() filtert) – noch nicht umgesetzte bleiben im Katalog,
+// erscheinen aber nicht zur Auswahl (Rückmeldung 08.10.2026, vorher ausgegraut mit "folgt").
 function regelKachel(r, standard) {
   return el("label",
-    { class: `regel${r.umgesetzt ? "" : " folgt"}`,
-      "data-tip": r.umgesetzt ? (r.stufe === "experimentell" && r.kurzsatz ? r.kurzsatz : r.beobachtet)
-        : "folgt in einer späteren Ausbaustufe" },
-    el("input", { type: "checkbox", value: r.id, ...(standard.includes(r.id) && r.umgesetzt ? { checked: "" } : {}),
-      ...(r.umgesetzt ? {} : { disabled: "" }) }),
+    { class: "regel", "data-tip": r.stufe === "experimentell" && r.kurzsatz ? r.kurzsatz : r.beobachtet },
+    el("input", { type: "checkbox", value: r.id, ...(standard.includes(r.id) ? { checked: "" } : {}) }),
     el("span", { class: "r-icon" }, icon(r.id)),
     el("span", {}, r.titel.split(" – ")[0]),
-    el("span", { class: "r-stufe" }, r.umgesetzt ? r.stufe_text : "folgt"));
+    el("span", { class: "r-stufe" }, r.stufe_text));
 }
 // „Weitere Regeln“ (Ticket #10, ersetzt das frühere „Eigene Regeln“): Freitext, den Nestor einmal am Anfang
-// vorliest, aber nicht prüft – im selben Raster wie die anderen Regel-Kacheln, deshalb hier statt als
-// eigenständiges Feld in index.html gebaut. #f-regeln wird unverändert von formularDaten() gelesen.
+// vorliest, aber nicht prüft. Eigene, neutrale Gruppe statt Kachel unter den prüfbaren Regeln (Rückmeldung
+// 08.10.2026): Lautsprecher-Symbol statt Datei-Symbol, Untertitel auf der Gruppe selbst sagt, dass Nestor das
+// nur vorliest und nicht prüft. #f-regeln wird unverändert von formularDaten() gelesen.
 function weitereRegelnKachel() {
-  return el("div", { class: "regel regel-weitere", "data-tip": "Nestor liest das einmal vor, prüft es aber nicht" },
-    el("span", { class: "r-icon" }, icon("datei")),
-    el("span", { class: "r-weitere-titel" }, "Weitere Regeln"),
-    el("textarea", { id: "f-regeln", rows: "2",
+  return el("div", { class: "regel-weitere" },
+    el("span", { class: "r-icon" }, icon("lautsprecher")),
+    el("textarea", { id: "f-regeln", rows: "2", "aria-label": "Weitere Regeln",
       placeholder: "Eine pro Zeile, z. B. Handys bleiben in der Tasche" }));
 }
 function regelwahl(standard) {
   const vorherigeWeitere = $("f-regeln")?.value ?? "";
   $("f-regelwahl-verlaesslich").replaceChildren(
-    ...regelkatalog.filter((r) => r.stufe === "verlaesslich").map((r) => regelKachel(r, standard)),
-    weitereRegelnKachel());
+    ...regelkatalog.filter((r) => r.stufe === "verlaesslich" && r.umgesetzt).map((r) => regelKachel(r, standard)));
   $("f-regelwahl-beta").replaceChildren(
-    ...regelkatalog.filter((r) => r.stufe === "experimentell").map((r) => regelKachel(r, standard)));
+    ...regelkatalog.filter((r) => r.stufe === "experimentell" && r.umgesetzt).map((r) => regelKachel(r, standard)));
+  $("f-regel-weitere").replaceChildren(weitereRegelnKachel());
   $("f-regeln").value = vorherigeWeitere;
 }
 // Eine Seite, ein Stand: Das Formular übernimmt, was auf dem Server eingerichtet ist (anderer Tab, anderes Gerät),
@@ -500,7 +499,7 @@ function rendern() {
     + (eigenerSchluessel ? " · eigener Schlüssel" : "");
   $("modus-pill").dataset.tip = (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
     : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
-    + (eigenerSchluessel ? " – die KI-Kosten dieses Meetings laufen über Ihren eigenen OpenAI-Schlüssel" : "");
+    + (eigenerSchluessel ? " – die KI-Kosten dieses Meetings laufen über deinen eigenen OpenAI-Schlüssel" : "");
   $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
   $("btn-mikro").classList.toggle("an", !!z.stumm);
