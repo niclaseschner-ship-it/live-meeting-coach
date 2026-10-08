@@ -86,7 +86,18 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .kopf-meeting { display: flex; flex-direction: column; min-width: 0; border-left: 2px solid var(--rand); padding-left: 18px; }
 .kopf-meeting strong { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kopf-meeting span { font-size: 14px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kopf-knoepfe { display: flex; align-items: center; gap: 8px; }
+.kopf-knoepfe { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+
+/* „Mehr“-Menü (Ticket #17 Punkt 4): seltene Aktionen (Handy koppeln, Einstellungen) statt zwei eigener Symbole */
+.kopf-mehr { position: relative; }
+.mehr-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; display: grid; gap: 2px;
+  background: var(--flaeche); border: 1px solid var(--rand); border-radius: 12px; padding: 6px;
+  box-shadow: 0 12px 40px rgba(11, 19, 36, .18); min-width: 190px; }
+.mehr-eintrag { display: flex; align-items: center; gap: 10px; justify-content: flex-start; width: 100%;
+  background: transparent; border: 0; padding: 10px 12px; font-weight: 600; font-size: 14px; color: var(--text);
+  border-radius: 8px; white-space: nowrap; }
+.mehr-eintrag:hover { background: var(--flaeche-2); border-color: transparent; }
+.mehr-eintrag svg { width: 20px; height: 20px; flex: none; color: var(--text-2); }
 .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: 14px;
   font-weight: 700; background: var(--flaeche-2); color: var(--text-2); border: 1px solid var(--rand); margin-right: 4px; }
 .pill::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); }
@@ -331,6 +342,23 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
   .einrichtung { padding: 16px; }
   .hinweis-band, .untertitel, .fehler { margin-left: 16px; margin-right: 16px; }
   .arbeitsflaeche { padding: 16px; }
+}
+
+/* Handy (Ticket #17 Punkt 5): Einrichten ohne seitliches Überlaufen bei 390 px – schmalere Ränder, Eingabe und
+   Agenda-Zeile gestapelt statt nebeneinander erzwungen. */
+@media (max-width: 480px) {
+  .kopf { padding: 10px 14px; gap: 10px; }
+  .marke-text span { display: none; }
+  .einrichtung { padding: 12px; }
+  .einrichtung .karte { padding: 18px 16px; }
+  .agenda-eingabe { flex-direction: column; }
+  .agenda-eingabe-gross .agenda-knoepfe { flex-direction: row; }
+  .agenda-eingabe-gross .agenda-knoepfe button { min-width: 0; }
+  .agenda-zeile { grid-template-columns: 1fr !important; }
+  .agenda-reihenfolge { justify-self: start; }
+  .regelwahl { grid-template-columns: 1fr; }
+  .regel-weitere { grid-column: span 1; }
+  .mehr-menu { right: -10px; }
 }
 
 /* Kosten in der Kopfleiste */

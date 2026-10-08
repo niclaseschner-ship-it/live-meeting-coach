@@ -56,6 +56,10 @@ const PFADE = {
   seitengespraeche: '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
   sachlich: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
   eingehen: '<path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>',
+  // Kopfleiste entschlackt (Ticket #17): „Mehr“-Menü für seltene Aktionen (Handy koppeln, Einstellungen)
+  mehr: '<circle cx="12" cy="5" r="1.8" fill="currentColor" stroke="none"/>'
+    + '<circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/>'
+    + '<circle cx="12" cy="19" r="1.8" fill="currentColor" stroke="none"/>',
 };
 const icon = (name) => {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");

@@ -34,10 +34,12 @@
       <span id="nestor-zustand">hört zu</span>
     </div>
 
+    <!-- Kopfleiste entschlackt (Ticket #17 Punkt 4): „eigener Schlüssel“ steht jetzt an der Stufen-Pille statt in
+         einer eigenen; Handy koppeln und Einstellungen – beides seltene, vorbereitende Aktionen, keine Aktionen
+         je Minute – stecken in einem gemeinsamen „Mehr“-Menü statt als zwei eigene Symbole. -->
     <div class="kopf-knoepfe">
       <span id="modus-pill" class="pill" hidden></span>
       <a id="modus-wechseln" class="textknopf" href="/" hidden data-tip="Nur außerhalb eines laufenden Meetings">Stufe wechseln</a>
-      <span id="eigener-schluessel-pill" class="pill" hidden data-tip="Die KI-Kosten dieses Meetings laufen über Ihren eigenen OpenAI-Schlüssel">eigener Schlüssel</span>
       <span id="status-pill" class="pill">Vorbereitung</span>
       <span id="aufnahme-pill" class="pill aufnahme" hidden data-tip="Audio wird lokal im Meeting-Ordner gespeichert (Testphase) – abschaltbar in den Einstellungen">Aufnahme</span>
       <button id="btn-ablage" class="pill ablage" hidden data-tip="Meeting-Ordner öffnen: Protokoll, Bild, Bericht, Aufnahme"></button>
@@ -48,8 +50,13 @@
       <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
       <button id="btn-transkript" class="icon" data-tip="Verlauf: Transkript, Hinweise und Nestors Karten"></button>
       <button id="btn-mikro-quelle" class="pill mikro-quelle" hidden><span id="mq-text"></span><span class="pegel-mini" aria-hidden="true"><i id="mq-pegel"></i></span></button>
-      <button id="btn-handy" class="icon" data-tip="Handy als Mikrofon und Fernbedienung koppeln"></button>
-      <button id="btn-einstellungen" class="icon" data-tip="Einstellungen"></button>
+      <div class="kopf-mehr">
+        <button id="btn-mehr" class="icon" data-tip="Weiteres: Handy koppeln, Einstellungen"></button>
+        <div id="mehr-menu" class="mehr-menu" hidden>
+          <button id="btn-handy" class="mehr-eintrag" type="button"><span class="mehr-label">Handy koppeln</span></button>
+          <button id="btn-einstellungen" class="mehr-eintrag" type="button"><span class="mehr-label">Einstellungen</span></button>
+        </div>
+      </div>
       <button id="btn-start" class="primaer">Meeting starten</button>
       <button id="btn-stopp" class="gefahr" hidden>Beenden</button>
       <button id="btn-neu" hidden>Neues Meeting</button>
