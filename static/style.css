@@ -517,6 +517,14 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .ub-neu { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--marke-weich); color: var(--marke-2); font-size: 13.5px; }
 @media (max-width: 900px) { .ub-raster { grid-template-columns: 1fr; } }
 
+/* Feedback-Knopf (Ticket #18, Nachtrag): auf jeder Seite, unten rechts, nicht in der Kopfleiste – soll auffindbar,
+   aber nicht störend sein. */
+.fb-schwebend { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 48px; height: 48px;
+  background: var(--marke); border-color: var(--marke); color: #fff; box-shadow: 0 8px 24px rgba(55, 48, 163, .35); }
+.fb-schwebend:hover { background: var(--marke-2); border-color: var(--marke-2); }
+.fb-fenster { top: auto; right: 20px; bottom: 78px; }
+@media (max-width: 480px) { .fb-schwebend { right: 14px; bottom: 14px; } .fb-fenster { right: 14px; left: 14px; width: auto; bottom: 72px; } }
+
 /* Handy: Knöpfe wie im Dashboard, „Nestor fragen“ zum Halten */
 .h-knopfraster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .h-knopfraster button { padding: 12px 10px; white-space: normal; }

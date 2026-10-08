@@ -1,5 +1,9 @@
 /* Abschlussseite: Paket, Unterstützung, Datenspende – ruhiger Nachlauf zum Dashboard (style.css). */
 .ab-seite { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; display: grid; gap: 20px; }
+
+/* Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“ */
+.ab-kopfzeile { text-align: center; padding: 6px 0 2px; }
+.ab-kopfzeile h1 { margin: 0; font-size: 24px; color: var(--marke-2); letter-spacing: -.01em; }
 .ab-seite h3 { margin-top: 18px; }
 .ab-seite textarea { resize: vertical; }
 .ab-seite button.leise.klein { margin-top: 8px; }

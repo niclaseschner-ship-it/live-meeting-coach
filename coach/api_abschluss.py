@@ -84,11 +84,17 @@ async def abschluss():
     # Eigener Schlüssel (Angebot auf der Startseite, config.schluessel_info): die KI-Kosten liefen übers eigene
     # OpenAI-Konto, also kein Kostenausgleich mit Stufen – nur der allgemeine Link ohne Betrag.
     eigener = schluessel_info()["quelle"] == "dashboard"
+    m = coach.meeting
+    # Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“ – Punkte aus der
+    # Agenda, Entscheidungen aus den Ergebnissen je Punkt (Regel 10, coach/ergebnisse.py).
+    entscheidungen = sum(len(e.get("entscheidungen") or []) for e in m.ergebnisse.values())
     return {
-        "dauer_sekunden": round(coach.meeting.jetzt(), 1),
+        "dauer_sekunden": round(m.jetzt(), 1),
         "kosten_usd": round(kosten_usd, 4),
         "kosten_eur": round(kosten_usd * EINST.eur_je_usd, 2),
         "eigener_schluessel": eigener,
+        "punkte": len(m.agenda),
+        "entscheidungen": entscheidungen,
         "stufen": liste,
         "paypal": ([{**s, "link": f"https://paypal.me/{name}/{s['betrag']}EUR"} for s in liste]
                    if name and not eigener else None),
@@ -145,6 +151,24 @@ async def abschluss_feedback(daten: dict):
     if not text:
         raise HTTPException(400, "Kein Feedback-Text.")
     await _ablegen({"feedback.txt": text.encode("utf-8")})
+    return {"ok": True}
+
+
+_FEEDBACK_ARTEN = ("feedback", "funktionswunsch", "fehler")
+
+
+@router.post("/api/feedback")
+async def feedback_jederzeit(daten: dict):
+    """Feedback-Knopf auf jeder Seite (Ticket #18, Nachtrag Niclas): jederzeit erlaubt, auch während eines
+    laufenden Meetings – anders als `/api/abschluss/feedback` kein beendetes Meeting nötig. Ohne Meetinginhalte,
+    über dieselbe Ablage wie die Datenspende (lokal ein Ordner, im Cloud-Betrieb R2)."""
+    text = str(daten.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Kein Feedback-Text.")
+    art = daten.get("art") if daten.get("art") in _FEEDBACK_ARTEN else "feedback"
+    seite = str(daten.get("seite") or "")[:200]
+    inhalt = f"Art: {art}\nSeite: {seite}\n\n{text}"
+    await _ablegen({"feedback.txt": inhalt.encode("utf-8")})
     return {"ok": True}
 
 

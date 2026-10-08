@@ -86,8 +86,9 @@ def test_startseite_nennt_mistral_und_openai():
     from coach.server import app
 
     text = TestClient(app, client=("127.0.0.1", 5000)).get("/").text
-    assert "Alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU." in text
-    assert "Alles Gesprochene wird in Echtzeit von OpenAI verarbeitet." in text
+    # Ticket #18: Premium (OpenAI) ist der Standard, Basis (Mistral) das Downgrade für DSGVO-Nähe/weniger Kosten.
+    assert "KI nur bei Mistral (Frankreich), Verarbeitung in der EU" in text
+    assert "US-Anbieter (OpenAI)" in text
     assert "Nur auf Knopfdruck" in text
 
 

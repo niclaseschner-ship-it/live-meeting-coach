@@ -9,25 +9,43 @@ body { background: var(--bg); }
 .s-haupt { max-width: 760px; margin: 0 auto; padding: 28px 22px 36px; display: grid; gap: 28px; }
 .s-frage { font-size: 19px; font-weight: 700; margin: 0; color: var(--text); text-align: center; }
 
-.s-karten { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* Datenversprechen (Nachtrag #18): sichtbar, nicht im Kleingedruckten */
+.s-versprechen { margin: -8px 0 0; padding: 14px 18px; border-radius: var(--radius); background: var(--gruen-weich);
+  border: 1px solid var(--gruen); }
+.s-versprechen p { margin: 0; font-size: 14.5px; line-height: 1.5; color: #0B5A3B; }
+.s-versprechen strong { color: var(--gruen); }
+
+/* Premium ist der Standard (#18): zuerst, breiter, betont; Basis daneben als Alternative/Downgrade. */
+.s-karten { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 680px) { .s-karten { grid-template-columns: 1fr; } }
 
-.moduskarte { display: grid; gap: 12px; text-align: left; align-content: start; padding: 22px 22px 20px;
+.moduskarte { display: grid; gap: 14px; text-align: left; align-content: start; padding: 22px 22px 20px;
   background: var(--flaeche); border: 2px solid var(--rand); border-radius: var(--radius); box-shadow: var(--schatten);
   cursor: pointer; font: inherit; color: var(--text); white-space: normal; }
 .moduskarte:hover, .moduskarte:focus-visible { border-color: var(--marke); outline: none; }
 .moduskarte:focus-visible { box-shadow: 0 0 0 3px #A5B4FC; }
 .moduskarte h2 { margin: 0; font-size: 19px; color: var(--marke-2); text-transform: none; letter-spacing: 0; }
-.moduskarte ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.moduskarte li { display: flex; gap: 9px; font-size: 14.5px; line-height: 1.4; color: var(--text-2); }
-.moduskarte li::before { content: ""; flex: none; width: 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: var(--gold); }
-.s-datenhinweis { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--marke-weich); color: var(--marke-2);
-  font-size: 13.5px; font-style: italic; line-height: 1.4; }
-.s-kosten { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-2); }
-.moduskarte h2 small { font-size: 13px; font-weight: 600; color: var(--text-3); margin-left: 6px; }
+.moduskarte-premium { border-color: var(--marke); box-shadow: 0 4px 20px rgba(55, 48, 163, .14); }
+.moduskarte-premium h2 small { background: var(--marke); color: #fff; padding: 2px 9px; border-radius: 999px; }
+.moduskarte h2 small { font-size: 12.5px; font-weight: 700; color: var(--text-3); margin-left: 6px; }
 .moduskarte:disabled { opacity: .5; cursor: not-allowed; }
 .s-stufe { display: grid; gap: 10px; align-content: start; }
 .s-stufe .moduskarte { height: 100%; }
+.s-stufe-basis .moduskarte { padding-top: 20px; }
+
+/* Vor-/Nachteile statt Fließtext (#18): je zwei bis drei Stichpunkte, klar als Plus/Minus erkennbar. */
+.moduskarte ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.moduskarte li { display: flex; gap: 9px; font-size: 14.5px; line-height: 1.4; color: var(--text-2); }
+.s-plus li::before { content: "+"; flex: none; width: 18px; height: 18px; display: grid; place-items: center;
+  font-weight: 800; font-size: 13px; border-radius: 50%; color: var(--gruen); background: var(--gruen-weich); }
+.s-minus li::before { content: "−"; flex: none; width: 18px; height: 18px; display: grid; place-items: center;
+  font-weight: 800; font-size: 13px; border-radius: 50%; color: var(--text-3); background: var(--flaeche-2); }
+#kosten-premium, #kosten-basis { font-weight: 700; color: var(--text); }
+.s-datenhinweis { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--marke-weich); color: var(--marke-2);
+  font-size: 13.5px; font-style: italic; line-height: 1.4; }
+.s-cloudflare { margin: -10px 0 0; text-align: center; font-size: 13px; color: var(--text-3); }
+.s-quelloffen { margin: -6px 0 0; text-align: center; font-size: 12px; color: var(--text-3); }
+.s-quelloffen a { color: var(--text-3); }
 .s-schalter { display: flex !important; flex-direction: row; gap: 10px; align-items: flex-start; padding: 12px 14px;
   border-radius: var(--radius); font-weight: 400;
   background: var(--flaeche); border: 1px solid var(--rand); font-size: 13.5px; line-height: 1.45; color: var(--text-2);
