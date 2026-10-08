@@ -119,3 +119,12 @@ Rückfallweg noch vorhanden.
 ## Mitmachen
 
 Ideen und Aufgaben bitte als [Issue](../../issues) anlegen.
+
+## Lizenz
+
+Nestor ist Open Source unter der [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+Jeder darf Nestor nutzen, verändern und selbst betreiben. Wer eine veränderte Fassung als Dienst für andere
+anbietet, muss den vollständigen Quellcode dieser Fassung unter derselben Lizenz offenlegen.
+
+Die Stimme „Thorsten“ der Stufe Basis stammt aus Thorsten-Voice und steht unter CC0
+(`coach/stimmen/`).
