@@ -91,7 +91,19 @@ Zeile im Band oben oder als Karte im Verlauf. Einzige Ausnahme ist die Begrüßu
   `{"typ": "nestor_text"}`; das Dashboard zeigt ihn in Nestors Zeile über dem Verlauf.
 - **Gemessen** (`scripts/bogen_messen.py`, 60-Minuten-Meeting, ab dem Auslöser):
 
-MESS_BOGEN_TABELLE
+| Bogen (60 min Meeting) | Premium: Bestätigung · Karte · Satz · Ende | Basis: Bestätigung · Karte · Satz · Ende |
+|---|---|---|
+| Zusammenfassen (laufender Abschnitt ~19 000 Zeichen nachgeholt) | 0,0 · 8,2 · 9,0 · **10,2 s** | 0,0 · 11,1 · 11,6 · **12,2 s** (vorher mit größeren Stücken 15,1 s) |
+| Wo stehen wir? | 0,0 · 1,9 · 2,9 · 4,1 s | 0,0 · 2,0 · 4,1 · 4,6 s |
+| Was fehlt? | 0,0 · 1,2 · 1,7 · 3,0 s | 0,0 · 0,6 · 1,2 · 2,0 s |
+| Protokoll (Festgehalten) | 0,0 · 0,0 · 0,5 · 1,1 s | 0,0 · 0,0 · 0,5 · 0,9 s |
+| Überblick | 0,0 · 7,0 · 7,5 · 7,9 s | 0,0 · 9,7 · 10,2 · 10,4 s |
+| Frage („Wie viel Zeit noch?“) | Floskel 0,0 s, Antwort-Ton 1,5–2,2 s (Realtime), Ende 4,8–9,4 s | Floskel 0,0 s, Antwort-Ton 1,8 s, Ende 2,6 s |
+
+Zum Vergleich: dieselben 60 Minuten ohne Abschnitte, nacheinander erkannt – 65,8 s allein für die Erkennung. Die
+stillen Abschnitts-Zusammenfassungen dauerten 18–33 s im Hintergrund. Im lokalen Cloudtest (Takt, `--bis 250`) kam der
+erste Ton nach einer Frage im Median nach 1,5 s (Premium) bzw. 1,3 s (Basis, Sprechtaste); alle vier Grenzfälle
+beantwortet.
 
 ## Nachfrage ohne Namen (Premium, Follow-up-Modus)
 
@@ -106,7 +118,7 @@ gerichtet, schließt das Fenster sofort (die Runde hat übernommen). Entscheidun
 3. Sonst ein schneller Klassifikator (gpt-5.4-mini, kurzer Prompt mit Nestors letzter Antwort): `frage_an_nestor`
    (Bogen), `an_nestor_ohne_antwort` („Passt“, „Danke“ → still), `nicht_an_nestor` (still). Frist 2,5 s.
 Dieselbe Person wie die Fragende wird mitgeschrieben, ist aber nur ein Plus-Signal. Antwortet Nestor doch falsch,
-stoppt ihn Reinreden. MESS_EINORDNUNG_TEXT
+stoppt ihn Reinreden. Gemessen (`scripts/einordnen_messen.py`, 14 typische Sätze direkt nach einer Antwort, u. a. „Anna, das machst du doch, oder?“, „Ja, passt.“, „Und bis wann?“, „Was meinst du mit Wartungsfenster?“): Denkaufwand „low“ 14/14 richtig, Median 1,04 s; „none“ 13/14, Median 0,70 s (der eine Fehler: Zeitüberschreitung, also still). Eingestellt ist „none“ (`LMC_EINORDNEN_AUFWAND`).
 
 ## Architektur
 

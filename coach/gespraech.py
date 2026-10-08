@@ -163,8 +163,11 @@ class Gespraech:
             await asyncio.wait_for(self._fertig.wait(), frist)
         except asyncio.TimeoutError:
             log.warning("Gespräch: keine fertige Antwort nach %.0f s", frist)
-        # bis der Ton im Dashboard zu Ende ist – erst dann beginnt das Nachfrage-Fenster
-        while (not bogen.abgeloest and self.a.sprechzeiten
+        # bis der Ton im Dashboard zu Ende ist – erst dann beginnt das Nachfrage-Fenster. Höchstens so lange, wie der
+        # Ton noch dauert (plus 1 s): steht die Meetinguhr (kein Mikrofon-Ton mehr), hinge der Bogen sonst
+        rest = (self.a.sprechzeiten[-1][1] - 0.8 - self.coach.meeting.jetzt()) if self.a.sprechzeiten else 0.0
+        bis = time.monotonic() + max(0.0, rest) + 1.0
+        while (not bogen.abgeloest and self.a.sprechzeiten and time.monotonic() < bis
                and self.a.sprechzeiten[-1][1] - 0.8 > self.coach.meeting.jetzt()):
             await asyncio.sleep(0.2)
 

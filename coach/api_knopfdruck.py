@@ -52,6 +52,11 @@ def _knopf(art: str):
                 coach.assistent.frage_beantworten(frage, "getippt")
                 return {"ok": True}
             ziel = knopfdruck.BOGEN[art]
+            if (daten or {}).get("band"):  # Band-Knopf gedrückt: der Hinweis ist erledigt – auf allen Seiten weg
+                jetzt = coach.meeting.jetzt()
+                for h in coach.meeting.hinweise:
+                    if (h.aktion or {}).get("bogen") == art and jetzt - h.zeit < h.dauer:
+                        h.dauer = max(0.0, jetzt - h.zeit)
             if ziel == "bild" and EINST.bild_anbieter == "text":
                 ziel = "ueberblick"  # Basis: kein Bildmodell
             try:

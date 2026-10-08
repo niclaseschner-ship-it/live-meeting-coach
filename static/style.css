@@ -651,5 +651,10 @@ button.luecke:hover { border-color: var(--rot); }
   .nz-gesagt { font-size: 16px; }
   .knopf-leiste { margin: 10px 10px 0; padding: 10px; }
   .knopf-frage { min-width: 0; flex-basis: 100%; }
+  .knopf-knoepfe { gap: 6px; }
+  .knopf-knoepfe .knopf-art { padding: 6px 10px; font-size: 14px; }
+  .knopf-frage input { min-width: 0; }
+  .taste { flex-basis: 100%; justify-content: center; white-space: normal; }
+  .taste .nur-gross { display: none; }
   .arbeitsflaeche { padding: 10px; gap: 12px; }
 }

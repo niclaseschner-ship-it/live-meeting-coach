@@ -287,7 +287,10 @@ function knopfRendern(z) {
   // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
   const tasteDa = basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
   $("btn-taste").hidden = !tasteDa;
-  if (!taste.aktiv) $("taste-text").textContent = tasteMeldung ?? "Sprechtaste – halten (oder Leertaste)";
+  if (!taste.aktiv) {
+    if (tasteMeldung) $("taste-text").textContent = tasteMeldung;
+    else $("taste-text").replaceChildren("Sprechtaste – halten", el("span", { class: "nur-gross" }, " (oder Leertaste)"));
+  }
 }
 
 // ---------- Sprechtaste (Funkgerät, Ticket #27) ----------

@@ -60,6 +60,7 @@ async def main() -> None:
     ap.add_argument("--minuten", type=float, default=60.0)
     ap.add_argument("--vergleich", action="store_true")
     ap.add_argument("--ausgabe", default=None)
+    ap.add_argument("--boegen", default=",".join(BOEGEN), help="Komma-Liste, z. B. frage,stand")
     args = ap.parse_args()
     logging.basicConfig(level=logging.WARNING)
     from coach import bogen as BG
@@ -106,8 +107,11 @@ async def main() -> None:
     print(f"Noch nicht ausgewertet beim ersten Bogen: {len(offen)} Beiträge, {sum(len(s.text) for s in offen)} Zeichen")
 
     ergebnisse = []
-    for art in BOEGEN:
+    for art in args.boegen.split(","):
         gesendet.clear()
+        # die Meetinguhr steht hier (kein Ton): bis hinter Nestors letzte Wiedergabe vorstellen, wie im echten Meeting
+        if c.assistent.sprechzeiten:
+            c.meeting.virtuelle_zeit = max(c.meeting.virtuelle_zeit, c.assistent.sprechzeiten[-1][1] + 1)
         start = time.monotonic()
         if art == "frage":
             b = c.assistent.bogen_starten("frage", FRAGE, "stimme")

@@ -119,6 +119,27 @@ zählen nicht in Treffer/Verpasst, damit die mit älteren Läufen vergleichbar b
 - **Tonspur im Bericht ≤ 1 s** neben der Ankunft der Stimme (#21 Punkt 5), je Ton-Block. `nestor_stimme.wav`
   berücksichtigt dafür jetzt `stimme_stopp` wie der Browser (abgeschnitten, danach wieder ab Ankunft).
 
+## Sprechtaste und Bedienung (Ticket #27)
+
+- **Basis = Funkgerät:** Nestor Basis reagiert nicht auf „Nestor“. Im Takt-Modus hält die Regie deshalb die
+  Sprechtaste (Leertaste) um jede Ansprache an Nestor gedrückt – 0,3 s vor dem Satz bis 0,4 s danach
+  (`cloudtest_takt.taste_fenster`: jede Anweisung im #9-Schema und jeder Grenzfall, dessen Erwartung eine Antwort
+  ist, auch Rückfragen und das Hineinreden; Fehlauslöser, späte Rückfrage und „Nein“ im Normalsatz ohne Taste,
+  `taste` in der Referenz überschreibt). Das Material bleibt dasselbe: die Sätze beginnen weiter mit „Nestor, …“,
+  vorher wird die Taste gedrückt. Premium nutzt den Namen wie bisher.
+- **Bedienplan** (beide Stufen, nicht mit „Nur auf Knopfdruck“): einmal „Wo stehen wir?“ (ab 2:00 Quellzeit), der
+  Band-Knopf „Zusammenfassen ›“, sobald das Fünf-Minuten-Band erscheint (sonst am Ende der Knopf „Zusammenfassen“),
+  ✕ an einem langen Auftrag, sobald der Arbeitsring einen zeigt, und einmal „Still“ 1,5 s nach dem ersten Ton einer
+  Antwort ab 7:30. Nach jedem Knopf wartet die Regie wie nach einer Frage.
+- **Mitschnitt:** Jeder Druck steht in `bericht.json` unter `messwerte.takt.bedienung` (Laufachse, bei der
+  Sprechtaste mit Loslassen, Dauer und Satz). `cloudtest_takt.bedienung_auswerten` rechnet die Meetinguhr und
+  Nestors Reaktion aus dem WebSocket-Mitschnitt: Bestätigung (erster Text bzw. Ton), erster Ton, neue Karte im
+  Verlauf; bei ✕ ob der Auftrag weg ist, bei „Still“ ob die Stimme stoppt.
+- **Bericht:** im HTML-Zeitstrahl eine eigene violette Spur (👆) – Knopfname, Meetinguhr und bei der Sprechtaste der
+  Satz; ein Klick springt ins Audio. In `bewertung.md` die Tabelle „Bedienung“ (Zeit, Knopf, Satz, Reaktion).
+- **Cookie nach „Fertig“ (Cloud):** geprüft wird, dass das alte Meeting-Cookie weg ist. Die Startseite bekommt vom
+  Worker sofort ein neues (neues Meeting) – der frühere Befund „noch gesetzt“ war dieses neue Cookie.
+
 ## Was geprüft wird
 
 Mitgeschnitten wird aus der Seite selbst: alle Nachrichten auf der Zustands-WebSocket mit Zeitstempel

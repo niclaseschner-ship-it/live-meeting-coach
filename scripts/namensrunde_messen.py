@@ -128,9 +128,10 @@ async def durchgang(pcm: np.ndarray, zeilen: list[dict], verfahren: str) -> dict
     hoeren.LiveText = Drehbuchtext
     c = Coach()
     c._einrichten({"titel": "Namensrunde", "agenda": [], "regel_ids": []})
-    c._client = object()  # nur „vorhanden“ – es geht kein Aufruf hinaus (keine Agenda, Nestor aus)
+    c._client = type("Attrappe", (), {})()  # nur „vorhanden“ – es geht kein Aufruf hinaus (keine Agenda, Nestor aus)
     c.assistent.aktiv = False
     c.simulation_laeuft = True
+    c.onepager_am_ende = False
     if verfahren == "vorher":
         c.name_lernen = alt_name_lernen(c)
         c._namen_zuordnen = lambda: None
@@ -144,8 +145,10 @@ async def durchgang(pcm: np.ndarray, zeilen: list[dict], verfahren: str) -> dict
     for _ in range(3):  # Analyse-Rückstand abarbeiten, dann wie im Takt zuordnen
         await asyncio.sleep(0.3)
         c.takt()
+    register = c.hoerstrom.stimmen.register
+    offen = [(o["name"], [round(float(o["vektor"] @ sp), 2) for sp in register.schwerpunkte()] if o["vektor"] is not None
+              else None) for o in c.namen_offen]
     await c.hoeren_beenden()
-    c._namen_zuordnen() if verfahren == "nachher" else None
     # Bewertung: Wer trägt die späteren Beiträge jeder Person?
     ergebnis = {}
     for p in {z["name"] for z in zeilen}:
@@ -161,7 +164,7 @@ async def durchgang(pcm: np.ndarray, zeilen: list[dict], verfahren: str) -> dict
     vorstellungen = {z["name"]: next((s.sprecher for s in c.meeting.transkript if abs(s.start - z["start"]) < 1.5), None)
                      for z in zeilen if z["vorstellung"]}
     return {"verfahren": verfahren, "richtig": richtig, "falsch": falsch, "zuordnung": ergebnis,
-            "namen": dict(c.namen), "personen": len(c.hoerstrom.stimmen.register.summen) if c.hoerstrom else None,
+            "namen": dict(c.namen), "personen": [round(x) for x in register.sekunden], "offen": offen,
             "vorstellung_als": vorstellungen}
 
 
@@ -188,7 +191,8 @@ async def main() -> None:
             summen[verfahren][0] += e["richtig"]
             summen[verfahren][1] += e["falsch"]
             print(f"  {verfahren:8} {e['richtig']}/4 richtig, {e['falsch']} falsch · Vorstellung erkannt als "
-                  f"{e['vorstellung_als']} · Namen {e['namen']} · Stimmen im Register {e['personen']}")
+                  f"{e['vorstellung_als']} · Namen {e['namen']} · Sekunden je Stimme {e['personen']}"
+                  + (f" · offen (Ähnlichkeit je Stimme) {e['offen']}" if e["offen"] else ""))
     n = 4 * args.runden
     for verfahren, (richtig, falsch) in summen.items():
         print(f"Gesamt {verfahren}: {richtig}/{n} Namen richtig, {falsch} falsch")

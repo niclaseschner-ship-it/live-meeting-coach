@@ -200,8 +200,8 @@ Regel-Ampeln im Dashboard.
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
 | Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s | – |
-| Nachfrage ohne Namen (Premium) | verlässlich | MESS_EINORDNUNG | – |
-| Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | MESS_NAMEN | – |
+| Nachfrage ohne Namen (Premium) | verlässlich | `scripts/einordnen_messen.py`, 14 Sätze direkt nach einer Antwort: 14/14 mit Denkaufwand „low“ (Median 1,04 s), 13/14 mit „none“ (Median 0,70 s; der eine Fehler war eine Zeitüberschreitung → still) – eingestellt ist „none“ | – |
+| Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: vorher 0/12 Namen richtig (jede kurze Vorstellung landete als „Person ?“), jetzt 12/12, 0 falsch | – |
 
 ### 4.4 Paket zum Herunterladen
 
@@ -278,7 +278,7 @@ Agendapunkte müssen keine Entscheidung haben.
   parallelen Stücken (höchstens 6 000 Zeichen je Aufruf), damit der Bogen unter 15 s bleibt. Das Modell sieht die
   schon festgehaltenen Artefakte mit Nummer und ergänzt, statt doppelt anzulegen. Premium `gpt-5.4-mini`, Basis
   `mistral-medium-latest` (`mistral-small` war deutlich schlechter). Unter Konfidenz 0,4 wird nichts festgehalten,
-  unter 0,5 nichts markiert. Gemessen nach 60 Minuten Meeting: MESS_ZUSAMMENFASSEN.
+  unter 0,5 nichts markiert. Gemessen nach 60 Minuten Meeting: Bogen „Zusammenfassen“ Premium 10,2 s, Basis 12,2 s (Abschnitt 4.10).
 - **Zusammenfassung je Abschnitt (still):** eine Karte „Punkt 2 · Budget“ bzw. „Zwischenstand“ im Verlauf –
   entschieden, Aufgaben, offen, Risiken. Keine Stimme, keine Nachfrage.
 - **Regel „Ergebnisse festhalten“** heißt nur noch: Lücken in diesen Karten rot markieren plus ein Band-Hinweis
@@ -304,7 +304,7 @@ Agendapunkte müssen keine Entscheidung haben.
   erreicht?“ – offen, bis die Korrekturansicht aus #22 es abfragt), Entscheidungen, Aufgaben (Was/Wer/Bis wann, Lücken),
   offene Punkte, Risiken, Parkplatz, Agenda Soll/Ist. Das Dokument selbst (Grafik, Regelanalyse, Anhang) kommt mit #22.
 - **Kosten:** deutlich weniger Aufrufe als die frühere Erkennung je Minute Sprache (Premium etwa +0,2 $/h, Basis
-  +0,15 $/h): je Abschnitt ein bis drei Aufrufe, dazu die Aufrufe auf Anfrage – MESS_KOSTEN_ARTEFAKTE.
+  +0,15 $/h): je Abschnitt ein bis drei Aufrufe, dazu die Aufrufe auf Anfrage – im 60-Minuten-Messlauf zwei Abschnitte mit je zwei bis vier Aufrufen plus ein Zusammenfassen mit sechs parallelen Stücken.
 
 ### 4.10 Bedienlogik: Antwortbogen, Verlauf, Band (Ticket #27)
 
@@ -323,7 +323,7 @@ Agendapunkte müssen keine Entscheidung haben.
 den laufenden Bogen (Premium: Reinreden oder „Nestor, …“, Basis: die Sprechtaste) und startet den neuen – nie zwei
 parallel. **Unterbrechen stoppt nur die Stimme, nicht die Arbeit:** Die Karte des ersten Auftrags kommt trotzdem
 still in den Verlauf (im Realtime-Gespräch wird die Antwort fertig erzeugt, das Modell erfährt per
-`conversation.item.truncate`, wie weit sie zu hören war). Gemessen: MESS_BOEGEN.
+`conversation.item.truncate`, wie weit sie zu hören war). Gemessen: `scripts/bogen_messen.py` nach 60 Minuten: Bestätigung immer sofort (Floskel), Karte nach 0–11 s, Ende eines Karten-Bogens nach 1–12 s; Einzelwerte in [sprachassistent.md](sprachassistent.md).
 
 **Lange Aufträge sind kein Bogen:** Bild (~60 s) und Recherche (20–60 s). Nestor sagt nur „Nehme ich mit, dauert ein
 bisschen. Macht ruhig weiter.“; das Ergebnis kommt später **still** in den Verlauf (Bild-Karte, Recherche-Karte mit
@@ -364,7 +364,7 @@ nein“ löscht auch in Basis alles).
 Telefon bzw. Funkgerät –, Agenda-Bitte, Start mit Punkt eins) und endet mit „Wenn ihr mögt, sagt kurz eure Namen,
 dann schreibe ich das Protokoll mit Namen.“ Danach spricht er nicht mehr von sich aus; er ordnet die Namen still zu
 (Name mit dem Stimm-Fingerabdruck der Vorstellung, zugeordnet, sobald die Stimme im Register sicher bekannt ist) und
-zeigt oben „Erkannt: Anna, David …“. Gemessen: MESS_NAMEN.
+zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: vorher 0/12 Namen richtig (jede kurze Vorstellung landete als „Person ?“), jetzt 12/12, 0 falsch.
 
 ## 5. Rahmenbedingungen
 

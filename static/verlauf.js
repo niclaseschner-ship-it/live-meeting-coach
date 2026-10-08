@@ -127,7 +127,8 @@ function verlaufRendern(z) {
   if (k && k.id === verlauf.leuchten) karte.classList.add("leuchtet");
   if (verlauf.richtung) { karte.classList.add(verlauf.richtung > 0 ? "von-links" : "von-rechts"); verlauf.richtung = 0; }
   w.buehne.replaceChildren(karte);
-  const fokus = karte.querySelector(".art-form input[name=was], .art-form input[name=wer]");
+  const feld = typeof verlauf.edit?.fokus === "string" ? verlauf.edit.fokus : "was";
+  const fokus = karte.querySelector(`.art-form input[name=${feld}]`) ?? karte.querySelector(".art-form input[name=was]");
   if (fokus && verlauf.edit?.fokus) { fokus.focus(); verlauf.edit.fokus = false; }
 }
 
@@ -231,7 +232,7 @@ function artZeile(a, k) {
   const luecken = a.luecken ?? [];
   const vorher = (k.luecken_vorher ?? {})[String(a.id)] ?? [];
   const zeigen = k.luecken_zeigen !== false;
-  const bearbeiten = () => { verlauf.edit = { karte: k.id, id: a.id, fokus: true }; verlaufRendern(zustand); };
+  const bearbeiten = (feld = "was") => { verlauf.edit = { karte: k.id, id: a.id, fokus: feld }; verlaufRendern(zustand); };
   const meta = [];
   const wert = { wer: a.wer, bis: a.bis ? `bis ${a.bis}` : null, reaktion: a.reaktion,
     status: a.status === "endgueltig" ? "beschlossen" : a.status === "vorlaeufig" ? "vorläufig" : null };
@@ -244,11 +245,12 @@ function artZeile(a, k) {
   if (a.ausserhalb) meta.push(el("span", { class: "art-park" }, "Parkplatz"));
   const fehlt = zeigen ? luecken.map((l) => el("button", { class: `luecke${a.abgelehnt ? " still" : ""}`, type: "button",
     "data-tip": a.abgelehnt ? "Die Runde wollte das offen lassen" : "Fehlt noch – antippen zum Eintragen",
-    onclick: (e) => { e.stopPropagation(); bearbeiten(); } }, ART_LUECKE[l] ?? l)) : [];
+    onclick: (e) => { e.stopPropagation(); bearbeiten(["wer", "bis", "reaktion"].includes(l) ? l : "was"); } },
+    ART_LUECKE[l] ?? l)) : [];
   const unsicher = a.konfidenz < 0.6 && !a.bestaetigt;
   return el("li", { class: `art ${a.typ}${luecken.length && zeigen ? " unvollstaendig" : ""}${unsicher ? " unsicher" : ""}${a.erledigt ? " erledigt" : ""}`,
       tabindex: "0", "data-tip": `${ART_TYP[a.typ]} · ${a.zeit_text}${a.zitat ? ` · „${a.zitat}“` : ""}${unsicher ? " · unsicher erkannt" : ""}`,
-      onclick: bearbeiten, onkeydown: (e) => { if (e.key === "Enter") bearbeiten(); } },
+      onclick: () => bearbeiten(), onkeydown: (e) => { if (e.key === "Enter") bearbeiten(); } },
     el("span", { class: "art-zeichen", "aria-label": ART_TYP[a.typ] }, ART_ZEICHEN[a.typ]),
     el("span", { class: "art-inhalt" }, el("span", { class: "art-was" }, a.was,
       ...(a.bestaetigt ? [el("span", { class: "art-ok", "data-tip": "von der Runde bestätigt" }, " ✓")] : [])),

@@ -179,10 +179,6 @@ class Floskeln:
 
 # --- Aufträge und Warteschlange -----------------------------------------------------------------------------
 ARTEN = {"recherche": "Recherche", "bild": "Live-Bild", "folie": "Folie", "ueberblick": "Überblick"}
-# Coroutinen, in denen der Coach (coach/pipeline.py) die langen Aufgaben ausführt – darüber findet der Assistent die
-# laufende Aufgabe, ohne dass die Pipeline davon wissen muss
-PIPELINE_CORO = {"bild": "_onepager_zeichnen", "folie": "_folie_bauen", "ueberblick": "ueberblick_bauen"}
-
 ART_RE = {
     "recherche": re.compile(r"recherch|such|nachschau|\bnetz\b", re.IGNORECASE),
     "folie": re.compile(r"\bfolie", re.IGNORECASE),
@@ -285,20 +281,3 @@ class Auftraege:
 
     def schnappschuss(self) -> list[dict]:
         return [a.bild() for a in self.liste]
-
-
-def coro_name(task: asyncio.Task) -> str:
-    coro = task.get_coro()
-    return getattr(getattr(coro, "cr_code", None), "co_name", "") or getattr(coro, "__name__", "")
-
-
-def pipeline_aufgaben(art: str, ausser: set | None = None) -> list[asyncio.Task]:
-    """Laufende Aufgaben des Coaches für eine Art (Bild, Folie, Überblick), die noch keinem Auftrag gehören."""
-    name = PIPELINE_CORO.get(art)
-    if not name:
-        return []
-    try:
-        alle = asyncio.all_tasks()
-    except RuntimeError:
-        return []
-    return [t for t in alle if not t.done() and coro_name(t) == name and t not in (ausser or set())]

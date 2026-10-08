@@ -582,3 +582,10 @@ def test_namensrunde_ordnet_kurze_vorstellungen_still_der_richtigen_stimme_zu():
     assert nach_runde == {"Person 1": "Anna"}
     assert c.namen == {"Person 1": "Anna", "Person 2": "David", "Person 3": "Lea", "Person 4": "Tarek"}
     assert [h.text for h in c.meeting.hinweise if h.art == "namen"][-1] == "Erkannt: Anna, David, Lea, Tarek"
+
+
+def test_name_aus_auch_mit_hier_und_zusatz():
+    from coach.assistent import name_aus
+
+    assert name_aus("Lea hier, ich mache das Marketing.") == "Lea"
+    assert name_aus("Mein Name ist Tarek.") == "Tarek" and name_aus("Hallo, ich bin Anna.") == "Anna"

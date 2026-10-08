@@ -294,6 +294,8 @@ def spaetes_nein(text: str) -> bool:
 VORSTELLUNG_RE = re.compile(r"(?i:ich bin|ich heiße|ich heisse|mein name ist|hier ist|hier spricht)\s+(?i:die |der )?"
                      r"([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?)")
 NUR_NAME_RE = re.compile(r"^\W*([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?)(?:\s+hier)?\W*$")
+# „Lea hier, ich mache das Marketing.“ (Ticket #27: in der Namensrunde-Messung nie erkannt)
+NAME_HIER_RE = re.compile(r"^\W*([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?)\s+hier\b")
 
 
 def name_aus(text: str, bekannte: list[str] | None = None) -> str | None:
@@ -303,7 +305,7 @@ def name_aus(text: str, bekannte: list[str] | None = None) -> str | None:
         vorname = n.split()[0]
         if re.search(r"\b" + re.escape(vorname) + r"\b", text, re.IGNORECASE):
             return n
-    m = VORSTELLUNG_RE.search(text) or NUR_NAME_RE.match(text.strip())
+    m = VORSTELLUNG_RE.search(text) or NUR_NAME_RE.match(text.strip()) or NAME_HIER_RE.match(text.strip())
     if m and m.group(1).lower() not in {"nestor", "ja", "nein", "okay", "hallo", "danke", "gut"}:
         return m.group(1)
     return None

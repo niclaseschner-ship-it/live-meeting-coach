@@ -135,8 +135,8 @@ class Einstellungen:
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
     nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 15)  # Rückfrage ohne Namen möglich (Premium)
-    # Ticket #27, Nachtrag C: Denkaufwand der Einordnung „Nachfrage an Nestor oder nicht?“ (Ziel unter 1 s)
-    einordnen_aufwand: str = os.getenv("LMC_EINORDNEN_AUFWAND", "low")
+    # Ticket #27, Nachtrag C: Denkaufwand der Einordnung „Nachfrage an Nestor oder nicht?“ (Ziel unter 1 s; scripts/einordnen_messen.py)
+    einordnen_aufwand: str = os.getenv("LMC_EINORDNEN_AUFWAND", "none")  # gemessen: Median 0,70 s (low: 1,04 s)
     # Ticket #27: Zusammenfassung je Abschnitt – beim Punktwechsel und spätestens nach so vielen Minuten am selben
     # Punkt (ohne Agenda: im selben Takt)
     abschnitt_minuten: float = _zahl("LMC_ABSCHNITT_MINUTEN", 20)

@@ -51,7 +51,8 @@ KOLLEKTIV = {"wir", "uns", "alle", "jemand", "man", "ihr", "team", "das team", "
 
 MIN_SPRACHE = 30.0        # ein Abschnitt mit weniger Sprache und ohne Artefakte bekommt keine Karte
 KONTEXT_SEKUNDEN = 40.0   # Gesprochenes vor den neuen Sätzen als Kontext
-MAX_ZEICHEN = 6000        # größere Mengen (20-Minuten-Abschnitt) in mehreren Aufrufen – auf Anfrage parallel
+MAX_ZEICHEN = 6000        # größere Mengen (20-Minuten-Abschnitt) in mehreren Aufrufen
+MAX_ZEICHEN_PARALLEL = 3500  # auf Anfrage (Bogen) kleinere Stücke, alle gleichzeitig – der Bogen soll unter 15 s bleiben
 MIN_KONFIDENZ = 0.4       # darunter wird nichts festgehalten
 FRAGE_KONFIDENZ = 0.5     # darunter fragt Nestor nicht nach (die Karte bleibt sichtbar)
 FUENF_MINUTEN = 300.0
@@ -597,10 +598,10 @@ class Artefakte:
             hintergrund(self.abschnitt_abschliessen(m.aktiver_punkt if m.agenda else None, m.jetzt(), "zeit"))
         self._fuenf_pruefen()
 
-    def _stuecke(self, neu: list) -> list[list]:
+    def _stuecke(self, neu: list, groesse: int = MAX_ZEICHEN) -> list[list]:
         stuecke, stueck, zeichen = [], [], 0
         for s in neu:
-            if stueck and zeichen + len(s.text) > MAX_ZEICHEN:
+            if stueck and zeichen + len(s.text) > groesse:
                 stuecke.append(stueck)
                 stueck, zeichen = [], 0
             stueck.append(s)
@@ -639,7 +640,7 @@ class Artefakte:
                 neu = [s for s in self._neue_saetze() if bis is None or s.start <= bis]
                 if not neu or c._client is None:
                     return 0
-                stuecke = self._stuecke(neu)
+                stuecke = self._stuecke(neu, MAX_ZEICHEN_PARALLEL if parallel else MAX_ZEICHEN)
                 if parallel and len(stuecke) > 1:
                     liste = list(self.liste)
                     ergebnisse = await asyncio.gather(

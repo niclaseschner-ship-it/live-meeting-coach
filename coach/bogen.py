@@ -151,9 +151,11 @@ async def moderationssatz(coach, karte: dict, ersatz: str) -> str:
     if coach._client is None:
         return ersatz
     t0 = time.monotonic()
+    # Basis bleibt bei mistral-medium: small war schneller (−2,5 s), sprach aber falsches Deutsch („sollten ihr“)
+    modell = EINST.assistent_modell
     try:
         r = await asyncio.wait_for(coach._client.chat.completions.create(
-            model=EINST.assistent_modell,
+            model=modell,
             messages=[{"role": "user", "content": SATZ.format(name=EINST.assistent_name, karte=karte_als_text(karte))}],
             **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {})),
             SATZ_FRIST if EINST.ki != "codex" else 40)
@@ -161,7 +163,7 @@ async def moderationssatz(coach, karte: dict, ersatz: str) -> str:
         log.info("Moderationssatz nicht formuliert (%s) – Ersatz", type(e).__name__)
         return ersatz
     u = getattr(r, "usage", None)
-    nutzung_loggen({"art": "assistent", "zweck": "bogen_satz", "modell": EINST.assistent_modell,
+    nutzung_loggen({"art": "assistent", "zweck": "bogen_satz", "modell": modell,
                     "tokens_rein": getattr(u, "prompt_tokens", None), "tokens_raus": getattr(u, "completion_tokens", None),
                     "sekunden": round(time.monotonic() - t0, 1)})
     text = re.sub(r"\s+", " ", (r.choices[0].message.content or "").replace("*", "")).strip().strip('"„“')
