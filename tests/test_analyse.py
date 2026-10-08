@@ -329,6 +329,34 @@ def test_ansage_in_voxtral_schreibweise():
                                 titel, 1) is None
 
 
+def test_rueckwaerts_ansage_wechselt():
+    """Ticket #17, Grenzfall 11: „Lass uns nochmal kurz zu Punkt eins zurück“ kam in allen Cloud-Läufen 08.10.
+    wörtlich an (OpenAI „eins“, Voxtral „1“) und wechselte nie. Vertagen und Rückkehr ohne Agenda-Ziel nicht."""
+    from coach.analyse import angekuendigter_punkt
+
+    titel = ["Ablauf des Ausfalls", "Ursache", "Maßnahmen", "Kommunikation an Kunden"]
+    for satz, ziel in [("Lass uns nochmal kurz zu Punkt eins zurück.", 0),
+                       ("Lass uns nochmal kurz zu Punkt 1 zurück.", 0),
+                       ("Zurück zu Punkt eins, bitte.", 0),
+                       ("Gehen wir zurück zur Ursache.", 1),
+                       ("Gehen wir zurück zum ersten Punkt.", 0),
+                       ("Nochmal zu Punkt zwei.", 1),
+                       ("Noch einmal kurz zum ersten Punkt.", 0),
+                       ("Kommen wir noch mal auf Punkt eins zurück.", 0),
+                       ("Lasst uns zum Ablauf des Ausfalls zurückgehen.", 0)]:
+        assert angekuendigter_punkt(satz, titel, 2) == ziel, satz
+    for satz in ["Wir kommen später darauf zurück.",
+                 "Wir kommen später auf Punkt eins zurück.",
+                 "Darauf kommen wir nachher bei Punkt eins zurück.",
+                 "Lass uns zu Punkt eins am Ende zurückkommen.",
+                 "Gut, zurück zur Datenbank.",  # Ende der Abschweifung im Cloud-Lauf – kein Agendapunkt
+                 "Ja, zurück zum Incident. Als Root Cause halten wir fest: blockierende Postgres-Migration.",
+                 "Ich will noch mal zur Ursache was sagen.",
+                 "Das hat zwar die Pods zurückgesetzt, aber nicht das Datenbank-Schema."]:
+        assert angekuendigter_punkt(satz, titel, 2) is None, satz
+    assert angekuendigter_punkt("Lass uns nochmal kurz zu Punkt eins zurück.", titel, 0) is None  # schon dort
+
+
 def test_ergebnis_hinweis_fasst_offene_aufgaben_zusammen():
     from coach.ergebnisse import hinweise
 

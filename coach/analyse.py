@@ -155,10 +155,34 @@ _PUNKT_ORD = re.compile(r"\b(" + "|".join(ORDNUNG) + r")(?:e|en|er|es)\s+(?:punk
 _NAECHSTER = re.compile(r"n(?:ä|ae)chste[nrs]?\s+(?:punkt|thema|" + _PUNKTWORT + r"|top)\b", re.IGNORECASE)
 
 
+# Rückwärts-Ansage („Lass uns nochmal kurz zu Punkt eins zurück“, „zurück zur Ursache“, „nochmal zu Punkt zwei“):
+# In allen drei Cloud-Läufen 08.10. kam der Satz wörtlich richtig im Live-Text an, ANKUENDIGUNG kannte aber nur
+# Vorwärts-Formeln – kein Wechsel (Ticket #17, Grenzfall 11). Zählt nur mit ausdrücklichem Ziel (Nummer,
+# Ordnungszahl, Titel), sonst wechselte „Gut, zurück zur Datenbank“ nach einer Abschweifung. Vertagen („wir kommen
+# später auf Punkt zwei zurück“, „darauf kommen wir nachher zurück“) ist keine Ansage.
+_RUECKWAERTS = re.compile(
+    r"\bzur(?:ü|ue)ck\s+(?:zu|zum|zur)\b|"  # „zurück zu Punkt eins“, „gehen wir zurück zur Ursache“
+    r"\b(?:zu|zum|zur)\s+(?:[\w.-]+\s+){1,4}?zur(?:ü|ue)ck(?:gehen|kommen|kehren|springen)?\b|"  # „zu P. 1 zurück“
+    # „nochmal zu Punkt zwei“ nur mit Punkt-Wort – „noch mal zu den Kosten: …“ ist ein Beitrag, kein Wechsel
+    r"\bnoch\s?(?:mal|einmal|mals)\s+(?:(?:kurz|eben|schnell)\s+)?(?:zu|zum)\s+(?:\w+\s+)?(?:punkt|top|"
+    + _PUNKTWORT + r")\b|"
+    r"\b(?:lass|lasst|kommen|gehen) (?:uns|wir)\b(?:\s+\w+){0,4}?\s+auf\s+(?:[\w.-]+\s+){1,4}?zur(?:ü|ue)ck",
+    re.IGNORECASE,
+)
+_VERTAGT = re.compile(r"\b(?:sp(?:ä|ae)ter|nachher|danach|anschlie(?:ß|ss)end|irgendwann|am ende|morgen|"
+                      r"n(?:ä|ae)chste[ns]? (?:mal|woche|termin|meeting|runde))\b", re.IGNORECASE)
+
+
+def rueckwaerts(text: str) -> bool:
+    """Ausdrückliche Rückkehr zu einem früheren Punkt (ohne Vertagung) – das Ziel prüft angekuendigter_punkt."""
+    return bool(_RUECKWAERTS.search(text)) and not _VERTAGT.search(text)
+
+
 def angekuendigter_punkt(text: str, titel: list[str], aktiv: int) -> int | None:
-    """Ausdrückliche Überleitung mit Ziel („weiter zu Punkt drei“, „zum nächsten Punkt“, „…zum Budget“):
-    Index des Agendapunkts, sonst None. Ohne Überleitungsformel nie – „Punkt drei war gut“ wechselt nicht."""
-    if not ankuendigung(text):
+    """Ausdrückliche Überleitung mit Ziel („weiter zu Punkt drei“, „zum nächsten Punkt“, „…zum Budget“,
+    „nochmal zurück zu Punkt eins“): Index des Agendapunkts, sonst None. Ohne Überleitungsformel nie –
+    „Punkt drei war gut“ wechselt nicht."""
+    if not (ankuendigung(text) or rueckwaerts(text)):
         return None
     ziel = None
     if t := _PUNKT_NR.search(text):
