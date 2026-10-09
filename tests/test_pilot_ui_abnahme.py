@@ -251,3 +251,77 @@ async def _agenda_mikro_mock_hold() -> None:
 
 def test_agenda_mikro_pointer_hold_und_release_sind_getrennter_frontend_mock():
     asyncio.run(_agenda_mikro_mock_hold())
+
+
+def test_terminpruefung_erlaubt_freitag_oder_iso_freitag_nur_im_laufzeitfenster():
+    from datetime import date
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from pilot_ui_abnahme import termin_enthalten, ui_semantik_enthalten
+
+    start = date(2026, 10, 9)
+    assert termin_enthalten("Aufgabe bis Freitag", start)
+    assert termin_enthalten("Sabine liefert bis2026-10-16", start)
+    assert not termin_enthalten("Sabine liefert bis 2026-10-23", start)  # Freitag, aber außerhalb +7 Tage
+    assert not termin_enthalten("Sabine liefert bis 2026-10-15", start)  # innerhalb, aber kein Freitag
+    assert not termin_enthalten("Sabine liefert irgendwann", start)
+
+    basis = "Budget 9.000 Euro, Zuschuss 3.500 Euro, Verantwortliche Sabine"
+    assert ui_semantik_enthalten(basis + ", Termin 2026-10-16", start)
+    assert not ui_semantik_enthalten(basis + ", Termin 2026-10-23", start)
+
+
+def test_fehlerdetails_entfernen_query_und_url_credentials():
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from pilot_ui_abnahme import sichere_details
+
+    detail = sichere_details("GET https://user:pass@example.test/handy?k=KOPPLUNG&meeting=GEHEIM#x failed")
+    assert "KOPPLUNG" not in detail and "GEHEIM" not in detail
+    assert "user:pass" not in detail
+    assert "https://example.test/handy" in detail
+
+
+def test_screenshot_gallery_zeigt_nur_bilder_des_aktuellen_laufs(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from pilot_ui_abnahme import Lauf
+
+    lauf = Lauf(tmp_path / "lauf", "basis")
+    (lauf.ordner / "screenshots" / "alter-fehler.png").touch()
+    lauf.schreiben()
+    gallery = (lauf.ordner / "bericht.html").read_text(encoding="utf-8")
+    assert "alter-fehler.png" not in gallery
+
+
+def test_premium_stimmenwahl_per_ui_verhindert_ungueltige_paarung():
+    async def run():
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(executable_path="/usr/bin/chromium", headless=True, args=["--no-sandbox"])
+            page = await browser.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            await page.goto(_base_url())
+            await page.locator("#karte-premium").click()
+            await page.wait_for_url("**/meeting")
+            await page.wait_for_function("() => zustand?.stufe === 'premium'")
+            await page.locator("#btn-mehr").click()
+            await page.locator("#btn-einstellungen").click()
+            mode, voice = page.locator("#e-modus"), page.locator("#e-stimme")
+            assert await voice.locator('option[value="nova"], option').evaluate_all(
+                "opts => opts.find(o => o.value === 'nova').disabled")
+            await mode.select_option("text")
+            await page.wait_for_function("() => zustand?.einstellungen.modus === 'text'")
+            await voice.select_option("nova")
+            await page.wait_for_function("() => zustand?.einstellungen.stimme === 'nova'")
+            await mode.select_option("gespraech")
+            await page.wait_for_function("() => document.getElementById('e-modus').value === 'text'")
+            assert await page.evaluate("() => zustand.einstellungen.modus") == "text"
+            assert await page.evaluate("() => zustand.einstellungen.stimme") == "nova"
+            await voice.select_option("cedar")
+            await page.wait_for_function("() => zustand?.einstellungen.stimme === 'cedar'")
+            await mode.select_option("gespraech")
+            await page.wait_for_function("() => zustand?.einstellungen.modus === 'gespraech'")
+            assert not errors
+            await browser.close()
+    asyncio.run(run())

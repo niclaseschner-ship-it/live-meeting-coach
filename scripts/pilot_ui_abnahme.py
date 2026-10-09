@@ -24,8 +24,9 @@ import json
 import os
 import re
 import time
+import traceback
 import zipfile
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -55,6 +56,7 @@ UI = {
     "meeting_start": "#btn-start",
     "meeting_stop": "#btn-stopp",
     "transcript_toggle": "#btn-transkript",
+    "transcript_close": "#leiste-zu",
     "transcript": "#transkript",
     "result_cards": "#vl-buehne",
     "package": "#btn-paket",
@@ -71,6 +73,46 @@ SOLLFRAGMENTE = {
     "Verantwortliche": re.compile(r"Sabine", re.I),
     "Termin": re.compile(r"Freitag", re.I),
 }
+SOLLFRAGMENTE_OHNE_TERMIN = {k: v for k, v in SOLLFRAGMENTE.items() if k != "Termin"}
+_URL_RE = re.compile(r"(?i)\b(?:https?|wss?)://[^\s<>\"']+")
+
+
+def termin_enthalten(text: str, laufbeginn: date | datetime | str) -> bool:
+    """Freitag oder ein explizites ISO-Freitagsdatum von Laufstart bis +7 Tage."""
+    if SOLLFRAGMENTE["Termin"].search(text):
+        return True
+    return any(re.search(rf"(?<!\d){tag}(?!\d)", text)
+               for tag in iso_freitagsfenster(laufbeginn))
+
+
+def iso_freitagsfenster(laufbeginn: date | datetime | str) -> list[str]:
+    if isinstance(laufbeginn, str):
+        laufbeginn = datetime.fromisoformat(laufbeginn).date()
+    elif isinstance(laufbeginn, datetime):
+        laufbeginn = laufbeginn.date()
+    freitage = []
+    for offset in range(8):
+        tag = laufbeginn + timedelta(days=offset)
+        if tag.weekday() == 4:
+            freitage.append(tag.isoformat())
+    return freitage
+
+
+def ui_semantik_enthalten(text: str, laufbeginn: date | datetime | str) -> bool:
+    return (all(pattern.search(text) for pattern in SOLLFRAGMENTE_OHNE_TERMIN.values())
+            and termin_enthalten(text, laufbeginn))
+
+
+def sichere_details(text: str) -> str:
+    """Entfernt Query/Fragment aus URLs in Fehlerdetails und Stacktraces."""
+    def ersetzen(match: re.Match) -> str:
+        url = match.group(0)
+        suffix = ""
+        while url and url[-1] in ".,;:)]}":
+            suffix = url[-1] + suffix
+            url = url[:-1]
+        return protokoll_url(url) + suffix
+    return _URL_RE.sub(ersetzen, text)
 
 
 def kompaktmaterial() -> tuple[np.ndarray, dict]:
@@ -114,14 +156,19 @@ class Lauf:
         (ordner / "screenshots").mkdir(exist_ok=True)
         self.stufe = stufe
         self.start = time.monotonic()
+        self.started_at = datetime.now().astimezone()
+        self.screenshots: list[str] = []
         self.pruefungen: list[dict] = []
         self.fehler: list[str] = []
-        self.belege: dict = {"laufart": "echte UI-Klickabnahme", "gestartet": datetime.now().astimezone().isoformat(),
+        self.belege: dict = {"laufart": "echte UI-Klickabnahme", "gestartet": self.started_at.isoformat(),
                              "stufe": stufe,
                              "offline_semantisch_bestanden": False}
 
     def pruefen(self, name: str, ok: bool, detail: str = "") -> None:
-        print(f"[{self.stufe}] {'OK' if ok else 'FEHLT'}: {name}", flush=True)
+        try:
+            print(f"[{self.stufe}] {'OK' if ok else 'FEHLT'}: {name}", flush=True)
+        except BrokenPipeError:
+            pass  # Ein Chat-/Terminalwechsel darf die Browserabnahme nicht abbrechen.
         self.pruefungen.append({"name": name, "status": "ok" if ok else "fehlt", "detail": detail})
         if not ok:
             self.fehler.append(name + (": " + detail if detail else ""))
@@ -130,7 +177,10 @@ class Lauf:
         self.pruefungen.append({"name": name, "status": "offline", "detail": detail})
 
     async def screenshot(self, page: Page, name: str) -> None:
-        await page.screenshot(path=str(self.ordner / "screenshots" / f"{name}.png"), full_page=True)
+        datei = f"{name}.png"
+        await page.screenshot(path=str(self.ordner / "screenshots" / datei), full_page=True)
+        if datei not in self.screenshots:
+            self.screenshots.append(datei)
 
     def schreiben(self) -> None:
         self.belege["pruefungen"] = self.pruefungen
@@ -144,9 +194,10 @@ class Lauf:
         rows = "".join(
             f"<tr><td>{html.escape(p['status'])}</td><td>{html.escape(p['name'])}</td>"
             f"<td>{html.escape(p['detail'])}</td></tr>" for p in self.pruefungen)
-        bilder = "".join(f'<figure><figcaption>{html.escape(p.stem)}</figcaption><a href="screenshots/{p.name}">'
-                         f'<img loading="lazy" src="screenshots/{p.name}"></a></figure>'
-                         for p in sorted((self.ordner / "screenshots").glob("*.png")))
+        bilder = "".join(f'<figure><figcaption>{html.escape(Path(name).stem)}</figcaption>'
+                         f'<a href="screenshots/{html.escape(name)}">'
+                         f'<img loading="lazy" src="screenshots/{html.escape(name)}"></a></figure>'
+                         for name in self.screenshots)
         (self.ordner / "bericht.html").write_text(
             "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>UI-Abnahme</title>"
             "<style>body{font:16px system-ui;margin:24px auto;max-width:1100px;padding:16px;color:#182033}"
@@ -170,7 +221,14 @@ async def warte(page: Page, predicate: str, timeout: float = 20) -> bool:
 def protokoll_url(url: str) -> str:
     """Query und Fragment verbergen, weil QR-Links Kopplungsdaten enthalten."""
     p = urlparse(url)
-    return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
+    host = p.hostname or ""
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    try:
+        port = f":{p.port}" if p.port else ""
+    except ValueError:
+        port = ""
+    return urlunparse((p.scheme, host + port, p.path, "", "", ""))
 
 
 async def zustand(page: Page) -> dict:
@@ -404,18 +462,24 @@ async def meeting_starten(page: Page, stufe: str, lauf: Lauf) -> None:
     lauf.pruefen("Kernknöpfe gleich hoch und kompakt", len(heights) == 5 and max(heights) - min(heights) < 2 and max(heights) <= 90,
                  f"Höhen: {[round(h, 1) for h in heights]}")
     await lauf.screenshot(page, "dashboard_live")
-    if stufe == "basis":
-        taste = page.locator("#btn-taste")
-        if await taste.is_visible():
-            await taste.focus()
-            await page.keyboard.down("Space")
+
+
+async def space_taste_pruefen(page: Page, stufe: str, lauf: Lauf) -> None:
+    if stufe != "basis":
+        return
+    taste = page.locator("#btn-taste")
+    if await taste.is_visible():
+        await taste.focus()
+        await page.keyboard.down("Space")
+        try:
             gehalten = await warte(page, "() => document.getElementById('btn-taste')?.classList.contains('haelt')",
                                    timeout=3)
             await asyncio.sleep(0.2)
+        finally:
             await page.keyboard.up("Space")
-            lauf.pruefen("Leertaste löst bei fokussierter Sprechtaste Halten aus", gehalten)
-        else:
-            lauf.ueberspringen("Leertaste auf Sprechtaste", "Basis-Sprechtaste ist in diesem Offline-Zustand verborgen")
+        lauf.pruefen("Leertaste löst bei fokussierter Sprechtaste Halten aus", gehalten)
+    else:
+        lauf.ueberspringen("Leertaste auf Sprechtaste", "Basis-Sprechtaste ist in diesem Offline-Zustand verborgen")
 
 
 async def begruessung_abwarten(page: Page, letzte_stimme: dict, lauf: Lauf) -> None:
@@ -460,6 +524,9 @@ async def audio_abspielen(page: Page, phone: Page, lauf: Lauf, letzte_stimme: di
 
     # Nur das gekoppelte Handy empfängt und spielt die Stimme tatsächlich ab.
     await begruessung_abwarten(phone, letzte_stimme, lauf)
+    # PTT-Keycheck erst nach Begrüßung; selbst kurze Test-Aktivität darf deren
+    # tatsächliche Sprachaufnahme weder triggern noch überlappen.
+    await space_taste_pruefen(page, lauf.stufe, lauf)
     pcm, _referenz = kompaktmaterial()
     encoded = base64.b64encode(pcm.tobytes()).decode("ascii")
     await phone.evaluate("b => window.__testMikro.laden(91, b)", encoded)
@@ -516,16 +583,18 @@ async def audio_abspielen(page: Page, phone: Page, lauf: Lauf, letzte_stimme: di
     lauf.pruefen("Neue Ergebnis-Karte nach UI-Klick auf Ergebnisse bündeln", karte_da)
     if not karte_da:
         raise RuntimeError("Der UI-Klick erzeugte keine neue Zusammenfassungs-Karte")
+    termin_js = "|".join(["Freitag", *iso_freitagsfenster(lauf.started_at)])
     await warte(page,
         "() => { const t = document.getElementById('vl-buehne')?.innerText || ''; "
         "return /(?:9\\s*[.]?\\s*000|neun\\s*tausend)/i.test(t) && "
         "/(?:3\\s*[.]?\\s*500|drei\\s*tausend\\s*f[uü]nfhundert)/i.test(t) && "
-        "/Sabine/i.test(t) && /Freitag/i.test(t); }", timeout=30)
+        "/Sabine/i.test(t) && new RegExp(" + json.dumps(termin_js) + ", 'i').test(t); }", timeout=30)
     cards = await page.locator(UI["result_cards"]).inner_text()
     lauf.belege["ergebnis_karten_text"] = cards
-    card_ok = all(pattern.search(cards) for pattern in SOLLFRAGMENTE.values())
+    card_ok = ui_semantik_enthalten(cards, lauf.started_at)
     lauf.pruefen("Beschluss und Aufgabe in sichtbarer Ergebnis-Karte", card_ok,
-                 "Alle vier Aussagen gefunden" if card_ok else "Karteninhalt enthält nicht alle Sollfragmente")
+                 "Aussagen inkl. Freitag/ISO-Freitag im 7-Tage-Fenster gefunden" if card_ok else
+                 "Karteninhalt enthält nicht alle Sollfragmente oder nennt einen Termin außerhalb des 7-Tage-Fensters")
     finaler_stand = await zustand(page)
     lauf.belege["ki_zustand"] = {
         "stufe": finaler_stand.get("stufe"),
@@ -538,6 +607,10 @@ async def audio_abspielen(page: Page, phone: Page, lauf: Lauf, letzte_stimme: di
 
 
 async def abschluss_und_paket(page: Page, lauf: Lauf) -> None:
+    panel_zu = await transkriptpanel_schliessen(page)
+    lauf.pruefen("Transkriptpanel per sichtbarem Schließenknopf vor Meetingende geschlossen", panel_zu)
+    if not panel_zu:
+        raise RuntimeError("Transkriptpanel ließ sich vor dem Beenden nicht über den UI-Knopf schließen")
     await page.locator(UI["meeting_stop"]).click()
     if not await warte(page, "() => location.pathname.includes('abschluss') || "
                             "!document.getElementById('ab-inhalt')?.hidden", timeout=30):
@@ -565,18 +638,35 @@ async def abschluss_und_paket(page: Page, lauf: Lauf) -> None:
                           if "transkript.md" in names else "")
     lauf.belege["paket_dateien"] = names
     online_semantik = bool(online and protocol_name and not missing)
-    prot_ok = (online_semantik and
-               all(pattern.search(protocol) for pattern in SOLLFRAGMENTE.values()) and
-               all(pattern.search(transcript_zip) for pattern in SOLLFRAGMENTE.values()))
+    protocol_text_ok = ui_semantik_enthalten(protocol, lauf.started_at)
+    transcript_zip_ok = all(pattern.search(transcript_zip) for pattern in SOLLFRAGMENTE.values())
+    prot_ok = online_semantik and protocol_text_ok and transcript_zip_ok
     lauf.pruefen("UI-ZIP enthält Pflichtdateien und Beschluss/Aufgabe in Protokoll und Transkript",
                  prot_ok,
                  "Semantische Prüfung nur online" if online_semantik else
                  ("Pflichtdateien fehlen: " + ", ".join(missing) if missing else
                   "Offline/Modell nicht bestätigt; ZIP-Inhalt ist kein KI-Semantiknachweis"))
+    lauf.belege["protokoll_semantik"] = {
+        "inhalt_vorhanden": protocol_text_ok,
+        "terminfenster_start": lauf.started_at.date().isoformat(),
+        "zulaessige_iso_freitage": iso_freitagsfenster(lauf.started_at),
+        "transkript_enthaelt_freitag": transcript_zip_ok,
+    }
     # Ein Offline-Lauf darf lokale UI-Prüfungen bestehen, aber nie als semantischer Erfolg gelten.
     lauf.belege["offline_semantisch_bestanden"] = False
     lauf.belege["semantik_bestanden"] = bool(lauf.belege.get("semantik_bestanden") and prot_ok and online_semantik)
     await lauf.screenshot(page, "abschluss")
+
+
+async def transkriptpanel_schliessen(page: Page) -> bool:
+    panel = page.locator("#leiste")
+    if not await panel.count() or not await panel.is_visible():
+        return True
+    close_button = page.locator(UI["transcript_close"])
+    if not await close_button.is_visible():
+        return False
+    await close_button.click()
+    return await warte(page, "() => document.getElementById('leiste')?.hidden === true", timeout=5)
 
 
 async def run(args) -> Lauf:
@@ -594,11 +684,18 @@ async def run(args) -> Lauf:
         import cloudtest_takt as takt
         await context.add_init_script(takt.INIT_SCRIPT)
         page = await context.new_page()
+        async def dialog_beantworten(dialog):
+            if dialog.type == "alert":
+                report.fehler.append(sichere_details(f"Browser-Fehlermeldung: {dialog.message}"))
+                await dialog.dismiss()
+            else:
+                await dialog.accept()  # ausschließlich eigene synthetische Testrunde
+        page.on("dialog", dialog_beantworten)
         letzte_stimme = {"zeit": None}
         stimmen_mithoeren(page, letzte_stimme)
-        page.on("pageerror", lambda e: report.fehler.append(f"Browser-JS: {e}"))
+        page.on("pageerror", lambda e: report.fehler.append(sichere_details(f"Browser-JS: {e}")))
         page.on("requestfailed", lambda r: report.fehler.append(
-            f"Netzwerk: {r.method} {protokoll_url(r.url)} ({r.failure})"))
+            sichere_details(f"Netzwerk: {r.method} {r.url} ({r.failure})")))
         phone_context = None
         try:
             await anmelden(page, args.url, passwort, report)
@@ -608,13 +705,15 @@ async def run(args) -> Lauf:
             await meeting_starten(page, args.stufe, report)
             report.pruefen("Tatsächlicher Desktop-Klick auf btn-start", True)
             if args.bis_start:
+                await space_taste_pruefen(page, args.stufe, report)
                 report.ueberspringen("Live-ASR, Ergebniskarte und Paket-Semantik",
                                      "Lokaler Offline-UI-Lauf endet nach dem Meetingstart")
             else:
                 await audio_abspielen(page, phone, report, letzte_stimme)
                 await abschluss_und_paket(page, report)
         except Exception as exc:
-            report.fehler.append(f"Lauf abgebrochen: {type(exc).__name__}: {str(exc)[:300]}")
+            report.belege["ausnahme_traceback"] = sichere_details(traceback.format_exc())
+            report.fehler.append(sichere_details(f"Lauf abgebrochen: {type(exc).__name__}: {exc}"))
             try:
                 await report.screenshot(page, "fehler")
             except Exception:
@@ -622,6 +721,8 @@ async def run(args) -> Lauf:
         finally:
             # Eigene synthetische Testrunden über die UI beenden, auch bei fehlgeschlagener Abnahme.
             try:
+                if not await transkriptpanel_schliessen(page):
+                    raise RuntimeError("Transkriptpanel ließ sich nicht über den sichtbaren Schließenknopf schließen")
                 stop = page.locator(UI["meeting_stop"])
                 if await stop.count() and await stop.is_visible():
                     await stop.click()
@@ -629,12 +730,12 @@ async def run(args) -> Lauf:
                 fertig = page.locator("#btn-fertig")
                 if await fertig.count() and await fertig.is_visible():
                     await page.wait_for_function("() => !document.getElementById('btn-fertig')?.disabled", timeout=120_000)
-                    page.once("dialog", lambda d: d.accept())
                     await fertig.click()
                     await page.wait_for_function("() => document.getElementById('btn-fertig')?.disabled", timeout=15_000)
                     report.belege["test_cleanup"] = "Eigene Testrunde über UI abgeschlossen; automatische 5-Minuten-Rückkehrfrist"
             except Exception as exc:
-                report.fehler.append(f"UI-Testabschluss fehlgeschlagen: {type(exc).__name__}")
+                report.belege["cleanup_traceback"] = sichere_details(traceback.format_exc())
+                report.fehler.append(sichere_details(f"UI-Testabschluss fehlgeschlagen: {type(exc).__name__}: {exc}"))
             if phone_context:
                 await phone_context.close()
             await context.close()
