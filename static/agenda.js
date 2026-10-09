@@ -12,21 +12,22 @@ let agendaPunkte = [];       // [{titel, minuten, ziel}] – die Arbeitskopie, d
 let agendaLaeuft = false;    // ein Vorschlag (Text oder Sprache) ist unterwegs
 let agendaSchluesselDa = true;
 let agendaHoert = false;     // Mikro-Aufnahme läuft, bis zum zweiten Klick
+let agendaDialog = [];      // nur im offenen Tab, nicht dauerhaft gespeichert
 
 function agendaInit() {
   $("f-agenda-eingabe").replaceChildren(
     el("div", { class: "agenda-eingabe" },
       el("textarea", {
         id: "agenda-feld", rows: "2",
-        placeholder: "Einladung hier einfügen oder sagen, was ansteht – Nestor füllt den Rest aus",
+        placeholder: "Beschreibe euer Vorhaben – Nestor entwirft eine Agenda und fragt bei Unklarheiten nach. Auch Einladungen lassen sich einfügen.",
       }),
       el("div", { class: "agenda-knoepfe" },
         el("button", { id: "agenda-mikro", class: "icon", type: "button",
           "data-tip": "Sprechen – bis zum zweiten Klick" }, icon("mikro")),
         el("button", { id: "agenda-senden", class: "primaer klein", type: "button" }, "Absenden"))),
-    el("p", { id: "agenda-antwort", class: "agenda-antwort", hidden: "" }),
+    el("p", { id: "agenda-antwort", class: "agenda-antwort", role: "status", "aria-live": "polite", hidden: "" }),
     el("p", { id: "agenda-hinweis", class: "agenda-hinweis leise-text", hidden: "" },
-      "Ohne OpenAI-Schlüssel nicht möglich – die Tabelle lässt sich weiterhin von Hand bearbeiten."));
+      "Ohne KI-Verbindung nicht möglich – die Tabelle lässt sich weiterhin von Hand bearbeiten."));
   $("f-agenda").replaceChildren(
     el("div", { id: "agenda-tabelle", class: "agenda-tabelle" }),
     el("p", { id: "agenda-summe", class: "agenda-summe leise-text" }));
@@ -75,6 +76,7 @@ function agendaVerschieben(i, richtung) {
 
 // Vom Server übernommene Agenda (anderer Tab, anderes Gerät) – aufgerufen aus app.js: formAusServer().
 function agendaVonServer(agenda) {
+  agendaDialog = [];
   agendaPunkte = agenda.map((p) => ({ titel: p.titel ?? "", ziel: p.ziel ?? "", minuten: p.minuten ?? 10 }));
   agendaTabelleRendern();
 }
@@ -101,29 +103,40 @@ function agendaBisherWert() {
   if (!agendaPunkte.length && !titel && !ziel && !teilnehmende.length) return null;
   return { titel, ziel, punkte: agendaPunkte, teilnehmende };
 }
-function agendaUebernehmen(d) {
+function agendaUebernehmen(d, eingabe = "") {
   agendaPunkte = (d.punkte ?? []).map((p) => ({ titel: p.titel ?? "", ziel: p.ziel ?? "", minuten: p.minuten ?? 10 }));
   if (d.titel) $("f-titel").value = d.titel;
   if (d.ziel) $("f-ziel").value = d.ziel;
   if (d.teilnehmende?.length) teilnehmendeSetzen(d.teilnehmende);
   $("agenda-antwort").hidden = !d.antwort;
-  $("agenda-antwort").textContent = d.antwort ?? "";
+  $("agenda-antwort").textContent = (d.status === "rueckfrage" ? "Rückfrage: " : "") + (d.antwort ?? "");
+  $("agenda-feld").placeholder = d.status === "rueckfrage"
+    ? "Antworte hier auf Nestors Rückfrage …" : "Agenda ergänzen oder ändern – oder ein neues Vorhaben beschreiben …";
+  if (eingabe && d.status !== "fehler") {
+    agendaDialog.push({ role: "user", content: eingabe }, { role: "assistant", content: d.antwort ?? "" });
+    agendaDialog = agendaDialog.slice(-8);
+  }
+  if (d.status === "rueckfrage") $("agenda-feld").focus();
   agendaTabelleRendern();
 }
 function agendaLaufendSetzen(an) {
   agendaLaeuft = an;
   agendaSchluesselRendern(agendaSchluesselDa);
-  $("agenda-senden").textContent = an ? "…" : "Absenden";
+  $("agenda-senden").textContent = an ? "Agenda wird vorbereitet …" : "Absenden";
 }
 async function agendaSenden() {
   const text = $("agenda-feld").value.trim();
   if (!text || agendaLaeuft) return;
   agendaLaufendSetzen(true);
   try {
-    const d = await api("/api/agenda/vorschlag", { eingabe: text, bisher: agendaBisherWert() });
-    $("agenda-feld").value = "";
-    agendaUebernehmen(d);
-  } finally { agendaLaufendSetzen(false); }
+    const d = await api("/api/agenda/vorschlag", { eingabe: text, bisher: agendaBisherWert(), verlauf: agendaDialog });
+    if (!d) return; // api zeigt Fehler; Eingabe für erneuten Versuch behalten
+    if (d.status !== "fehler") $("agenda-feld").value = "";
+    agendaUebernehmen(d, text);
+  } finally {
+    agendaLaufendSetzen(false);
+    if ($("agenda-antwort").textContent.startsWith("Rückfrage:")) $("agenda-feld").focus();
+  }
 }
 
 // ---------- Eingabe: Sprache (eigener kurzer Mitschnitt, kein Dauerstrom wie das Meeting-Mikro) ----------
@@ -189,9 +202,10 @@ async function agendaSpracheSenden(wav) {
     const form = new FormData();
     form.append("datei", wav, "agenda.wav");
     form.append("bisher", JSON.stringify(agendaBisherWert()));
+    form.append("verlauf", JSON.stringify(agendaDialog));
     const r = await fetch("/api/agenda/sprache", { method: "POST", body: form });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Fehler: ${d.detail ?? r.status}`); return; }
-    agendaUebernehmen(d);
+    agendaUebernehmen(d, d.eingabe);
   } finally { agendaLaufendSetzen(false); }
 }

@@ -20,7 +20,7 @@ def _bereit():
     if coach.hoerstrom is not None:
         raise HTTPException(409, "Während des Meetings nicht möglich.")
     if coach._client is None:
-        raise HTTPException(409, "Ohne OpenAI-Schlüssel nicht möglich.")
+        raise HTTPException(409, "Ohne eingerichtete KI-Verbindung nicht möglich.")
     return coach
 
 
@@ -36,7 +36,8 @@ async def agenda_vorschlag(daten: dict):
     if not eingabe:
         raise HTTPException(400, "Eingabe fehlt.")
     try:
-        return await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe, daten.get("bisher"))
+        return await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe,
+                                       daten.get("bisher"), daten.get("verlauf"))
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
@@ -44,12 +45,16 @@ async def agenda_vorschlag(daten: dict):
 
 
 @router.post("/api/agenda/sprache")
-async def agenda_sprache(bisher: str = Form("null"), datei: UploadFile = File(...)):
+async def agenda_sprache(bisher: str = Form("null"), verlauf: str = Form("[]"), datei: UploadFile = File(...)):
     coach = _bereit()
     try:
         bisher_dict = json.loads(bisher)
     except json.JSONDecodeError:
         bisher_dict = None
+    try:
+        dialog = json.loads(verlauf)
+    except json.JSONDecodeError:
+        dialog = []
     wav = await datei.read()
     try:
         eingabe = await transkription.text(coach._client, EINST.text_modell, wav, EINST.sprache, "")
@@ -58,7 +63,7 @@ async def agenda_sprache(bisher: str = Form("null"), datei: UploadFile = File(..
     if not eingabe.strip():
         raise HTTPException(400, "Darin war nichts zu verstehen.")
     try:
-        ergebnis = await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe, bisher_dict)
+        ergebnis = await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe, bisher_dict, dialog)
     except Exception as e:  # noqa: BLE001
         raise _fehler(e) from e
     return {**ergebnis, "eingabe": eingabe}

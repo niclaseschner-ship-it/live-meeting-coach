@@ -137,6 +137,13 @@ eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbei
 sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Mit „Nur auf Knopfdruck“ gilt
 das Absenden einer Spracheingabe als Knopfdruck.
 
+**Pilotfeedback (Ticket #49):** Auch eine freie Beschreibung eines Vorhabens ohne fertige Tagesordnung
+ergibt einen strukturierten Agendaentwurf, nicht bloß ein befülltes Ziel. Fehlende Minuten werden geschätzt
+und als Schätzung kenntlich gemacht. Fehlen Thema oder beabsichtigtes Ergebnis, erscheinen konkrete Rückfragen;
+eine Folgeantwort verwendet den bisherigen Dialog. Während einer Rückfrage bleiben bestehende Felder und
+Agendapunkte unverändert. Der kurze Vorbereitungsdialog bleibt nur im offenen Browser-Tab und wird nicht
+dauerhaft gespeichert. Text und Sprache verwenden denselben Ablauf.
+
 Daneben gibt es „Weitere Regeln“: ein Freitext in einer eigenen, neutral gestalteten Gruppe unterhalb der
 Gesprächsregeln – deutlich von den prüfbaren Regeln abgehoben (anderes Symbol, gestrichelter Rahmen, eigener
 Untertitel „Nestor liest sie zu Beginn vor – prüfen kann er sie nicht“), damit auf einen Blick klar ist, dass

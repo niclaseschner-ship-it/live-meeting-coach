@@ -4,7 +4,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from coach.agenda_prompt import MAX_MINUTEN, MAX_PUNKTE, agenda_vorschlagen, normalisieren
+from coach.agenda_prompt import MAX_MINUTEN, MAX_PUNKTE, agenda_vorschlagen, normalisieren, dialog_nachrichten
 
 
 def _client(*antworten):
@@ -50,7 +50,7 @@ def test_normalisieren_behaelt_bisheriges_ziel_und_teilnehmende_wenn_nichts_komm
 
 
 def test_normalisieren_begrenzt_teilnehmende():
-    roh = {"punkte": [], "teilnehmende": [f"Person {i}" for i in range(30)]}
+    roh = {"punkte": [{"titel": "Planen", "minuten": 10}], "teilnehmende": [f"Person {i}" for i in range(30)]}
     erg = normalisieren(roh, None)
     assert len(erg["teilnehmende"]) == 20
 
@@ -182,3 +182,42 @@ def test_gezielter_aenderungswunsch_an_bisheriges_ziel():
     assert erg["ziel"] == "Neues Ziel"
     assert erg["titel"] == "Teamrunde"
     assert erg["teilnehmende"] == ["Lea", "Jonas"]
+
+
+def test_rueckfrage_bewahrt_alle_bestehenden_felder():
+    bisher = {"titel": "Team", "ziel": "Planen", "teilnehmende": ["Lea"],
+              "punkte": [{"titel": "Budget", "minuten": 10, "ziel": "Rahmen klären"}]}
+    erg = normalisieren({"status": "rueckfrage", "punkte": [], "ziel": "Nicht übernehmen",
+                         "antwort": "Welchen Punkt soll ich ändern?"}, bisher)
+    assert erg["status"] == "rueckfrage"
+    for feld, wert in bisher.items():
+        assert erg[feld] == wert
+
+
+def test_nur_ziel_ist_keine_stille_erfolgsantwort():
+    erg = normalisieren({"ziel": "Hausbau", "punkte": [], "antwort": "Ziel übernommen."}, None)
+    assert erg["status"] == "rueckfrage" and "?" in erg["antwort"]
+    assert erg["ziel"] == ""  # keine unvollständige Eingabe als fertiges Meeting ausgeben
+
+
+def test_dialog_begrenzt_und_ohne_systemrollen():
+    verlauf = [{"role": "user", "content": "a" * 3000}] * 9 + [{"role": "system", "content": "nein"}]
+    erg = dialog_nachrichten(verlauf)
+    assert len(erg) == 7 and all(len(n["content"]) == 2000 for n in erg)
+    assert dialog_nachrichten("kaputt") == []
+
+
+def test_folgeantwort_erhaelt_rueckfragekontext():
+    gesehen = {}
+    async def create(**kwargs):
+        gesehen.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=_json(
+            status="entwurf", titel="WG-Hausbau", punkte=[{"titel": "Keller", "minuten": 15}],
+            antwort="Ein Entwurf mit geschätzten Zeiten.")))])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    dialog = [{"role": "user", "content": "Wir wollen etwas gemeinsam planen."},
+              {"role": "assistant", "content": "Welches Vorhaben?"}]
+    erg = asyncio.run(agenda_vorschlagen(client, "modell", "Ein Hausbau mit der WG", None, dialog))
+    assert gesehen["messages"][1:3] == dialog
+    assert "Hausbau" in gesehen["messages"][-1]["content"]
+    assert erg["status"] == "entwurf" and erg["punkte"]
