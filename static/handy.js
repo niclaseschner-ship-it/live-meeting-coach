@@ -6,6 +6,7 @@
 
 let reiter = "transkript";
 let mikroGewollt = false;   // der Mensch will, dass dieses Handy zuhört – bei Abriss neu verbinden
+let mikroStartet = false;
 let laufzeit = null;        // ms Hin und zurück zum Laptop
 let wachSperre = null;
 let wachStand = "";         // "an" | "fehlt" | "aus"
@@ -37,7 +38,7 @@ $("koppeln-form").onsubmit = (e) => {
 // ---------- Verbindung ----------
 function verbinden() {
   ws = new WebSocket(`${wsBasis()}/ws?geraet=handy&handy_id=${encodeURIComponent(handyKennung())}`);
-  ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); ping(); };
+  ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); ping(); rendern(); };
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
     if (d.typ === "stimme") return lautsprecher && stimme.abspielen(d.pcm);
@@ -69,17 +70,19 @@ setInterval(ping, 5000);
 
 // ---------- Mikrofon ----------
 async function mikroStarten() {
-  stimme.bereit(); // aus dem Tipp heraus – sonst darf das Handy keinen Ton abspielen
+  if (mikroStartet) return;
+  mikroStartet = true; rendern();
   try {
+    stimme.bereit(); // aus dem Tipp heraus – sonst darf das Handy keinen Ton abspielen
     await mikro.starten(zustand?.einstellungen?.assistent ?? true, "handy");
     mikroGewollt = true;
     wachHalten();
   } catch (e) {
     mikroGewollt = false;
+    await mikro.stoppen();
     alert(window.isSecureContext ? `Mikrofon nicht verfügbar: ${e.message ?? e}`
       : "Das Mikrofon geht nur über HTTPS – die Adresse aus dem QR-Code verwenden (https://…ts.net).");
-  }
-  rendern();
+  } finally { mikroStartet = false; rendern(); }
 }
 async function mikroStoppen() { mikroGewollt = false; await mikro.stoppen(); rendern(); }
 mikro.beiEnde = async (grund) => {
@@ -270,9 +273,17 @@ function rendern() {
 
   // Mikrofon
   const hier = mikro.laeuft();
+  $("btn-mikro").disabled = mikroStartet || ws?.readyState !== WebSocket.OPEN;
+  $("mikro-titel").textContent = aktiv ? "Raummikrofon" : "Meeting vorbereiten";
+  $("mikro-vorbereitung").hidden = aktiv || beendet;
+  const bereit = z.handys && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
+  $("mikro-vorbereitung").textContent = mikroStartet ? "Mikrofon wird aktiviert – erlaube den Zugriff, falls dein Browser fragt."
+    : bereit ? "✓ Mikrofon und Ton sind bereit. Du kannst das Meeting jetzt am Laptop starten. Lass diese Seite offen."
+    : hier ? "Mikrofon eingeschaltet – warte auf die Bestätigung vom Server. Lass diese Seite offen."
+    : "✓ Handy gekoppelt. Aktiviere jetzt Mikrofon und Ton, damit das Meeting starten kann. Eine gespeicherte Erlaubnis schaltet das Mikrofon nicht automatisch ein.";
   $("btn-mikro").classList.toggle("an", hier);
   $("btn-mikro").querySelector(".i").replaceChildren(icon(hier ? "mikro" : "mikroAus"));
-  $("mikro-text").textContent = !hier ? "Dieses Handy übernimmt Mikro und Ton"
+  $("mikro-text").textContent = mikroStartet ? "Mikrofon wird aktiviert …" : !hier ? "Mikrofon und Ton aktivieren"
     : z.hoeren ? "Handy hört zu – tippen zum Beenden" : "Bereit – hört zu, sobald das Meeting startet";
   $("quelle").textContent = !z.hoeren && !m.quelle ? "" : m.quelle === "handy" ? (hier ? "dieses Handy" : "ein anderes Handy")
     : m.quelle === "laptop" ? "Laptop hört zu" : "niemand hört zu";

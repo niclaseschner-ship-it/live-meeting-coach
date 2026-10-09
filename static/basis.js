@@ -148,6 +148,10 @@ const mikro = {
   faktor: 1, pos: 0, pegel: 0, quelle: null,
   beiEnde: null, // (grund) => …  "uebernommen" | "getrennt" | "mikro" – nur bei Ende ohne stoppen()
   async starten(echo, quelle = "laptop") {
+    // Im Benutzertipp aktivieren, nicht erst nach WebSocket/Berechtigungsdialog (mobile Autoplay-Regeln).
+    try { this.ctx = new AudioContext({ sampleRate: RATE }); }
+    catch { this.ctx = new AudioContext(); }
+    await this.ctx.resume();
     this.quelle = quelle;
     this.ws = new WebSocket(`${wsBasis()}/ws/audio?quelle=${quelle}${quelle === "handy" ? `&handy_id=${encodeURIComponent(handyKennung())}` : ""}`);
     this.ws.binaryType = "arraybuffer";
@@ -160,11 +164,11 @@ const mikro = {
     this.stream.getAudioTracks()[0].onended = () => { if (this.stream) this.beiEnde?.("mikro"); };
     let quelleKnoten;
     try { // 24 kHz direkt; Browser, die Mikrofon und Kontext nicht umrechnen (Firefox), bekommen die Gerätefrequenz
-      this.ctx = new AudioContext({ sampleRate: RATE });
       quelleKnoten = this.ctx.createMediaStreamSource(this.stream);
     } catch {
       await this.ctx?.close();
       this.ctx = new AudioContext();
+      await this.ctx.resume();
       quelleKnoten = this.ctx.createMediaStreamSource(this.stream);
     }
     this.faktor = this.ctx.sampleRate / RATE; this.pos = 0;

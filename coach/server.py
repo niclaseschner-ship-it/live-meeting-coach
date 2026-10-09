@@ -136,7 +136,8 @@ async def taktgeber() -> None:
         if coach.meeting.laeuft:
             if not coach.simulation_laeuft:  # im Abspielmodus taktet die Wiedergabe selbst
                 coach.takt()
-            await senden()  # Uhr und Assistent auch in stillen Phasen aktuell halten
+        if verbindungen:
+            await senden()  # auch Vorbereitung: Handy-Audio und Startbereitschaft aktuell halten (#53)
 
 
 @asynccontextmanager

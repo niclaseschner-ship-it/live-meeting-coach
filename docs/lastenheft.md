@@ -52,6 +52,10 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    verschwindet der große erste Schritt und eine kompakte Rückmeldung zeigt, ob Mikrofon und Ton bereit sind.
    Nach Trennung erscheint der erste Schritt erneut. Der Start bleibt bis zu frischem Handy-Audio und
    angeschaltetem Handylautsprecher gesperrt.
+   Direkt nach dem QR-Einstieg steht am Handy die Vorbereitung mit „Mikrofon und Ton aktivieren“ oben,
+   nicht unter den Meetingfunktionen. Eine frühere Berechtigung ersetzt diesen Tipp nicht. Beide Geräte
+   unterscheiden „gekoppelt“, „aktivieren“, „warte auf Audio“ und „bereit“; die Vorbereitung wird regelmäßig
+   aktualisiert und der mobile Mikrofon-AudioContext ausdrücklich im Benutzertipp aufgeweckt (#53).
 4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen: links Zeit, Agenda und die
    gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile, oben das Band
    (Abschnitt 4.10). Premium kann zusätzlich ein Live-Bild zeichnen und spricht im Realtime-Gespräch.

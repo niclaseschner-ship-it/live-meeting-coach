@@ -485,13 +485,17 @@ function rendern() {
   const handyVerbunden = !!z.handys;
   const handyBereit = handyVerbunden && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
   $("btn-start").disabled = !handyBereit;
-  $("btn-start").textContent = handyBereit ? "Meeting starten" : "Erst Handy verbinden";
+  const startHinweis = !handyVerbunden ? "Erst Handy verbinden"
+    : m.quelle !== "handy" ? "Am Handy Mikrofon aktivieren"
+    : m.luecke == null || m.luecke > 3 ? "Warte auf Handy-Audio"
+    : "Am Handy Ton aktivieren";
+  $("btn-start").textContent = handyBereit ? "Meeting starten" : startHinweis;
   $("handy-empfehlung").classList.toggle("verbunden", handyBereit);
   $("handy-empfehlung").hidden = handyVerbunden;
   $("handy-bereitschaft").hidden = !handyVerbunden;
   $("handy-bereitschaft").textContent = handyBereit
     ? "✓ Handy bereit – Mikrofon und Ton sind verbunden. Du kannst das Meeting starten."
-    : "Handy verbunden – schalte dort noch Mikrofon und Ton ein, dann kannst du starten.";
+    : `Handy gekoppelt – ${startHinweis}. Tippe am Handy oben auf „Mikrofon und Ton aktivieren“.`;
   $("handy-empfehlung-text").textContent = handyBereit
     ? "Bereit: Das Handy übernimmt Mikrofon und Ton. Lege es in die Tischmitte, lass den Bildschirm offen und starte das Meeting hier."
     : handyVerbunden ? "Handy verbunden. Tippe dort auf „Dieses Handy übernimmt Mikro und Ton“ und erlaube das Mikrofon. Danach wird der Meetingstart freigeschaltet."

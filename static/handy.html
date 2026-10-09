@@ -44,6 +44,22 @@
 
   <main id="app" hidden>
     <div id="warnung" class="h-warnung" hidden></div>
+    <!-- #53: Aktivierung direkt nach dem QR-Einstieg, nicht unter den Meetingfunktionen verstecken. -->
+    <section id="mikro-karte" class="h-karte">
+      <div class="h-zeile">
+        <h2 id="mikro-titel">Meeting vorbereiten</h2>
+        <span id="quelle" class="h-quelle"></span>
+      </div>
+      <p id="mikro-vorbereitung" class="leise">✓ Handy gekoppelt. Aktiviere jetzt Mikrofon und Ton, damit das Meeting starten kann. Eine gespeicherte Erlaubnis schaltet das Mikrofon nicht automatisch ein.</p>
+      <button id="btn-mikro" class="h-mikro"><span class="i"></span><span id="mikro-text">Mikrofon und Ton aktivieren</span></button>
+      <div class="h-pegel" aria-hidden="true"><i id="pegel"></i></div>
+      <p class="leise">Das Handy hört zu, und Nestor spricht über das Handy – so hört er sich nicht selbst.
+        Am Laptop wird dann nichts aufgenommen und nichts abgespielt.</p>
+      <div class="h-zeile h-klein">
+        <button id="btn-stumm" class="klein">Stumm schalten</button>
+        <span class="h-chips"><span id="wach" class="chip"></span><span id="laufzeit" class="chip"></span></span>
+      </div>
+    </section>
     <div id="ton-fehlt" class="h-warnung" hidden>Nestor hat keinen Lautsprecher und bleibt still.
       <button id="btn-ton-hier" class="klein">Hier abspielen</button></div>
 
@@ -90,22 +106,6 @@
         <button id="vl-neu" class="vl-neu" hidden></button>
       </div>
       <div id="vl-buehne" class="vl-buehne"></div>
-    </section>
-
-    <!-- Mikrofon -->
-    <section class="h-karte">
-      <div class="h-zeile">
-        <h2>Mikrofon</h2>
-        <span id="quelle" class="h-quelle"></span>
-      </div>
-      <button id="btn-mikro" class="h-mikro"><span class="i"></span><span id="mikro-text">Dieses Handy übernimmt Mikro und Ton</span></button>
-      <div class="h-pegel" aria-hidden="true"><i id="pegel"></i></div>
-      <p class="leise">Das Handy hört zu, und Nestor spricht über das Handy – so hört er sich nicht selbst.
-        Am Laptop wird dann nichts aufgenommen und nichts abgespielt.</p>
-      <div class="h-zeile h-klein">
-        <button id="btn-stumm" class="klein">Stumm schalten</button>
-        <span class="h-chips"><span id="wach" class="chip"></span><span id="laufzeit" class="chip"></span></span>
-      </div>
     </section>
 
     <!-- Transkript und alle Hinweise -->
