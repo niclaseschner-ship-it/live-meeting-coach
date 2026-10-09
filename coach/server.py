@@ -105,6 +105,11 @@ coach.beobachter.append(senden)
 
 lautsprecher: WebSocket | None = None  # der Tab, der das Meeting gestartet hat – nur er spielt Nestor ab
 geraet: dict[WebSocket, str] = {}       # Verbindung -> "laptop" | "handy", damit alle Seiten sehen, wo Nestor spricht
+handy_kennungen: dict[WebSocket, str] = {}  # anonyme Browserkennung, keine Registrierung
+
+
+def handy_verbindung():
+    return next((w for w in verbindungen if geraet.get(w) == "handy"), None)
 
 
 async def senden_direkt(nachricht: dict) -> None:
@@ -411,10 +416,15 @@ async def stopp(request: Request):
 
 
 @app.websocket("/ws/audio")
-async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
+async def ws_audio(ws: WebSocket, quelle: str = "laptop", handy_id: str = ""):
     """Mikrofon: PCM 16 bit, 24 kHz, mono als Binärnachrichten. Eine neue Quelle löst die alte ab (Code 4001) –
     zwei Mikrofone zugleich ergäben einen zerhackten Strom."""
     await ws.accept()
+    if quelle == "handy":
+        handy = handy_verbindung()
+        if handy is None or not handy_id or handy_kennungen.get(handy) != handy_id:
+            await ws.close(code=4409)
+            return
     alt = audio["ws"]
     audio.update(ws=ws, quelle="handy" if quelle == "handy" else "laptop", letzt=time.monotonic())
     ereignis("mikro_an", quelle=audio["quelle"], abgeloest=alt is not None)
@@ -576,11 +586,23 @@ async def simulation(daten: dict):
 
 
 @app.websocket("/ws")
-async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="geraet")):
+async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="geraet"), handy_id: str = ""):
     global lautsprecher
     await ws.accept()
+    alt = None
+    if geraet_art == "handy":
+        alt = handy_verbindung()
+        if not handy_id or len(handy_id) > 100 or (alt is not None and handy_kennungen.get(alt) != handy_id):
+            await ws.close(code=4409)
+            return
+        if alt is not None:
+            verbindungen.discard(alt)  # Neuladen desselben Handys übernimmt den einzigen Platz
+        handy_kennungen[ws] = handy_id
     verbindungen.add(ws)
     geraet[ws] = "handy" if geraet_art == "handy" else "laptop"
+    if alt is not None:
+        with contextlib.suppress(Exception):
+            await alt.close(code=4001)
     if geraet[ws] == "handy":
         await senden()  # alle Seiten sehen sofort: Handy verbunden
     await ws.send_text(json.dumps(stand(), ensure_ascii=False))
@@ -610,8 +632,15 @@ async def ws_endpunkt(ws: WebSocket, geraet_art: str = Query("laptop", alias="ge
     except WebSocketDisconnect:
         verbindungen.discard(ws)
     finally:
-        if geraet.pop(ws, None) == "handy":
-            await senden()
+        verbindungen.discard(ws)
+        handy_kennungen.pop(ws, None)
+        war_handy = geraet.pop(ws, None) == "handy"
         if lautsprecher is ws:
+            lautsprecher = None
             ereignis("ton_weg", geraet="?")
-            await senden()  # alle Seiten zeigen: Nestor hat gerade keinen Lautsprecher
+        if war_handy:
+            # Beim Schließen der Handyseite auch ihren Audiostrom freigeben.
+            if handy_verbindung() is None and audio["quelle"] == "handy" and audio["ws"] is not None:
+                with contextlib.suppress(Exception):
+                    await audio["ws"].close(code=1012)  # Netzabriss darf nach Rückkehr erneut verbinden
+        await senden()

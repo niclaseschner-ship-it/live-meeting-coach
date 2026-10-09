@@ -6,6 +6,16 @@
 const $ = (id) => document.getElementById(id);
 let zustand = null;
 let ws = null;
+let handyBrowserKennung = null;
+function handyKennung() {
+  if (handyBrowserKennung) return handyBrowserKennung;
+  try { handyBrowserKennung = localStorage.getItem("nestor-handy-kennung"); } catch { /* privater Browser */ }
+  if (!handyBrowserKennung) {
+    handyBrowserKennung = crypto.randomUUID();
+    try { localStorage.setItem("nestor-handy-kennung", handyBrowserKennung); } catch { /* gilt für diesen Tab */ }
+  }
+  return handyBrowserKennung;
+}
 
 // ---------- Hilfen ----------
 const mmss = (s) => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -116,7 +126,7 @@ const mikro = {
   beiEnde: null, // (grund) => …  "uebernommen" | "getrennt" | "mikro" – nur bei Ende ohne stoppen()
   async starten(echo, quelle = "laptop") {
     this.quelle = quelle;
-    this.ws = new WebSocket(`${wsBasis()}/ws/audio?quelle=${quelle}`);
+    this.ws = new WebSocket(`${wsBasis()}/ws/audio?quelle=${quelle}${quelle === "handy" ? `&handy_id=${encodeURIComponent(handyKennung())}` : ""}`);
     this.ws.binaryType = "arraybuffer";
     await new Promise((ok, fehler) => { this.ws.onopen = ok; this.ws.onerror = () => fehler(new Error("Server nicht erreichbar")); });
     this.ws.onclose = (e) => { if (this.stream) this.beiEnde?.(e.code === 4001 ? "uebernommen" : "getrennt"); };

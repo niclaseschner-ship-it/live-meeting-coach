@@ -68,7 +68,7 @@ def test_ein_mikrofon_zur_zeit_und_laufzeitmessung():
     lokal = TestClient(app, client=("127.0.0.1", 5000))
     with lokal.websocket_connect("/ws/audio?quelle=laptop") as laptop:
         assert server.audio["quelle"] == "laptop"
-        with lokal.websocket_connect("/ws/audio?quelle=handy"):
+        with lokal.websocket_connect("/ws?geraet=handy&handy_id=test-handy"), lokal.websocket_connect("/ws/audio?quelle=handy&handy_id=test-handy"):
             assert server.audio["quelle"] == "handy"
             assert laptop.receive()["code"] == 4001                    # Laptop wurde abgelöst
             assert server.mikro_stand()["quelle"] == "handy"
@@ -128,7 +128,7 @@ def test_gemeldetes_handy_behaelt_den_ton():
                 return erwartet
         return None
 
-    with lokal.websocket_connect("/ws?geraet=handy") as handy, lokal.websocket_connect("/ws") as laptop:
+    with lokal.websocket_connect("/ws?geraet=handy&handy_id=test-handy") as handy, lokal.websocket_connect("/ws") as laptop:
         assert lokal.get("/api/zustand").json()["handys"] == 1                # Handy verbunden, auch ohne Mikro
         handy.send_text('{"lautsprecher": true}')
         assert ton(handy, "handy") == "handy"
@@ -139,6 +139,33 @@ def test_gemeldetes_handy_behaelt_den_ton():
         assert lokal.get("/api/zustand").json()["lautsprecher"] == "handy"
         laptop.send_text('{"lautsprecher": true, "erzwingen": true}')  # ausdrücklich „Hier abspielen“
         assert ton(laptop, "laptop") == "laptop"
+
+
+def test_zweites_handy_und_fremdes_audio_abgewiesen():
+    lokal = TestClient(app, client=("127.0.0.1", 5000))
+    with lokal.websocket_connect("/ws?geraet=handy&handy_id=erstes") as erstes:
+        erstes.receive_text()
+        erstes.receive_text()
+        with lokal.websocket_connect("/ws?geraet=handy&handy_id=zweites") as zweites:
+            assert zweites.receive()["code"] == 4409
+        assert lokal.get("/api/zustand").json()["handys"] == 1
+        with lokal.websocket_connect("/ws/audio?quelle=handy&handy_id=zweites") as fremd:
+            assert fremd.receive()["code"] == 4409
+        erstes.send_text('{"ping": 2}')
+        assert '"pong"' in erstes.receive_text()
+    assert lokal.get("/api/zustand").json()["handys"] == 0
+
+
+def test_selbes_handy_darf_neu_laden_ohne_zwei_verbindungen():
+    lokal = TestClient(app, client=("127.0.0.1", 5000))
+    with lokal.websocket_connect("/ws?geraet=handy&handy_id=erstes") as alt:
+        alt.receive_text()
+        alt.receive_text()
+        with lokal.websocket_connect("/ws?geraet=handy&handy_id=erstes") as neu:
+            assert alt.receive()["code"] == 4001
+            neu.receive_text()
+            assert lokal.get("/api/zustand").json()["handys"] == 1
+    assert lokal.get("/api/zustand").json()["handys"] == 0
 
 
 # --- Cloud-Betrieb (Ticket #5): kein „am Laptop“ mehr, dafür das Worker-Geheimnis ------------------------

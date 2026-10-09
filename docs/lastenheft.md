@@ -46,6 +46,12 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
    eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
+   **Handykopplung (Ticket #50):** Genau ein Handy je Meeting, anonym per QR-Code ohne Registrierung.
+   Ein zweites Handy wird mit verständlicher Meldung abgewiesen und übernimmt weder Mikrofon noch Ton.
+   Neuladen desselben Handys übernimmt dessen Verbindung, ohne zwei aktive Tabs zuzulassen. Nach Verbindung
+   verschwindet der große erste Schritt und eine kompakte Rückmeldung zeigt, ob Mikrofon und Ton bereit sind.
+   Nach Trennung erscheint der erste Schritt erneut. Der Start bleibt bis zu frischem Handy-Audio und
+   angeschaltetem Handylautsprecher gesperrt.
 4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen: links Zeit, Agenda und die
    gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile und Gesprächsdynamik, oben das Band
    (Abschnitt 4.10). Premium kann zusätzlich ein Live-Bild zeichnen und spricht im Realtime-Gespräch.

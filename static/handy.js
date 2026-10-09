@@ -36,7 +36,7 @@ $("koppeln-form").onsubmit = (e) => {
 
 // ---------- Verbindung ----------
 function verbinden() {
-  ws = new WebSocket(`${wsBasis()}/ws?geraet=handy`);
+  ws = new WebSocket(`${wsBasis()}/ws?geraet=handy&handy_id=${encodeURIComponent(handyKennung())}`);
   ws.onopen = () => { if (lautsprecher) ws.send(JSON.stringify({ lautsprecher: true })); ping(); };
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
@@ -48,6 +48,18 @@ function verbinden() {
   };
   ws.onclose = (e) => {
     if (e.code === 4401) return koppelnZeigen();
+    if (e.code === 4409 || e.code === 4001) {
+      mikroGewollt = false;
+      mikro.stoppen();
+      $("status").textContent = e.code === 4409 ? "Anderes Handy verbunden" : "In anderem Tab geöffnet";
+      $("status").className = "pill stumm";
+      $("app").hidden = true; $("koppeln").hidden = false;
+      $("koppeln-falsch").hidden = false;
+      $("koppeln-falsch").textContent = e.code === 4409
+        ? "Es kann nur ein Handy verbunden sein. Schließe zuerst die Meetingseite auf dem anderen Handy und scanne dann den QR-Code erneut."
+        : "Die Verbindung wurde in einem anderen Tab dieses Handys übernommen. Nutze diesen Tab oder lade diese Seite erneut.";
+      return; // kein automatischer Wettlauf zwischen zwei Handys/Tabs
+    }
     $("status").textContent = "Getrennt"; $("status").className = "pill stumm"; laufzeit = null;
     setTimeout(verbinden, 1000);
   };

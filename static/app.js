@@ -485,6 +485,11 @@ function rendern() {
   $("btn-start").disabled = !handyBereit;
   $("btn-start").textContent = handyBereit ? "Meeting starten" : "Erst Handy verbinden";
   $("handy-empfehlung").classList.toggle("verbunden", handyBereit);
+  $("handy-empfehlung").hidden = handyVerbunden;
+  $("handy-bereitschaft").hidden = !handyVerbunden;
+  $("handy-bereitschaft").textContent = handyBereit
+    ? "✓ Handy bereit – Mikrofon und Ton sind verbunden. Du kannst das Meeting starten."
+    : "Handy verbunden – schalte dort noch Mikrofon und Ton ein, dann kannst du starten.";
   $("handy-empfehlung-text").textContent = handyBereit
     ? "Bereit: Das Handy übernimmt Mikrofon und Ton. Lege es in die Tischmitte, lass den Bildschirm offen und starte das Meeting hier."
     : handyVerbunden ? "Handy verbunden. Tippe dort auf „Dieses Handy übernimmt Mikro und Ton“ und erlaube das Mikrofon. Danach wird der Meetingstart freigeschaltet."
