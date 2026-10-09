@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import urllib.error
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,6 +24,17 @@ from coach.server import app
 
 _GEHEIMNIS = "geheim-test-meeting-ende"
 _WORKER_URL = "https://nestor.example.workers.dev"
+
+
+@pytest.fixture(autouse=True)
+def start_mit_bereitem_handy(request, monkeypatch):
+    if not request.node.name.startswith("test_start_"):
+        return
+    handy = object()
+    monkeypatch.setattr(server, "audio", {"ws": handy, "quelle": "handy", "letzt": time.monotonic()})
+    monkeypatch.setattr(server, "lautsprecher", handy)
+    monkeypatch.setattr(server, "verbindungen", {handy})
+    monkeypatch.setattr(server, "geraet", {handy: "handy"})
 
 
 @pytest.fixture
