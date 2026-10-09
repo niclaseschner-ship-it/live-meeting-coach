@@ -117,6 +117,16 @@ let einrichtungOffen = false;
 let leisteOffen = false;
 let reiter = "transkript";
 
+// Die Verlaufleiste beginnt unter der echten, ggf. umgebrochenen Kopfzeile.
+function leisteUnterKopfPositionieren() {
+  const kopf = document.querySelector(".kopf");
+  if (!kopf) return;
+  document.documentElement.style.setProperty("--kopf-unterkante", `${Math.ceil(kopf.getBoundingClientRect().bottom)}px`);
+}
+leisteUnterKopfPositionieren();
+if ("ResizeObserver" in window) new ResizeObserver(leisteUnterKopfPositionieren).observe(document.querySelector(".kopf"));
+window.addEventListener("resize", leisteUnterKopfPositionieren);
+
 $("btn-person-neu").onclick = () => personZeile();
 $("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
 $("btn-abspielen").onclick = () => { stimme.bereit(); api("/api/abspielen", { name: $("f-aufnahme").value, tempo: 1, auto_wechsel: $("f-auto").checked }); };
@@ -178,11 +188,68 @@ document.addEventListener("click", (e) => {
   if (!$("mehr-menu").hidden && !$("mehr-menu").contains(e.target) && !$("btn-mehr").contains(e.target)) $("mehr-menu").hidden = true;
   if (!$("arbeit-liste").hidden && !$("arbeit-liste").contains(e.target) && !$("arbeitsring").contains(e.target)) $("arbeit-liste").hidden = true;
 });
-// Einstellungen: jede Änderung sofort an den Server
+// Einstellungen: Modus und Stimme werden als Paar behandelt. Die Auswahl wird erst
+// nach bestätigter Serverantwort übernommen; insbesondere startet ein Voicewechsel
+// kein privates TTS.
 const einstellen = (feld, wert) => api("/api/einstellungen", { [feld]: wert });
+let einstellungsPaar = { modus: "text", stimme: "nova" };
+function stimmeOptionRendern(modus) {
+  const nova = [...$("e-stimme").options].find((o) => o.value === "nova");
+  if (nova) nova.disabled = modus === "gespraech";
+}
+function paarMeldung(text = "", ok = false) {
+  const m = $("e-modus-stimme-meldung");
+  m.textContent = text;
+  m.classList.toggle("ok", ok);
+  m.hidden = !text;
+}
+async function einstellungsPaarAendern(feld, wert) {
+  const vorher = { ...einstellungsPaar };
+  const neu = { ...vorher, [feld]: wert };
+  // Native <select> zeigt den neuen Wert sofort. Zurücksetzen, bis der Server
+  // genau dieses Moduspaar bestätigt hat.
+  $("e-modus").value = vorher.modus;
+  $("e-stimme").value = vorher.stimme;
+  if (neu.modus === "gespraech" && neu.stimme === "nova") {
+    paarMeldung(feld === "modus"
+      ? "Nova gibt es nur für Kurzantworten. Bitte zuerst eine andere Stimme auswählen."
+      : "Nova gibt es nur für Kurzantworten. Für ein Gespräch bitte eine andere Stimme auswählen.");
+    return;
+  }
+
+  const modus = $("e-modus"), stimme = $("e-stimme");
+  modus.disabled = stimme.disabled = true;
+  paarMeldung("Speichere …");
+  try {
+    const r = await fetch("/api/einstellungen", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [feld]: wert }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail ?? `Fehler ${r.status}`);
+    if (d.modus !== neu.modus || d.stimme !== neu.stimme) {
+      throw new Error("Der Server hat die neue Modus-/Stimmenauswahl nicht bestätigt.");
+    }
+    einstellungsPaar = { modus: d.modus, stimme: d.stimme };
+    modus.value = d.modus;
+    stimme.value = d.stimme;
+    stimmeOptionRendern(d.modus);
+    paarMeldung(feld === "stimme" && d.modus === "gespraech"
+      ? "Stimme gespeichert; sie gilt ab dem nächsten Gespräch. Ein offenes Gespräch bleibt unverändert."
+      : "Einstellung gespeichert.", true);
+  } catch (err) {
+    einstellungsPaar = vorher;
+    modus.value = vorher.modus;
+    stimme.value = vorher.stimme;
+    stimmeOptionRendern(vorher.modus);
+    paarMeldung(`Nicht gespeichert: ${err?.message ?? String(err)}`);
+  } finally {
+    modus.disabled = stimme.disabled = false;
+  }
+}
 $("e-assistent").onchange = (e) => einstellen("assistent", e.target.checked);
-$("e-modus").onchange = (e) => einstellen("modus", e.target.value);
-$("e-stimme").onchange = (e) => einstellen("stimme", e.target.value);
+$("e-modus").onchange = (e) => { void einstellungsPaarAendern("modus", e.target.value); };
+$("e-stimme").onchange = (e) => { void einstellungsPaarAendern("stimme", e.target.value); };
 $("e-monolog").onchange = (e) => einstellen("monolog_sekunden", Number(e.target.value));
 $("e-bild-anbieter").onchange = (e) => einstellen("bild_anbieter", e.target.value);
 $("e-aufnahme").onchange = (e) => einstellen("aufnahme", e.target.checked);
@@ -335,8 +402,11 @@ function knopfRendern(z) {
   if (!taste.aktiv) {
     if (tasteMeldung) $("taste-text").textContent = tasteMeldung;
   else {
-    $("btn-taste").dataset.tip = "Halten oder Leertaste drücken, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
-    $("taste-text").replaceChildren("Sprechtaste – halten", el("span", { class: "nur-gross" }, " (oder Leertaste im freien Bereich)"));
+    const hilfe = "Halten und sprechen, dann loslassen. Leertaste funktioniert, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
+    $("btn-taste").dataset.tip = hilfe;
+    $("btn-taste").setAttribute("aria-label", `Sprechtaste. ${hilfe}`);
+    $("btn-taste").setAttribute("aria-description", hilfe);
+    $("taste-text").textContent = "Sprechtaste · halten";
   }
   }
 }
@@ -672,8 +742,10 @@ function leisteRendern(z) {
 function einstellungenRendern(e) {
   if (!e || !$("einstellungen").hidden) return; // nicht überschreiben, während jemand einstellt
   $("e-assistent").checked = e.assistent;
+  einstellungsPaar = { modus: e.modus, stimme: e.stimme };
   $("e-modus").value = e.modus;
   $("e-stimme").value = e.stimme;
+  stimmeOptionRendern(e.modus);
   $("e-monolog").value = e.monolog_sekunden;
   $("e-bild-anbieter").value = e.bild_anbieter;
   $("e-live-art").value = e.live_art;

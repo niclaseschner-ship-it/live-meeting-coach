@@ -299,7 +299,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .balken .wert { text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* Seitenleiste: Transkript und Hinweise */
-.leiste { position: fixed; top: 66px; right: 0; bottom: 0; z-index: 25; width: min(520px, 92vw); display: flex;
+.leiste { position: fixed; top: calc(var(--kopf-unterkante, 66px) + 1px); right: 0; bottom: 0; z-index: 19; width: min(520px, 92vw); display: flex;
   flex-direction: column; background: var(--flaeche); border-left: 1px solid var(--rand); box-shadow: -10px 0 40px rgba(11, 19, 36, .12); }
 .leiste-kopf { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rand); }
 .reiter { display: flex; gap: 6px; }

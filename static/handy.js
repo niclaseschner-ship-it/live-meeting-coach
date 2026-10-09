@@ -281,6 +281,7 @@ function rendern() {
     : "Nestor Premium verwendet OpenAI.";
   $("zeit").textContent = mmss(z.zeit);
   $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
+  $("mikro-karte").hidden = beendet;
   $("h-nestor-karte").hidden = !aktiv;
   $("h-verlauf-karte").hidden = !aktiv;
   $("h-transkript-karte").hidden = !aktiv;

@@ -134,6 +134,13 @@ Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts
 Referenzstimme; Modell und Stimme lassen sich über `LMC_BASIS_STIMME_MODELL` und `LMC_BASIS_STIMME` konfigurieren.
 Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
 
+Premium-Stimmenwahl (#58): Nova ist nur für Kurzantworten (Text mit TTS) verfügbar, nicht für das
+Realtime-Gespräch. Modus und Stimme werden vor jeder Änderung als Paar geprüft; eine unzulässige Kombination
+verändert keine Einstellung. Die Oberfläche zeigt erst die bestätigte Serverauswahl, sperrt Nova im
+Gesprächsmodus und erklärt: Eine neue Stimme verändert ein bereits offenes Gespräch nicht, sie gilt ab dem
+nächsten Gespräch. Grundlage: [OpenAI Realtime-Stimmen](https://developers.openai.com/api/docs/guides/realtime-conversations)
+und [TTS-Stimmen](https://developers.openai.com/api/docs/guides/text-to-speech).
+
 Gemessen ([messung_basis.md](messung_basis.md)): Sprechende → erster Ton im Median 2,0–2,1 s, alle zwölf
 Zurufe der Probe lösen die richtige Aktion aus (24/24). Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll
 (`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet: Grundlast ~0,5 $/h (Live-Text allein 0,36 $/h), dazu

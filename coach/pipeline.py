@@ -28,6 +28,7 @@ FENSTER_LUECKE = 10.0  # Sätze, die so lange vor dem ersten neuen Satz endeten,
 KONTEXT_SEKUNDEN = 30.0  # so viel Gesprochenes vor dem Fenster geht als Kontext mit (wie früher zwei Abschnitte)
 
 STIMMEN = ("nova", "cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad", "echo", "shimmer")
+REALTIME_STIMMEN = tuple(s for s in STIMMEN if s != "nova")
 
 log = logging.getLogger("coach")
 NUTZUNG = WURZEL / "logs" / "nutzung.jsonl"
@@ -413,10 +414,18 @@ class Coach:
 
     def einstellen(self, daten: dict) -> None:
         """Einstellungen zur Laufzeit (Dashboard-Kopfleiste). Nur bekannte Felder, geprüfte Werte."""
+        # #58: Paarung prüfen, bevor auch nur eine Einstellung verändert wird. Nova ist TTS, keine Realtime-Stimme.
+        if EINST.stufe == "premium":
+            modus = daten.get("modus", EINST.assistent_modus)
+            stimme = daten.get("stimme", EINST.stimme)
+            if modus not in ("gespraech", "text") or stimme not in STIMMEN:
+                raise ValueError("Unbekannte Gesprächsart oder Stimme.")
+            if modus == "gespraech" and stimme not in REALTIME_STIMMEN:
+                raise ValueError("Nova ist nur für Kurzantworten verfügbar. Wähle eine Gesprächsstimme oder die Gesprächsart Kurzantwort.")
         if "assistent" in daten:
             self.assistent.aktiv = bool(daten["assistent"])
         if EINST.stufe == "basis":
-            # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Nova euphorisch, Überblick als Text)
+            # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Custom-Voice, Überblick als Text)
             daten = {k: v for k, v in daten.items() if k not in ("modus", "stimme", "bild_anbieter")}
         if daten.get("modus") in ("gespraech", "text"):
             object.__setattr__(EINST, "assistent_modus", daten["modus"])
