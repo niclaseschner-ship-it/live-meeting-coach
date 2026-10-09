@@ -35,10 +35,11 @@ FUELL = {"bitte", "mal", "kurz", "doch", "uns", "mir", "nochmal", "jetzt", "gera
          "hey", "noch", "schnell", "gerne", "gern", "denn", "eigentlich", "kannst", "könntest", "du", "würdest",
          "magst", "vielleicht", "bis", "hier", "dann", "also", "und", "ja"}
 MUSTER = [
-    ("zusammenfassen", r"(?:fass|fasse|fasst)(?: das| alles| es| den punkt| den aktuellen punkt| bisher| soweit)?"
+    ("zusammenfassen", r"(?:fass|fasse|fasst)(?: mir)?(?: das| alles| es| den punkt| den aktuellen punkt| bisher| soweit| die ergebnisse| ergebnisse)?"
                        r" zusammen|(?:gib|gibst|mach|machst|zeig|zeigst|hätte gern|hätten gern|ich hätte gern"
                        r"|wir hätten gern|wir brauchen|ich brauche)? ?(?:die |eine )?zusammenfassung(?: geben| machen)?"
-                       r"|zusammenfassen|ergebnisse bündeln"),
+                       r"|zusammenfassen|ergebnisse bündeln|bündel(?:e)?(?: mir)? die ergebnisse|"
+                       r"bündle(?: mir)? die ergebnisse"),
     ("fehlt", r"was fehlt|welche lücken(?: gibt es| haben wir)?|wo fehlt was|was ist offen|was haben wir offen"
               r"|wo sind lücken|was fehlt uns|lücken klären"),
     ("stand", r"wo stehen wir|wie weit sind wir|wo sind wir|wie ist der stand|was ist der stand"),

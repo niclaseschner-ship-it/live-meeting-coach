@@ -14,11 +14,6 @@ from .zustand import Meeting, Segment
 ZWISCHENLAUT_SEKUNDEN = 1.5  # kurze Einwürfe ("mhm") sind noch kein Dialog
 BLOCKRAND_SEKUNDEN = 3.0  # Rede bis so kurz vor Ende des letzten Blocks gilt als "spricht noch"
 SPRACHE_AKTUELL_SEKUNDEN = 2.5  # so frisch muss das Sprachsignal vom Mikrofon sein
-# Hochrechnung über das Ende der letzten bekannten Äußerung hinaus: aus (0). Benchmark 05.10.2026: Die
-# Sprecherspur kommt je Äußerung (≤ 25 s); wechselt in der laufenden Äußerung die Person, rechnete die
-# Hochrechnung der vorigen Person deren Redezeit zu → 1–3 Fehlalarme je 12 min. Ohne sie kommt ein
-# echter Monolog-Hinweis höchstens eine Äußerungslänge später.
-MAX_HOCHRECHNUNG_SEKUNDEN = 0
 
 
 def mmss(sekunden: float) -> str:
@@ -43,31 +38,65 @@ def laufende_rede(segmente: list[Segment], luecke: float = 3.0) -> tuple[str, fl
 
 
 def monolog_live(meeting: Meeting, schwelle: float) -> tuple[bool, float]:
-    """(gelb?, Dauer) der laufenden Rede, live hochgezählt.
+    """(Hinweis?, Anzeigedauer) der laufenden Rede.
 
-    Die Sprecherspur kommt nur blockweise. Hat dieselbe Person bis zum Ende des letzten
-    verarbeiteten Blocks gesprochen und meldet das Mikrofon weiter Sprache, zählt die Dauer
-    bis jetzt weiter – so wird die Monolog-Schwelle erkannt, ohne auf den nächsten Block zu warten.
-    Ein Sprecherwechsel wird spätestens mit dem nächsten Block sichtbar und setzt zurück.
+    Die Dauer folgt während einer frischen VAD-Sprachphase sofort dem Mikrofon, einschließlich kurzer Pausen bis
+    SPRACHE_AKTUELL_SEKUNDEN. So bleibt die Anzeige während eines langen, noch nicht segmentierten Beitrags live.
+    Sobald ein vorhergehendes Segment einer anderen Stimme den Sprecherwechsel belegt, gewinnt die neue Kette.
+    Die VAD kennt keine Person: Bei vorhandenen Segmenten wird deshalb ein Hinweis erst aus der bestätigten, aktuellen
+    Sprecherspur ausgelöst. Ohne Segmente darf die erste durchgehende VAD-Phase anonym den Hinweis auslösen.
     """
     rede = laufende_rede(meeting.segmente)
-    if not rede:
-        # Voxtral liefert die Sprecherzuordnung erst am Ende einer Äußerung. Bei einem langen ersten Monolog
-        # gäbe es deshalb trotz fortlaufender Browser-VAD noch kein Segment. Die lückenlose Sprachphase darf
-        # hier ohne Namenszuordnung genügen; eine Pause > SPRACHE_AKTUELL_SEKUNDEN setzt sie zurück.
-        jetzt = meeting.jetzt()
-        aktiv = jetzt - meeting.sprache_bis <= SPRACHE_AKTUELL_SEKUNDEN
-        dauer = max(0.0, jetzt - meeting.sprache_seit) if aktiv else 0.0
-        return dauer >= schwelle, dauer
-    _, dauer, ende = rede
     jetzt = meeting.jetzt()
-    bis_blockende = ende >= meeting.letztes_block_ende - BLOCKRAND_SEKUNDEN
-    if not bis_blockende:  # im letzten Block hat jemand anderes oder niemand mehr gesprochen
-        return False, dauer
-    spricht_noch = jetzt - meeting.sprache_bis <= SPRACHE_AKTUELL_SEKUNDEN
-    if spricht_noch and jetzt - ende <= MAX_HOCHRECHNUNG_SEKUNDEN:
-        dauer = jetzt - (ende - dauer)
-    return dauer >= schwelle, dauer
+    signal_da = meeting.sprache_bis > -1e8
+    spricht_jetzt = signal_da and 0 <= jetzt - meeting.sprache_bis <= SPRACHE_AKTUELL_SEKUNDEN
+    phase_bekannt = meeting.sprache_seit > -1e8
+
+    if signal_da and not spricht_jetzt:
+        # Eine echte Pause beendet die Live-Anzeige, auch wenn ein älteres Segment lang genug war.
+        return False, 0.0
+
+    if spricht_jetzt and phase_bekannt:
+        phase_start = meeting.sprache_seit
+        phase_dauer = max(0.0, jetzt - phase_start)
+        if rede is None:
+            # Erste lange Äußerung: der Sprecher kann bis zum Commit noch unbekannt sein.
+            return phase_dauer >= schwelle, phase_dauer
+
+        sprecher, rede_dauer, ende = rede
+        rede_start = ende - rede_dauer
+        # Ein Segmentbeginn nach dem VAD-Start kann bloßer ASR-Verzug sein. Ein Wechsel ist erst belegt, wenn
+        # davor ein Segment einer anderen Stimme innerhalb derselben Sprachphase liegt.
+        wechsel_bestaetigt = any(
+            s.sprecher != sprecher and s.start < rede_start and s.ende >= phase_start
+            for s in meeting.segmente
+        )
+        if wechsel_bestaetigt:
+            # Der Start der neuen Kette ist bekannt; danach läuft ihre Anzeige mit den VAD-Ticks weiter.
+            dauer = max(0.0, jetzt - max(phase_start, rede_start))
+        elif ende < phase_start:
+            # Eine echte VAD-Pause hat die Phase nach dem letzten bekannten Segment neu begonnen.
+            dauer = phase_dauer
+        else:
+            # Gleiche bzw. noch nicht unterscheidbare Kette: VAD hält die Anzeige bis zum nächsten Segment aktuell,
+            # ohne die Warnung dem zuletzt bekannten Sprecher zuzuschreiben, bevor der Block ihn bestätigt.
+            dauer = max(rede_dauer, phase_dauer)
+        hinweis = rede_dauer >= schwelle and jetzt - ende <= BLOCKRAND_SEKUNDEN
+        return hinweis, dauer
+
+    if rede is None:
+        return False, 0.0
+
+    _, rede_dauer, ende = rede
+    if signal_da:
+        # Ein frisches VAD-Signal ohne gültigen Phasenbeginn (z. B. alte Zustände/Tests): nur bestätigte Spur.
+        dauer = rede_dauer
+        frisch = jetzt - ende <= BLOCKRAND_SEKUNDEN
+    else:
+        # Abspiel-/Unit-Test-Zustand ohne VAD: nur ein gerade abgeschlossenes Segment gilt als live.
+        dauer = rede_dauer if 0 <= jetzt - ende <= BLOCKRAND_SEKUNDEN else 0.0
+        frisch = dauer > 0
+    return frisch and rede_dauer >= schwelle, dauer
 
 
 def monolog(segmente: list[Segment], schwelle: float, luecke: float = 3.0) -> tuple[str, float] | None:
@@ -292,11 +321,19 @@ def prozess_ampeln(
     ampeln = []
 
     # 1. Monolog (FR-03): Gelb ab Schwelle, Grün sobald jemand anderes spricht
-    gelb, dauer = monolog_live(meeting, monolog_sekunden)
-    if gelb:
-        ampeln.append({"name": "Monolog", "farbe": "gelb", "detail": f"seit {mmss(dauer)} eine Stimme"})
+    _, dauer = monolog_live(meeting, monolog_sekunden)
+    rede = laufende_rede(meeting.segmente)
+    sprecher_bestaetigt = bool(
+        rede and meeting.jetzt() - rede[2] <= BLOCKRAND_SEKUNDEN and abs(dauer - rede[1]) < 0.1
+    )
+    if dauer >= monolog_sekunden:
+        detail = (f"seit {mmss(dauer)} eine Stimme" if sprecher_bestaetigt and rede[1] >= monolog_sekunden
+                  else f"Live-Rede (Beta) · Stimme noch unbestätigt · {mmss(dauer)}")
+        ampeln.append({"name": "Monolog", "farbe": "gelb", "detail": detail})
     elif dauer >= monolog_sekunden / 2:
-        ampeln.append({"name": "Monolog", "farbe": "gruen", "detail": f"eine Stimme seit {mmss(dauer)}"})
+        detail = (f"eine Stimme seit {mmss(dauer)}" if sprecher_bestaetigt
+                  else f"Live-Rede (Beta) · Stimme noch unbestätigt · {mmss(dauer)}")
+        ampeln.append({"name": "Monolog", "farbe": "gruen", "detail": detail})
     else:
         ampeln.append({"name": "Monolog", "farbe": "gruen", "detail": "Gespräch im Wechsel"})
 
