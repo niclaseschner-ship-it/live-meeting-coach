@@ -78,6 +78,14 @@ def test_anweisung_listet_pflichtinhalte_ohne_sie():
     mit_namen = B.anweisung(c.meeting, vorstellung=True)
     assert A.NAMEN_BITTE in mit_namen and "Punkt eins: Standkonzept" in mit_namen  # Ticket #27: alles, dann Namen
     assert mit_namen.index("Punkt eins: Standkonzept") < mit_namen.index(A.NAMEN_BITTE)
+    assert "Ein kurzer, menschlicher Kommentar" not in mit_namen
+
+
+def test_nachsatz_wiederholt_nicht_die_gesamte_begruessung_wenn_nur_spaeter_fehlt():
+    vorher = "Ich höre mit. Wer nicht einverstanden ist, sagt Nein, dann lösche ich alles."
+    rest = B.nachsatz(["spaeter"])
+    assert len(rest.split()) < 16
+    assert B.pflicht_fehlt(vorher + " " + rest) == []
 
 
 # --- Ablauf mit Attrappe ----------------------------------------------------------------------------------

@@ -306,3 +306,27 @@ def test_rueckkehrfrist_loescht_automatisch(beendetes_meeting, monkeypatch):
             assert server.coach.archiv is None
     finally:
         object.__setattr__(EINST, "ablage_behalten", alt)
+
+
+def test_neues_meeting_hebt_alte_loeschfrist_nicht_auf(beendetes_meeting, monkeypatch):
+    from coach import api_abschluss, server
+    neu = _abgelegtes_meeting()
+    alter_ordner = server.coach.archiv.ordner
+    neuer_ordner = neu.archiv.ordner
+    monkeypatch.setattr(api_abschluss, "RUECKKEHR_SEKUNDEN", 0.15)
+    alt = EINST.ablage_behalten
+    object.__setattr__(EINST, "ablage_behalten", False)
+    try:
+        with _lokal() as client:
+            assert client.post("/api/abschluss/schliessen").status_code == 200
+            server.coach.archiv = neu.archiv
+            server.coach.meeting.titel = "Neues Meeting"
+            import time
+            deadline = time.monotonic() + 2
+            while alter_ordner.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert not alter_ordner.exists() and neuer_ordner.exists()
+            assert server.coach.meeting.titel == "Neues Meeting"
+            assert api_abschluss._rueckkehr_archiv is None
+    finally:
+        object.__setattr__(EINST, "ablage_behalten", alt)

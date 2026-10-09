@@ -313,6 +313,20 @@ def name_aus(text: str, bekannte: list[str] | None = None) -> str | None:
         for n in bekannte or []:
             if n.split()[0].casefold() == m.group(1).casefold():
                 return n
+        # Eine typische Ein-Buchstaben-ASR-Variante (Niclas/Niklas) darf den eingetragenen Namen benutzen.
+        # Nur nach tatsächlicher Vorstellung und nur mit genau einem passenden Kandidaten.
+        gesagt = m.group(1).casefold()
+        def nahe(n):
+            n = n.split()[0].casefold()
+            if min(len(gesagt), len(n)) < 5:
+                return False
+            if len(gesagt) == len(n):
+                return sum(x != y for x, y in zip(gesagt, n)) == 1
+            kurz, lang = sorted((gesagt, n), key=len)
+            return len(lang) - len(kurz) == 1 and any(lang[:i] + lang[i + 1:] == kurz for i in range(len(lang)))
+        kandidaten = [n for n in bekannte or [] if nahe(n)]
+        if len(kandidaten) == 1:
+            return kandidaten[0]
         return m.group(1)
     return None
 
@@ -513,7 +527,7 @@ class Assistent:
         danach = "gespraech" if b.offen else "bereit"
         if fehlt:
             log.info("Begrüßung frei: Nachsatz (fehlt: %s)", ", ".join(fehlt))
-            await self._sprechen_texte([nachsatz()], danach=danach)
+            await self._sprechen_texte([nachsatz(fehlt)], danach=danach)
         if vorstellung and not re.search(r"\bnamen?\b", gesagt, re.IGNORECASE):
             await self._sprechen_texte([NAMEN_BITTE], danach=danach)
         ende = self.sprechzeiten[-1][1] if self.sprechzeiten else self.coach.meeting.jetzt()

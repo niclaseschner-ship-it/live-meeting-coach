@@ -264,6 +264,8 @@ die vollständige Antwort und klickbare Quellen statt sie nochmals zu wenigen St
 fehlende Quellen werden ausdrücklich markiert. Monolog zeigt laufende Dauer und Schwelle, Dynamik ist
 eingeklappt und zusätzlich im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
 herausgenommen. Namen werden nur aus einer tatsächlichen Vorstellung gelernt, nicht aus Erwähnungen.
+Eindeutige kleine ASR-Schreibvarianten können einem bereits eingetragenen Namen zugeordnet werden;
+mehrdeutige Kandidaten werden nicht geraten (#35).
 Ausdrückliche Korrekturen können bestehende Artefakte berichtigen, gemeinsame Verantwortlichkeit erfordert
 eine belegte Vereinbarung. Relative Fristen erhalten das Meetingdatum als Bezug; pauschale Fristen ergänzen
 alle betroffenen Aufgaben, spätere Ausnahmen nur die betreffende Aufgabe. Premium verwendet den
@@ -273,6 +275,8 @@ Abnahme-Nachtrag (#40, #41): Telegram prüft zusätzlich zur HTTP-Antwort die po
 und protokolliert ausschließlich deren Erfolg, ohne Nachricht, Chat-ID oder Token. Die feste Begrüßung
 verzichtet auf redundante Agenda-Kommentare und lange Bedienerklärungen; Einwilligung, Nein/Löschen,
 Produktrolle, Agendawechsel, Sprechtaste und Namen bleiben enthalten.
+Ein zwischenzeitlich gestartetes neues Meeting verlängert die alte Löschfrist nicht: ausschließlich dessen
+alter Archivordner und die Fristreferenz werden entfernt, ohne das neue Meeting zurückzusetzen (#37).
 
 Der Stand des Meetings als strukturierte Dashboard-Ansicht ohne Bildmodell (`coach/ueberblick.py`), in beiden Stufen:
 Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (grün), 🟡 Offen (bernstein),

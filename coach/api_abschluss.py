@@ -196,12 +196,20 @@ async def abschluss_schliessen(request: Request):
         archiv = coach.archiv
 
         async def loeschen():
+            global _rueckkehr_bis, _rueckkehr_archiv
             await asyncio.sleep(RUECKKEHR_SEKUNDEN)
             # Eine zwischenzeitlich gestartete andere Sitzung nie anfassen.
             if coach.archiv is archiv:
                 bg = BackgroundTasks()
                 await abschluss_fertig(request, bg)
                 await bg()
+            elif not EINST.ablage_behalten:
+                # Ein neues Meeting darf die Löschfrist des alten nicht aushebeln.
+                # Nur dessen bereits aufgelösten Ordner löschen, nie den neuen Zustand zurücksetzen.
+                import shutil
+                await asyncio.to_thread(shutil.rmtree, archiv.ordner, ignore_errors=True)
+                if _rueckkehr_archiv is archiv:
+                    _rueckkehr_bis, _rueckkehr_archiv = None, None
 
         _rueckkehr_task = asyncio.create_task(loeschen())
     return {"ok": True, "rueckkehr_bis": _rueckkehr_bis}

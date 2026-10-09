@@ -67,9 +67,11 @@ def basis_text_vollstaendig(text: str, vorstellung: bool) -> bool:
     return bool(PUNKT_EINS_RE.search(text))
 
 
-def nachsatz() -> str:
+def nachsatz(fehlend: list[str] | None = None) -> str:
     """Fester Nachsatz, wenn in der freien Begrüßung ein Teil der Einwilligung fehlte."""
     name = EINST.assistent_name
+    if fehlend == ["spaeter"]:
+        return f"Auch später könnt ihr widersprechen: „{name}, nein“. Dann lösche ich alles."
     return (f"Eins noch, damit es klar ist: Ich höre mit. Wer nicht einverstanden ist, sagt einfach Nein – "
             f"das geht auch später noch, dann mit meinem Namen: „{name}, nein“. Dann lösche ich alles.")
 
@@ -130,9 +132,9 @@ def pflichtinhalte(meeting, basis: bool = False, vorstellung: bool = False) -> s
          ("2. Die Regeln, die sich die Runde vorgenommen hat, kurz und ohne sie vorzulesen: " + regeln) if regeln
          else "2. (Es sind keine Regeln gewählt – lass das weg.)",
          "3. Dass du mithörst. Sag ausdrücklich „ich höre mit“.",
-         f"4. Wer nicht einverstanden ist, sagt einfach „Nein“. Das geht auch später noch, dann mit deinem Namen: "
-         f"„{name}, nein“. Dann löschst du alles – sag dabei ausdrücklich „lösche“. Diesen Punkt nie weglassen, nie "
-         "abschwächen, nie als Witz."]
+         f"4. Bei „Nein“ löschst du alles. Sag vollständig und wörtlich: „Ich höre mit. Nicht einverstanden? "
+         f"Sagt Nein – auch später mit „{name}, nein“. Dann lösche ich alles.“ Mit Punkt 3 verbinden, nicht doppelt "
+         "erklären. Diesen Punkt nie weglassen oder abschwächen."]
     z.append(start_inhalte(meeting, basis, ab=5))
     if vorstellung:  # Ticket #27: die Begrüßung sagt alles und endet mit der Bitte um die Namen – kein Startsatz danach
         z.append(f"{len(z) + 1 + z[-1].count(chr(10))}. Ganz zum Schluss, als letzter Satz: „{NAMEN_BITTE}“")
@@ -141,7 +143,7 @@ def pflichtinhalte(meeting, basis: bool = False, vorstellung: bool = False) -> s
 
 def start_inhalte(meeting, basis: bool = False, ab: int = 1) -> str:
     """Punkte 5–7: Ansprache (Telefon bzw. Funkgerät, Ticket #27), Agenda-Bitte mit Kommentar, Start mit Punkt eins."""
-    from .assistent import agenda_bitte, agenda_kommentar
+    from .assistent import agenda_bitte
 
     name = EINST.assistent_name
     if basis:
@@ -156,9 +158,6 @@ def start_inhalte(meeting, basis: bool = False, ab: int = 1) -> str:
     if agenda_bitte(meeting):
         agenda.append("Die Bitte, den Wechsel zum nächsten Agendapunkt kurz anzusagen oder ihn anzuklicken – auf "
                       "Wunsch fasst du vorher zusammen.")
-    kommentar = agenda_kommentar(meeting).strip()
-    if kommentar:
-        agenda.append(f"Ein kurzer, menschlicher Kommentar zur Agenda (Fakt: „{kommentar}“ – gern in eigenen Worten).")
     if agenda:
         z.append(f"{ab + 1}. " + " ".join(agenda))
     erster = f"„Punkt eins: {meeting.agenda[0].titel}“" if meeting.agenda else "„Los geht's“"
