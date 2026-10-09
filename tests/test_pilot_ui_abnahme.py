@@ -8,12 +8,22 @@ abgefangen; daraus darf kein echter Pilot- oder KI-Erfolg abgeleitet werden.
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
 from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("skript,seite", [("handy.js", "handy.html"), ("app.js", "index.html")])
+def test_alle_direkten_ui_ids_existieren_in_der_zugehoerigen_seite(skript, seite):
+    source = (ROOT / "static" / skript).read_text()
+    markup = (ROOT / "static" / seite).read_text()
+    dynamic = source + (ROOT / "static/agenda.js").read_text()
+    for ident in set(re.findall(r'\$\("([^"\n]+)"\)', source)):
+        assert (f'id="{ident}"' in markup or f'id: "{ident}"' in dynamic), ident
 
 
 def test_ui_selektoren_stehen_alle_in_den_vorgesehenen_html_dateien():
