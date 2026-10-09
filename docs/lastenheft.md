@@ -53,7 +53,7 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    Nach Trennung erscheint der erste Schritt erneut. Der Start bleibt bis zu frischem Handy-Audio und
    angeschaltetem Handylautsprecher gesperrt.
 4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen: links Zeit, Agenda und die
-   gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile und Gesprächsdynamik, oben das Band
+   gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile, oben das Band
    (Abschnitt 4.10). Premium kann zusätzlich ein Live-Bild zeichnen und spricht im Realtime-Gespräch.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite, eingeleitet mit einem Abschluss-Kopf – „Danke!
    11 Minuten · 4 Punkte · 2 Entscheidungen“, mit demselben Logo wie im Dashboard – und drei Angeboten:
@@ -199,7 +199,8 @@ Stille), Redeanteile bleiben. Ältere Messung mit OpenAI-Transkription und Codex
 **Nur gewählte Regeln sind sichtbar (Ticket #27).** Eine Regel, die die Runde nicht gewählt hat, hat kein Band,
 keine Ampel und keine Prüfung – das gilt für Fokus, Zeit, Monolog und Überlappung genauso wie für die anderen (bis
 #27 kamen diese vier immer). Was keine Regel ist, bleibt: die Uhr und der Countdown links, die Redeanteile, die
-Gesprächsdynamik und der Agenda-Vorschlag „Weiter zu …?“ (ein Band-Hinweis mit Knopf).
+Agenda-Vorschlag „Weiter zu …?“ (ein Band-Hinweis mit Knopf). Die experimentelle Gesprächsdynamik
+steht nur in der Abschlussauswertung, nicht im Live-Dashboard (Pilotfeedback, Ticket #52).
 
 Jedes Signal ist im Dashboard als **verlässlich** oder **Beta** gekennzeichnet (Schlüssel im Katalog/Code
 weiterhin „experimentell“, Ticket #10 ändert nur den Anzeige-Text). Bei Beta-Signalen steht in einem Satz
@@ -285,7 +286,7 @@ Texteingaben bleiben normal bedienbar. Neue Ergebnisse erhalten einen deutlich b
 ein optionaler 0,12-Sekunden-Signalton ist standardmäßig aus und kostet keine KI-Aufrufe. Recherche behält
 die vollständige Antwort und klickbare Quellen statt sie nochmals zu wenigen Stichworten zu verdichten;
 fehlende Quellen werden ausdrücklich markiert. Monolog zeigt laufende Dauer und Schwelle, Dynamik ist
-eingeklappt und zusätzlich im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
+seit #52 aus dem Live-Dashboard entfernt und nur im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
 herausgenommen. Namen werden nur aus einer tatsächlichen Vorstellung gelernt, nicht aus Erwähnungen.
 Eindeutige kleine ASR-Schreibvarianten können einem bereits eingetragenen Namen zugeordnet werden;
 mehrdeutige Kandidaten werden nicht geraten (#35).

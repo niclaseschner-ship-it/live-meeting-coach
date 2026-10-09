@@ -44,3 +44,14 @@ def test_beide_oberflaechen_nutzen_sichtbare_hilfe():
         code = (root / 'static' / f'{name}.js').read_text()
         assert 'aktionshilfeRendern(' in code
     assert 'h-ueberblick-umfang' in (root / 'static' / 'handy.html').read_text()
+
+
+def test_dynamik_nur_im_abschluss_nicht_live():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    live = (root / 'static' / 'index.html').read_text()
+    assert 'id="klima"' not in live
+    assert 'id="dynamik"' not in live
+    assert 'id="redeanteile"' in live
+    assert 'Gesprächsdynamik' in (root / 'static' / 'abschluss.js').read_text()
+    assert 'dynamikRendern(z);' not in (root / 'static' / 'app.js').read_text()

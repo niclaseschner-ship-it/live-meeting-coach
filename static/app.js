@@ -590,40 +590,8 @@ function liveRendern(z) {
     el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${(sek / summe) * 100}%` })),
     el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
 
-  dynamikRendern(z);
   nestorZeileRendern(z);
   verlaufRendern(z);
-}
-
-const KLIMA_HOEHE = { ruhig: 30, lebhaft: 65, hitzig: 100 };
-function dynamikRendern(z) {
-  const d = z.dynamik;
-  if (!d) return;
-  const k = d.klima ?? { stufe: "ruhig", gruende: [] };
-  const box = $("klima");
-  box.className = `klima ${k.stufe}`;
-  const thermo = el("span", { class: "thermo" }, el("span"));
-  thermo.firstChild.style.height = `${KLIMA_HOEHE[k.stufe] ?? 30}%`;
-  // Klima, gleichzeitiges Sprechen und Ausreden lassen je einzeln einstufen statt mit einem Schild fürs
-  // ganze Kärtchen (das verwischte, dass es unterschiedliche Zahlen sind, siehe Lastenheft 4.3).
-  const kKlima = signal(z, "klima");
-  const kGleich = signal(z, "gleichzeitig");
-  const kAusreden = signal(z, "ausreden");
-  box.dataset.tip = "Letzte 3 Minuten: gleichzeitiges Sprechen, Ins-Wort-Fallen, Lautstärke und Ton"
-    + (kKlima?.stufe === "experimentell" ? ` – ${kKlima.kurzsatz}` : "");
-  box.replaceChildren(thermo, el("div", {},
-    el("div", { class: "stufe" }, k.stufe[0].toUpperCase() + k.stufe.slice(1),
-      ...(kKlima?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
-    el("div", { class: "gruende" }, k.gruende.length ? k.gruende.join(" · ") : "keine Auffälligkeiten")));
-  $("dynamik").replaceChildren(
-    el("div", { "data-tip": "Vorfälle, in denen zwei gleichzeitig sprachen (seit Beginn / letzte 10 min)"
-        + (kGleich?.stufe === "experimentell" ? ` – ${kGleich.kurzsatz}` : "") },
-      el("strong", {}, d.ueberlappungen, ...(kGleich?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
-      el("span", {}, `gleichzeitig gesprochen · ${d.ueberlappungen_10min} in 10 min`)),
-    el("div", { "data-tip": "Wechsel ohne Pause, nach denen die neue Person das Wort behält (seit Beginn / letzte 10 min)"
-        + (kAusreden?.stufe === "experimentell" ? ` – ${kAusreden.kurzsatz}` : "") },
-      el("strong", {}, d.unterbrechungen, ...(kAusreden?.stufe === "experimentell" ? [konfSchild("konf-klein")] : [])),
-      el("span", {}, `ins Wort gefallen · ${d.unterbrechungen_10min} in 10 min`)));
 }
 
 function leisteRendern(z) {
