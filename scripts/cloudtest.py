@@ -439,7 +439,11 @@ async def einrichten(seite: Page, agenda_text: str, bericht: Bericht) -> None:
 async def anmelden(seite: Page, url: str, passwort: str, bericht: Bericht) -> None:
     t0 = time.monotonic()
     await seite.goto(url)
-    if "anmelden" in seite.url or await seite.locator('input[name="passwort"]').count():
+    # Der öffentliche Pilot zeigt unter /anmelden zuerst die Mail-PIN-Registrierung. Für automatisierte
+    # Bestandsläufe bleibt der vorhandene Testzugang bewusst unter ?alt=1 erreichbar.
+    if "anmelden" in seite.url and not await seite.locator('input[name="passwort"]').count():
+        await seite.goto(url.rstrip("/") + "/anmelden?alt=1")
+    if await seite.locator('input[name="passwort"]').count():
         await seite.locator('input[name="passwort"]').fill(passwort)
         await seite.get_by_role("button", name=re.compile("Anmelden", re.I)).click()
         await seite.wait_for_load_state("domcontentloaded")
