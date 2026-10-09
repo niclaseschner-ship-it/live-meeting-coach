@@ -60,6 +60,19 @@ def test_monolog_unter_schwelle_gruen():
     assert ampeln(m)["Monolog"]["farbe"] == "gruen"
 
 
+def test_erster_langer_monolog_wird_vor_erstem_voxtral_segment_erkannt():
+    """Ticket #29: Voxtral finalisiert eine lange erste Äußerung erst nach deren Ende; Browser-VAD reicht anonym."""
+    m = meeting_mit_agenda()
+    m.segmente = []
+    m.sprache_seit = 1
+    m.sprache_bis = 61.5
+    m.virtuelle_zeit = 62
+    assert analyse.monolog_live(m, 60) == (True, 61)
+    m.sprache_bis = 62
+    m.sprache_seit = 61.5  # Pause hat die fortlaufende Sprachphase zurückgesetzt
+    assert analyse.monolog_live(m, 60)[0] is False
+
+
 def test_kurzer_einwurf_ist_noch_kein_dialog():
     segs = [seg("A", 0, 40), seg("B", 40.5, 41.2, "Mhm."), seg("A", 41.5, 80)]
     assert analyse.monolog(segs, schwelle=60) == ("A", 80)

@@ -52,7 +52,13 @@ def monolog_live(meeting: Meeting, schwelle: float) -> tuple[bool, float]:
     """
     rede = laufende_rede(meeting.segmente)
     if not rede:
-        return False, 0.0
+        # Voxtral liefert die Sprecherzuordnung erst am Ende einer Äußerung. Bei einem langen ersten Monolog
+        # gäbe es deshalb trotz fortlaufender Browser-VAD noch kein Segment. Die lückenlose Sprachphase darf
+        # hier ohne Namenszuordnung genügen; eine Pause > SPRACHE_AKTUELL_SEKUNDEN setzt sie zurück.
+        jetzt = meeting.jetzt()
+        aktiv = jetzt - meeting.sprache_bis <= SPRACHE_AKTUELL_SEKUNDEN
+        dauer = max(0.0, jetzt - meeting.sprache_seit) if aktiv else 0.0
+        return dauer >= schwelle, dauer
     _, dauer, ende = rede
     jetzt = meeting.jetzt()
     bis_blockende = ende >= meeting.letztes_block_ende - BLOCKRAND_SEKUNDEN

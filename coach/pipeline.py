@@ -600,7 +600,10 @@ class Coach:
 
     def sprache_melden(self) -> None:
         """Mikrofon meldet gerade Sprache (vom Browser, etwa jede Sekunde)."""
-        self.meeting.sprache_bis = self.meeting.jetzt()
+        jetzt = self.meeting.jetzt()
+        if jetzt - self.meeting.sprache_bis > analyse.SPRACHE_AKTUELL_SEKUNDEN:
+            self.meeting.sprache_seit = jetzt
+        self.meeting.sprache_bis = jetzt
 
     def _ueberlappung_pruefen(self) -> None:
         """FR-06: technisches Signal, keine Bewertung von Unterbrechungen. Hinweis nur mit der Regel „Ausreden lassen“

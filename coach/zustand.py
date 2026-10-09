@@ -75,6 +75,7 @@ class Meeting:
     vorschlag: dict | None = None
     letztes_block_ende: float = 0.0  # Meetingzeit, bis zu der Audio verarbeitet ist
     sprache_bis: float = -1e9  # zuletzt vom Mikrofon gemeldete Sprachaktivität
+    sprache_seit: float = -1e9  # Beginn der aktuellen lückenlosen Sprachphase (auch vor erstem Sprechersegment)
     gestartet_um: float | None = None
     virtuelle_zeit: float | None = None  # gesetzt im Simulationsbetrieb
     _punkt_seit: float = 0.0
