@@ -1,6 +1,6 @@
 # Nestor – Lastenheft
 
-**Stand:** 08.10.2026 (Ticket #13: zwei Stufen; Ticket #26: Meeting-Artefakte; Ticket #27: Bedienlogik) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
+**Stand:** 09.10.2026 (Tickets #54–57: Variantenwahl, UI, UI-Prüfung und Sprach-/Monologverhalten) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
 **Vorgänger:** [archiv/spezifikation_v2.md](archiv/spezifikation_v2.md) (Laptop-Fassung, Messungen bis 05.10.)
 
 Diese Datei beschreibt verbindlich, was Nestor tut. Wer etwas Nennenswertes ändert, trägt es hier im selben
@@ -56,8 +56,9 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    nicht unter den Meetingfunktionen. Eine frühere Berechtigung ersetzt diesen Tipp nicht. Beide Geräte
    unterscheiden „gekoppelt“, „aktivieren“, „warte auf Audio“ und „bereit“; die Vorbereitung wird regelmäßig
    aktualisiert und der mobile Mikrofon-AudioContext ausdrücklich im Benutzertipp aufgeweckt (#53).
-4. **Meeting:** Dashboard mit denselben Knöpfen an denselben Stellen in beiden Stufen: links Zeit, Agenda und die
-   gewählten Regeln, in der Mitte Nestor und der Verlauf, rechts Redeanteile, oben das Band
+4. **Meeting:** Dashboard mit der Regel-Ampelzone oben unter der Kopfleiste und oberhalb der Aktionen; darunter
+   fünf kompakte Kernaktionen, Zusatzaktionen separat. Zeit und Agenda stehen links, in der Mitte Nestor und der
+   Verlauf, rechts Redeanteile, oben in der Kopfleiste das Band
    (Abschnitt 4.10). Premium kann zusätzlich ein Live-Bild zeichnen und spricht im Realtime-Gespräch.
 5. **Abschluss:** Nach „Meeting beenden“ folgt eine Seite, eingeleitet mit einem Abschluss-Kopf – „Danke!
    11 Minuten · 4 Punkte · 2 Entscheidungen“, mit demselben Logo wie im Dashboard – und drei Angeboten:
@@ -75,9 +76,10 @@ hier Sie-Form.
 
 ## 3. Die zwei Stufen
 
-Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Gleiche Funktionen, gleiche
-Knöpfe, gleiche Stellen im Dashboard – man kann jederzeit umsteigen, ohne überrascht zu werden. Premium legt nur das
-Erlebnis darauf (Gespräch, Live-Bild). `LMC_KI=codex` und der Claude-Bildweg sind reine Testwege, keine Stufe.
+Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Die fünf Kernaktionen sind
+gemeinsam; verfügbare Zusatzfunktionen unterscheiden sich. Die Auswahl gilt für das Meeting und wird während eines
+laufenden Meetings nicht gewechselt. Premium legt Gespräch und Live-Bild darauf. `LMC_KI=codex` und der Claude-Bildweg
+sind reine Testwege, keine Stufe.
 
 **Wording (Niclas, 08.10.2026, Ticket #18):** **Nestor Premium** (OpenAI) ist der **Standard** – auf der
 Startseite zuerst, größer, mit dem Zusatz „Standard“. **Nestor Basis** (Mistral) ist das **Downgrade** für alle,
@@ -91,9 +93,9 @@ Live-Bild.
 | Live-Transkript, Fokus, Ton, Ergebnisse | live | live |
 | Monolog, Redeanteile, Überlappung, Zeit | live, lokal auf dem Server | live, lokal auf dem Server |
 | Nestor ansprechen | **wie ein Telefon:** „Nestor, …“; direkt nach dem Bogen eine Nachfrage ohne Namen; am Handy auch die Sprechtaste; die Knöpfe | **wie ein Funkgerät:** Sprechtaste halten, sprechen, loslassen (Laptop: Knopf oder Leertaste, Handy: großer Knopf); auf „Nestor“ reagiert Basis nicht; die Knöpfe |
-| Nestors Antwort | Antwortbogen im Realtime-Gespräch; Reinreden macht ihn still | Antwortbogen mit der Stimme **Thorsten** (Thorsten-Voice, CC0); er redet aus, die Sprechtaste unterbricht |
+| Nestors Antwort | Antwortbogen im Realtime-Gespräch; Reinreden macht ihn still | Antwortbogen mit der konfigurierten Mistral-Custom-Voice aus einer vollständig KI-generierten Referenz; sie redet aus, die Sprechtaste unterbricht |
 | Bild / Überblick | Live-Bild auf Zuruf und per Knopf (langer Auftrag, kommt still) und am Ende; Überblick als Text per Knopf | **Überblick als Text** (Abschnitt 4.7) auf Zuruf und per Knopf und am Ende; kein Bildmodell |
-| Knöpfe | Wo stehen wir? · Zusammenfassen · Was fehlt? · Protokoll · Überblick · Bild · Regeln eingehalten? (nur mit Regeln) · Nestor fragen | dieselben ohne Bild, dazu die Sprechtaste |
+| Knöpfe | fünf kompakte Kernaktionen: Stand · Zusammenfassen · Lücken · Protokoll · Überblick; Meetingbild, Regeln prüfen und Nestor fragen unter „Weitere Aktionen“ | dieselben Aktionen, soweit in der Stufe verfügbar, dazu die Sprechtaste |
 | Löschen | „Nein“ in der Begrüßung oder später „Nestor, nein“ löscht alles | dasselbe – Einwilligung und Nein bleiben per Stimme |
 | Kosten (Richtwert) | ~2 € je Stunde | ~0,7 € je Stunde |
 
@@ -102,6 +104,12 @@ ausgeblendet, der Code bleibt. Ohne Knopf geht dann nichts an Mistral: Der Ton b
 Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf Knopfdruck (Abschnitt 4.2), Nestor spricht nicht und
 antwortet als Karte. Zeit, Redeanteile, Überlappung und Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten
 verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je Stunde.
+
+**Variantenwahl (Ticket #54):** Die Startseite wartet auf die Serverbestätigung der gewählten Stufe und des Modus,
+bevor sie zum Meeting wechselt. Im Cloudbetrieb bleibt die bestätigte Auswahl im Durable Object gespeichert und
+wird für Folgeanfragen serverseitig wiederhergestellt; Browser-Header können sie nicht überschreiben. Der Start
+sendet zusätzlich die erwartete Stufe, damit ein nicht passender Serverzustand mit einer verständlichen 409-Meldung
+abgewiesen wird.
 
 Die Startseite zeigt je Stufe einen Satz, wie man mit Nestor spricht, und zwei Plus- und zwei Minus-Stichpunkte
 (Ticket #18/#27). **Premium**: „Wie ein Telefon: Ihr sagt „Nestor, …“, fragt direkt danach ohne Namen nach und könnt
@@ -121,10 +129,12 @@ AGPL-3.0 lizenzierte) GitHub-Repo – solange das Repo privat gewesen wäre, hä
 Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription auf Knopfdruck
 `voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
 Überblick, Folie), Zuordnung alle ~15 s `mistral-small-latest` (im Vergleich gleich gut, ein Zehntel der Kosten),
-Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts-latest` mit der gespeicherten Stimme
-Thorsten. Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
+Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts-latest` mit der über
+`LMC_BASIS_STIMME` konfigurierten Mistral-Custom-Voice. Der aktuelle Standard ist eine vollständig KI-generierte
+Referenzstimme; Modell und Stimme lassen sich über `LMC_BASIS_STIMME_MODELL` und `LMC_BASIS_STIMME` konfigurieren.
+Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
 
-Gemessen ([messung_basis.md](messung_basis.md)): Sprechende → Thorstens erster Ton im Median 2,0–2,1 s, alle zwölf
+Gemessen ([messung_basis.md](messung_basis.md)): Sprechende → erster Ton im Median 2,0–2,1 s, alle zwölf
 Zurufe der Probe lösen die richtige Aktion aus (24/24). Die Kostenrichtwerte stammen aus dem Nutzungsprotokoll
 (`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet: Grundlast ~0,5 $/h (Live-Text allein 0,36 $/h), dazu
 ~0,01 $ je Frage an Nestor und ~0,06 $ je Recherche – mit 10 Fragen und 2 Recherchen ~0,7 $/h (≈ 0,65 €). Der
@@ -154,6 +164,10 @@ eine Folgeantwort verwendet den bisherigen Dialog. Während einer Rückfrage ble
 Agendapunkte unverändert. Der kurze Vorbereitungsdialog bleibt nur im offenen Browser-Tab und wird nicht
 dauerhaft gespeichert. Text und Sprache verwenden denselben Ablauf.
 
+Die freie Spracheingabe zur Agenda kann alternativ über eine Sprechtaste bedient werden: Aufnahme startet beim
+Drücken und wird beim Loslassen abgeschickt. Die Frontend-Prüfung simuliert diesen Haltevorgang; ein KI- oder
+Live-Pilotnachweis ist das nicht.
+
 Daneben gibt es „Weitere Regeln“: ein Freitext in einer eigenen, neutral gestalteten Gruppe unterhalb der
 Gesprächsregeln – deutlich von den prüfbaren Regeln abgehoben (anderes Symbol, gestrichelter Rahmen, eigener
 Untertitel „Nestor liest sie zu Beginn vor – prüfen kann er sie nicht“), damit auf einen Blick klar ist, dass
@@ -172,7 +186,9 @@ aus den vorhandenen Modelltarifen und der Kontextlänge; kein Gesamtpreis und ke
 nachgeholte Auswertung und Recherche sind ausdrücklich zusätzlich. Für die lokal erzeugte Protokollliste,
 Bilder und unbekannte Modelle gibt es keine erfundenen festen KI-Preise.
 
-Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leiste unter der Kopfleiste) und am Handy.
+Die fünf kompakten Kernaktionen stehen in der Leiste unter der Regel-Ampelzone; seltenere Aktionen (Bild,
+Regelprüfung, Frage) sind unter „Weitere Aktionen“ gebündelt. Die Sprechtaste bleibt ein eigener, je nach Stufe
+verfügbarer Zugang. Am Handy gibt es dieselben Kernaktionen.
 Jeder Knopf löst einen Antwortbogen aus wie ein Zuruf (Abschnitt 4.10): Bestätigung, Karte im Verlauf, ein bis zwei
 Sätze. Während ein Bogen läuft, sind die Knöpfe gesperrt (sichtbar: „Nestor ist bei „Wo stehen wir?“ …“).
 
@@ -212,6 +228,13 @@ dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn und sind von
 und räumlich getrennt – bei den Gesprächsregeln in der Einrichtung (zwei Gruppen) genauso wie bei den
 Regel-Ampeln im Dashboard.
 
+Die Regel-Ampeln stehen im Dashboard oben unter der Kopfleiste und vor der Aktionsleiste, nicht mehr als linke
+Seitenliste. Die Monologanzeige berücksichtigt die Live-VAD-Zeit einschließlich laufender Rede; gelb wird ab
+60 Sekunden zusammenhängender Rede ausgelöst. Eine kurze Pause von 2 Sekunden setzt die Kette nicht zurück.
+Ein Sprecherwechsel wird nur angenommen, wenn innerhalb derselben VAD-Phase ein vorheriges Segment einer anderen
+Person belegt ist. Die Warnung wird einer benannten Stimme erst mit bestätigtem Segment zugeordnet; solange keine
+Sprechersegmente vorliegen, kann ein erster langer Beitrag anonym gemeldet werden.
+
 | Signal | Einstufung | Grundlage | Kurzsatz im Dashboard |
 |---|---|---|---|
 | Zeit und Agenda-Ampel | verlässlich | Uhr | – |
@@ -234,8 +257,9 @@ Regel-Ampeln im Dashboard.
 ### 4.4 Paket zum Herunterladen
 
 Ein ZIP mit Protokoll (`protokoll.md`), Abschlussbild (Basis: `ueberblick.md`, der Überblick als Text),
-Transkript, Agenda mit Zeitnutzung und Hinweisen, dazu `meeting.json` (Standardgliederung, Abschnitt 4.9) und
-`tasks.json` (nur die Aufgaben: was, wer, bis wann, Lücken, bestätigt) als Grundlage für das Export-Dokument (#22). In Premium ist das Protokoll die Analyse hinter dem
+Transkript, Agenda mit Zeitnutzung und Hinweisen, `technik.json` (verwendete Stufe und technische Modell-/Anbieterangaben),
+dazu `meeting.json` (Standardgliederung, Abschnitt 4.9) und `tasks.json` (nur die Aufgaben: was, wer, bis wann,
+Lücken, bestätigt) als Grundlage für das Export-Dokument (#22). In Premium ist das Protokoll die Analyse hinter dem
 Abschlussbild; Basis hat kein Bild und erstellt es am Meetingende wie der Knopf „Protokoll“ (Ergebnisse je
 Agendapunkt). Mit „Nur auf Knopfdruck“ gibt es Protokoll und Überblick nur, wenn vorher gedrückt wurde.
 Die Aufnahme ist nur auf ausdrücklichen Wunsch dabei.
@@ -272,7 +296,8 @@ automatisch und beendet den Container; lokal bleibt die explizite Einstellung `a
   laufenden Meetings – anders als die Datenspende unten kein beendetes Meeting nötig. `POST /api/feedback`
   (`coach/api_abschluss.py`), legt über dieselbe Ablage ab wie die Datenspende (lokal ein Ordner, im Cloud-Betrieb
   R2), ohne Meetinginhalte.
-- **Datenspende:** Transkript, Hinweise, Agenda und optional die Aufnahme, mit einer eigenen Anmerkung dazu.
+- **Datenspende:** Transkript, Hinweise, Agenda, Dynamikdaten (`dynamik.json`), technische Metadaten
+  (`technik.json`) und optional die Aufnahme, mit einer eigenen Anmerkung dazu.
   Absenden geht nur mit dem Häkchen „Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden“.
 - Hinweistext: „Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
   einzeln an oder wertet Inhalte aus.“
@@ -443,8 +468,8 @@ zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
 - **Mistral-Schlüssel (Basis):** Niclas' Schlüssel als Secret `MISTRAL_API_KEY`, im Container als
-  `LMC_MISTRAL_SCHLUESSEL`. Fehlt er, ist Basis auf der Startseite nicht wählbar. Die Stimme Thorsten ist im
-  Mistral-Konto gespeichert; die Referenz (CC0) liegt in `coach/stimmen/`, um sie neu anzulegen.
+  `LMC_MISTRAL_SCHLUESSEL`. Fehlt er, ist Basis auf der Startseite nicht wählbar. Die aktuelle Basisstimme ist
+  als Mistral-Custom-Voice gespeichert; ihre vollständig KI-generierte Referenz und Konfiguration liegen im Repo.
 - **OpenAI-Schlüssel (Premium):** Niclas' Schlüssel als Secret, in einem eigenen OpenAI-Projekt mit Ausgabenlimit. Wer
   möchte, trägt auf der Startseite (aufklappbare Zeile unter den Stufen-Karten, optional) seinen eigenen Schlüssel
   ein – ein Angebot, kein Pflichtschritt. Ein eingetragener Schlüssel hat Vorrang vor Niclas' Schlüssel; die
