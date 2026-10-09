@@ -78,8 +78,8 @@ hier Sie-Form.
 
 Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Die fünf Kernaktionen sind
 gemeinsam; verfügbare Zusatzfunktionen unterscheiden sich. Die Auswahl gilt für das Meeting und wird während eines
-laufenden Meetings nicht gewechselt. Premium legt Gespräch und Live-Bild darauf. `LMC_KI=codex` und der Claude-Bildweg
-sind reine Testwege, keine Stufe.
+laufenden Meetings nicht gewechselt. Premium verwendet ausschließlich OpenAI, Basis ausschließlich Mistral.
+Die früheren Codex-/Claude-Abo-Wege sind aus dem Produktlauf entfernt; auch lokal gibt es keinen Anbieter-Fallback.
 
 **Wording (Niclas, 08.10.2026, Ticket #18):** **Nestor Premium** (OpenAI) ist der **Standard** – auf der
 Startseite zuerst, größer, mit dem Zusatz „Standard“. **Nestor Basis** (Mistral) ist das **Downgrade** für alle,
@@ -510,5 +510,5 @@ Nutzerkonten mit Selbstregistrierung.
   Lastenheft, Dateien, die angefasst werden dürfen, Dateien, die tabu sind, Abnahme und Prüfbefehl.
 - **Branch je Ticket**, Commit-Nachricht mit `#<nr>`. Ein Ticket ist fertig, wenn die Abnahme erfüllt ist,
   die Tests grün sind und das Lastenheft stimmt.
-- **Testen ohne unnötige API-Kosten:** `LMC_KI=codex` (Codex auf dem Pi), `LMC_TEXT_CACHE`, `LMC_STIMME_AUS=1`.
+- **Testen ohne unnötige API-Kosten:** `LMC_OFFLINE=1`, lokale Modell-Attrappen, `LMC_TEXT_CACHE`, `LMC_STIMME_AUS=1`.
   Echte API-Aufrufe nur für eine Abnahme, die sie wirklich braucht, und mit Kosten im Ticket vermerkt.

@@ -72,8 +72,8 @@ der Meeting-Zusammenfassung als Bild.
 - **Live-Text schnell oder sparsam** (Einstellungen): Standard ist „schnell“ (Streaming, Text schon beim
   Sprechen, ~1,02 $/h). „Sparsam“ schickt jede Äußerung einzeln (~0,36 $/h); Sätze erscheinen erst nach dem Satzende (im Mittel ~1 s, bis ~4 s)
   und Nestor antwortet entsprechend später. Sprecher, Redeanteile, Monolog und Unterbrechungen sind nicht betroffen.
-- **Live-Bild über das Claude-Abo statt OpenAI** (kostenlos, Layout einfacher): `LMC_BILD_ANBIETER=claude`;
-  braucht die Claude-Code-Kommandozeile mit angemeldetem Abo (Standard: Pi per `LMC_CLAUDE_BEFEHL`).
+- **Anbieter strikt getrennt:** Premium ausschließlich OpenAI, Basis ausschließlich Mistral. Frühere
+  Codex-/Claude-Abo-Schalter wirken nicht mehr; fehlende Verbindungen führen zu einem Fehler, nicht zu einem anderen Anbieter.
 - **Testbibliothek:** Proben mit Referenz in [testbibliothek/](testbibliothek/README.md); Audio herstellen
   mit `scripts\bibliothek_laden.py`, danach im Dashboard unter „Aufnahme abspielen“. Kopflos mit
   Bericht: `scripts\abspielen.py`; Sprechertrennung messen: `scripts\bench_sprecher.py`.
@@ -85,11 +85,10 @@ der Meeting-Zusammenfassung als Bild.
   die Münze in der Kopfleiste zeigt das laufende Meeting nach Funktion, pro Stunde, heute und insgesamt
   (Listenpreise in `coach/kosten.py`).
 - **Tests:** `.venv\Scripts\python -m pytest`
-- **Testläufe ohne API-Kosten** (nur für eigene Tests): `LMC_KI=codex` schickt alle Text-KI-Aufrufe über das
-  ChatGPT-Abo (Codex auf dem Pi, ~5 s je Aufruf), `LMC_TEXT_CACHE=logs/textcache` speichert Transkripte je
+- **Testläufe ohne API-Kosten:** `LMC_OFFLINE=1` bzw. lokale Modell-Attrappen. `LMC_TEXT_CACHE=logs/textcache` speichert Transkripte je
   Äußerung (zweiter Lauf kostet nichts; `LMC_TEXT_VORLAGE=logs/bericht_<probe>.json` übernimmt sie aus einem
   früheren Lauf), `LMC_STIMME_AUS=1` spart die Sprachausgabe. Live-Text dazu `LMC_LIVE_ART=sparsam`, Live-Bild
-  `LMC_ONEPAGER_MINUTEN=0` (nur auf Zuruf) oder `LMC_BILD_ANBIETER=claude` (Abo). Protokoll des ersten großen
+  `LMC_ONEPAGER_MINUTEN=0` (nur auf Zuruf). Protokoll des ersten großen
   Testlaufs: [docs/testlauf_2026-10-05.md](docs/testlauf_2026-10-05.md).
 
 ## Aufbau (Version 2: Ströme statt Blöcke)
@@ -107,7 +106,7 @@ Schlüssel `OPENAI_API_KEY` bzw. `MISTRAL_API_KEY` (oder `LMC_MISTRAL_SCHLUESSEL
 | 1 Live-Text | `coach/livetext.py` | OpenAI `gpt-live-transcribe`, Teiltext während des Sprechens; *Voxtral Realtime (`LiveTextMistral`), 16 kHz, Verzug 240 ms* |
 | 2 Wer spricht | `coach/stimmen.py` | Stimm-Fingerabdruck (CAM++) in 1,5-s-Fenstern, lokal – Benchmark 99 % (Stadtrat) / 95 % (Talkshow), Raumtest offen |
 | 4 Kontext | `coach/themen.py` | Zuordnung zum Agendapunkt per GPT-5.4-mini, alle ~15 s Gesprochenes; *mistral-medium-latest* |
-| 5 Live-Bild | `coach/bild_gpt.py`, `coach/onepager.py` | Standard: GPT-5.4 + gpt-image-2 wie in ChatGPT, Fortschreibung des letzten Bildes (~55 s, ~8 ct); Alternative: Claude-Abo, SVG (`LMC_BILD_ANBIETER=claude`); *in Basis kein Bildmodell* |
+| 5 Live-Bild | `coach/bild_gpt.py` | Premium: ausschließlich OpenAI, Fortschreibung des letzten Bildes; *in Basis kein Bildmodell, Überblick als Mistral-Text* |
 | 5 Überblick | `coach/ueberblick.py` | Überblick als Text (Entschieden, Offen, Aufgaben, Außerhalb, Neu) aus einem Textaufruf, Zahlen gegen das Material geprüft; in beiden Stufen, in Basis statt des Live-Bilds |
 | Sprachassistent | `coach/assistent.py`, `coach/gespraech.py` | Ansprache per Name im Live-Text, Realtime-Gespräch (gpt-realtime) bzw. Rückfall GPT-5.4-mini + Sprachausgabe; *mistral-medium + Voxtral TTS, Stimme Thorsten (`coach/stimmen/`)* |
 | Knöpfe | `coach/knopfdruck.py`, `coach/api_knopfdruck.py` | Wo stehen wir · Regeln · Überblick · Protokoll · Nestor fragen (am Handy halten), in beiden Stufen gleich; „Nur auf Knopfdruck“ in Basis |

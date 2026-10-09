@@ -115,38 +115,43 @@ def test_meeting_text_enthaelt_agenda_status_und_transkript():
 def test_bildwunsch_waehrend_des_zeichnens_wird_nachgeholt(monkeypatch):
     import asyncio
 
-    from coach import onepager
+    from coach import bild_gpt
     from coach.pipeline import Coach
     from coach.zustand import Segment
 
     aufrufe = []
 
-    async def attrappe(meeting, vorher=None, fokus=None):
+    async def attrappe(client, meeting, vorher=None, fokus=None):
         aufrufe.append(vorher)
         await asyncio.sleep(0.05)
-        return {"analyse": "a", "svg": "<svg></svg>"}
+        return {"analyse": "a", "png": b"test-png"}
 
-    monkeypatch.setattr(onepager, "erzeugen", attrappe)
+    monkeypatch.setattr(bild_gpt, "erzeugen", attrappe)
     from coach.config import EINST
     vorher_anbieter = EINST.bild_anbieter
-    object.__setattr__(EINST, "bild_anbieter", "claude")  # dieser Test prüft die Warteschlange, nicht den Anbieter
+    object.__setattr__(EINST, "bild_anbieter", "openai")
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda eintrag: None)  # Kostenprotokoll sauber halten
 
     async def ablauf():
         c = Coach()
+        c._client = object()  # kein Netzwerk: Bild-KI ist vollständig durch die Attrappe ersetzt
         c.meeting.starten(virtuell=True)
         c.meeting.transkript = [Segment("Person 1", "Hallo", 0, 1)]
         assert c.onepager_starten() is True
         assert c.onepager_starten() is False  # läuft schon → wird vorgemerkt
-        while c._onepager_laeuft or len(aufrufe) < 2:
+        for _ in range(200):
+            if not c._onepager_laeuft and len(aufrufe) >= 2:
+                break
             await asyncio.sleep(0.01)
         return c
 
-    c = asyncio.run(ablauf())
-    object.__setattr__(EINST, "bild_anbieter", vorher_anbieter)
-    assert len(aufrufe) == 2 and c.onepager_version == 2 and c.onepager_svg == "<svg></svg>"
+    try:
+        c = asyncio.run(ablauf())
+    finally:
+        object.__setattr__(EINST, "bild_anbieter", vorher_anbieter)
+    assert len(aufrufe) == 2 and c.onepager_version == 2 and c.onepager_png == b"test-png"
     # das zweite Bild schreibt das erste fort
-    assert aufrufe[0] is None and aufrufe[1]["analyse"] == "a" and aufrufe[1]["svg"] == "<svg></svg>"
+    assert aufrufe[0] is None and aufrufe[1]["analyse"] == "a" and aufrufe[1]["png"] == b"test-png"
 
 
 # --- Fenster-Zuordnung (Sprecherwechsel ohne Pause) ------------------------

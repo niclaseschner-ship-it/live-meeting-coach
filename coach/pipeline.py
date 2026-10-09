@@ -237,10 +237,6 @@ class Coach:
                 from openai import AsyncOpenAI
 
                 self._client = AsyncOpenAI(api_key=openai_schluessel())
-            if EINST.ki == "codex":
-                from .ki_abo import AboClient
-
-                self._client = AboClient(self._client)
 
     def kosten_stand(self) -> dict:
         m = self.meeting
@@ -422,6 +418,8 @@ class Coach:
                 raise ValueError("Unbekannte Gesprächsart oder Stimme.")
             if modus == "gespraech" and stimme not in REALTIME_STIMMEN:
                 raise ValueError("Nova ist nur für Kurzantworten verfügbar. Wähle eine Gesprächsstimme oder die Gesprächsart Kurzantwort.")
+            if daten.get("bild_anbieter", EINST.bild_anbieter) != "openai":
+                raise ValueError("Premium verwendet ausschließlich OpenAI.")
         if "assistent" in daten:
             self.assistent.aktiv = bool(daten["assistent"])
         if EINST.stufe == "basis":
@@ -431,7 +429,7 @@ class Coach:
             object.__setattr__(EINST, "assistent_modus", daten["modus"])
         if daten.get("live_art") in ("schnell", "sparsam"):
             object.__setattr__(EINST, "live_art", daten["live_art"])  # gilt ab dem nächsten Meetingstart
-        if daten.get("bild_anbieter") in ("openai", "claude"):
+        if daten.get("bild_anbieter") == "openai":
             object.__setattr__(EINST, "bild_anbieter", daten["bild_anbieter"])
             self._onepager_voll = None  # Fortschreibung nur innerhalb eines Anbieters
         if daten.get("stimme") in STIMMEN:
@@ -1284,8 +1282,6 @@ class Coach:
         return True
 
     async def _onepager_zeichnen(self, fokus: str | None = None) -> None:
-        from . import onepager
-
         m = self.meeting
         stand = m.jetzt()
         t0 = time.monotonic()
@@ -1298,8 +1294,7 @@ class Coach:
                 erg = await bild_gpt.erzeugen(self._client, m, vorher, fokus)
                 self.onepager_png, self.onepager_svg = erg["png"], None
             else:
-                erg = await onepager.erzeugen(m, vorher, fokus)
-                self.onepager_svg, self.onepager_png = erg["svg"], None
+                raise RuntimeError("OpenAI-Bildweg nicht verfügbar; kein Anbieter-Fallback.")
             self.onepager_analyse = erg["analyse"]
             self.onepager_fokus = fokus
             if not fokus:

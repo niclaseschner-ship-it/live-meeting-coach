@@ -203,13 +203,12 @@ class Einstellungen:
     richtwert_premium_eur: float = _zahl("LMC_RICHTWERT_PREMIUM_EUR", 2.0)
 
     def __post_init__(self) -> None:
-        # Cloud: Abo-Wege (Codex/Claude über den Pi) sind nur für eigene Tests gedacht und in der Cloud nicht
-        # erreichbar – unabhängig davon, was LMC_KI/LMC_BILD_ANBIETER versehentlich mitbekommen.
-        if self.betrieb == "cloud":
-            if self.ki != "openai":
-                object.__setattr__(self, "ki", "openai")
-            if self.bild_anbieter not in ("openai", "text"):
-                object.__setattr__(self, "bild_anbieter", "openai")
+        # Keine versteckten Abo-/Claude-Wege, auch lokal: Premium OpenAI, Basis Mistral.
+        # Die Basiswerte (inklusive Textüberblick) werden anschließend durch stufe_setzen eingesetzt.
+        if self.ki != "openai":
+            object.__setattr__(self, "ki", "openai")
+        if self.bild_anbieter != "openai":
+            object.__setattr__(self, "bild_anbieter", "openai")
 
 
 EINST = Einstellungen()
