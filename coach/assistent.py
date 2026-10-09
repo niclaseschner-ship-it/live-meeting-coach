@@ -250,8 +250,8 @@ def wie_text(basis: bool) -> str:
     """Wie man mit Nestor spricht – Telefon (Premium) oder Funkgerät (Basis), Ticket #27."""
     name = EINST.assistent_name
     if basis:
-        return ("Ich funktioniere wie ein Funkgerät: Taste halten, sprechen, loslassen – ich rede dann aus. Die Taste "
-                "ist auf dem Bildschirm und am Handy, am Laptop geht auch die Leertaste.")
+        return ("Fragen stellt ihr wie beim Funkgerät: Taste halten, sprechen, loslassen. Die Taste gibt es am Handy "
+                "und auf dem Bildschirm, am Laptop auch per Leertaste.")
     return (f"Ich funktioniere wie ein Telefon: Sagt „{name}“ und eure Frage. Direkt danach könnt ihr ohne Namen "
             "nachfragen, und wenn ich zu viel rede, redet einfach rein.")
 
@@ -270,8 +270,8 @@ def begruessungstext(meeting, basis: bool | None = None, namen: bool | None = No
         liste = ", ".join(regeln[:-1]) + (" und " if len(regeln) > 1 else "") + regeln[-1]
         teil_regeln = f" Ihr habt euch diese Regeln vorgenommen: {liste}."
     teil_regeln += _weitere_regeln_satz(meeting)
-    gruss = (f"Hallo zusammen, ich bin {name} und begleite heute euer Meeting.{teil_regeln} Dafür höre ich mit. "
-             f"Wer nicht einverstanden ist, sagt einfach Nein – das geht auch später noch, dann mit meinem Namen: "
+    gruss = (f"Hallo zusammen, ich bin {name}, euer Moderationsassistent.{teil_regeln} Ich höre mit und behalte "
+             f"Agenda, Zeit und Gesprächsfluss im Blick. Wer das nicht möchte, sagt Nein – auch später mit "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
     if basis is None:

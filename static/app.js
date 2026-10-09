@@ -124,6 +124,7 @@ async function handyFensterZeigen() {
       " einrichten oder LMC_HANDY_URL setzen."]));
 }
 $("btn-handy").onclick = () => { $("mehr-menu").hidden = true; handyFensterZeigen(); };
+$("btn-handy-vorbereitung").onclick = handyFensterZeigen;
 $("btn-ton-hier").onclick = () => stimme.bereit(true);
 $("btn-mikro-quelle").onclick = handyFensterZeigen;
 $("hf-laptop").onclick = async () => {
@@ -472,6 +473,12 @@ function rendern() {
   $("fehler").hidden = !z.fehler; $("fehler").textContent = z.fehler ?? "";
   // Mikrofon: welche Quelle hört gerade, und kommt überhaupt Ton an?
   const m = z.mikro ?? {};
+  const handyVerbunden = !!z.handys;
+  $("handy-empfehlung").classList.toggle("verbunden", handyVerbunden);
+  $("handy-empfehlung-text").textContent = handyVerbunden
+    ? "Handy verbunden. Tippe dort auf „Dieses Handy übernimmt Mikro und Ton“ – das geht schon vor dem Meetingstart."
+    : "Lege ein Handy in die Tischmitte. Es hört die Runde meist gleichmäßiger als das gerichtete Laptop-Mikrofon und spielt auch Nestors Stimme ab.";
+  $("btn-handy-vorbereitung").textContent = handyVerbunden ? "Verbindung anzeigen" : "Handy verbinden";
   // Handy verbunden (gekoppelt, Seite offen) – auch bevor es Mikro und Ton übernimmt
   $("btn-mikro-quelle").hidden = z.simulation || (!m.quelle && !z.handys) || (!z.hoeren && m.quelle !== "handy" && !z.handys);
   $("mq-text").textContent = m.quelle === "handy" ? "Mikro: Handy"

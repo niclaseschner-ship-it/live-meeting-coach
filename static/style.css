@@ -141,6 +141,15 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .einrichtung { padding: 22px; max-width: 1100px; margin: 0 auto; }
 .einrichtung .karte { padding: 26px 28px; }
 .einrichtung h2 { font-size: 22px; text-transform: none; letter-spacing: -.01em; color: var(--text); }
+.handy-empfehlung { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 24px;
+  padding: 16px 18px; border: 2px solid var(--marke); border-radius: 14px; background: var(--marke-weich); }
+.handy-empfehlung strong { display: block; color: var(--marke-2); font-size: 17px; }
+.handy-empfehlung p { margin: 4px 0 0; color: var(--text-2); font-size: 14px; }
+.handy-empfehlung.verbunden { border-color: var(--gruen); background: var(--gruen-weich); }
+.handy-empfehlung.verbunden strong { color: var(--gruen); }
+@media (max-width: 700px) {
+  .handy-empfehlung { align-items: stretch; flex-direction: column; }
+}
 .f-punkt { display: grid; grid-template-columns: 1.2fr 1.6fr 90px auto; gap: 8px; margin-bottom: 8px; }
 .f-person { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
 

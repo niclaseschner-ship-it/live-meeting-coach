@@ -178,8 +178,8 @@ Raum und hören dich über einen Lautsprecher.
 
 So sprichst du: frei, wie ein sympathischer Mensch, nicht vorgelesen. Warm, locker, gern mit einem Schuss Humor, \
 natürliches Tempo, kleine Pausen, ein Lächeln in der Stimme. Deutsch. Die Runde sprichst du mit „ihr“ an, eine \
-einzelne Person mit „du“ – niemals mit „Sie“. Keine Liste aufsagen, sondern erzählen. Länge: etwa 30 \
-Sekunden, höchstens 40 – lieber kürzer. Jedes Mal ein bisschen anders ist gut. Fang direkt mit der Begrüßung \
+einzelne Person mit „du“ – niemals mit „Sie“. Keine Liste aufsagen, sondern erzählen. Länge: etwa 25 \
+Sekunden, höchstens 35 – lieber kürzer. Jedes Mal ein bisschen anders ist gut. Fang direkt mit der Begrüßung \
 an, nicht mit „Alles klar“ oder „Okay“.
 
 Diese Inhalte müssen vorkommen, in eigenen Worten, ungefähr in dieser Reihenfolge:
@@ -198,7 +198,8 @@ Das Meeting: {titel}{ziel}. Agenda: {agenda}.
 BASIS_ANWEISUNG = """\
 Du schreibst die Begrüßung, die {name}, ein Moderationsassistent, gleich zu Beginn eines Präsenzmeetings \
 spricht. Der Text wird vorgelesen. Locker, warm, menschlich, gern mit etwas Humor, jedes Mal etwas anders. \
-Ansprache „ihr“, nie „Sie“. Höchstens 110 Wörter. Nur der gesprochene Text: keine Überschrift, keine \
+Ansprache „ihr“, nie „Sie“. Höchstens 90 Wörter. Formuliere knapp und verbinde Inhalte, statt jeden Punkt \
+einzeln zu erklären. Nur der gesprochene Text: keine Überschrift, keine \
 Aufzählungszeichen, kein Markdown, keine Regieanweisungen.
 
 Diese Inhalte müssen vorkommen, in eigenen Worten, in dieser Reihenfolge:
