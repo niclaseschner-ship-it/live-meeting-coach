@@ -15,19 +15,36 @@ async function richtwerteHolen() {
 }
 
 const euro = (betrag) => `etwa ${betrag.toLocaleString("de-DE", { maximumFractionDigits: 1 })} € je Meetingstunde`;
+let stufeWirdGesetzt = false;
 
 async function stufeWaehlen(stufe) {
+  if (stufeWirdGesetzt) return;
+  stufeWirdGesetzt = true;
+  const karten = [$("karte-basis"), $("karte-premium")];
+  const vorher = karten.map(k => k.disabled);
+  karten.forEach(k => { k.disabled = true; });
+  const meldung = $("stufe-fehlt");
+  meldung.hidden = false;
+  meldung.textContent = `Nestor ${stufe === "premium" ? "Premium" : "Basis"} wird vorbereitet …`;
   const nurKnopfdruck = stufe === "basis" && $("nur-knopfdruck").checked;
   try {
     const r = await fetch("/api/stufe", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stufe, nur_knopfdruck: nurKnopfdruck }),
     });
-    if (!r.ok && r.status !== 409) { alert(`Fehler: ${await r.text()}`); return; } // 409: Meeting läuft schon – trotzdem weiter
-  } catch {
-    // Server nicht erreichbar: das Dashboard zeigt den Fehler gleich selbst
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || `Auswahl nicht übernommen (Fehler ${r.status}).`);
+    const modus = nurKnopfdruck ? "knopfdruck" : "live";
+    if (d.ok !== true || d.stufe !== stufe || d.modus !== modus) {
+      throw new Error("Der Server hat die gewählte Variante nicht bestätigt. Bitte erneut wählen.");
+    }
+    try { sessionStorage.setItem("nestor-gewaehlte-stufe", stufe); } catch { /* privater Browser: bestätigte Serverwahl bleibt gültig */ }
+    location.href = "/meeting";
+  } catch (e) {
+    meldung.textContent = e instanceof TypeError ? "Server nicht erreichbar. Die Variante wurde nicht übernommen; bitte erneut wählen." : e.message;
+    karten.forEach((k, i) => { k.disabled = vorher[i]; });
+    stufeWirdGesetzt = false;
   }
-  location.href = "/meeting";
 }
 
 // Eigener OpenAI-Schlüssel (optional, Abschnitt 6): ruft den vorhandenen /api/schluessel auf, der Dashboard-Eintrag
@@ -67,9 +84,9 @@ $("sk-eingabe").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault()
   if (d.richtwert_premium_eur != null) $("kosten-premium").textContent = euro(d.richtwert_premium_eur);
   // Fehlt der Schlüssel einer Stufe auf dem Server, ist sie nicht wählbar (Demos laufen trotzdem im Dashboard)
   const fehlt = [];
-  if (d.basis_bereit === false) { $("karte-basis").disabled = true; fehlt.push("Basis"); }
-  if (d.premium_bereit === false) { $("karte-premium").disabled = true; fehlt.push("Premium"); }
-  if (fehlt.length) {
+  if (!stufeWirdGesetzt && d.basis_bereit === false) { $("karte-basis").disabled = true; fehlt.push("Basis"); }
+  if (!stufeWirdGesetzt && d.premium_bereit === false) { $("karte-premium").disabled = true; fehlt.push("Premium"); }
+  if (fehlt.length && !stufeWirdGesetzt) {
     $("stufe-fehlt").hidden = false;
     $("stufe-fehlt").textContent = `Nestor ${fehlt.join(" und ")} ist auf diesem Server gerade nicht eingerichtet (kein Schlüssel).`;
   }

@@ -151,12 +151,23 @@ async def lebenszyklus(app: FastAPI):
 
 app = FastAPI(title="Live Meeting Coach", lifespan=lebenszyklus)
 app.add_middleware(zugang.Zugangsschutz)
+_variantenwahl_wiederhergestellt = False
 
 
 @app.middleware("http")
 async def immer_nachfragen(request: Request, call_next):
     """Seiten und Skripte: der Browser fragt jedes Mal nach (meist 304). Sonst mischt ein Handy alte und neue
     Fassungen – Teachbuddy 14.09., und im eigenen Test 06.10. kam das alte CSS."""
+    # #54: Der Worker hält die bestätigte Auswahl außerhalb des flüchtigen Containers.
+    # Fremde Header sind keine Autorität; laufende Meetings bleiben unverändert.
+    global _variantenwahl_wiederhergestellt
+    if not _variantenwahl_wiederhergestellt and EINST.betrieb == "cloud" and zugang.worker_geheimnis_passt(request.scope):
+        stufe = request.headers.get("X-Nestor-Stufe")
+        modus = request.headers.get("X-Nestor-Modus")
+        if coach.hoerstrom is None and stufe in ("basis", "premium") and modus in ("live", "knopfdruck"):
+            if coach.stufe != stufe or coach.modus != modus:
+                coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+            _variantenwahl_wiederhergestellt = True
     antwort = await call_next(request)
     if request.url.path.startswith("/static/") or request.url.path in ("/", "/meeting", "/handy"):
         antwort.headers["Cache-Control"] = "no-cache"
@@ -383,6 +394,9 @@ async def start(request: Request):
     if coach.hoerstrom is not None:
         ereignis("start_abgewiesen", von=_herkunft(request))
         raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
+    erwartet = request.headers.get("X-Nestor-Erwartete-Stufe")
+    if erwartet and erwartet != coach.stufe:
+        raise HTTPException(409, "Die gewählte Variante stimmt nicht mit dem Server überein. Bitte auf der Startseite erneut wählen.")
     if (audio["ws"] is None or audio["quelle"] != "handy"
             or time.monotonic() - audio["letzt"] > LUECKE
             or lautsprecher not in verbindungen or geraet.get(lautsprecher) != "handy"):

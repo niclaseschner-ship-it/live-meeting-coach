@@ -63,6 +63,18 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
         "namen": coach.namen,
         "ueberlappungen": m.ueberlappungen,
         "einstellungen": coach.einstellungen(),
+        "technik": {
+            "stufe": coach.stufe,
+            "anbieter": "Mistral" if coach.stufe == "basis" else "OpenAI",
+            "modus": coach.modus,
+            "transkription": EINST.transkriptions_modell,
+            "live_text": EINST.text_modell,
+            "live_modell": EINST.live_modell,
+            "live_art": EINST.live_art,
+            "analyse": EINST.analyse_modell,
+            "stimme": EINST.basis_stimme_modell if coach.stufe == "basis" else EINST.stimme_modell,
+            "gespraech": EINST.realtime_modell if coach.stufe == "premium" and EINST.assistent_modus == "gespraech" else None,
+        },
         "fehler": coach.fehler,
     }
 

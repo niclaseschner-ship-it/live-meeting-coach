@@ -14,6 +14,7 @@ import {
   pinSeite, registrierungsSeite,
 } from "./pilotzugang";
 import { meetingKurz, telegramMelden } from "./telegram";
+import { mitVariantenwahl } from "./variantenwahl";
 
 export { KundenZaehler };
 
@@ -43,6 +44,7 @@ export interface Env {
 
 /** Der Nestor-Container selbst: ein Image, 8080, schläft nach Ruhe ein (siehe README zur Begründung). */
 export class Nestor extends Container<Env> {
+  private readonly wahlSpeicher: DurableObjectStorage;
   defaultPort = 8080;
   // Während eines laufenden Meetings schickt der Browser durchgehend Audio über /ws/audio (alle ~100 ms,
   // beide Modi – Lastenheft §3) – das sind eingehende Anfragen auf der offenen WebSocket und halten den
@@ -52,6 +54,7 @@ export class Nestor extends Container<Env> {
 
   constructor(ctx: ConstructorParameters<typeof Container<Env>>[0], env: Env) {
     super(ctx, env);
+    this.wahlSpeicher = ctx.storage;
     this.envVars = {
       LMC_BETRIEB: "cloud",
       LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
@@ -66,6 +69,10 @@ export class Nestor extends Container<Env> {
       LMC_IMPRESSUM_MAIL: env.IMPRESSUM_MAIL ?? "",
       LMC_IMPRESSUM_ANSCHRIFT: env.IMPRESSUM_ANSCHRIFT ?? "",
     };
+  }
+
+  override async fetch(request: Request): Promise<Response> {
+    return mitVariantenwahl(request, this.wahlSpeicher, r => super.fetch(r));
   }
 }
 

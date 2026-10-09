@@ -119,7 +119,7 @@ def test_ordnerablage_legt_dateien_unter_datum_und_kurz_id_ab(tmp_path):
 def test_spenden_dateien_enthaelt_erwartete_teile(archiv_pfad):
     c = _abgelegtes_meeting()
     dateien = spenden_dateien(c.archiv.ordner, "Gut gemacht", mit_aufnahme=False)
-    assert set(dateien) == {"transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt"}
+    assert set(dateien) == {"transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt", "technik.json"}
     assert dateien["feedback.txt"] == b"Gut gemacht"
     dateien2 = spenden_dateien(c.archiv.ordner, "", mit_aufnahme=True)
     assert "aufnahme.wav" in dateien2

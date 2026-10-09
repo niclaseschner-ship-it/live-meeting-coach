@@ -76,6 +76,9 @@ async def stufe_setzen(daten: dict) -> dict:
 
     if coach.hoerstrom is not None:
         raise HTTPException(409, "Während des Meetings nicht wechselbar.")
+    bereit = mistral_schluessel() if stufe == "basis" else openai_schluessel()
+    if not bereit and os.getenv("LMC_OFFLINE") != "1":
+        raise HTTPException(503, "Die gewählte Variante ist auf dem Server nicht eingerichtet; es wird nicht auf eine andere gewechselt.")
     coach.stufe_setzen(stufe, nur_knopfdruck=bool(daten.get("nur_knopfdruck")))
     await coach.melden()
     return {"ok": True, "stufe": coach.stufe, "modus": coach.modus}

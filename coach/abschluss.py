@@ -152,6 +152,7 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
         z.writestr("transkript.md", _transkript_md(bericht.get("transkript", [])))
         z.writestr("agenda.md", _agenda_md(bericht.get("agenda", [])))
         z.writestr("hinweise.md", _hinweise_md(bericht.get("hinweise", [])))
+        z.writestr("technik.json", json.dumps(bericht.get("technik", {}), ensure_ascii=False, indent=2))
         if mit_aufnahme and (ordner / "aufnahme.wav").exists():
             z.write(ordner / "aufnahme.wav", "aufnahme.wav")
     return puffer.getvalue()
@@ -167,6 +168,7 @@ def spenden_dateien(ordner: Path, feedback: str, mit_aufnahme: bool) -> dict[str
         "agenda.md": _agenda_md(bericht.get("agenda", [])).encode("utf-8"),
         "dynamik.json": json.dumps(bericht.get("dynamik", {}), ensure_ascii=False, indent=1).encode("utf-8"),
         "feedback.txt": (feedback or "").encode("utf-8"),
+        "technik.json": json.dumps(bericht.get("technik", {}), ensure_ascii=False, indent=2).encode("utf-8"),
     }
     if mit_aufnahme and (ordner / "aufnahme.wav").exists():
         dateien["aufnahme.wav"] = (ordner / "aufnahme.wav").read_bytes()
