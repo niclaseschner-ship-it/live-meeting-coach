@@ -269,6 +269,11 @@ eine belegte Vereinbarung. Relative Fristen erhalten das Meetingdatum als Bezug;
 alle betroffenen Aufgaben, spätere Ausnahmen nur die betreffende Aufgabe. Premium verwendet den
 serverseitigen OpenAI-Projektschlüssel; Basis/Mistral bleibt die Vorauswahl.
 
+Abnahme-Nachtrag (#40, #41): Telegram prüft zusätzlich zur HTTP-Antwort die positive Bot-API-Bestätigung
+und protokolliert ausschließlich deren Erfolg, ohne Nachricht, Chat-ID oder Token. Die feste Begrüßung
+verzichtet auf redundante Agenda-Kommentare und lange Bedienerklärungen; Einwilligung, Nein/Löschen,
+Produktrolle, Agendawechsel, Sprechtaste und Namen bleiben enthalten.
+
 Der Stand des Meetings als strukturierte Dashboard-Ansicht ohne Bildmodell (`coach/ueberblick.py`), in beiden Stufen:
 Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (grün), 🟡 Offen (bernstein),
 📌 Aufgaben (wer, bis wann), ↪ Außerhalb der Agenda (grau) und „Neu seit dem letzten Stand“. Inhalte aus einem

@@ -49,6 +49,13 @@ def test_explizit_gemeinsame_verantwortung_aber_nicht_vages_jemand():
     assert "wer" in a.luecken()
 
 
+def test_gemeinsame_zustaendigkeit_darf_nicht_auf_jemand_uebergehen():
+    c = Coach()
+    a = c.artefakte.anlegen("aufgabe", "Bericht senden", wer="alle", bis="Freitag", gemeinsam=True)
+    c.artefakte.uebernehmen(A.normalisieren({"nummer": a.id, "wer": "jemand"}), 2)
+    assert not a.gemeinsam and "wer" in a.luecken()
+
+
 def test_gemeinsame_frist_und_spaetere_ausnahme():
     c = Coach()
     a = c.artefakte.anlegen("aufgabe", "Bericht senden", wer="Lea")

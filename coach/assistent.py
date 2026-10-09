@@ -243,15 +243,14 @@ def agenda_kommentar(meeting) -> str:
     return f" {zahl} in {minuten} Minuten – {wertung}."
 
 
-NAMEN_BITTE = "Wenn ihr mögt, sagt kurz eure Namen, dann schreibe ich das Protokoll mit Namen."
+NAMEN_BITTE = "Sagt gern eure Namen fürs Protokoll."
 
 
 def wie_text(basis: bool) -> str:
     """Wie man mit Nestor spricht – Telefon (Premium) oder Funkgerät (Basis), Ticket #27."""
     name = EINST.assistent_name
     if basis:
-        return ("Fragen stellt ihr wie beim Funkgerät: Taste halten, sprechen, loslassen. Die Taste gibt es am Handy "
-                "und auf dem Bildschirm, am Laptop auch per Leertaste.")
+        return "Wie beim Funkgerät: Taste halten, sprechen, loslassen – am Handy oder per Leertaste."
     return (f"Ich funktioniere wie ein Telefon: Sagt „{name}“ und eure Frage. Direkt danach könnt ihr ohne Namen "
             "nachfragen, und wenn ich zu viel rede, redet einfach rein.")
 
@@ -270,15 +269,15 @@ def begruessungstext(meeting, basis: bool | None = None, namen: bool | None = No
         liste = ", ".join(regeln[:-1]) + (" und " if len(regeln) > 1 else "") + regeln[-1]
         teil_regeln = f" Ihr habt euch diese Regeln vorgenommen: {liste}."
     teil_regeln += _weitere_regeln_satz(meeting)
-    gruss = (f"Hallo zusammen, ich bin {name}, euer Moderationsassistent.{teil_regeln} Ich höre mit und behalte "
-             f"Agenda, Zeit und Gesprächsfluss im Blick. Wer das nicht möchte, sagt Nein – auch später mit "
+    gruss = (f"Hallo, ich bin {name}, euer Moderationsassistent.{teil_regeln} Ich höre mit: Agenda, Zeit, Gesprächsfluss. "
+             f"Nicht einverstanden? Sagt Nein – auch später mit "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
     if basis is None:
         basis = EINST.stufe == "basis"
     if namen is None:
         namen = EINST.vorstellung_sekunden > 0
-    start = f"{wie_text(basis)}{agenda_bitte(meeting)}{agenda_kommentar(meeting)}{erster}"
+    start = f"{wie_text(basis)}{agenda_bitte(meeting)}{erster}"
     if namen:
         start += f" {NAMEN_BITTE}"
     return gruss, start

@@ -448,6 +448,7 @@ class Artefakte:
     def _ergaenzen(self, a: Artefakt, e: dict) -> None:
         """Neue Felder eintragen. Was die Runde selbst gesetzt hat (Stimme, Klick), überschreibt die Erkennung nicht."""
         geaendert = False
+        wer_vorher = a.wer
         for k in ("wer", "bis", "status", "reaktion", "was"):
             v = e.get(k)
             if not v or v == getattr(a, k):
@@ -462,6 +463,8 @@ class Artefakte:
             geaendert = True
         if e.get("gemeinsam") and not a.gemeinsam:
             a.gemeinsam, geaendert = True, True
+        if a.wer != wer_vorher and not e.get("gemeinsam"):
+            a.gemeinsam = False
         if e.get("wer") and not kollektiv(e["wer"]):
             a.gemeinsam = False
         if e.get("erledigt") and a.typ == "offen" and not a.erledigt:

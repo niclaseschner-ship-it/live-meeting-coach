@@ -12,6 +12,10 @@ export async function telegramMelden(env: TelegramEnv, text: string): Promise<vo
     body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, disable_web_page_preview: true }),
   });
   if (!antwort.ok) throw new Error(`Telegram HTTP ${antwort.status}`);
+  const daten = await antwort.json() as { ok?: boolean };
+  if (daten.ok !== true) throw new Error("Telegram hat die Nachricht nicht bestätigt");
+  // Keine Nachrichteninhalte, Chat-IDs oder Token in Betriebslogs.
+  console.info("Telegram-Meldung bestätigt");
 }
 
 export function meetingKurz(meetingId: string): string {

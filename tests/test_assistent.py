@@ -306,14 +306,14 @@ def test_spaetes_nein_nur_name_und_nein():
     assert not a.spaetes_nein("Nein, das sehe ich anders.")
 
 
-def test_begruessung_erklaert_ansprache_und_kommentiert_agenda():
+def test_begruessung_erklaert_ansprache_ohne_redundanten_agendakommentar():
     c = Coach()
     c._einrichten({"titel": "T", "agenda": [{"titel": "A", "minuten": 5}, {"titel": "B", "minuten": 5}],
                    "regel_ids": []})
     gruss, start = a.begruessungstext(c.meeting)
     assert "Nestor, nein" in gruss and "später" in gruss
     assert "redet einfach rein" in start and "ohne Namen" in start and "Telefon" in start
-    assert "Zwei Punkte in 10 Minuten – das ist sportlich." in start and "Punkt eins: A." in start
+    assert "das ist sportlich" not in start and "Punkt eins: A." in start
     assert start.endswith(a.NAMEN_BITTE)  # Ticket #27: die Begrüßung endet mit der Bitte um die Namen
 
 
