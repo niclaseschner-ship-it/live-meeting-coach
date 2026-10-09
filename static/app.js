@@ -88,11 +88,8 @@ $("btn-person-neu").onclick = () => personZeile();
 $("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
 $("btn-abspielen").onclick = () => { stimme.bereit(); api("/api/abspielen", { name: $("f-aufnahme").value, tempo: 1, auto_wechsel: $("f-auto").checked }); };
 $("btn-start").onclick = async () => {
-  stimme.bereit();
   await einrichten();
   await api("/api/start");
-  if (zustand?.mikro?.quelle === "handy") return; // gemeldetes Handy trägt Mikro und Ton
-  try { await mikro.starten($("f-assistent").checked); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); await api("/api/stopp"); }
 };
 $("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); location.href = "/abschluss"; };
 $("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
@@ -119,7 +116,7 @@ async function handyFensterZeigen() {
   kopplungGeladen = !!k.adresse; // ohne Freigabe beim nächsten Öffnen erneut nachsehen
   $("hf-code").textContent = k.code.replace(/(.{4})/, "$1-");
   $("hf-qr").innerHTML = k.qr ?? "";
-  $("hf-text").replaceChildren(...(k.adresse ? ["Adresse: ", el("strong", {}, k.adresse)]
+  $("hf-text").replaceChildren(...(k.adresse ? [el("a", { href: k.adresse, target: "_blank", rel: "noopener" }, "Handy-Link öffnen oder kopieren")]
     : ["Kein Tailscale gefunden. HTTPS ist Pflicht fürs Handy-Mikrofon: ", el("code", {}, k.befehl),
       " einrichten oder LMC_HANDY_URL setzen."]));
 }
@@ -135,7 +132,7 @@ $("hf-laptop").onclick = async () => {
 mikro.beiEnde = (grund) => { mikro.stoppen(); if (grund !== "uebernommen") console.warn("Laptop-Mikrofon beendet:", grund); };
 document.addEventListener("click", (e) => {
   if (!$("handy-fenster").hidden && !$("handy-fenster").contains(e.target) && !$("btn-handy").contains(e.target)
-      && !$("btn-mikro-quelle").contains(e.target)) $("handy-fenster").hidden = true;
+      && !$("btn-mikro-quelle").contains(e.target) && !$("btn-handy-vorbereitung").contains(e.target)) $("handy-fenster").hidden = true;
   if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
   if (!$("kosten").hidden && !$("kosten").contains(e.target) && !$("btn-kosten").contains(e.target)) $("kosten").hidden = true;
   if (!$("mehr-menu").hidden && !$("mehr-menu").contains(e.target) && !$("btn-mehr").contains(e.target)) $("mehr-menu").hidden = true;
@@ -474,10 +471,14 @@ function rendern() {
   // Mikrofon: welche Quelle hört gerade, und kommt überhaupt Ton an?
   const m = z.mikro ?? {};
   const handyVerbunden = !!z.handys;
-  $("handy-empfehlung").classList.toggle("verbunden", handyVerbunden);
-  $("handy-empfehlung-text").textContent = handyVerbunden
-    ? "Handy verbunden. Tippe dort auf „Dieses Handy übernimmt Mikro und Ton“ – das geht schon vor dem Meetingstart."
-    : "Lege ein Handy in die Tischmitte. Es hört die Runde meist gleichmäßiger als das gerichtete Laptop-Mikrofon und spielt auch Nestors Stimme ab.";
+  const handyBereit = handyVerbunden && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
+  $("btn-start").disabled = !handyBereit;
+  $("btn-start").textContent = handyBereit ? "Meeting starten" : "Erst Handy verbinden";
+  $("handy-empfehlung").classList.toggle("verbunden", handyBereit);
+  $("handy-empfehlung-text").textContent = handyBereit
+    ? "Bereit: Das Handy übernimmt Mikrofon und Ton. Lege es in die Tischmitte, lass den Bildschirm offen und starte das Meeting hier."
+    : handyVerbunden ? "Handy verbunden. Tippe dort auf „Dieses Handy übernimmt Mikro und Ton“ und erlaube das Mikrofon. Danach wird der Meetingstart freigeschaltet."
+    : "1. QR-Code scannen. 2. Am Handy Mikrofon und Ton einschalten. 3. Meeting hier starten. Keine Anmeldung oder App nötig. Lege das Handy in die Tischmitte.";
   $("btn-handy-vorbereitung").textContent = handyVerbunden ? "Verbindung anzeigen" : "Handy verbinden";
   // Handy verbunden (gekoppelt, Seite offen) – auch bevor es Mikro und Ton übernimmt
   $("btn-mikro-quelle").hidden = z.simulation || (!m.quelle && !z.handys) || (!z.hoeren && m.quelle !== "handy" && !z.handys);

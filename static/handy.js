@@ -14,6 +14,12 @@ let wachStand = "";         // "an" | "fehlt" | "aus"
 async function pruefen() {
   const r = await fetch("/api/zustand");
   if (r.status === 401) return koppelnZeigen();
+  if (!r.ok || !(r.headers.get("content-type") ?? "").includes("application/json")) {
+    koppelnZeigen();
+    $("koppeln-falsch").hidden = false;
+    $("koppeln-falsch").textContent = "Kein Meeting erreichbar. Bitte den QR-Code im Dashboard erneut scannen.";
+    return;
+  }
   $("koppeln").hidden = true; $("app").hidden = false;
   zustand = await r.json(); rendern();
   verbinden();
@@ -150,6 +156,7 @@ $("btn-ton-hier").onclick = () => stimme.bereit();
 $("btn-stumm").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
 $("btn-start").onclick = async () => {
   if (!mikro.laeuft()) await mikroStarten(); // erst melden, dann starten – der Laptop hält sich dann raus
+  if (!mikro.laeuft()) return;
   await api("/api/start");
 };
 $("btn-stopp").onclick = async () => {

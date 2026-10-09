@@ -4,6 +4,10 @@
 
 let letzterStand = null;
 let nachlademen = null;
+let spendeLaeuft = false;
+let spendeGespeichert = false;
+// Gewünschte Reihenfolge: Daten spenden, Kosten ausgleichen, Dokument und Download.
+$("ab-inhalt").append($("ab-datenspende"), $("ab-unterstuetzung"), $("ab-protokoll"), $("ab-paket"));
 
 async function laden() {
   const r = await fetch("/api/abschluss");
@@ -114,25 +118,45 @@ $("btn-paket").onclick = () => {
 
 function spendeKnopfAktualisieren() {
   const fertig = !letzterStand || letzterStand.ablage_fertig;
-  $("btn-spende").disabled = !$("sp-einverstanden").checked || !fertig;
+  $("btn-spende").disabled = spendeLaeuft || spendeGespeichert || !$("sp-einverstanden").checked || !fertig;
 }
 $("sp-einverstanden").onchange = spendeKnopfAktualisieren;
 
 $("btn-spende").onclick = async () => {
-  await api("/api/abschluss/spende", {
+  spendeLaeuft = true;
+  $("btn-fertig").disabled = true;
+  $("btn-spende").textContent = "Wird hochgeladen … bitte warten";
+  spendeKnopfAktualisieren();
+  try {
+    await api("/api/abschluss/spende", {
     einverstanden: $("sp-einverstanden").checked,
     aufnahme: $("sp-aufnahme").checked,
     feedback: $("fb-text").value.trim(),
-  });
-  $("sp-danke").hidden = false;
-  $("btn-spende").disabled = true;
+    });
+    spendeGespeichert = true;
+    $("sp-danke").hidden = false;
+  } catch {
+    $("sp-danke").hidden = false;
+    $("sp-danke").textContent = "Upload fehlgeschlagen. Die Daten sind noch hier – bitte erneut versuchen oder das ZIP sichern.";
+  } finally {
+    spendeLaeuft = false;
+    $("btn-fertig").disabled = false;
+    $("btn-spende").textContent = spendeGespeichert ? "Datenspende gespeichert ✓" : "Erneut spenden";
+    spendeKnopfAktualisieren();
+  }
 };
+window.addEventListener("beforeunload", (e) => {
+  if (spendeLaeuft) { e.preventDefault(); e.returnValue = ""; }
+});
 
 $("btn-fertig").onclick = async () => {
+  if (spendeLaeuft) return;
+  if (!confirm("Meetingdaten jetzt endgültig löschen? Danach kannst du weder das Paket herunterladen noch Daten spenden.")) return;
   try {
     await api("/api/abschluss/fertig");
-  } finally {
     location.href = "/";
+  } catch {
+    // Bei einem Fehler auf der Abschlussseite bleiben, damit das Paket noch gesichert werden kann.
   }
 };
 

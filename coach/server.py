@@ -227,7 +227,7 @@ async def kopplung(request: Request):
         https = {8000: 443, 8001: 8443}.get(EINST.port, 10000)
         befehl = f"tailscale serve --bg {EINST.port}" if https == 443 else f"tailscale serve --bg --https={https} {EINST.port}"
     svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2) if url else None
-    return {"code": zugang.code(), "adresse": f"{basis}/handy" if basis else None, "qr": svg, "befehl": befehl}
+    return {"code": zugang.code(), "adresse": url, "qr": svg, "befehl": befehl}
 
 
 @app.post("/api/ablage/oeffnen")
@@ -377,6 +377,10 @@ async def start(request: Request):
     if coach.hoerstrom is not None:
         ereignis("start_abgewiesen", von=_herkunft(request))
         raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
+    if (audio["ws"] is None or audio["quelle"] != "handy"
+            or time.monotonic() - audio["letzt"] > LUECKE
+            or lautsprecher not in verbindungen or geraet.get(lautsprecher) != "handy"):
+        raise HTTPException(409, "Erst den QR-Code scannen und am Handy Mikrofon und Ton einschalten. Dann Meeting starten.")
     if EINST.betrieb == "cloud":
         # Ticket #12: Ein Meeting zählt beim Worker (KundenZaehler) erst ab hier, nicht schon beim Ansehen der
         # Startseite. Kein Netzkontakt zum Worker möglich (None) lässt den Start im Zweifel zu, statt an einer

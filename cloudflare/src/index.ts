@@ -235,7 +235,7 @@ async function handleInteressenten(request: Request, env: Env): Promise<Response
 }
 
 /** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
-async function handleSpende(request: Request, env: Env, name: string): Promise<Response> {
+async function handleSpende(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
   if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
@@ -249,6 +249,7 @@ async function handleSpende(request: Request, env: Env, name: string): Promise<R
       anzahl++;
     }
   }
+  melden(ctx, env, `📦 Nestor: Datenspende / Feedback gespeichert\nPaket: ${name}\nDateien: ${anzahl}`);
   return Response.json({ ok: true, dateien: anzahl });
 }
 
@@ -277,8 +278,8 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
     method: "POST",
     body: JSON.stringify({ meetingId, maxMeetings }),
   });
-  const ergebnis = await antwort.json() as { ok?: boolean };
-  if (ergebnis.ok) melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nMeeting: ${meetingKurz(meetingId)}`);
+  const ergebnis = await antwort.json() as { erlaubt?: boolean };
+  if (ergebnis.erlaubt) melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nMeeting: ${meetingKurz(meetingId)}`);
   return Response.json(ergebnis);
 }
 
@@ -314,7 +315,7 @@ export default {
     const pfad = url.pathname;
 
     if (pfad.startsWith("/intern/spende/")) {
-      return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)));
+      return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);
     }
     if (pfad === "/intern/meeting-start") {
       return handleMeetingStart(request, env, ctx);
@@ -336,7 +337,9 @@ export default {
     }
 
     const kunde = await cookiePruefen(cookieLesen(request.headers.get("Cookie"), KUNDE_COOKIE), env.COOKIE_GEHEIMNIS);
-    if (!kunde && !offenOhneAnmeldung(pfad)) {
+    const gekoppelt = !!cookieLesen(request.headers.get("Cookie"), "lmc_kopplung")
+      && !!cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE);
+    if (!kunde && !gekoppelt && !offenOhneAnmeldung(pfad)) {
       return Response.redirect(new URL("/anmelden", request.url).toString(), 303);
     }
 
@@ -351,13 +354,14 @@ export default {
       }
       meetingId = crypto.randomUUID();
       cookieSetzen = meetingId;
-    } else if (url.searchParams.get("meeting") && kunde) {
+    } else if (url.searchParams.get("meeting")) {
       cookieSetzen = meetingId; // aus der QR-URL übernommen (Handy) – eigenes Cookie, damit es gekoppelt bleibt
     }
 
     const kopfzeilen = new Headers(request.headers);
     kopfzeilen.set("X-Nestor-Geheimnis", env.WORKER_GEHEIMNIS);
     kopfzeilen.set("X-Nestor-Meeting", meetingId);
+    kopfzeilen.delete("X-Nestor-Kunde");
     if (kunde) kopfzeilen.set("X-Nestor-Kunde", kunde);
     const weitergeleitet = new Request(request, { headers: kopfzeilen });
 

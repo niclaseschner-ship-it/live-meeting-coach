@@ -161,6 +161,12 @@ class Zugangsschutz:
         self.app = app
 
     async def __call__(self, scope, receive, send):
+        if (EINST.betrieb == "cloud" and scope["type"] in ("http", "websocket")
+                and worker_geheimnis_passt(scope) and not kunde(scope)):
+            pfad = scope.get("path", "")
+            if pfad in OFFEN or pfad.startswith("/static/") or gekoppelt(scope):
+                return await self.app(scope, receive, send)
+            return await self._verweigern(scope, receive, send, 401, "Nicht gekoppelt – QR-Code erneut scannen.")
         if scope["type"] not in ("http", "websocket") or lokal(scope):
             return await self.app(scope, receive, send)
         if EINST.betrieb == "cloud":

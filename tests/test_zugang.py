@@ -179,15 +179,33 @@ def test_cloud_websocket_ohne_geheimnis_wird_abgewiesen(cloud):
 
 def test_kopplung_in_der_cloud_nutzt_host_und_meeting_statt_tailscale(cloud):
     c = TestClient(app, client=("10.1.2.3", 5000), base_url="https://nestor.example.workers.dev")
-    r = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Meeting": "abc123"})
+    r = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "test", "X-Nestor-Meeting": "abc123"})
     assert r.status_code == 200
     daten = r.json()
-    assert daten["adresse"] == "https://nestor.example.workers.dev/handy"
+    assert daten["adresse"].startswith("https://nestor.example.workers.dev/handy?k=")
+    assert daten["adresse"].endswith("&meeting=abc123")
     assert daten["qr"] is not None
     assert daten["befehl"] is None                        # kein tailscale-Befehl in der Cloud
 
-    ohne_meeting = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS})
+    ohne_meeting = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "test"})
     assert ohne_meeting.json()["qr"] is None               # ohne Meeting-Kennung vom Worker kein QR-Code
+
+
+def test_cloud_handy_ohne_login_koppelt_per_qr(cloud):
+    c = TestClient(app, base_url="https://nestor.example.workers.dev")
+    kopf = {"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Meeting": "abc123"}
+    assert c.get("/api/zustand", headers=kopf).status_code == 401
+    assert c.get(f"/handy?k={zugang.code()}", headers=kopf).status_code == 200
+    assert c.get("/api/zustand", headers=kopf).status_code == 200
+
+
+def test_start_ohne_handy_abgewiesen(monkeypatch):
+    monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setitem(server.audio, "ws", None)
+    c = TestClient(app, client=("127.0.0.1", 5000))
+    r = c.post("/api/start")
+    assert r.status_code == 409
+    assert "QR-Code" in r.json()["detail"]
 
 
 def test_ablage_oeffnen_in_der_cloud_aus(cloud):

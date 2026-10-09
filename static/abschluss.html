@@ -37,7 +37,7 @@
     </div>
 
     <div id="ab-inhalt" hidden>
-      <section class="karte ab-dokument-karte">
+      <section id="ab-protokoll" class="karte ab-dokument-karte">
         <h2>Meeting-Dokument</h2>
         <p class="leise-text">Prüft Namen, Termine und rot markierte Lücken. Danach könnt ihr das formatierte Dokument
           direkt nach Word, Outlook, Teams oder Google Docs kopieren oder als PDF drucken.</p>
@@ -48,7 +48,7 @@
         <p id="dok-meldung" class="leise-text" hidden></p>
       </section>
       <!-- Euer Paket -->
-      <section class="karte">
+      <section id="ab-paket" class="karte">
         <h2>Euer Paket</h2>
         <p class="leise-text">Protokoll, Abschlussbild, Transkript, Agenda mit Zeitnutzung und Hinweisen – als ZIP
           zum Herunterladen.</p>
@@ -81,7 +81,7 @@
 
       <!-- Nestor verbessern: allgemeines Feedback jetzt über den Feedback-Knopf unten rechts (feedback.js),
            auf jeder Seite gleich erreichbar. Hier bleibt nur die Datenspende mit ihrer eigenen Anmerkung. -->
-      <section class="karte">
+      <section id="ab-datenspende" class="karte">
         <h2>Datenspende</h2>
         <label>Anmerkung zur Spende <small>optional</small>
           <textarea id="fb-text" rows="3" placeholder="Was soll Nestor über diese Spende wissen?"></textarea>
@@ -93,11 +93,12 @@
           <span>Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden</span></label>
         <label class="schalter"><input type="checkbox" id="sp-aufnahme"> <span>mit Aufnahme</span></label>
         <button id="btn-spende" class="primaer" disabled>Daten spenden</button>
-        <p id="sp-danke" class="leise-text" hidden>Danke für die Datenspende!</p>
+        <p id="sp-danke" class="leise-text" role="status" aria-live="polite" hidden>Danke! Die Datenspende wurde erfolgreich gespeichert.</p>
       </section>
     </div>
 
-    <button id="btn-fertig" class="gefahr ab-fertig">Fertig</button>
+    <p class="leise-text">Lade dein Paket herunter, bevor du abschließt. „Abschließen und löschen“ entfernt die Meetingdaten unwiderruflich; eine erfolgreiche Datenspende bleibt gespeichert.</p>
+    <button id="btn-fertig" class="gefahr ab-fertig">Abschließen und löschen</button>
   </main>
 
   <script src="/static/basis.js"></script>
