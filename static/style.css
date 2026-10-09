@@ -429,6 +429,16 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .knopf-knoepfe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .knopf-knoepfe .knopf-art { background: var(--marke-weich); border-color: transparent; color: var(--marke); }
 .knopf-knoepfe .knopf-art.knopf-aktiv { background: var(--marke); color: #fff; }
+.knopf-art, .h-knopf, #knopf-fragen { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; white-space: normal; text-align: left; }
+.aktion-name { font-weight: 750; }
+.aktion-detail, .aktion-umfang { font-size: 11px; line-height: 1.3; font-weight: 400; max-width: 210px; }
+.aktion-preis { font-size: 10px; font-weight: 650; border: 1px solid currentColor; border-radius: 5px; padding: 1px 4px; margin-top: 2px; }
+.aktions-kosten { font-size: 11px; color: var(--text-2); margin: 6px 0; }
+.aktions-kosten summary { cursor: pointer; }
+.h-umfang { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 12px 0; }
+.h-umfang select { min-width: 0; flex: 1; }
+.h-knopfraster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.h-knopf { min-width: 0; width: 100%; }
 .knopf-frage { display: flex; gap: 8px; flex: 1; min-width: 260px; }
 .knopf-frage input { flex: 1; }
 .knopf-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 14px; }

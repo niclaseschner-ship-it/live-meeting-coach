@@ -214,8 +214,8 @@ const knopfdruck = (z) => z?.modus === "knopfdruck";
 const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
   protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage",
   zusammenfassen: "/api/knopf/zusammenfassen", fehlt: "/api/knopf/fehlt" };
-const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
-  bild: "Bild", frage: "Nestor fragen", zusammenfassen: "Zusammenfassen", fehlt: "Was fehlt?" };
+const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln prüfen", ueberblick: "Überblick", protokoll: "Gesamtprotokoll",
+  bild: "Meetingbild", frage: "Nestor fragen", zusammenfassen: "Ergebnisse bündeln", fehlt: "Lücken klären" };
 let knopfWartet = null;
 function knopfDruecken(art, daten = {}) {
   if (knopfWartet) return Promise.resolve(false);
@@ -231,6 +231,7 @@ function knopfDruecken(art, daten = {}) {
   }); // Fehler zeigt api() schon an
 }
 document.querySelectorAll("#knopf-leiste .knopf-art").forEach((b) => { b.onclick = () => knopfDruecken(b.dataset.knopf); });
+$("ueberblick-umfang").onchange = () => aktionshilfeRendern(zustand, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
 $("knopf-frage-form").onsubmit = (e) => {
   e.preventDefault();
   const text = $("knopf-frage").value.trim();
@@ -257,6 +258,7 @@ function knopfOffenText(k) {
     : `${Math.round(k.seit_sekunden / 60)} Minuten noch nicht ausgewertet`;
 }
 function knopfRendern(z) {
+  aktionshilfeRendern(z, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
   const an = !!z.hoeren;
   $("knopf-leiste").hidden = !an;
   if (!an) return;

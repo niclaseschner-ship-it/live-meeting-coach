@@ -64,14 +64,18 @@
       <!-- Ticket #13/#27: die Sprechtaste (Funkgerät; in Premium die Alternative zum Namen) und dieselben Knöpfe wie
            im Dashboard – jeder Knopf ein Antwortbogen, gesperrt, solange Nestor spricht -->
       <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Sprechtaste – halten und sprechen</span></button>
+      <p class="frage-kosten leise"></p>
+      <label class="h-umfang">Überblick für <select id="h-ueberblick-umfang"><option value="aktuell">Aktuellen Agendapunkt</option><option value="gesamt">Ganzes Meeting</option></select></label>
       <div class="h-knopfraster">
         <button class="h-knopf" data-knopf="stand">Wo stehen wir?</button>
-        <button class="h-knopf" data-knopf="zusammenfassen">Zusammenfassen</button>
-        <button class="h-knopf" data-knopf="fehlt">Was fehlt?</button>
-        <button class="h-knopf" data-knopf="protokoll">Protokoll</button>
-        <button class="h-knopf" data-knopf="ueberblick">Überblick</button>
-        <button class="h-knopf" data-knopf="bild">Bild</button>
+        <button class="h-knopf" data-knopf="zusammenfassen">Ergebnisse bündeln</button>
+        <button class="h-knopf" data-knopf="fehlt">Lücken klären</button>
+        <button class="h-knopf" data-knopf="protokoll">Gesamtprotokoll</button>
+        <button class="h-knopf" data-knopf="ueberblick">Punktüberblick</button>
+        <button class="h-knopf" data-knopf="bild">Meetingbild</button>
       </div>
+      <p class="leise">Textkosten-Richtwerte · Stimme und Nachholen extra · keine Preisgarantie</p>
+      <details class="aktions-kosten"><summary>Was bedeuten die Kosten-Tags?</summary><p class="aktions-kostenhinweis"></p></details>
       <p id="knopf-stand" class="leise" hidden></p>
       <p id="gesagt" class="h-antwort" hidden></p>
     </section>

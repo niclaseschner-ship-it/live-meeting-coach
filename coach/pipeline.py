@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-from . import analyse, konfidenz, kosten, regeln, themen, transkription
+from . import aktionen, analyse, konfidenz, kosten, regeln, themen, transkription
 from .artefakte import Artefakte
 from .assistent import Assistent
 from .config import EINST, WURZEL, ki_verfuegbar, mistral_schluessel, openai_schluessel, schluessel_info
@@ -275,6 +275,7 @@ class Coach:
                 "schluessel_vorhanden": self._client is not None,
                 "schluessel": schluessel_info(),
                 "kosten": self.kosten_stand(),
+                "aktionshilfe": aktionen.katalog(self, EINST),
                 "simulation": self.simulation_laeuft,
                 "block_sekunden": EINST.block_sekunden,
                 "ampeln": ampeln,

@@ -158,6 +158,16 @@ weitere, die ihr auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinner
 
 ### 4.2 Die Knöpfe – jeder Knopf ein Antwortbogen
 
+**Sichtbare Erklärung (Ticket #51, Nachprüfung des Pilotfeedbacks):** Auf Laptop und Handy stehen Inhalt,
+Umfang und Ausgabeform direkt im Button, nicht nur in Hover-Texten. „Zusammenfassen“ heißt in der Oberfläche
+„Ergebnisse bündeln“ (bisher festgehaltene Entscheidungen, Aufgaben, offene Punkte), „Was fehlt?“ heißt
+„Lücken klären“, „Protokoll“ heißt „Gesamtprotokoll“. Der Überblick heißt entsprechend der Auswahl
+„Punktüberblick“ oder „Meetingüberblick“; die Auswahl gibt es auch am Handy und wird an den Server übergeben.
+Die bisherigen gesprochenen Aufträge bleiben gültig. Kleine Tags zeigen grobe **Textkosten** in US-Cent
+aus den vorhandenen Modelltarifen und der Kontextlänge; kein Gesamtpreis und keine Obergrenze. Stimme,
+nachgeholte Auswertung und Recherche sind ausdrücklich zusätzlich. Für die lokal erzeugte Protokollliste,
+Bilder und unbekannte Modelle gibt es keine erfundenen festen KI-Preise.
+
 Dieselben Knöpfe stehen in beiden Stufen an derselben Stelle im Dashboard (Leiste unter der Kopfleiste) und am Handy.
 Jeder Knopf löst einen Antwortbogen aus wie ein Zuruf (Abschnitt 4.10): Bestätigung, Karte im Verlauf, ein bis zwei
 Sätze. Während ein Bogen läuft, sind die Knöpfe gesperrt (sichtbar: „Nestor ist bei „Wo stehen wir?“ …“).

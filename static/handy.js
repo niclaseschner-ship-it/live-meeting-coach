@@ -161,7 +161,16 @@ async function haltenAus() {
 $("btn-fragen").addEventListener("pointerdown", haltenAn);
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-fragen").addEventListener(ev, haltenAus);
 $("btn-fragen").addEventListener("contextmenu", (e) => e.preventDefault());
-document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = () => { stimme.bereit(); api(`/api/knopf/${b.dataset.knopf}`); }; });
+let handyKnopfWartet = false;
+document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = async () => {
+  if (handyKnopfWartet) return;
+  handyKnopfWartet = true; stimme.bereit(); rendern();
+  $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Letzten Redebeitrag übernehmen …";
+  try { await api(`/api/knopf/${b.dataset.knopf}`, b.dataset.knopf === "ueberblick"
+    ? {umfang: $("h-ueberblick-umfang").value} : {}); }
+  finally { handyKnopfWartet = false; rendern(); }
+}; });
+$("h-ueberblick-umfang").onchange = () => rendern();
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-ton-hier").onclick = () => stimme.bereit();
@@ -209,6 +218,7 @@ function chipsRendern() {
 }
 
 function rendern() {
+  aktionshilfeRendern(zustand ?? {}, ".h-knopf", $("h-ueberblick-umfang").value);
   const z = zustand; if (!z) return;
   const aktiv = z.laeuft || z.simulation || z.hoeren;
   const beendet = !aktiv && z.segmente.length > 0;
@@ -245,11 +255,12 @@ function rendern() {
   $("btn-fragen").disabled = !fragenDa && !haelt;
   const bogen = !nurKnopf && a?.bogen;
   document.querySelectorAll(".h-knopf").forEach((b) => {
-    b.disabled = !z.hoeren || !!z.knopf?.laeuft || !!bogen;
+    b.disabled = handyKnopfWartet || !z.hoeren || !!z.knopf?.laeuft || !!bogen;
     if (b.dataset.knopf === "bild") b.hidden = z.stufe === "basis"; // Basis: kein Bildmodell
     if (["zusammenfassen", "fehlt"].includes(b.dataset.knopf)) b.hidden = nurKnopf;
   });
-  if (bogen) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = `Nestor ist bei „${bogen.name}“ …`; }
+  if (handyKnopfWartet) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Letzten Redebeitrag übernehmen …"; }
+  else if (bogen) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = `Nestor ist bei „${bogen.name}“ …`; }
   else if (z.knopf?.laeuft) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor arbeitet …"; }
   else if (z.knopf?.fehler) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = z.knopf.fehler; }
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);

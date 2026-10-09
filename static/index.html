@@ -74,18 +74,20 @@
     <div class="knopf-knoepfe">
       <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – halten</span></button>
       <button class="knopf-art" data-knopf="stand" title="Agenda, Zeit und aktueller Stand – kurzer Textaufruf, zusätzliche API-Kosten">Wo stehen wir?</button>
-      <button class="knopf-art" data-knopf="zusammenfassen" title="Ergebnisse des laufenden Abschnitts – Textaufruf, zusätzliche API-Kosten">Zusammenfassen</button>
-      <button class="knopf-art" data-knopf="fehlt" title="Offene Angaben zu Aufgaben und Beschlüssen – Textaufruf, zusätzliche API-Kosten">Was fehlt?</button>
-      <button class="knopf-art" data-knopf="protokoll" title="Protokoll über das ganze Meeting – längerer Textaufruf, zusätzliche API-Kosten">Protokoll</button>
-      <button class="knopf-art" data-knopf="ueberblick" title="Strukturierte Ansicht: aktueller Punkt oder ganzes Meeting – zusätzliche API-Kosten">Überblick</button>
+      <button class="knopf-art" data-knopf="zusammenfassen" title="Bisher festgehaltene Ergebnisse bündeln">Ergebnisse bündeln</button>
+      <button class="knopf-art" data-knopf="fehlt" title="Offene Angaben zu Aufgaben und Beschlüssen">Lücken klären</button>
+      <button class="knopf-art" data-knopf="protokoll" title="Alle festgehaltenen Ergebnisse nach Agendapunkt">Gesamtprotokoll</button>
+      <button class="knopf-art" data-knopf="ueberblick" title="Strukturierte Ansicht: aktueller Punkt oder ganzes Meeting">Punktüberblick</button>
       <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Aktueller Punkt</option><option value="gesamt">Ganzes Meeting</option></select>
       <button class="knopf-art" data-knopf="bild">Bild</button>
       <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
       <form id="knopf-frage-form" class="knopf-frage">
         <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
-        <button id="knopf-fragen" class="primaer">Fragen</button>
+        <button id="knopf-fragen" class="primaer" data-knopf="frage">Nestor fragen</button>
       </form>
     </div>
+    <p class="aktions-kosten">Textkosten-Richtwerte · Stimme und Nachholen extra · keine Preisgarantie</p>
+    <details class="aktions-kosten"><summary>Was bedeuten die Kosten-Tags?</summary><p class="aktions-kostenhinweis"></p></details>
     <div class="knopf-zeile">
       <span id="knopf-bogen" class="knopf-bogen" hidden></span>
       <span id="knopf-offen" class="knopf-offen"></span>

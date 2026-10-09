@@ -17,6 +17,29 @@ function handyKennung() {
   return handyBrowserKennung;
 }
 
+function aktionshilfeRendern(z, selektor, umfang = "aktuell") {
+  const hilfe = z?.aktionshilfe;
+  if (!hilfe) return;
+  document.querySelectorAll(selektor).forEach((button) => {
+    const art = button.dataset.knopf, d = hilfe.aktionen[art];
+    if (!d) return;
+    const ganz = art === "ueberblick" && umfang === "gesamt";
+    const name = ganz ? "Meetingüberblick" : d.name;
+    const bereich = ganz ? "Ganzes Meeting · strukturierte Ansicht" : d.umfang;
+    const preis = ganz ? d.kosten_gesamt ?? d.kosten : d.kosten;
+    const signatur = JSON.stringify([name, bereich, preis, d.beschreibung]);
+    if (button.dataset.hilfe === signatur) return;
+    button.dataset.hilfe = signatur;
+    button.replaceChildren(el("span", {class:"aktion-name"}, name),
+      el("span", {class:"aktion-detail"}, d.beschreibung),
+      el("span", {class:"aktion-umfang"}, bereich),
+      el("span", {class:"aktion-preis"}, preis));
+    button.title = `${d.beschreibung}. ${bereich}. ${preis}. ${hilfe.kostenhinweis}`;
+  });
+  document.querySelectorAll(".aktions-kostenhinweis").forEach((e) => { e.textContent = hilfe.kostenhinweis; });
+  document.querySelectorAll(".frage-kosten").forEach((e) => { e.textContent = `Frage beantworten: ${hilfe.aktionen.frage?.kosten ?? "Text: variabel"} · Stimme und Recherche ggf. extra`; });
+}
+
 // ---------- Hilfen ----------
 const mmss = (s) => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const el = (tag, attrs = {}, ...kinder) => {
