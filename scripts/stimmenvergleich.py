@@ -7,6 +7,7 @@ unter logs/stimmenvergleich/ und ist absichtlich kein Produktbestandteil.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import pathlib
@@ -57,10 +58,13 @@ def mistral_thorsten() -> None:
         "10-mistral-jane-curious.f32le": "5de47977-6e47-4266-a938-3bc1d76b4676",
     }
     for datei, voice_id in stimmen.items():
-        post("https://api.mistral.ai/v1/audio/speech", {"Authorization": f"Bearer {key}"}, {
+        req = urllib.request.Request("https://api.mistral.ai/v1/audio/speech", data=json.dumps({
         "model": "voxtral-mini-tts-latest", "voice_id": voice_id,
-        "input": TEXT, "response_format": "pcm", "stream": True,
-    }, ZIEL / datei)
+        "input": TEXT, "response_format": "wav", "stream": False,
+        }).encode(), headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=90) as response:
+            antwort = json.load(response)
+        (ZIEL / datei.replace(".f32le", ".wav")).write_bytes(base64.b64decode(antwort["audio_data"]))
 
 
 if __name__ == "__main__":

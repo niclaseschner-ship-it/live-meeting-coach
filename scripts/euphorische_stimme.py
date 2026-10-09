@@ -53,18 +53,22 @@ def main() -> None:
     })
     (OUT / "12-openai-nova-euphorisch.wav").write_bytes(direkt)
 
-    created = json.loads(request("https://api.mistral.ai/v1/audio/voices", auth_mi, {
-        "name": "nestor-nova-euphorisch-test", "description": "Synthetische OpenAI-Nova-Testreferenz; AI-generiert",
-        "sample_audio": base64.b64encode(ref).decode(), "sample_filename": "nova-euphorisch.wav",
-        "languages": ["de"], "gender": "female", "tags": ["synthetic", "cheerful", "coach"],
-    }))
-    voice_id = created["id"]
-    (OUT / "mistral-nova-euphorisch-voice-id.txt").write_text(voice_id + "\n")
-    pcm = request("https://api.mistral.ai/v1/audio/speech", auth_mi, {
+    id_datei = OUT / "mistral-nova-euphorisch-voice-id.txt"
+    if id_datei.exists():
+        voice_id = id_datei.read_text().strip()
+    else:
+        created = json.loads(request("https://api.mistral.ai/v1/audio/voices", auth_mi, {
+            "name": "nestor-nova-euphorisch-test", "description": "Synthetische OpenAI-Nova-Testreferenz; AI-generiert",
+            "sample_audio": base64.b64encode(ref).decode(), "sample_filename": "nova-euphorisch.wav",
+            "languages": ["de"], "gender": "female", "tags": ["synthetic", "cheerful", "coach"],
+        }))
+        voice_id = created["id"]
+        id_datei.write_text(voice_id + "\n")
+    antwort = json.loads(request("https://api.mistral.ai/v1/audio/speech", auth_mi, {
         "model": "voxtral-mini-tts-latest", "voice_id": voice_id, "input": VERGLEICH,
-        "response_format": "pcm", "stream": True,
-    })
-    (OUT / "13-mistral-aus-nova-euphorisch.f32le").write_bytes(pcm)
+        "response_format": "wav", "stream": False,
+    }))
+    (OUT / "13-mistral-aus-nova-euphorisch.wav").write_bytes(base64.b64decode(antwort["audio_data"]))
     print(voice_id)
 
 
