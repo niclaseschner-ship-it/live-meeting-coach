@@ -2,8 +2,8 @@
 
 Stand 09.10.2026. Diese Matrix fasst technische Anforderungen aus den privaten Pilotnotizen zusammen, ohne
 Originalzitate oder personenbezogene Meetinginhalte zu übernehmen. Sie beschreibt Code- und Testbelege, nicht die
-Abnahme eines Live-Piloten. „Lokaler Klick“ bezeichnet ausschließlich einen Browser-Mock; für alle Punkte steht
-ein echter Live-Klick mit Pilotdaten noch aus.
+Abnahme eines Live-Piloten. Die folgende Matrix wurde vor Beginn der HTTPS-Abnahme erstellt. Der spätere
+Belegstand und die ausdrücklich offenen Prüfungen stehen unter „Übergabe an Claude Opus“ am Ende.
 
 | Ursprung / Thema | Umsetzung und Codebeleg | Ticket | Belegstand und offen |
 |---|---|---|---|
@@ -20,6 +20,38 @@ ein echter Live-Klick mit Pilotdaten noch aus.
 
 ## Abnahmegrenze
 
-Die vorhandenen Belege sind Unit-/API-Tests oder ausdrücklich simulierte lokale Browser-Mocks. Sie belegen weder
-die Qualität der Erkennung mit echtem Mikrofon noch die visuelle Wirkung auf den Zielgeräten oder einen erfolgreichen
-Cloud-Piloten. Diese Matrix enthält deshalb keine Abnahme- oder Einsatzbereitschaftsaussage.
+Unit-/API-Tests und ausdrücklich simulierte lokale Browser-Mocks ersetzen keine Hardware-Abnahme. Auch der
+unten beschriebene teilweise erfolgreiche HTTPS-Lauf ist keine vollständige Einsatzbereitschaftsaussage.
+
+## Übergabe an Claude Opus
+
+Der vollständige Übernahmeauftrag mit Prüfschritten und Belegpfaden liegt in
+[Ticket #59](https://github.com/niclaseschner-ship-it/live-meeting-coach/issues/59). #54–#58 bleiben offen.
+Der laufende Reparaturstand wurde abgeschlossen, nicht als gesamtes Produkt freigegeben.
+
+- Letzter vollständiger Regressionstest nach den Anbietergrenzen: **415 Python-Tests bestanden**,
+  `logs/pilot56_live/regressionen-final.log`. Worker: **26 Tests bestanden**, TypeScript-Prüfung grün.
+- Ein echter HTTPS-Basislauf bestätigte Login, Variantenwahl/Reload, Agenda-Rückfrage und Entwurf, QR-Kopplung
+  ohne Handylogin, Mikro/Ton-Freigabe, Ausschluss des zweiten Handys, Start, Begrüßung, Mistral-ASR und fachlich
+  richtige Ergebnis-Karte. Bericht: `logs/pilot56_live/basis/bericht.html` und `.json` (private lokale Belege).
+  Dieser Bericht ist dennoch fehlgeschlagen: ISO-Freitagsdatum wurde vom Test fälschlich abgewiesen, anschließend
+  verdeckte das offene Transkriptpanel den Stop-Knopf. Terminprüfung und tatsächlicher Layoutfehler sind inzwischen
+  repariert; die vollständige Runde wurde danach nicht wiederholt. Keine Premium-Gesamtabnahme.
+- Weitere UI-Reparaturen: kurzer Sprechtastentext mit Bedienhilfe; Verlaufpanel unter der tatsächlichen
+  Headerhöhe, auch bei Umbruch; keine leere Mikro-/Vorbereitungskarte am Handy nach Meetingende.
+- Premium-Stimme/Modus wird serverseitig vor Änderungen geprüft und im UI erst nach Bestätigung übernommen.
+  Nova nur für Kurzantworten; neue Stimme wirkt nicht rückwirkend in einem offenen Realtime-Gespräch (#58).
+- Die nochmals bestätigte Anbietergrenze ist nun auch gegen Legacy-Testoptionen abgesichert: **Premium nur
+  OpenAI, Basis nur Mistral**. Kein AboClient im Produkt-Clientweg, keine Claude-Bildoption, kein Bild-Fallback
+  zu Claude; fremder Bildanbieter wird vor einer Teilmutation abgewiesen. README und Lastenheft angepasst.
+- Commits des letzten Abschlusses: `7c31075` (UI/Stimmen), `87c18a7` (Anbietergrenzen), `b36b9bc`
+  (Abnahmeskript). Cloud- und Repo-Gleichstand muss am neuesten Deploylog/Rollout verifiziert werden.
+- Offen für Opus: Gesamtdiff/alle Rückmeldungen inklusive Vorarbeiten prüfen; alle fünf Aktionen fachlich testen;
+  Basis und Premium vollständig bis ZIP und Datenspende abnehmen; **echtes physisches Handy** ohne Registrierung
+  oder Tailscale testen, einschließlich QR, Berechtigungen, Bereitschaft, Sprache/Ton, Wiederverbinden und Ende.
+  Separate Playwright-Browserkontexte mit synthetischem Mikrofon ersetzen diese Hardware-Abnahme nicht.
+  Agenda-Sprachverarbeitung, Monolog im echten längeren Sprachblock und Moderator-Promptwege zusätzlich prüfen.
+
+Private Aufnahmen, Spenden-/ZIP-Belege, Originalanhänge und das nutzereigene `:memory:.ses` bleiben erhalten.
+Keine privaten Audio-/Feedbackinhalte wurden ins öffentliche Repo übernommen. Die konkrete historische Ursache
+des unerwarteten Basisverhaltens bei gewähltem Premium ist weiterhin nicht abschließend belegt.
