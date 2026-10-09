@@ -13,6 +13,7 @@ import {
   interessentLesen, interessentenListe, interessentSpeichern, normalisiereAnmeldung, pinErzeugen, pinMailSenden, pinPruefen,
   pinSeite, registrierungsSeite,
 } from "./pilotzugang";
+import { meetingKurz, telegramMelden } from "./telegram";
 
 export { KundenZaehler };
 
@@ -34,6 +35,8 @@ export interface Env {
   PIN_GEHEIMNIS: string; // Secret – hasht PINs vor der Ablage
   MAIL_VON: string; // Secret/Var – verifizierter Absender, z. B. Nestor <login@example.de>
   AUTO_FREIGABE?: string; // "0" = neue Interessenten warten auf manuelle Freigabe, sonst sofort aktiv
+  TELEGRAM_BOT_TOKEN?: string; // Secret – bestehender privater Assistenten-Bot
+  TELEGRAM_CHAT_ID?: string; // Secret – Niclas' privater Chat
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
   // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
 }
@@ -154,7 +157,11 @@ const ANMELDEN_SEITE = (fehler: boolean) => `<!doctype html>
 </body>
 </html>`;
 
-async function handleAnmelden(request: Request, env: Env): Promise<Response> {
+function melden(ctx: ExecutionContext, env: Env, text: string): void {
+  ctx.waitUntil(telegramMelden(env, text).catch((e) => console.error("Telegram-Meldung fehlgeschlagen", e)));
+}
+
+async function handleAnmelden(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET") {
     if (new URL(request.url).searchParams.has("alt")) {
       const fehler = new URL(request.url).searchParams.has("falsch");
@@ -178,6 +185,7 @@ async function handleAnmelden(request: Request, env: Env): Promise<Response> {
       return new Response(registrierungsSeite("Der Code konnte gerade nicht verschickt werden. Bitte versuche es später erneut."),
         { status: 502, headers: { "content-type": "text/html; charset=utf-8" } });
     }
+    melden(ctx, env, `🟣 Nestor: Zugang angefordert\n${anmeldung.name}\n${anmeldung.email}\nKennt dich über: ${anmeldung.herkunft}`);
     return new Response(pinSeite(anmeldung.email), { headers: { "content-type": "text/html; charset=utf-8" } });
   }
   if (!form.has("passwort")) {
@@ -194,7 +202,7 @@ async function handleAnmelden(request: Request, env: Env): Promise<Response> {
   return setzeCookie(antwort, KUNDE_COOKIE, cookieWert, DREISSIG_TAGE);
 }
 
-async function handlePin(request: Request, env: Env): Promise<Response> {
+async function handlePin(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
   const form = await request.formData();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
@@ -208,6 +216,7 @@ async function handlePin(request: Request, env: Env): Promise<Response> {
     return new Response(pinSeite(email, "Der Code ist falsch oder abgelaufen."),
       { status: 400, headers: { "content-type": "text/html; charset=utf-8" } });
   }
+  melden(ctx, env, `✅ Nestor: Zugang bestätigt\n${email}`);
   const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
   return setzeCookie(antwort, KUNDE_COOKIE, await cookieSigniere(email, env.COOKIE_GEHEIMNIS), DREISSIG_TAGE);
 }
@@ -255,7 +264,7 @@ function offenOhneAnmeldung(pfad: string): boolean {
 
 /** Meeting-Start melden (Ticket #12): vom Coach aufgerufen (`coach/server.py`, echtes `/api/start`), NICHT vom
  * normalen Seitenaufruf – ein Meeting zählt beim Kunden erst jetzt, nicht schon beim Ansehen der Startseite. */
-async function handleMeetingStart(request: Request, env: Env): Promise<Response> {
+async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
@@ -268,14 +277,16 @@ async function handleMeetingStart(request: Request, env: Env): Promise<Response>
     method: "POST",
     body: JSON.stringify({ meetingId, maxMeetings }),
   });
-  return Response.json(await antwort.json());
+  const ergebnis = await antwort.json() as { ok?: boolean };
+  if (ergebnis.ok) melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nMeeting: ${meetingKurz(meetingId)}`);
+  return Response.json(ergebnis);
 }
 
 /** Meeting-Ende melden (Ticket #12): vom Coach aufgerufen (`coach/api_abschluss.py`, `/api/abschluss/fertig`,
  * als Hintergrundaufgabe erst NACH der Antwort an den Browser). Gibt den Platz im KundenZaehler sofort frei und
  * stoppt den Container – `stop()` (SIGTERM; Doku: developers.cloudflare.com/containers/container-class/) reicht
  * für ein regulär beendetes Meeting, `destroy()` (SIGKILL) wäre nur für ein erzwungenes Ende nötig. */
-async function handleMeetingEnde(request: Request, env: Env): Promise<Response> {
+async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
@@ -293,11 +304,12 @@ async function handleMeetingEnde(request: Request, env: Env): Promise<Response> 
     // Container war evtl. schon gestoppt oder eingeschlafen – kein Fehler für den Aufrufer, der Platz im
     // Zähler ist zu diesem Zeitpunkt ohnehin schon frei.
   }
+  melden(ctx, env, `🏁 Nestor: Meeting beendet\nZugang: ${kunde || "unbekannt"}\nMeeting: ${meetingKurz(meetingId)}`);
   return Response.json({ ok: true });
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const pfad = url.pathname;
 
@@ -305,16 +317,16 @@ export default {
       return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)));
     }
     if (pfad === "/intern/meeting-start") {
-      return handleMeetingStart(request, env);
+      return handleMeetingStart(request, env, ctx);
     }
     if (pfad === "/intern/meeting-ende") {
-      return handleMeetingEnde(request, env);
+      return handleMeetingEnde(request, env, ctx);
     }
     if (pfad === "/anmelden") {
-      return handleAnmelden(request, env);
+      return handleAnmelden(request, env, ctx);
     }
     if (pfad === "/pin") {
-      return handlePin(request, env);
+      return handlePin(request, env, ctx);
     }
     if (pfad === "/intern/interessenten") {
       return handleInteressenten(request, env);

@@ -20,6 +20,8 @@ baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb
    npx wrangler secret put PAYPAL_ME             # Name aus paypal.me/<name>
    npx wrangler secret put IMPRESSUM_NAME
    npx wrangler secret put IMPRESSUM_MAIL
+   npx wrangler secret put TELEGRAM_BOT_TOKEN  # private Live-Meldungen: Zugang, Login, Meeting Start/Ende
+   npx wrangler secret put TELEGRAM_CHAT_ID
    # optional: IMPRESSUM_ANSCHRIFT (ohne entfällt die Zeile)
    ```
 4. **Passwort-Hash erzeugen** (für das Secret `KUNDEN`) – SHA-256 des Klartext-Passworts, klein geschrieben:
