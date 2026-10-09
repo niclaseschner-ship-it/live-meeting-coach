@@ -216,14 +216,19 @@ const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueb
   zusammenfassen: "/api/knopf/zusammenfassen", fehlt: "/api/knopf/fehlt" };
 const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
   bild: "Bild", frage: "Nestor fragen", zusammenfassen: "Zusammenfassen", fehlt: "Was fehlt?" };
+let knopfWartet = null;
 function knopfDruecken(art, daten = {}) {
+  if (knopfWartet) return Promise.resolve(false);
+  knopfWartet = art;
   if (art === "ueberblick" && !daten.umfang) {
     daten.umfang = $("ueberblick-umfang").value;
   }
   if (knopfdruck(zustand) && zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
   if (!knopfdruck(zustand) && zustand?.assistent) zustand.assistent = { ...zustand.assistent, bogen: { art, name: KNOPF_NAME[art] } };
   knopfRendern(zustand);
-  return api(KNOPF_PFAD[art], daten).then(() => true, () => false); // Fehler zeigt api() schon an
+  return api(KNOPF_PFAD[art], daten).then(() => true, () => false).finally(() => {
+    knopfWartet = null; if (zustand) knopfRendern(zustand);
+  }); // Fehler zeigt api() schon an
 }
 document.querySelectorAll("#knopf-leiste .knopf-art").forEach((b) => { b.onclick = () => knopfDruecken(b.dataset.knopf); });
 $("knopf-frage-form").onsubmit = (e) => {
@@ -269,12 +274,12 @@ function knopfRendern(z) {
   document.querySelector('#knopf-leiste [data-knopf="zusammenfassen"]').hidden = nurKnopf;
   document.querySelector('#knopf-leiste [data-knopf="fehlt"]').hidden = nurKnopf;
   const bogen = !nurKnopf && a.bogen;
-  const laeuft = nurKnopf ? !!k.laeuft : !!bogen;
+  const laeuft = !!knopfWartet || (nurKnopf ? !!k.laeuft : !!bogen);
   document.querySelectorAll("#knopf-leiste .knopf-art, #knopf-fragen").forEach((b) => {
     b.disabled = laeuft; b.classList.toggle("knopf-aktiv", (nurKnopf ? k.laeuft : bogen?.art) === b.dataset.knopf);
   });
-  $("knopf-bogen").hidden = !bogen;
-  $("knopf-bogen").textContent = bogen ? `Nestor ist bei „${bogen.name}“ …` : "";
+  $("knopf-bogen").hidden = !bogen && !knopfWartet;
+  $("knopf-bogen").textContent = knopfWartet ? "Letzten Redebeitrag übernehmen …" : bogen ? `Nestor ist bei „${bogen.name}“ …` : "";
   $("knopf-fortschritt").hidden = !(nurKnopf && k.laeuft);
   if (nurKnopf && k.laeuft) {
     const transkribiert = k.schritt === "transkribiere";

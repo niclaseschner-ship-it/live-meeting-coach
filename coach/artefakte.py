@@ -224,7 +224,8 @@ Felder:
   zitat = dieser Satz, höchstens 15 Wörter.
 Antworte nur mit JSON: {"artefakte": [{"nummer": null, "typ": "aufgabe", "was": "…", "wer": null, "bis": null,
 "status": null, "reaktion": null, "hoch": false, "vage": false, "ausserhalb": false, "erledigt": false,
-"konfidenz": 0.8, "zeit": "mm:ss", "zitat": "…"}]}. Leere Liste, wenn die neuen Sätze nichts davon enthalten."""
+"gemeinsam": false, "korrigiert": false, "konfidenz": 0.8, "zeit": "mm:ss", "zitat": "…"}]}.
+Leere Liste, wenn die neuen Sätze nichts davon enthalten."""
 
 def _artefakte_text(liste: list[Artefakt], n: int = 30) -> str:
     return "\n".join(a.kurz() for a in liste[-n:]) or "(noch keine)"
