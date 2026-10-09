@@ -11,7 +11,8 @@
 let agendaPunkte = [];       // [{titel, minuten, ziel}] – die Arbeitskopie, die die Tabelle zeigt
 let agendaLaeuft = false;    // ein Vorschlag (Text oder Sprache) ist unterwegs
 let agendaSchluesselDa = true;
-let agendaHoert = false;     // Mikro-Aufnahme läuft, bis zum zweiten Klick
+let agendaHoert = false;     // Mikro-Aufnahme läuft, solange die Taste gehalten wird
+let agendaMikroGedrueckt = false;
 let agendaDialog = [];      // nur im offenen Tab, nicht dauerhaft gespeichert
 
 function agendaInit() {
@@ -23,7 +24,7 @@ function agendaInit() {
       }),
       el("div", { class: "agenda-knoepfe" },
         el("button", { id: "agenda-mikro", class: "icon", type: "button",
-          "data-tip": "Sprechen – bis zum zweiten Klick" }, icon("mikro")),
+          "data-tip": "Sprechtaste: halten, sprechen, loslassen", "aria-label": "Sprechtaste halten" }, icon("mikro")),
         el("button", { id: "agenda-senden", class: "primaer klein", type: "button" }, "Absenden"))),
     el("p", { id: "agenda-antwort", class: "agenda-antwort", role: "status", "aria-live": "polite", hidden: "" }),
     el("p", { id: "agenda-hinweis", class: "agenda-hinweis leise-text", hidden: "" },
@@ -35,7 +36,16 @@ function agendaInit() {
   $("agenda-feld").onkeydown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agendaSenden(); }
   };
-  $("agenda-mikro").onclick = agendaMikroKlick;
+  $("agenda-mikro").addEventListener("pointerdown", agendaMikroStart);
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("agenda-mikro").addEventListener(ev, agendaMikroEnde);
+  $("agenda-mikro").addEventListener("keydown", (e) => {
+    if (!["Space", "Enter"].includes(e.code)) return;
+    e.preventDefault(); if (!e.repeat) agendaMikroStart(e);
+  });
+  $("agenda-mikro").addEventListener("keyup", (e) => {
+    if (["Space", "Enter"].includes(e.code)) { e.preventDefault(); agendaMikroEnde(); }
+  });
+  $("agenda-mikro").addEventListener("contextmenu", (e) => e.preventDefault());
   agendaTabelleRendern();
 }
 
@@ -144,15 +154,24 @@ const agendaAufnahme = {
   ctx: null, stream: null, worklet: null, proben: [], faktor: 1, pos: 0,
   async starten() {
     this.proben = [];
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
     try { this.ctx = new AudioContext({ sampleRate: RATE }); } catch { this.ctx = new AudioContext(); }
-    const quelle = this.ctx.createMediaStreamSource(this.stream);
-    this.faktor = this.ctx.sampleRate / RATE; this.pos = 0;
-    await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
-    this.worklet = new AudioWorkletNode(this.ctx, "sammler");
-    const leise = this.ctx.createGain(); leise.gain.value = 0;
-    quelle.connect(this.worklet); this.worklet.connect(leise); leise.connect(this.ctx.destination);
-    this.worklet.port.onmessage = (e) => this._daten(e.data);
+    try {
+      // AudioContext direkt im Tastendruck aktivieren, bevor die Mikrofonfreigabe asynchron wartet.
+      await this.ctx.resume();
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
+      const quelle = this.ctx.createMediaStreamSource(this.stream);
+      this.faktor = this.ctx.sampleRate / RATE; this.pos = 0;
+      await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+      this.worklet = new AudioWorkletNode(this.ctx, "sammler");
+      const leise = this.ctx.createGain(); leise.gain.value = 0;
+      quelle.connect(this.worklet); this.worklet.connect(leise); leise.connect(this.ctx.destination);
+      this.worklet.port.onmessage = (e) => this._daten(e.data);
+    } catch (err) {
+      this.stream?.getTracks().forEach((t) => t.stop());
+      try { await this.ctx?.close(); } catch { /* Kontext kann bereits beendet sein */ }
+      this.ctx = this.stream = this.worklet = null; this.proben = [];
+      throw err;
+    }
   },
   _daten(f) {
     let p = this.pos;
@@ -182,21 +201,48 @@ function agendaWavBauen(proben, rate) {
   for (let i = 0; i < proben.length; i++) d.setInt16(44 + i * 2, proben[i], true);
   return new Blob([puffer], { type: "audio/wav" });
 }
-async function agendaMikroKlick() {
-  if (agendaHoert) {
-    agendaHoert = false;
-    iconSetzen("agenda-mikro", "mikro");
-    const wav = await agendaAufnahme.stoppen();
-    await agendaSpracheSenden(wav);
-    return;
-  }
+async function agendaMikroStart(e) {
+  e.preventDefault();
+  if (agendaMikroGedrueckt || agendaHoert || agendaLaeuft || !agendaSchluesselDa) return;
+  agendaMikroGedrueckt = true;
   try {
     await agendaAufnahme.starten();
+    if (!agendaMikroGedrueckt) {
+      await agendaAufnahme.stoppen();
+      return;
+    }
     agendaHoert = true;
     iconSetzen("agenda-mikro", "mikroAus");
-  } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); }
+    $("agenda-mikro").classList.add("haelt");
+    $("agenda-mikro").setAttribute("aria-label", "Aufnahme läuft – loslassen zum Senden");
+    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Ich höre … loslassen zum Senden";
+  } catch (err) {
+    agendaMikroGedrueckt = false;
+    agendaHoert = false;
+    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Mikrofon nicht verfügbar: ${err.message ?? err}`;
+  }
+}
+async function agendaMikroEnde() {
+  agendaMikroGedrueckt = false;
+  if (!agendaHoert) return;
+  agendaHoert = false;
+  $("agenda-mikro").classList.remove("haelt");
+  $("agenda-mikro").setAttribute("aria-label", "Sprechtaste halten");
+  iconSetzen("agenda-mikro", "mikro");
+  let wav;
+  try { wav = await agendaAufnahme.stoppen(); }
+  catch (err) {
+    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Aufnahme konnte nicht beendet werden: ${err.message ?? err}`;
+    return;
+  }
+  if (wav.size < 44 + RATE * 2 * 0.5) {
+    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Zum Diktieren gedrückt halten, sprechen, dann loslassen.";
+    return;
+  }
+  await agendaSpracheSenden(wav);
 }
 async function agendaSpracheSenden(wav) {
+  $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Agenda wird vorbereitet …";
   agendaLaufendSetzen(true);
   try {
     const form = new FormData();
@@ -205,7 +251,12 @@ async function agendaSpracheSenden(wav) {
     form.append("verlauf", JSON.stringify(agendaDialog));
     const r = await fetch("/api/agenda/sprache", { method: "POST", body: form });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Fehler: ${d.detail ?? r.status}`); return; }
+    if (!r.ok) {
+      $("agenda-antwort").textContent = `Fehler: ${d.detail ?? r.status}`;
+      return;
+    }
     agendaUebernehmen(d, d.eingabe);
+  } catch (err) {
+    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Fehler: ${err.message ?? err}`;
   } finally { agendaLaufendSetzen(false); }
 }

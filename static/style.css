@@ -131,6 +131,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 
 @keyframes auftauchen { from { transform: translateY(-6px); opacity: 0; } }
 .fehler { margin: 14px 22px 0; padding: 12px 16px; border-radius: 12px; background: var(--rot-weich); color: #8A0F1F; font-weight: 600; }
+#start-fehler { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: var(--rot-weich); color: #8A0F1F; font-weight: 700; }
 
 /* ---------- Karten ---------- */
 .karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: var(--radius); padding: 18px 20px;
@@ -166,6 +167,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .agenda-eingabe textarea { flex: 1; resize: vertical; min-height: 42px; }
 .agenda-knoepfe { display: flex; gap: 8px; flex: none; }
 .agenda-eingabe textarea:disabled, .agenda-knoepfe button:disabled { opacity: .5; }
+.agenda-knoepfe .icon.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }
 .agenda-antwort { margin: 0 0 10px; padding: 10px 14px; border-radius: 10px; background: var(--marke-weich);
   color: var(--marke-2); font-weight: 600; font-size: 14px; }
 .agenda-hinweis { margin: -2px 0 10px; }
@@ -260,6 +262,17 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .agenda .min { font-size: 13px; color: var(--text-3); font-weight: 600; font-variant-numeric: tabular-nums; padding-top: 4px; }
 /* Regeln als Ampeln */
 .regel-ampeln { display: grid; gap: 10px; }
+.regeln-zone { margin: 12px 22px 0; padding: 10px 14px; border: 1px solid var(--rand); border-radius: 12px;
+  background: var(--flaeche); box-shadow: var(--schatten); }
+.regeln-zone h2 { margin: 0 0 8px; font-size: 13px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.regeln-zone .regel-ampeln { display: flex; flex-wrap: wrap; gap: 6px; }
+.regeln-zone .ampel { flex: 1 1 210px; grid-template-columns: 28px 1fr; gap: 2px 8px; padding: 6px 8px; border-width: 1px; }
+.regeln-zone .ampel .a-icon { grid-row: span 2; width: 28px; height: 28px; border-radius: 8px; }
+.regeln-zone .ampel .a-icon svg { width: 17px; height: 17px; }
+.regeln-zone .ampel strong { font-size: 13px; }
+.regeln-zone .ampel span.detail { font-size: 12px; line-height: 1.2; }
+.regeln-zone .ampel-beta-titel { flex-basis: 100%; margin: 2px 0 0; }
+.regeln-zone .erinnerungen { margin-top: 6px; }
 .ampel { display: grid; grid-template-columns: 46px 1fr; gap: 2px 12px; align-items: center; padding: 10px 12px;
   border-radius: 12px; border: 2px solid transparent; background: var(--gruen-weich); }
 .ampel .a-icon { grid-row: span 2; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px;
@@ -426,19 +439,30 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 /* ---------- Modus „Auf Knopfdruck“: Knopfleiste statt Nestor-Leiste (Ticket #6) ---------- */
 .knopf-leiste { margin: 14px 22px 0; padding: 12px 16px; border-radius: var(--radius); background: var(--flaeche);
   border: 1px solid var(--rand); box-shadow: var(--schatten); display: grid; gap: 10px; }
-.knopf-knoepfe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.knopf-knoepfe .knopf-art { background: var(--marke-weich); border-color: transparent; color: var(--marke); }
+.knopf-knoepfe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.knopf-knoepfe .taste { grid-column: 1 / -1; justify-self: start; }
+.knopf-knoepfe .knopf-art { background: var(--marke-weich); border-color: transparent; color: var(--marke); min-height: 60px; height: 100%; }
 .knopf-knoepfe .knopf-art.knopf-aktiv { background: var(--marke); color: #fff; }
 .knopf-art, .h-knopf, #knopf-fragen { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; white-space: normal; text-align: left; }
 .aktion-name { font-weight: 750; }
-.aktion-detail, .aktion-umfang { font-size: 11px; line-height: 1.3; font-weight: 400; max-width: 210px; }
-.aktion-preis { font-size: 10px; font-weight: 650; border: 1px solid currentColor; border-radius: 5px; padding: 1px 4px; margin-top: 2px; }
+.aktion-preis { display: inline-block; width: fit-content; font-size: 10px; line-height: 1.25; font-weight: 650; border: 1px solid currentColor;
+  border-radius: 5px; padding: 1px 4px; margin-top: 2px; white-space: normal; }
+.ueberblick-aktion { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+.ueberblick-aktion select { width: auto; max-width: 82px; padding: 5px 4px; font-size: 11px; }
+.zusatz-aktionen { font-size: 12px; color: var(--text-2); }
+.zusatz-aktionen summary { cursor: pointer; font-weight: 650; }
+.zusatz-aktionen-inhalt { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.zusatz-aktionen-inhalt > button { flex: 0 0 auto; }
+.aktions-hilfe-liste { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 5px; }
+.aktions-hilfe-liste .aktion-preis { margin: 0 3px; }
 .aktions-kosten { font-size: 11px; color: var(--text-2); margin: 6px 0; }
 .aktions-kosten summary { cursor: pointer; }
 .h-umfang { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 12px 0; }
 .h-umfang select { min-width: 0; flex: 1; }
 .h-knopfraster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.h-knopf { min-width: 0; width: 100%; }
+.h-knopf { min-width: 0; width: 100%; min-height: 60px; }
+.h-knopf .aktion-name { font-size: 14px; }
+.h-knopf .aktion-preis { font-size: 9px; }
 .knopf-frage { display: flex; gap: 8px; flex: 1; min-width: 260px; }
 .knopf-frage input { flex: 1; }
 .knopf-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 14px; }
@@ -452,6 +476,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-
 .knopf-verwerfen .knopf-gefahr { color: var(--rot); border-color: var(--rot-weich); }
 .knopf-link { display: inline-block; margin-top: 4px; font-weight: 600; }
 @media (max-width: 700px) { .knopf-verwerfen { margin-left: 0; } }
+*[hidden] { display: none !important; }
 
 /* ---------- Überblick als Text (Ticket #13): Zonen wie im Live-Bild, Farben wie im Gestaltungssystem ---------- */
 .ub-kopf { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
@@ -648,7 +673,8 @@ button.luecke:hover { border-color: var(--rot); }
 @keyframes drehen { to { transform: rotate(360deg); } }
 
 /* Sprechtaste (Funkgerät, Basis) */
-.taste { display: inline-flex; align-items: center; gap: 8px; background: var(--rot-weich); color: #8A0F1F; border-color: var(--rot);
+.taste { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; width: min(100%, 320px); font-weight: 700;
+  background: var(--marke); color: #fff; border-color: var(--marke);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .taste .i svg { width: 20px; height: 20px; display: block; }
 .taste.haelt { background: var(--rot); color: #fff; }
@@ -673,8 +699,12 @@ button.luecke:hover { border-color: var(--rot); }
   .nz-gesagt { font-size: 16px; }
   .knopf-leiste { margin: 10px 10px 0; padding: 10px; }
   .knopf-frage { min-width: 0; flex-basis: 100%; }
-  .knopf-knoepfe { gap: 6px; }
-  .knopf-knoepfe .knopf-art { padding: 6px 10px; font-size: 14px; }
+  .knopf-knoepfe { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .knopf-knoepfe .knopf-art { padding: 7px 4px; font-size: 12px; align-items: center; text-align: center; }
+  .ueberblick-aktion { grid-column: auto; grid-template-columns: 1fr; }
+  .ueberblick-aktion select { max-width: none; width: 100%; }
+  .regeln-zone { margin: 10px 10px 0; padding: 8px; }
+  .regeln-zone .ampel { flex-basis: 100%; }
   .knopf-frage input { min-width: 0; }
   .taste { flex-basis: 100%; justify-content: center; white-space: normal; }
   .taste .nur-gross { display: none; }

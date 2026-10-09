@@ -17,9 +17,16 @@ function handyKennung() {
   return handyBrowserKennung;
 }
 
+function aktionPreisKurz(preis) {
+  if (preis.startsWith("Text ~")) return `≈ ${preis.slice(6).replace(/ US-ct$/, " ct")}`;
+  return preis.replace("Liste: lokal · KI ggf. extra", "Liste lokal")
+    .replace("Text: variabel", "Text variabel").replace("Bild: variabel", "Bild variabel");
+}
+
 function aktionshilfeRendern(z, selektor, umfang = "aktuell") {
   const hilfe = z?.aktionshilfe;
   if (!hilfe) return;
+  const zeilen = [];
   document.querySelectorAll(selektor).forEach((button) => {
     const art = button.dataset.knopf, d = hilfe.aktionen[art];
     if (!d) return;
@@ -27,16 +34,19 @@ function aktionshilfeRendern(z, selektor, umfang = "aktuell") {
     const name = ganz ? "Meetingüberblick" : d.name;
     const bereich = ganz ? "Ganzes Meeting · strukturierte Ansicht" : d.umfang;
     const preis = ganz ? d.kosten_gesamt ?? d.kosten : d.kosten;
-    const signatur = JSON.stringify([name, bereich, preis, d.beschreibung]);
-    if (button.dataset.hilfe === signatur) return;
-    button.dataset.hilfe = signatur;
-    button.replaceChildren(el("span", {class:"aktion-name"}, name),
-      el("span", {class:"aktion-detail"}, d.beschreibung),
-      el("span", {class:"aktion-umfang"}, bereich),
-      el("span", {class:"aktion-preis"}, preis));
+    const label = button.dataset.label || name;
+    const tag = button.querySelector(".aktion-preis");
+    if (tag) tag.textContent = aktionPreisKurz(preis);
     button.title = `${d.beschreibung}. ${bereich}. ${preis}. ${hilfe.kostenhinweis}`;
+    if (!zeilen.some((x) => x.art === art)) zeilen.push({ art, label, name, bereich, beschreibung: d.beschreibung, preis });
   });
   document.querySelectorAll(".aktions-kostenhinweis").forEach((e) => { e.textContent = hilfe.kostenhinweis; });
+  const liste = $("aktions-hilfe-liste");
+  if (liste) {
+    liste.replaceChildren(...zeilen.map((x) => el("li", {},
+      el("strong", {}, x.label), ` · ${x.beschreibung} ${x.bereich}. `,
+      el("span", { class: "aktion-preis" }, x.preis))));
+  }
   document.querySelectorAll(".frage-kosten").forEach((e) => { e.textContent = `Frage beantworten: ${hilfe.aktionen.frage?.kosten ?? "Text: variabel"} · Stimme und Recherche ggf. extra`; });
 }
 

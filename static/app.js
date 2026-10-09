@@ -78,6 +78,39 @@ function formularDaten() {
   };
 }
 const einrichten = () => api("/api/einrichten", formularDaten());
+async function einrichtenStrikt() {
+  const r = await fetch("/api/einrichten", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formularDaten()),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail ?? `Einrichten fehlgeschlagen (HTTP ${r.status}).`);
+  if (d.ok !== true) throw new Error("Der Server hat die Einrichtung nicht bestätigt.");
+  return d;
+}
+
+function startStufeErmitteln() {
+  let ausgewaehlt = null;
+  try { ausgewaehlt = sessionStorage.getItem("nestor-gewaehlte-stufe"); } catch { /* privater Browser */ }
+  const aktuell = zustand?.stufe ?? null;
+  if (ausgewaehlt && aktuell && ausgewaehlt !== aktuell) {
+    throw new Error(`Stufenabweichung: Startseite wählte ${ausgewaehlt}, der Server meldet ${aktuell}. Bitte auf der Startseite erneut wählen.`);
+  }
+  const erwartet = ausgewaehlt || aktuell;
+  if (!["basis", "premium"].includes(erwartet)) {
+    throw new Error("Die Nestor-Variante ist noch nicht bestätigt. Bitte die Startseite neu laden und Basis oder Premium wählen.");
+  }
+  return erwartet;
+}
+async function meetingStartAnfordern(erwartet = startStufeErmitteln()) {
+  const r = await fetch("/api/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Nestor-Erwartete-Stufe": erwartet },
+    body: "{}",
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail ?? `Meetingstart fehlgeschlagen (HTTP ${r.status}).`);
+  if (d.ok !== true) throw new Error("Der Server hat den Meetingstart nicht bestätigt.");
+}
 
 // ---------- Knöpfe ----------
 let einrichtungOffen = false;
@@ -88,8 +121,16 @@ $("btn-person-neu").onclick = () => personZeile();
 $("btn-simulation").onclick = async () => { await einrichten(); api("/api/simulation", { name: $("f-szenario").value, tempo: 10 }); };
 $("btn-abspielen").onclick = () => { stimme.bereit(); api("/api/abspielen", { name: $("f-aufnahme").value, tempo: 1, auto_wechsel: $("f-auto").checked }); };
 $("btn-start").onclick = async () => {
-  await einrichten();
-  await api("/api/start");
+  $("start-fehler").hidden = true;
+  try {
+    const erwartet = startStufeErmitteln();
+    await einrichtenStrikt();
+    await meetingStartAnfordern(erwartet);
+  } catch (err) {
+    $("start-fehler").hidden = false;
+    $("start-fehler").textContent = err.message ?? String(err);
+    return;
+  }
 };
 $("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); location.href = "/abschluss"; };
 $("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
@@ -117,8 +158,7 @@ async function handyFensterZeigen() {
   $("hf-code").textContent = k.code.replace(/(.{4})/, "$1-");
   $("hf-qr").innerHTML = k.qr ?? "";
   $("hf-text").replaceChildren(...(k.adresse ? [el("a", { href: k.adresse, target: "_blank", rel: "noopener" }, "Handy-Link öffnen oder kopieren")]
-    : ["Kein Tailscale gefunden. HTTPS ist Pflicht fürs Handy-Mikrofon: ", el("code", {}, k.befehl),
-      " einrichten oder LMC_HANDY_URL setzen."]));
+    : ["Für das Handy-Mikrofon ist eine erreichbare HTTPS-Adresse nötig. Richte diese Adresse ein: ", el("code", {}, k.befehl)]));
 }
 $("btn-handy").onclick = () => { $("mehr-menu").hidden = true; handyFensterZeigen(); };
 $("btn-handy-vorbereitung").onclick = handyFensterZeigen;
@@ -259,7 +299,7 @@ function knopfOffenText(k) {
 }
 function knopfRendern(z) {
   aktionshilfeRendern(z, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
-  const an = !!z.hoeren;
+  const an = !!(z.laeuft || z.simulation);
   $("knopf-leiste").hidden = !an;
   if (!an) return;
   const k = z.knopf ?? {};
@@ -272,9 +312,6 @@ function knopfRendern(z) {
   // Basis: kein Bildmodell (der Überblick steht für das Bild); Regeln-Knopf nur, wenn Regeln gewählt sind (Ticket #27)
   document.querySelector('#knopf-leiste [data-knopf="bild"]').hidden = basis;
   document.querySelector('#knopf-leiste [data-knopf="regeln"]').hidden = !(z.regel_ids ?? []).length;
-  // Nur auf Knopfdruck kennt nur das Protokoll – Zusammenfassen und Was fehlt sind dort dasselbe
-  document.querySelector('#knopf-leiste [data-knopf="zusammenfassen"]').hidden = nurKnopf;
-  document.querySelector('#knopf-leiste [data-knopf="fehlt"]').hidden = nurKnopf;
   const bogen = !nurKnopf && a.bogen;
   const laeuft = !!knopfWartet || (nurKnopf ? !!k.laeuft : !!bogen);
   document.querySelectorAll("#knopf-leiste .knopf-art, #knopf-fragen").forEach((b) => {
@@ -293,11 +330,14 @@ function knopfRendern(z) {
   $("knopf-fehler").hidden = laeuft || !k.fehler;
   $("knopf-fehler").textContent = k.fehler ?? "";
   // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
-  const tasteDa = basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
+  const tasteDa = !!(z.laeuft || z.simulation) && basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
   $("btn-taste").hidden = !tasteDa;
   if (!taste.aktiv) {
     if (tasteMeldung) $("taste-text").textContent = tasteMeldung;
-    else $("taste-text").replaceChildren("Sprechtaste – halten", el("span", { class: "nur-gross" }, " (oder Leertaste)"));
+  else {
+    $("btn-taste").dataset.tip = "Halten oder Leertaste drücken, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
+    $("taste-text").replaceChildren("Sprechtaste – halten", el("span", { class: "nur-gross" }, " (oder Leertaste im freien Bereich)"));
+  }
   }
 }
 
@@ -343,7 +383,9 @@ $("btn-taste").addEventListener("pointerdown", tasteAn);
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-taste").addEventListener(ev, tasteAus);
 $("btn-taste").addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" || e.target.closest?.("input, textarea, select, [contenteditable='true']")) return;
+  if (e.code !== "Space") return;
+  const sprechtasteFokussiert = !!e.target.closest?.("#btn-taste");
+  if (e.target.closest?.("button, input, textarea, select, summary, a, [role='button'], [contenteditable='true']") && !sprechtasteFokussiert) return;
   if ($("btn-taste").hidden) return;
   e.preventDefault();
   if (!e.repeat) tasteAn();
@@ -411,7 +453,7 @@ function nestorStopp() { // Hineinreden, Sprechtaste oder „Stopp“: was noch 
 const spricht = () => feld.wartend.length > 0 || (!!stimme.ctx && stimme.naechste > stimme.ctx.currentTime + 0.05);
 function nestorZeileRendern(z) {
   const a = z.assistent ?? {};
-  const aktiv = z.laeuft || z.simulation || z.hoeren;
+  const aktiv = !!(z.laeuft || z.simulation);
   const name = a.name ?? "Nestor";
   const redet = spricht();
   const hoertNoch = a.hoert_bis ? a.hoert_bis - z.zeit : 0;
@@ -442,8 +484,8 @@ function nestorZeileRendern(z) {
 
 function rendern() {
   const z = zustand; if (!z) return;
-  const aktiv = z.laeuft || z.simulation || z.hoeren;
-  const beendet = !aktiv && z.segmente.length > 0;
+  const aktiv = !!(z.laeuft || z.simulation);
+  const beendet = !aktiv && (z.segmente.length > 0 || z.zeit > 0);
   if (aktiv) einrichtungOffen = false;
   const vorbereitung = !aktiv && (!beendet || einrichtungOffen);
   $("einrichtung").hidden = !vorbereitung;
@@ -454,22 +496,24 @@ function rendern() {
   $("ziel-anzeige").textContent = z.ziel || "";
   $("btn-start").hidden = !vorbereitung;
   $("btn-neu").hidden = !(beendet && !einrichtungOffen);
+  $("btn-kosten").hidden = !aktiv;
+  $("btn-transkript").hidden = !aktiv;
   // Ablage: läuft die Aufnahme, und wo liegt das Meeting danach?
   const ab = z.archiv;
   $("aufnahme-pill").hidden = !(ab?.aufnahme && z.hoeren);
   $("btn-ablage").hidden = !(ab && !z.hoeren);
   $("btn-ablage").textContent = ab?.fertig ? "Abgelegt – Ordner öffnen" : "Wird abgelegt …";
-  $("btn-stopp").hidden = !z.hoeren || z.simulation;
+  $("btn-stopp").hidden = !aktiv || z.simulation;
   const pill = $("status-pill");
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
     : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
   // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
-  $("modus-pill").hidden = !z.modus;
+  $("modus-pill").hidden = !z.stufe;
   document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
   // „eigener Schlüssel“ (Ticket #17, entschlackte Kopfleiste) steht hier statt in einer eigenen Pille
   const eigenerSchluessel = z.schluessel?.quelle === "dashboard";
-  $("modus-pill").textContent = (z.stufe === "basis" ? `Basis${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium")
+  $("modus-pill").textContent = (z.stufe === "basis" ? `Basis · Mistral${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium · OpenAI")
     + (eigenerSchluessel ? " · eigener Schlüssel" : "");
   $("modus-pill").dataset.tip = (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
     : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
@@ -529,6 +573,7 @@ function rendern() {
   }
   // Band (Ticket #27): Regel-Hinweise und stille Angebote, je mit höchstens einem Knopf
   bandRendern(z, $("band"));
+  $("band").hidden = !aktiv || $("band").hidden;
   arbeitRendern(z);
 
   if (!vorbereitung) liveRendern(z);
@@ -583,7 +628,7 @@ function liveRendern(z) {
     ...(beta.length ? [el("p", { class: "etikett ampel-beta-titel" }, "Beta"), ...beta.map(ampel)] : []));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
   // Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte
-  $("regeln-karte").hidden = !regelStatus.length && !(z.regeln ?? []).length;
+  $("regeln-zone").hidden = !(z.laeuft || z.simulation) || (!regelStatus.length && !(z.regeln ?? []).length);
 
   // Redeanteile, ohne Bewertung
   const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);

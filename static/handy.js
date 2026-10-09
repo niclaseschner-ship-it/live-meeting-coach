@@ -81,7 +81,7 @@ async function mikroStarten() {
     mikroGewollt = false;
     await mikro.stoppen();
     alert(window.isSecureContext ? `Mikrofon nicht verfügbar: ${e.message ?? e}`
-      : "Das Mikrofon geht nur über HTTPS – die Adresse aus dem QR-Code verwenden (https://…ts.net).");
+      : "Das Mikrofon benötigt HTTPS. Öffne die HTTPS-Adresse aus dem QR-Code und aktiviere es dort.");
   } finally { mikroStartet = false; rendern(); }
 }
 async function mikroStoppen() { mikroGewollt = false; await mikro.stoppen(); rendern(); }
@@ -173,15 +173,56 @@ document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = async () => {
     ? {umfang: $("h-ueberblick-umfang").value} : {}); }
   finally { handyKnopfWartet = false; rendern(); }
 }; });
+$("h-frage-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("h-frage").value.trim();
+  if (!text || handyKnopfWartet || !(zustand?.laeuft || zustand?.simulation)) return;
+  handyKnopfWartet = true; stimme.bereit(); rendern();
+  try {
+    await api("/api/knopf/frage", { text });
+    $("h-frage").value = "";
+  } finally { handyKnopfWartet = false; rendern(); }
+};
 $("h-ueberblick-umfang").onchange = () => rendern();
 $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-ton-hier").onclick = () => stimme.bereit();
 $("btn-stumm").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
+function startStufeErmitteln() {
+  let ausgewaehlt = null;
+  try { ausgewaehlt = sessionStorage.getItem("nestor-gewaehlte-stufe"); } catch { /* privater Browser */ }
+  const aktuell = zustand?.stufe ?? null;
+  if (ausgewaehlt && aktuell && ausgewaehlt !== aktuell) {
+    throw new Error(`Stufenabweichung: Startseite wählte ${ausgewaehlt}, der Server meldet ${aktuell}. Bitte auf der Startseite erneut wählen.`);
+  }
+  const erwartet = ausgewaehlt || aktuell; // anonymes Handy: aktueller WebSocket-Stand ist maßgeblich
+  if (!["basis", "premium"].includes(erwartet)) {
+    throw new Error("Die Nestor-Variante ist noch nicht bestätigt. Bitte die Kopplung erneuern.");
+  }
+  return erwartet;
+}
+async function meetingStartAnfordern(erwartet = startStufeErmitteln()) {
+  const r = await fetch("/api/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Nestor-Erwartete-Stufe": erwartet },
+    body: "{}",
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail ?? `Meetingstart fehlgeschlagen (HTTP ${r.status}).`);
+  if (d.ok !== true) throw new Error("Der Server hat den Meetingstart nicht bestätigt.");
+}
 $("btn-start").onclick = async () => {
-  if (!mikro.laeuft()) await mikroStarten(); // erst melden, dann starten – der Laptop hält sich dann raus
-  if (!mikro.laeuft()) return;
-  await api("/api/start");
+  $("start-fehler").hidden = true;
+  try {
+    const erwartet = startStufeErmitteln();
+    if (!mikro.laeuft()) await mikroStarten(); // erst melden, dann starten – der Laptop hält sich dann raus
+    if (!mikro.laeuft()) return;
+    await meetingStartAnfordern(erwartet);
+  } catch (err) {
+    $("start-fehler").hidden = false;
+    $("start-fehler").textContent = err.message ?? String(err);
+    return;
+  }
 };
 $("btn-stopp").onclick = async () => {
   if (!confirm("Meeting beenden? Danach entstehen Zusammenfassung und Abschlussbild am Laptop.")) return;
@@ -223,8 +264,9 @@ function chipsRendern() {
 function rendern() {
   aktionshilfeRendern(zustand ?? {}, ".h-knopf", $("h-ueberblick-umfang").value);
   const z = zustand; if (!z) return;
-  const aktiv = z.laeuft || z.simulation || z.hoeren;
-  const beendet = !aktiv && z.segmente.length > 0;
+  const aktiv = !!(z.laeuft || z.simulation);
+  const beendet = !aktiv && (z.segmente.length > 0 || z.zeit > 0);
+  $("app").dataset.phase = aktiv ? "meeting" : beendet ? "beendet" : "vorbereitung";
   const m = z.mikro ?? {};
   $("titel").textContent = z.titel || "Nestor";
   $("untertitel-kopf").textContent = z.ziel || "Meeting-Coach";
@@ -232,8 +274,17 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live" : beendet ? "Beendet" : "Mit Laptop verbunden";
   if (!z.stumm && !z.hoeren) pill.className = "pill verbunden";
+  $("modus").hidden = !z.stufe;
+  $("modus").textContent = z.stufe === "basis" ? "Basis · Mistral" : z.stufe === "premium" ? "Premium · OpenAI" : "";
+  $("modus").dataset.tip = z.stufe === "basis"
+    ? "Nestor Basis verwendet Mistral AI."
+    : "Nestor Premium verwendet OpenAI.";
   $("zeit").textContent = mmss(z.zeit);
   $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
+  $("h-nestor-karte").hidden = !aktiv;
+  $("h-verlauf-karte").hidden = !aktiv;
+  $("h-transkript-karte").hidden = !aktiv;
+  $("h-meeting").hidden = beendet;
 
   // Warnung: Mikrofon weg, eigener Hinweis oder Fehler vom Server
   const eigenesWeg = mikroGewollt && !mikro.laeuft();
@@ -242,10 +293,11 @@ function rendern() {
     : m.weg ? (m.quelle ? `Seit ${Math.round(m.luecke)} s kein Ton vom ${m.quelle === "handy" ? "Handy" : "Laptop"}.` : "Kein Mikrofon verbunden – Nestor hört nichts.")
     : z.fehler ?? null;
   $("warnung").hidden = !warnung; $("warnung").textContent = warnung ?? "";
-  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
+  $("ton-fehlt").hidden = !aktiv || !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
 
   // Band (Ticket #27)
   bandRendern(z, $("band"));
+  $("band").hidden = !aktiv || $("band").hidden;
 
   // Nestor
   const a = z.assistent;
@@ -254,13 +306,14 @@ function rendern() {
   $("nestor-zustand").textContent = nestorDa ? `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}` : z.hoeren ? "Nestor ist aus" : "Nestor wartet aufs Meeting";
   // Knöpfe: in beiden Stufen; „Nestor fragen“ auch bei „Nur auf Knopfdruck“ (dann ohne Stimme, als Karte)
   const nurKnopf = z.modus === "knopfdruck";
-  const fragenDa = z.hoeren && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
-  $("btn-fragen").disabled = !fragenDa && !haelt;
+  const fragenDa = aktiv && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
   const bogen = !nurKnopf && a?.bogen;
+  const frageBeschaeftigt = handyKnopfWartet || !!z.knopf?.laeuft || !!bogen;
+  $("btn-fragen").disabled = (!fragenDa || frageBeschaeftigt) && !haelt;
   document.querySelectorAll(".h-knopf").forEach((b) => {
-    b.disabled = handyKnopfWartet || !z.hoeren || !!z.knopf?.laeuft || !!bogen;
+    b.disabled = handyKnopfWartet || !aktiv || !!z.knopf?.laeuft || !!bogen;
     if (b.dataset.knopf === "bild") b.hidden = z.stufe === "basis"; // Basis: kein Bildmodell
-    if (["zusammenfassen", "fehlt"].includes(b.dataset.knopf)) b.hidden = nurKnopf;
+    if (b.dataset.knopf === "regeln") b.hidden = !(z.regel_ids ?? []).length;
   });
   if (handyKnopfWartet || bogen || z.knopf?.laeuft) $("knopf-stand").dataset.aktion = "1";
   if (handyKnopfWartet) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Letzten Redebeitrag übernehmen …"; }
@@ -276,6 +329,8 @@ function rendern() {
   $("btn-mikro").disabled = mikroStartet || ws?.readyState !== WebSocket.OPEN;
   $("mikro-titel").textContent = aktiv ? "Raummikrofon" : "Meeting vorbereiten";
   $("mikro-vorbereitung").hidden = aktiv || beendet;
+  $("mikro-erklaerung").hidden = !!z.hoeren || beendet;
+  $("btn-mikro").hidden = beendet;
   const bereit = z.handys && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
   $("mikro-vorbereitung").textContent = mikroStartet ? "Mikrofon wird aktiviert – erlaube den Zugriff, falls dein Browser fragt."
     : bereit ? "✓ Mikrofon und Ton sind bereit. Du kannst das Meeting jetzt am Laptop starten. Lass diese Seite offen."
@@ -287,12 +342,20 @@ function rendern() {
     : z.hoeren ? "Handy hört zu – tippen zum Beenden" : "Bereit – hört zu, sobald das Meeting startet";
   $("quelle").textContent = !z.hoeren && !m.quelle ? "" : m.quelle === "handy" ? (hier ? "dieses Handy" : "ein anderes Handy")
     : m.quelle === "laptop" ? "Laptop hört zu" : "niemand hört zu";
-  $("btn-stumm").hidden = !z.hoeren;
+  $("btn-stumm").hidden = !aktiv;
   $("btn-stumm").textContent = z.stumm ? "Stumm aus – wieder zuhören" : "Stumm schalten";
 
   // Meeting
-  $("btn-start").hidden = aktiv;
-  $("btn-stopp").hidden = !z.hoeren || z.simulation;
+  $("btn-start").hidden = aktiv || beendet;
+  const startBereit = !!z.handys && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
+  $("btn-start").disabled = !startBereit;
+  if (!aktiv && !beendet) {
+    $("btn-start").textContent = startBereit ? "Meeting starten"
+      : !z.handys ? "Erst Handy koppeln"
+        : m.quelle !== "handy" ? "Am Handy Mikrofon aktivieren"
+          : m.luecke == null || m.luecke > 3 ? "Warte auf Handy-Audio" : "Am Handy Ton aktivieren";
+  }
+  $("btn-stopp").hidden = !aktiv || z.simulation;
   $("meeting-text").textContent = aktiv ? "" : beendet ? "Meeting beendet – Zusammenfassung am Laptop. Neues Meeting dort einrichten."
     : "Agenda und Personen am Laptop einrichten; starten geht auch hier.";
 

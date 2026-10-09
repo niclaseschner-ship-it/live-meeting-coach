@@ -28,6 +28,7 @@
     </span>
     <div class="h-titel"><strong id="titel">Nestor</strong><span id="untertitel-kopf">Meeting-Coach</span></div>
     <span id="aufnahme" class="pill aufnahme" hidden>Aufnahme</span>
+    <span id="modus" class="pill" hidden></span>
     <span id="status" class="pill">Verbinde …</span>
   </header>
 
@@ -53,7 +54,7 @@
       <p id="mikro-vorbereitung" class="leise">✓ Handy gekoppelt. Aktiviere jetzt Mikrofon und Ton, damit das Meeting starten kann. Eine gespeicherte Erlaubnis schaltet das Mikrofon nicht automatisch ein.</p>
       <button id="btn-mikro" class="h-mikro"><span class="i"></span><span id="mikro-text">Mikrofon und Ton aktivieren</span></button>
       <div class="h-pegel" aria-hidden="true"><i id="pegel"></i></div>
-      <p class="leise">Das Handy hört zu, und Nestor spricht über das Handy – so hört er sich nicht selbst.
+      <p id="mikro-erklaerung" class="leise">Das Handy hört zu, und Nestor spricht über das Handy – so hört er sich nicht selbst.
         Am Laptop wird dann nichts aufgenommen und nichts abgespielt.</p>
       <div class="h-zeile h-klein">
         <button id="btn-stumm" class="klein">Stumm schalten</button>
@@ -67,7 +68,7 @@
     <div id="band" class="band" hidden aria-live="polite"></div>
 
     <!-- Nestor -->
-    <section class="h-karte h-nestor">
+    <section id="h-nestor-karte" class="h-karte h-nestor">
       <div class="h-zeile">
         <div id="nestor" class="nestor bereit"><span class="welle" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <span id="nestor-zustand">Nestor</span></div>
@@ -81,23 +82,37 @@
            im Dashboard – jeder Knopf ein Antwortbogen, gesperrt, solange Nestor spricht -->
       <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Sprechtaste – halten und sprechen</span></button>
       <p class="frage-kosten leise"></p>
-      <label class="h-umfang">Überblick für <select id="h-ueberblick-umfang"><option value="aktuell">Aktuellen Agendapunkt</option><option value="gesamt">Ganzes Meeting</option></select></label>
+      <label class="h-umfang">Überblick für <select id="h-ueberblick-umfang"><option value="aktuell">Punkt</option><option value="gesamt">Meeting</option></select></label>
       <div class="h-knopfraster">
-        <button class="h-knopf" data-knopf="stand">Wo stehen wir?</button>
-        <button class="h-knopf" data-knopf="zusammenfassen">Ergebnisse bündeln</button>
-        <button class="h-knopf" data-knopf="fehlt">Lücken klären</button>
-        <button class="h-knopf" data-knopf="protokoll">Gesamtprotokoll</button>
-        <button class="h-knopf" data-knopf="ueberblick">Punktüberblick</button>
-        <button class="h-knopf" data-knopf="bild">Meetingbild</button>
+        <button class="h-knopf" data-knopf="stand" data-label="Stand"><span class="aktion-name">Stand</span><span class="aktion-preis"></span></button>
+        <button class="h-knopf" data-knopf="zusammenfassen" data-label="Zusammenfassen"><span class="aktion-name">Zusammenfassen</span><span class="aktion-preis"></span></button>
+        <button class="h-knopf" data-knopf="fehlt" data-label="Lücken"><span class="aktion-name">Lücken</span><span class="aktion-preis"></span></button>
+        <button class="h-knopf" data-knopf="protokoll" data-label="Protokoll"><span class="aktion-name">Protokoll</span><span class="aktion-preis"></span></button>
+        <button class="h-knopf" data-knopf="ueberblick" data-label="Überblick"><span class="aktion-name">Überblick</span><span class="aktion-preis"></span></button>
       </div>
-      <p class="leise">Textkosten-Richtwerte · Stimme und Nachholen extra · keine Preisgarantie</p>
-      <details class="aktions-kosten"><summary>Was bedeuten die Kosten-Tags?</summary><p class="aktions-kostenhinweis"></p></details>
+      <details class="zusatz-aktionen">
+        <summary>Weitere Aktionen</summary>
+        <div class="zusatz-aktionen-inhalt">
+          <button class="h-knopf" data-knopf="bild" data-label="Meetingbild"><span class="aktion-name">Meetingbild</span><span class="aktion-preis"></span></button>
+          <button class="h-knopf" data-knopf="regeln" data-label="Regeln prüfen"><span class="aktion-name">Regeln prüfen</span><span class="aktion-preis"></span></button>
+          <form id="h-frage-form" class="knopf-frage">
+            <input id="h-frage" placeholder="Frage an Nestor …" autocomplete="off" maxlength="500">
+            <button class="primaer">Frage senden</button>
+          </form>
+          <p class="frage-kosten leise"></p>
+        </div>
+      </details>
+      <details id="aktions-hilfe" class="aktions-kosten">
+        <summary>Aktionen und Kosten erklären</summary>
+        <p class="aktions-kostenhinweis"></p>
+        <ul id="aktions-hilfe-liste" class="aktions-hilfe-liste"></ul>
+      </details>
       <p id="knopf-stand" class="leise" hidden></p>
       <p id="gesagt" class="h-antwort" hidden></p>
     </section>
 
     <!-- Verlauf (Ticket #27): alles Inhaltliche als Karte, neueste vorn – wischen oder ‹ › zum Blättern -->
-    <section class="h-karte h-verlauf">
+    <section id="h-verlauf-karte" class="h-karte h-verlauf">
       <div class="vl-nav">
         <h2>Verlauf</h2>
         <button id="vl-zurueck" class="icon klein" aria-label="Ältere Karte">‹</button>
@@ -109,7 +124,7 @@
     </section>
 
     <!-- Transkript und alle Hinweise -->
-    <details class="h-karte h-mehr">
+    <details id="h-transkript-karte" class="h-karte h-mehr">
       <summary>Transkript und Hinweise</summary>
       <div class="reiter">
         <button id="r-transkript" class="aktiv">Transkript</button>
@@ -122,6 +137,7 @@
     <!-- Meeting -->
     <section class="h-karte h-meeting">
       <button id="btn-start" class="primaer" hidden>Meeting starten</button>
+      <p id="start-fehler" class="h-fehler" role="alert" aria-live="assertive" hidden></p>
       <button id="btn-stopp" class="gefahr" hidden>Meeting beenden</button>
       <p id="meeting-text" class="leise"></p>
       <button id="btn-installieren" class="klein" hidden>Als App installieren</button>

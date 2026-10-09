@@ -64,6 +64,7 @@ button.warn { background: var(--gelb); border-color: var(--gelb); color: #fff; }
 .h-code-zeile { display: flex; gap: 8px; }
 .h-code-zeile input { flex: 1; min-width: 0; font-size: 20px; letter-spacing: .1em; text-transform: uppercase; }
 .h-fehler { color: var(--rot); font-weight: 600; }
+#start-fehler { padding: 10px 12px; border-radius: 10px; background: var(--rot-weich); color: #8A0F1F; font-weight: 700; }
 
 .h-mikro, button.gross { white-space: normal; text-align: left; }
 main, .h-karte { min-width: 0; }
@@ -77,3 +78,10 @@ main, .h-karte { min-width: 0; }
 .h-mehr summary { cursor: pointer; font-weight: 700; color: var(--text-2); }
 .h-mehr .reiter button { flex: 1; padding: 8px 6px; }
 .h-knopfraster button:disabled { opacity: .5; }
+.agenda-knoepfe .icon.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }
+.zusatz-aktionen-inhalt .h-knopf { width: auto; }
+#app[data-phase="meeting"] #mikro-karte .h-mikro { min-height: 44px; padding: 8px 12px; font-size: 15px; border-radius: 12px; }
+#app[data-phase="meeting"] #mikro-karte .h-pegel { max-width: 180px; }
+#app[data-phase="meeting"] #mikro-karte .h-zeile.h-klein { justify-content: flex-start; }
+#h-frage-form { flex: 1 1 100%; }
+#h-frage-form input { min-width: 0; flex: 1; }

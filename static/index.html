@@ -68,26 +68,42 @@
     </div>
   </header>
 
-  <!-- Knopfleiste (Ticket #6, seit #13 in beiden Stufen gleich, seit #27 jeder Knopf ein Antwortbogen): dieselben Knöpfe
-       an derselben Stelle. Während Nestor einen Bogen spricht, sind sie gesperrt. Basis: die Sprechtaste (Funkgerät). -->
+  <!-- Live-Regeln stehen separat über den Meetingaktionen, damit die gewählten Ampeln sofort sichtbar sind. -->
+  <section id="regeln-zone" class="regeln-zone" hidden aria-live="polite">
+    <h2>Gesprächsregeln</h2>
+    <div id="regel-ampeln" class="regel-ampeln"></div>
+    <div id="erinnerungen" class="erinnerungen"></div>
+  </section>
+
+  <!-- Knopfleiste: fünf kompakte Kernaktionen plus eigenständige Sprechtaste. -->
   <section id="knopf-leiste" class="knopf-leiste" hidden>
     <div class="knopf-knoepfe">
       <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – halten</span></button>
-      <button class="knopf-art" data-knopf="stand" title="Agenda, Zeit und aktueller Stand – kurzer Textaufruf, zusätzliche API-Kosten">Wo stehen wir?</button>
-      <button class="knopf-art" data-knopf="zusammenfassen" title="Bisher festgehaltene Ergebnisse bündeln">Ergebnisse bündeln</button>
-      <button class="knopf-art" data-knopf="fehlt" title="Offene Angaben zu Aufgaben und Beschlüssen">Lücken klären</button>
-      <button class="knopf-art" data-knopf="protokoll" title="Alle festgehaltenen Ergebnisse nach Agendapunkt">Gesamtprotokoll</button>
-      <button class="knopf-art" data-knopf="ueberblick" title="Strukturierte Ansicht: aktueller Punkt oder ganzes Meeting">Punktüberblick</button>
-      <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Aktueller Punkt</option><option value="gesamt">Ganzes Meeting</option></select>
-      <button class="knopf-art" data-knopf="bild">Bild</button>
-      <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
-      <form id="knopf-frage-form" class="knopf-frage">
-        <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
-        <button id="knopf-fragen" class="primaer" data-knopf="frage">Nestor fragen</button>
-      </form>
+      <button class="knopf-art" data-knopf="stand" data-label="Stand"><span class="aktion-name">Stand</span><span class="aktion-preis"></span></button>
+      <button class="knopf-art" data-knopf="zusammenfassen" data-label="Zusammenfassen"><span class="aktion-name">Zusammenfassen</span><span class="aktion-preis"></span></button>
+      <button class="knopf-art" data-knopf="fehlt" data-label="Lücken"><span class="aktion-name">Lücken</span><span class="aktion-preis"></span></button>
+      <button class="knopf-art" data-knopf="protokoll" data-label="Protokoll"><span class="aktion-name">Protokoll</span><span class="aktion-preis"></span></button>
+      <div class="ueberblick-aktion">
+        <button class="knopf-art" data-knopf="ueberblick" data-label="Überblick"><span class="aktion-name">Überblick</span><span class="aktion-preis"></span></button>
+        <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Punkt</option><option value="gesamt">Meeting</option></select>
+      </div>
     </div>
-    <p class="aktions-kosten">Textkosten-Richtwerte · Stimme und Nachholen extra · keine Preisgarantie</p>
-    <details class="aktions-kosten"><summary>Was bedeuten die Kosten-Tags?</summary><p class="aktions-kostenhinweis"></p></details>
+    <details id="aktions-hilfe" class="aktions-kosten">
+      <summary>Aktionen und Kosten erklären</summary>
+      <p class="aktions-kostenhinweis"></p>
+      <ul id="aktions-hilfe-liste" class="aktions-hilfe-liste"></ul>
+    </details>
+    <details class="zusatz-aktionen">
+      <summary>Weitere Aktionen</summary>
+      <div class="zusatz-aktionen-inhalt">
+        <button class="knopf-art" data-knopf="bild" data-label="Meetingbild"><span class="aktion-name">Meetingbild</span><span class="aktion-preis"></span></button>
+        <button class="knopf-art" data-knopf="regeln" data-label="Regeln prüfen"><span class="aktion-name">Regeln prüfen</span><span class="aktion-preis"></span></button>
+        <form id="knopf-frage-form" class="knopf-frage">
+          <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
+          <button id="knopf-fragen" class="primaer" data-knopf="frage">Frage senden</button>
+        </form>
+      </div>
+    </details>
     <div class="knopf-zeile">
       <span id="knopf-bogen" class="knopf-bogen" hidden></span>
       <span id="knopf-offen" class="knopf-offen"></span>
@@ -199,6 +215,7 @@
         <button id="btn-handy-vorbereitung" class="primaer" type="button">Handy verbinden</button>
       </section>
       <p id="handy-bereitschaft" class="leise-text" role="status" aria-live="polite" hidden></p>
+      <p id="start-fehler" class="start-fehler" role="alert" aria-live="assertive" hidden></p>
       <div id="f-agenda-eingabe" class="agenda-eingabe-gross"></div>
 
       <div class="zwei">
@@ -270,11 +287,6 @@
         <ol id="agenda" class="agenda"></ol>
       </section>
       <!-- Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte -->
-      <section id="regeln-karte" class="karte">
-        <h2>Regeln</h2>
-        <div id="regel-ampeln" class="regel-ampeln"></div>
-        <div id="erinnerungen" class="erinnerungen"></div>
-      </section>
     </aside>
 
     <!-- Mitte: Nestor und der Verlauf (Ticket #27) – alles Inhaltliche als Karte, neueste vorn, ‹ › zum Blättern -->
