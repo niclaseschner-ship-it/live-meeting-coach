@@ -320,9 +320,14 @@ def websuche_lesen(roh: dict) -> dict:
                 text += teil.get("text") or ""
             elif teil.get("type") == "tool_reference":
                 url = teil.get("url")
-                if url and url not in gesehen:
+                if isinstance(url, str) and url.startswith(("https://", "http://")) and url not in gesehen:
                     gesehen.add(url)
                     quellen.append({"titel": (teil.get("title") or url)[:120], "url": url})
+    # Einige Antworten liefern Links im Text statt als separate tool_reference-Stücke.
+    for titel, url in re.findall(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", text):
+        if url not in gesehen:
+            gesehen.add(url)
+            quellen.append({"titel": titel[:120], "url": url})
     u = roh.get("usage") or {}
     # Suchergebnisse zählt Mistral als „connector_tokens“ – vorsichtshalber wie Eingabe-Tokens rechnen
     rein = (u.get("prompt_tokens") or 0) + (u.get("connector_tokens") or 0)

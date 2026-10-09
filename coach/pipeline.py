@@ -324,8 +324,8 @@ class Coach:
             if rid == "kurz":
                 dauer = analyse.monolog_live(m, self.monolog_sekunden)[1] if m.laeuft else 0.0
                 farbe = "rot" if dauer >= 1.5 * self.monolog_sekunden else "gelb" if dauer >= self.monolog_sekunden else "gruen"
-                detail = (f"{analyse.mmss(dauer)} von {analyse.mmss(self.monolog_sekunden)} am Stück" if dauer >= 10
-                          else "Gespräch im Wechsel")
+                detail = (f"{analyse.mmss(dauer)} am Stück · Hinweis ab {analyse.mmss(self.monolog_sekunden)}" if dauer > 0
+                          else f"Gespräch im Wechsel · Hinweis ab {analyse.mmss(self.monolog_sekunden)}")
             elif rid == "ausreden":
                 n = sum(1 for t in self._unterbrechungen_gemeldet if t >= jetzt - 300)
                 ov = len(analyse.ueberlappungs_vorfaelle(m, jetzt - 300))
@@ -674,6 +674,9 @@ class Coach:
         m.punkt_wechseln(i)
         if alt != m.aktiver_punkt:  # bisher Gesagtes gehört zum alten Punkt: nicht mehr ins Fenster der Zuordnung
             self._fenster_ab = max(self._fenster_ab, m.jetzt())
+            for h in m.hinweise:
+                if h.art == "fokus":
+                    h.dauer = min(h.dauer, max(0, m.jetzt() - h.zeit))
         if alt != m.aktiver_punkt and not self.knopfdruck and self._client is not None and m.laeuft:
             # Ticket #27: still die Zusammenfassung des abgeschlossenen Punkts als Karte (Artefakte nur aus diesem
             # Abschnitt); mit der Regel „Ergebnisse festhalten“ Lücken markiert und ein Band-Hinweis
@@ -820,12 +823,21 @@ class Coach:
         if abschnitte:
             m.segmente.extend(abschnitte)
             m.segmente.sort(key=lambda s: s.start)
+        # Nestors Lautsprecher kann im Raummikro als zweite Stimme erscheinen.
+        # Nur den betroffenen Zeitbereich herausnehmen, nicht den ganzen Block.
+        mischung = [t for t in mischung if not self.assistent.spricht_um(t)]
+        echte_ueber = []
+        for a, b in ueber or []:
+            reste = [(a, b)]
+            for x, y in self.assistent.sprechzeiten:
+                reste = [(u, v) for l, r in reste for u, v in ((l, min(r, x)), (max(l, y), r)) if v > u]
+            echte_ueber.extend(reste)
         if mischung:
             m.mischungen.extend(mischung)
             self.protokoll.append({"zeit": mischung[0], "art": "ueberlappung"})
         if ueber is not None:
             m.ueberlappungen_gezaehlt = True
-        for a, b in ueber or []:
+        for a, b in echte_ueber:
             # Vorfälle zählen: weniger als 1 s auseinander gehört zusammen
             if m.ueberlappungen and a - m.ueberlappungen[-1][1] < 1.0:
                 m.ueberlappungen[-1][1] = max(m.ueberlappungen[-1][1], b)
@@ -962,6 +974,9 @@ class Coach:
         self._fenster_ab = max(self._fenster_ab, seg.start)
         if analyse.fokus_status(m.themen_verlauf, self.karenz_bloecke)[0] == "gelb":
             analyse.rueckkehr_merken(m)
+        for h in m.hinweise:
+            if h.art == "fokus":
+                h.dauer = min(h.dauer, max(0, m.jetzt() - h.zeit))
         self.protokoll.append({"zeit": seg.ende, "art": "rueckkehr"})
 
     def _abschnitt_takt(self) -> None:

@@ -73,11 +73,12 @@
   <section id="knopf-leiste" class="knopf-leiste" hidden>
     <div class="knopf-knoepfe">
       <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – halten</span></button>
-      <button class="knopf-art" data-knopf="stand">Wo stehen wir?</button>
-      <button class="knopf-art" data-knopf="zusammenfassen">Zusammenfassen</button>
-      <button class="knopf-art" data-knopf="fehlt">Was fehlt?</button>
-      <button class="knopf-art" data-knopf="protokoll">Protokoll</button>
-      <button class="knopf-art" data-knopf="ueberblick">Überblick</button>
+      <button class="knopf-art" data-knopf="stand" title="Agenda, Zeit und aktueller Stand – kurzer Textaufruf, zusätzliche API-Kosten">Wo stehen wir?</button>
+      <button class="knopf-art" data-knopf="zusammenfassen" title="Ergebnisse des laufenden Abschnitts – Textaufruf, zusätzliche API-Kosten">Zusammenfassen</button>
+      <button class="knopf-art" data-knopf="fehlt" title="Offene Angaben zu Aufgaben und Beschlüssen – Textaufruf, zusätzliche API-Kosten">Was fehlt?</button>
+      <button class="knopf-art" data-knopf="protokoll" title="Protokoll über das ganze Meeting – längerer Textaufruf, zusätzliche API-Kosten">Protokoll</button>
+      <button class="knopf-art" data-knopf="ueberblick" title="Strukturierte Ansicht: aktueller Punkt oder ganzes Meeting – zusätzliche API-Kosten">Überblick</button>
+      <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Aktueller Punkt</option><option value="gesamt">Ganzes Meeting</option></select>
       <button class="knopf-art" data-knopf="bild">Bild</button>
       <button class="knopf-art" data-knopf="regeln">Regeln eingehalten?</button>
       <form id="knopf-frage-form" class="knopf-frage">
@@ -298,9 +299,12 @@
         <div id="redeanteile" class="redeanteile"></div>
       </section>
       <section class="karte">
-        <h2>Gesprächsdynamik</h2>
+        <details>
+        <summary>Gesprächsdynamik · experimentell</summary>
+        <p class="leise-text">Automatische Schätzung, keine Bewertung von Personen. Die Auswertung findest du auch nach dem Meeting.</p>
         <div id="klima" class="klima"></div>
         <div id="dynamik" class="dynamik"></div>
+        </details>
       </section>
     </aside>
   </main>

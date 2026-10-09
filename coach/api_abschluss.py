@@ -12,6 +12,7 @@ import json
 import urllib.error
 import urllib.request
 import uuid
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
@@ -27,6 +28,10 @@ _ablage = R2Ablage() if EINST.betrieb == "cloud" else OrdnerAblage()
 
 # Muss zum Cookie-Namen MEETING_COOKIE in cloudflare/src/index.ts passen (Ticket #12).
 _MEETING_COOKIE = "nestor_meeting"
+RUECKKEHR_SEKUNDEN = 300
+_rueckkehr_bis: float | None = None
+_rueckkehr_task: asyncio.Task | None = None
+_rueckkehr_archiv = None
 
 
 async def _ablegen(dateien: dict[str, bytes]) -> None:
@@ -101,8 +106,10 @@ async def abschluss():
                    if name and not eigener else None),
         "paypal_allgemein": f"https://paypal.me/{name}" if name else None,
         "ablage_fertig": coach.archiv.fertig,
+        "rueckkehr_bis": _rueckkehr_bis if _rueckkehr_archiv is coach.archiv else None,
         "dokument": meeting_daten(coach.archiv.ordner) if coach.archiv.fertig else None,
         "regelanalyse": {"redeanteile": coach.meeting.redeanteile(),
+                          "dynamik": coach.dynamik(),
                           "hinweise": [{"zeit": h.zeit, "text": h.text} for h in coach.meeting.hinweise]},
     }
 
@@ -176,8 +183,33 @@ async def feedback_jederzeit(daten: dict):
     return {"ok": True}
 
 
+@router.post("/api/abschluss/schliessen")
+async def abschluss_schliessen(request: Request):
+    """Einmalige, nicht durch erneutes Öffnen verlängerbare Rückkehrfrist."""
+    global _rueckkehr_bis, _rueckkehr_task, _rueckkehr_archiv
+    coach = _nach_ende()
+    if not coach.archiv.fertig:
+        raise HTTPException(409, "Das Paket wird noch erstellt. Bitte kurz warten.")
+    if _rueckkehr_archiv is not coach.archiv or _rueckkehr_bis is None:
+        _rueckkehr_archiv = coach.archiv
+        _rueckkehr_bis = time.time() + RUECKKEHR_SEKUNDEN
+        archiv = coach.archiv
+
+        async def loeschen():
+            await asyncio.sleep(RUECKKEHR_SEKUNDEN)
+            # Eine zwischenzeitlich gestartete andere Sitzung nie anfassen.
+            if coach.archiv is archiv:
+                bg = BackgroundTasks()
+                await abschluss_fertig(request, bg)
+                await bg()
+
+        _rueckkehr_task = asyncio.create_task(loeschen())
+    return {"ok": True, "rueckkehr_bis": _rueckkehr_bis}
+
+
 @router.post("/api/abschluss/fertig")
 async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
+    global _rueckkehr_bis, _rueckkehr_archiv
     coach = _nach_ende()
     ordner = coach.archiv.ordner
     # Cloud-Betrieb: ein im Dashboard eingetragener eigener Schlüssel galt nur für dieses eine Meeting (Angebot
@@ -187,6 +219,7 @@ async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
         coach.client_neu()
     coach.einrichten({})  # auf ein leeres Meeting zurücksetzen (wie eine neue Einrichtung)
     coach.archiv = None
+    _rueckkehr_bis, _rueckkehr_archiv = None, None
     if not EINST.ablage_behalten:
         import shutil
 

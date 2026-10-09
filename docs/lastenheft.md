@@ -233,6 +233,11 @@ Betrag.
 
 ### 4.6 Feedback, Datenspende
 
+Pilotfeedback 09.10.2026 (#37, #43): Datenspende steht vor Unterstützung und Download. Während eines Uploads
+ist Abschließen gesperrt; Fehler bleiben sichtbar und erlauben einen neuen Versuch. Abschließen startet eine
+sichtbare, nicht verlängerbare Rückkehrfrist von fünf Minuten für Paket und Spende. Danach löscht die Cloud
+automatisch und beendet den Container; lokal bleibt die explizite Einstellung `ablage_behalten` maßgeblich.
+
 - **Feedback-Knopf (Ticket #18, Nachtrag):** auf jeder Seite erreichbar – Startseite, Dashboard, Abschluss –, im
   Dashboard gut sichtbar, aber nicht in der Kopfleiste und nicht störend. Öffnet ein kleines Fenster: Art wählen
   (Feedback · Funktionswunsch · Fehler), Textfeld, Senden, kurzer Dank. Jederzeit erlaubt, auch während eines
@@ -246,6 +251,23 @@ Betrag.
 - Die Spende landet in einem Speicher in der EU (R2), lokal unter `spenden/`.
 
 ### 4.7 Überblick als Text
+
+Pilotfeedback (#34, #44): Der Knopf bietet „Aktueller Punkt“ (Vorauswahl) und „Ganzes Meeting“. Aktueller Punkt
+filtert Transkript und festgestellte Ergebnisse vor dem Modellaufruf. Ergebnisaktionen warten auf die laufende
+Transkription; ein Timeout meldet den fehlenden letzten Beitrag statt unbemerkt alten Stand auszugeben.
+Agenda-Titel und -Ziele stammen ausschließlich aus den gespeicherten Daten; neue Ideen heißen Vorschlag.
+
+Weitere Pilotkorrekturen (#31–36, #45–48): Leertaste unterdrückt auch bei Wiederholung Seitensprünge,
+Texteingaben bleiben normal bedienbar. Neue Ergebnisse erhalten einen deutlich beschrifteten Merker;
+ein optionaler 0,12-Sekunden-Signalton ist standardmäßig aus und kostet keine KI-Aufrufe. Recherche behält
+die vollständige Antwort und klickbare Quellen statt sie nochmals zu wenigen Stichworten zu verdichten;
+fehlende Quellen werden ausdrücklich markiert. Monolog zeigt laufende Dauer und Schwelle, Dynamik ist
+eingeklappt und zusätzlich im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
+herausgenommen. Namen werden nur aus einer tatsächlichen Vorstellung gelernt, nicht aus Erwähnungen.
+Ausdrückliche Korrekturen können bestehende Artefakte berichtigen, gemeinsame Verantwortlichkeit erfordert
+eine belegte Vereinbarung. Relative Fristen erhalten das Meetingdatum als Bezug; pauschale Fristen ergänzen
+alle betroffenen Aufgaben, spätere Ausnahmen nur die betreffende Aufgabe. Premium verwendet den
+serverseitigen OpenAI-Projektschlüssel; Basis/Mistral bleibt die Vorauswahl.
 
 Der Stand des Meetings als strukturierte Dashboard-Ansicht ohne Bildmodell (`coach/ueberblick.py`), in beiden Stufen:
 Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (grün), 🟡 Offen (bernstein),

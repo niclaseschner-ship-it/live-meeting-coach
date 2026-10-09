@@ -295,6 +295,8 @@ def test_name_aus_der_vorstellung():
     assert name_aus("Nestor.") is None
     assert name_aus("Hier ist Lea Brandt", ["Lea Brandt", "Jonas Ott"]) == "Lea Brandt"
     assert name_aus("Leander hier", ["Lea Brandt"]) == "Leander"  # Wortgrenze: Lea ≠ Leander
+    assert name_aus("Lea übernimmt das Protokoll", ["Lea Brandt"]) is None
+    assert name_aus("Ich bin Lea", ["Lea Brandt"]) == "Lea Brandt"
 
 
 def test_spaetes_nein_nur_name_und_nein():

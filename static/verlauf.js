@@ -16,6 +16,15 @@ const VK_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Fo
   fehlt: "Was noch fehlt", festgehalten: "Festgehalten", punkt: "Zusammenfassung", bild: "Live-Bild",
   beispiel: "So nutzt ihr Nestor" };
 const STILL_VORN_SEKUNDEN = 60;
+let ergebnisSignal = false; // nur durch Klick einschaltbar, keine zusätzliche KI
+let signalAudio = null;
+function neuesErgebnisSignal() {
+  if (!ergebnisSignal || !signalAudio) return;
+  const o = signalAudio.createOscillator(), g = signalAudio.createGain();
+  o.frequency.value = 660; g.gain.value = 0.035;
+  o.connect(g); g.connect(signalAudio.destination);
+  o.start(); o.stop(signalAudio.currentTime + 0.12);
+}
 
 const verlauf = {
   ordnung: [],        // Karten-ids in Anzeige-Reihenfolge, [0] = vorn
@@ -90,6 +99,15 @@ function verlaufVerdrahten(wurzel) {
   wurzel.zurueck.onclick = () => verlaufBlaettern(1);
   wurzel.vor.onclick = () => verlaufBlaettern(-1);
   wurzel.neu.onclick = () => { const id = verlauf.neu[0]; if (id) verlaufZeigen(id); };
+  const signal = el("button", { class: "klein", type: "button", "aria-pressed": "false",
+    title: "Optionaler 0,12-Sekunden-Ton bei neuen Ergebnissen, keine API-Kosten" }, "Ergebnis-Ton: aus");
+  signal.onclick = async () => {
+    ergebnisSignal = !ergebnisSignal;
+    if (ergebnisSignal) { signalAudio ??= new AudioContext(); await signalAudio.resume(); }
+    signal.textContent = `Ergebnis-Ton: ${ergebnisSignal ? "an" : "aus"}`;
+    signal.setAttribute("aria-pressed", String(ergebnisSignal));
+  };
+  wurzel.neu.after(signal);
   let x0 = null, y0 = null;
   wurzel.buehne.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   wurzel.buehne.addEventListener("touchend", (e) => {
@@ -107,7 +125,9 @@ function verlaufVerdrahten(wurzel) {
 
 function verlaufRendern(z) {
   const w = verlauf.wurzel; if (!w) return;
+  const vorher = verlauf.gesehen;
   verlaufEinordnen(z);
+  if (vorher !== null && verlauf.gesehen > vorher) neuesErgebnisSignal();
   const nachId = new Map((z.karten ?? []).map((k) => [k.id, k]));
   const n = verlauf.ordnung.length;
   w.zaehler.textContent = n ? `${verlauf.index + 1} / ${n}` : "";
@@ -115,12 +135,13 @@ function verlaufRendern(z) {
   w.vor.disabled = verlauf.index <= 0;
   w.zurueck.hidden = w.vor.hidden = n < 2;
   w.neu.hidden = !verlauf.neu.length;
-  w.neu.textContent = `${verlauf.neu.length} neu ›`;
+  w.neu.textContent = `${verlauf.neu.length} neues Ergebnis – jetzt ansehen ›`;
+  w.neu.setAttribute("aria-live", "polite");
   // Nicht neu zeichnen, während jemand in einer Karte tippt – sonst verschwindet die Eingabe
   if (verlauf.edit && w.buehne.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
   const k = n ? nachId.get(verlauf.ordnung[verlauf.index]) : beispielKarte(z);
   // Nur neu zeichnen, wenn sich die angezeigte Karte geändert hat (sonst flackert sie, und das Leuchten beginnt neu)
-  const sig = JSON.stringify([k, k?.ids ? z.artefakte?.liste : null, verlauf.edit, z.knopf?.protokoll, z.stufe, z.modus]);
+  const sig = JSON.stringify([k, k?.ids ? z.artefakte?.liste : null, verlauf.edit, z.knopf?.protokoll, z.stufe, z.modus, verlauf.leuchten]);
   if (sig === verlauf.sig && w.buehne.firstChild) return;
   verlauf.sig = sig;
   const karte = karteBauen(k, z);
@@ -165,6 +186,7 @@ function karteBauen(k, z) {
   }
   if (k.ids) { a.append(artefaktListe(k, z)); return a; }
   if (k.punkte?.length) a.append(el("ul", { class: "vk-punkte" }, ...k.punkte.map((p) => el("li", {}, p))));
+  if (k.details) a.append(el("div", { class: "vk-recherche-text" }, k.details));
   if (k.quellen?.length) {
     a.append(el("div", { class: "vk-quellen" }, el("strong", {}, "Quellen"), ...k.quellen.map((q) => el("div", {},
       el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel), " ", el("small", {}, q.seite ?? "")))));

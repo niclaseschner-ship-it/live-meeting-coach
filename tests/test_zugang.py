@@ -163,8 +163,9 @@ def test_cloud_falsches_geheimnis_403(cloud):
 
 def test_cloud_mit_geheimnis_laptop_rechte(cloud):
     c = TestClient(app, client=("10.1.2.3", 5000))
-    assert c.get("/api/zustand", headers={"X-Nestor-Geheimnis": GEHEIMNIS}).status_code == 200
-    with c.websocket_connect("/ws", headers={"X-Nestor-Geheimnis": GEHEIMNIS}) as ws:
+    headers = {"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "testkunde"}
+    assert c.get("/api/zustand", headers=headers).status_code == 200
+    with c.websocket_connect("/ws", headers=headers) as ws:
         ws.receive_text()  # Anfangszustand – die Verbindung steht
 
 
@@ -210,5 +211,5 @@ def test_start_ohne_handy_abgewiesen(monkeypatch):
 
 def test_ablage_oeffnen_in_der_cloud_aus(cloud):
     c = TestClient(app, client=("10.1.2.3", 5000))
-    r = c.post("/api/ablage/oeffnen", headers={"X-Nestor-Geheimnis": GEHEIMNIS})
+    r = c.post("/api/ablage/oeffnen", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "testkunde"})
     assert r.status_code == 404

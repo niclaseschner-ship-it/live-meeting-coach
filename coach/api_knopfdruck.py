@@ -48,6 +48,10 @@ def _knopf(art: str):
             # Live (Ticket #27): jeder Knopf ist ein Antwortbogen, die getippte Frage wie eine gesprochene
             if coach.hoerstrom is None or coach._client is None:
                 raise HTTPException(409, "Es läuft kein Meeting." if coach.hoerstrom is None else "Kein KI-Schlüssel.")
+            try:
+                await coach.hoerstrom.text_abwarten()
+            except TimeoutError as e:
+                raise HTTPException(409, str(e)) from e
             if art == "frage":
                 coach.assistent.frage_beantworten(frage, "getippt")
                 return {"ok": True}
@@ -61,7 +65,9 @@ def _knopf(art: str):
                 ziel = "ueberblick"  # Basis: kein Bildmodell
             try:
                 coach.assistent.bogen_starten(ziel, BOGEN_NAMEN.get(ziel, ziel), "band" if (daten or {}).get("band")
-                                              else "knopf")
+                                              else "knopf", fokus="aktueller Agendapunkt" if
+                                              art == "ueberblick" and (daten or {}).get("umfang", "aktuell") == "aktuell"
+                                              else "gesamtes Meeting" if art == "ueberblick" else "")
             except BogenBelegt as e:
                 raise HTTPException(409, str(e)) from e
             await coach.melden()

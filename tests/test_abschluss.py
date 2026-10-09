@@ -274,3 +274,35 @@ def test_fertig_loescht_ablage_wenn_nicht_behalten(beendetes_meeting):
         assert not ordner.exists()
     finally:
         object.__setattr__(EINST, "ablage_behalten", alt)
+
+
+def test_rueckkehrfrist_behaelt_paket_und_verlaengert_sich_nicht(beendetes_meeting):
+    from coach import api_abschluss
+    with _lokal() as client:
+        r = client.post("/api/abschluss/schliessen")
+        assert r.status_code == 200
+        deadline = r.json()["rueckkehr_bis"]
+        assert client.get("/api/abschluss/paket.zip").status_code == 200
+        assert client.post("/api/abschluss/schliessen").json()["rueckkehr_bis"] == deadline
+        assert client.get("/api/abschluss").json()["rueckkehr_bis"] == deadline
+        assert client.post("/api/abschluss/fertig").status_code == 200
+    assert api_abschluss._rueckkehr_bis is None
+
+
+def test_rueckkehrfrist_loescht_automatisch(beendetes_meeting, monkeypatch):
+    from coach import api_abschluss, server
+    monkeypatch.setattr(api_abschluss, "RUECKKEHR_SEKUNDEN", 0.02)
+    alt = EINST.ablage_behalten
+    object.__setattr__(EINST, "ablage_behalten", False)
+    ordner = server.coach.archiv.ordner
+    try:
+        with _lokal() as client:
+            assert client.post("/api/abschluss/schliessen").status_code == 200
+            import time
+            deadline = time.monotonic() + 2
+            while ordner.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert not ordner.exists()
+            assert server.coach.archiv is None
+    finally:
+        object.__setattr__(EINST, "ablage_behalten", alt)

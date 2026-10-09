@@ -192,7 +192,8 @@ def test_knopf_ueber_die_api_ist_waehrend_eines_bogens_gesperrt(monkeypatch):
 
     c, _ = _coach(Attrappe(verzoegerung=0.3))
     monkeypatch.setattr(server, "coach", c)
-    c.hoerstrom = object()
+    from unittest.mock import AsyncMock
+    c.hoerstrom = SimpleNamespace(text_abwarten=AsyncMock())
     with TestClient(server.app, client=("127.0.0.1", 5000)) as client:
         assert client.post("/api/knopf/stand", json={}).status_code == 200
         r = client.post("/api/knopf/zusammenfassen", json={})

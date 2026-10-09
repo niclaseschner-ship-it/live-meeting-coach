@@ -39,6 +39,8 @@ TON = (
     "anderer: Wer berichtet, was jemand gesagt, geschrieben oder getitelt hat („der Kunde sagte, das sei Mist“, "
     "„in der Mail stand …“, „die Schlagzeile lautete …“, „wir werden als … bezeichnet“), verwendet das Wort nicht "
     "selbst – auch dann nicht melden, wenn das Zitat derb oder beleidigend ist. Leere Liste, wenn nichts davon vorkommt."
+    " Ein einzelnes mehrdeutiges Wort oder wahrscheinlich falsch transkribierter Fachbegriff ist kein Tonverstoß. "
+    "Bei unsicherem Kontext keinen Alarm; persönliche Angriffe nur mit eindeutiger herabsetzender Aussage."
 )
 TON_ARTEN = ("kraftausdruck", "angriff")
 

@@ -116,6 +116,7 @@ class Artefakt:
     nachgefragt: bool = False        # Nestor hat einmal nachgefragt (nicht wiederholen)
     abgelehnt: bool = False          # die Runde wollte die Nachfrage nicht – nie wieder fragen
     geaendert: float = 0.0
+    gemeinsam: bool = False          # ausdrücklich gemeinsame Verantwortlichkeit, kein vages „jemand“
 
     def luecken(self) -> list[str]:
         """Fehlende Pflichtfelder in Anzeigereihenfolge. Leer = vollständig."""
@@ -125,7 +126,7 @@ class Artefakt:
         if self.typ == "aufgabe":
             if self.vage:
                 aus.append("was")
-            if not self.wer or kollektiv(self.wer):
+            if not self.wer or (kollektiv(self.wer) and not self.gemeinsam):
                 aus.append("wer")
             if not self.bis:
                 aus.append("bis")
@@ -205,6 +206,13 @@ Was NICHT dazugehört:
   festgehaltenes Artefakt eindeutig.
 Felder:
 - Nur ausdrücklich Gesagtes, nichts ergänzen. Fehlt etwas, ist es null.
+- Eine ausdrücklich vereinbarte gemeinsame Verantwortung („alle sind verantwortlich“, „gemeinsam verantwortlich")
+  bekommt gemeinsam=true. Bloßes „wir sollten“ oder „jemand“ ist keine bestätigte gemeinsame Verantwortung.
+- Ein gemeinsamer Termin („alle diese Aufgaben bis morgen“) ergänzt JEDE betroffene vorhandene Nummer separat.
+  Eine später ausdrücklich genannte Ausnahme überschreibt nur den Termin der betreffenden Aufgabe.
+- Relative Fristen anhand des unten angegebenen Meetingdatums auflösen, z. B. „morgen“ zu einem konkreten Datum.
+- Explizite Berichtigungen („nicht X, sondern Y“, „ich korrigiere“) ersetzen das falsche Feld am bestehenden Artefakt:
+  nummer angeben, korrigiert=true und den korrigierenden Satz als zitat. Kein zweites Artefakt anlegen.
 - wer: nur, wenn eine Person genannt wird oder jemand in der Ich-Form zusagt („mach ich“, „passe ich an“ → der
   Sprecher, z. B. „Person 2“). Passiv oder „muss noch …“ ohne Namen → null, auch wenn der Sprecher es sagt. Sagt
   jemand ausdrücklich „wir“, „alle“ oder „jemand“, genau das. Übernehmen mehrere Personen verschiedene Teile
@@ -223,9 +231,12 @@ def _artefakte_text(liste: list[Artefakt], n: int = 30) -> str:
 
 
 def nachricht(meeting, liste: list[Artefakt], neu: list, kontext: list) -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    datum = datetime.fromtimestamp(meeting.gestartet_um or time.time(), ZoneInfo("Europe/Berlin")).isoformat()
     agenda = "\n".join(f"{i + 1}. {p.titel}" + (f" – {p.ziel}" if p.ziel else "") for i, p in enumerate(meeting.agenda))
     zeile = lambda s: f"[{mmss(s.start)}] {s.sprecher}: {s.text}"  # noqa: E731
-    return (f"Meeting: {meeting.titel or '-'} · Ziel: {meeting.ziel or '-'}\nAgenda:\n{agenda or '(keine)'}\n\n"
+    return (f"Meetingdatum (Europe/Berlin): {datum}\nMeeting: {meeting.titel or '-'} · Ziel: {meeting.ziel or '-'}\nAgenda:\n{agenda or '(keine)'}\n\n"
             f"Schon festgehalten:\n{_artefakte_text(liste)}\n\n"
             + (f"Kontext (schon ausgewertet):\n" + "\n".join(zeile(s) for s in kontext) + "\n\n" if kontext else "")
             + "NEUE Sätze:\n" + "\n".join(zeile(s) for s in neu))
@@ -273,7 +284,8 @@ def normalisieren(e: dict) -> dict | None:
             "vage": e.get("vage") if isinstance(e.get("vage"), bool) else None,
             "ausserhalb": e.get("ausserhalb") if isinstance(e.get("ausserhalb"), bool) else None,
             "erledigt": e.get("erledigt") if isinstance(e.get("erledigt"), bool) else None,
-            "konfidenz": konf, "zeit": sekunden(e.get("zeit")), "zitat": _text(e.get("zitat"), 140)}
+            "konfidenz": konf, "zeit": sekunden(e.get("zeit")), "zitat": _text(e.get("zitat"), 140),
+            "gemeinsam": e.get("gemeinsam") is True, "korrigiert": e.get("korrigiert") is True}
 
 
 def _woerter(t: str) -> set[str]:
@@ -400,6 +412,14 @@ class Artefakte:
     def uebernehmen(self, e: dict, quelle_zeit: float, saetze: list | None = None) -> Artefakt | None:
         """Ein normalisierter Eintrag aus der Erkennung: neues Artefakt oder Ergänzung eines bestehenden."""
         m = self.coach.meeting if self.coach else None
+        e = dict(e)
+        quelle_text = " ".join(s.text for s in saetze or [])
+        # Modellflags allein reichen nicht: ausdrückliche Vereinbarung/Berichtigung muss in der Quelle stehen.
+        e["gemeinsam"] = bool(e.get("gemeinsam") and re.search(
+            r"(?:alle|gemeinsam|team|runde).{0,50}(?:verantwort|zuständig)|(?:verantwort|zuständig).{0,50}(?:alle|gemeinsam)",
+            quelle_text, re.I))
+        e["korrigiert"] = bool(e.get("korrigiert") and re.search(
+            r"korrig|berichti|nicht.{1,80}sondern", quelle_text, re.I))
         a = self.holen(e["nummer"]) if e.get("nummer") else None
         if a is None and e.get("typ") and e.get("was"):
             a = next((x for x in self.liste if x.typ == e["typ"] and aehnlich(x.was, e["was"])), None)
@@ -416,6 +436,7 @@ class Artefakte:
         a = self.anlegen(e["typ"], e["was"], wer=e["wer"], bis=e["bis"], status=e["status"] if e["typ"] == "entscheidung"
                          else None, reaktion=e["reaktion"] if e["typ"] == "risiko" else None,
                          hoch=bool(e.get("hoch")), vage=bool(e.get("vage")), ausserhalb=bool(e.get("ausserhalb")),
+                         gemeinsam=bool(e.get("gemeinsam")),
                          konfidenz=konf, zeit=zeit, zitat=e.get("zitat") or (quelle.text[:140] if quelle else ""),
                          sprecher=quelle.sprecher if quelle is not None and quelle.start == zeit else None,
                          punkt=punkt_an(m, zeit) if m is not None else None)
@@ -430,14 +451,18 @@ class Artefakte:
             v = e.get(k)
             if not v or v == getattr(a, k):
                 continue
-            if a.herkunft != "erkannt" and getattr(a, k):
+            if a.herkunft != "erkannt" and getattr(a, k) and not e.get("korrigiert"):
                 continue
-            if k == "was" and getattr(a, k):
+            if k == "was" and getattr(a, k) and not e.get("korrigiert"):
                 continue  # der Wortlaut bleibt, sonst springt die Anzeige
             if k == "status" and a.status == "endgueltig" and v == "vorschlag":
                 continue
             setattr(a, k, v)
             geaendert = True
+        if e.get("gemeinsam") and not a.gemeinsam:
+            a.gemeinsam, geaendert = True, True
+        if e.get("wer") and not kollektiv(e["wer"]):
+            a.gemeinsam = False
         if e.get("erledigt") and a.typ == "offen" and not a.erledigt:
             a.erledigt, geaendert = True, True
         for k in ("hoch", "vage"):

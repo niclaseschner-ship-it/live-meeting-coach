@@ -44,7 +44,7 @@ def cloud_betrieb():
     object.__setattr__(EINST, "betrieb", "cloud")
     object.__setattr__(EINST, "worker_geheimnis", _GEHEIMNIS)
     object.__setattr__(EINST, "worker_url", _WORKER_URL)
-    yield {"X-Nestor-Geheimnis": _GEHEIMNIS}
+    yield {"X-Nestor-Geheimnis": _GEHEIMNIS, "X-Nestor-Kunde": "testkunde"}
     object.__setattr__(EINST, "betrieb", alt[0])
     object.__setattr__(EINST, "worker_geheimnis", alt[1])
     object.__setattr__(EINST, "worker_url", alt[2])

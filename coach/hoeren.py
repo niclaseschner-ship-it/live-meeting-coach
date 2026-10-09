@@ -229,6 +229,23 @@ class Hoerstrom:
             await self._ausgeben(uid)
         self._rechner.shutdown(wait=False)
 
+    async def text_abwarten(self, zeitlimit: float = 12.0) -> None:
+        """Knopf nach einem Redebeitrag: aktuellen VAD-Block abschließen und auf seinen Text warten.
+
+        Kein Stoppen des Audiostroms; neu eintreffende Äußerungen gehören nicht zur Momentaufnahme.
+        Bei Ausfall lieber einen wiederholbaren Fehler als eine scheinbar vollständige alte Antwort.
+        """
+        if self.knopfdruck:
+            return  # dessen Knopf-Pipeline transkribiert selbst
+        for start, ende, proben in self.vad.ende():
+            await self._aeusserung(start, ende, proben)
+        offen = set(self._offen)
+        deadline = asyncio.get_running_loop().time() + zeitlimit
+        while offen.intersection(self._offen):
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError("Der letzte Redebeitrag wird noch transkribiert. Bitte gleich erneut versuchen.")
+            await asyncio.sleep(0.05)
+
     # --- intern -------------------------------------------------------------
     async def _aeusserung(self, start: float, ende: float, proben: np.ndarray) -> None:
         uid = self._naechste_id

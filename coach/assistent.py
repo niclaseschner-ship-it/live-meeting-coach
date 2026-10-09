@@ -309,12 +309,11 @@ NAME_HIER_RE = re.compile(r"^\W*([A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zä�
 def name_aus(text: str, bekannte: list[str] | None = None) -> str | None:
     """Vorname aus einer Vorstellung („Ich bin Lea“, „Mein Name ist Jonas“, „Miriam hier“). Stehen Teilnehmende
     in der Einrichtung, gewinnt der dort eingetragene Name, wenn er im Satz vorkommt."""
-    for n in bekannte or []:
-        vorname = n.split()[0]
-        if re.search(r"\b" + re.escape(vorname) + r"\b", text, re.IGNORECASE):
-            return n
     m = VORSTELLUNG_RE.search(text) or NUR_NAME_RE.match(text.strip()) or NAME_HIER_RE.match(text.strip())
     if m and m.group(1).lower() not in {"nestor", "ja", "nein", "okay", "hallo", "danke", "gut"}:
+        for n in bekannte or []:
+            if n.split()[0].casefold() == m.group(1).casefold():
+                return n
         return m.group(1)
     return None
 
@@ -887,7 +886,10 @@ class Assistent:
                             "sekunden": erg["sekunden"]})
         c.recherche_merken(frage, erg)
         self.verlauf.append((frage, erg["text"]))
-        await c._karte_bauen(frage, erg["text"], erg["quellen"], still=True)
+        # Recherche nicht wieder auf vier Zehn-Wort-Stichpunkte einkürzen.
+        c._karte_ablegen({"art": "recherche", "frage": frage, "titel": frage[:80], "still": True,
+                         "details": erg["text"], "quellen": erg["quellen"]})
+        await c.melden()
 
     # --- Sonstige Sprache (kein Bogen) -------------------------------------------------------------------------
     async def _ja_sagen(self) -> None:

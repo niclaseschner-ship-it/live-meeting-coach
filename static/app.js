@@ -217,6 +217,9 @@ const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueb
 const KNOPF_NAME = { stand: "Wo stehen wir?", regeln: "Regeln eingehalten?", ueberblick: "Überblick", protokoll: "Protokoll",
   bild: "Bild", frage: "Nestor fragen", zusammenfassen: "Zusammenfassen", fehlt: "Was fehlt?" };
 function knopfDruecken(art, daten = {}) {
+  if (art === "ueberblick" && !daten.umfang) {
+    daten.umfang = $("ueberblick-umfang").value;
+  }
   if (knopfdruck(zustand) && zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
   if (!knopfdruck(zustand) && zustand?.assistent) zustand.assistent = { ...zustand.assistent, bogen: { art, name: KNOPF_NAME[art] } };
   knopfRendern(zustand);
@@ -333,11 +336,13 @@ $("btn-taste").addEventListener("pointerdown", tasteAn);
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-taste").addEventListener(ev, tasteAus);
 $("btn-taste").addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" || e.repeat || e.target.closest?.("input, textarea, select, button")) return;
+  if (e.code !== "Space" || e.target.closest?.("input, textarea, select, [contenteditable='true']")) return;
   if ($("btn-taste").hidden) return;
-  e.preventDefault(); tasteAn();
+  e.preventDefault();
+  if (!e.repeat) tasteAn();
 });
 document.addEventListener("keyup", (e) => { if (e.code === "Space" && taste.aktiv) { e.preventDefault(); tasteAus(); } });
+window.addEventListener("blur", () => { if (taste.aktiv) tasteAus(); });
 
 // ---------- Arbeitsring: lange Aufträge (Ticket #27) ----------
 const AUFTRAG_ZUSTAND = { laeuft: "läuft", wartet: "wartet" };

@@ -577,7 +577,8 @@ button.luecke:hover { border-color: var(--rot); }
 .vl-nav .icon { font-size: 22px; font-weight: 700; line-height: 1; }
 .vl-zaehler { font-size: 14px; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 44px;
   text-align: center; }
-.vl-neu { margin-left: auto; padding: 5px 12px; border-radius: 999px; font-size: 14px; background: var(--gold);
+.vk-recherche-text { white-space: pre-wrap; line-height: 1.55; overflow-wrap: anywhere; }
+.vl-neu { margin-left: auto; padding: 9px 14px; border-radius: 999px; font-size: 15px; font-weight: 700; background: var(--gold);
   border-color: var(--gold); color: var(--marke-2); animation: auftauchen .3s ease-out; }
 .vl-buehne { flex: 1; min-width: 0; min-height: 0; max-height: min(68vh, 760px); overflow: auto;
   overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable; }

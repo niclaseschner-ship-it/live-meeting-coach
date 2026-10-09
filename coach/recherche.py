@@ -14,9 +14,11 @@ from .config import EINST
 
 AUFTRAG = """\
 Recherchiere im Web und gib einer Besprechungsrunde einen kurzen Überblick zum Thema unten.
-- 4 bis 6 kurze Sätze, gut vorlesbar, Deutsch, ohne Aufzählungszeichen, ohne URLs und ohne Klammern.
+- Liefere 3 bis 5 konkrete, brauchbare Ergebnisse mit Namen, Unterschieden, Nutzen und Einschränkungen.
+- Deutsch, klar gegliedert, etwa 180 bis 300 Wörter. Jede überprüfbare Empfehlung braucht eine klickbare Quelle.
 - Aktueller Stand mit Jahreszahl, wo es darauf ankommt; Zahlen nur, wenn sie aus den Quellen stammen.
 - Wenn die Lage unklar oder umstritten ist, sag das.
+- Wenn keine belastbaren Webquellen gefunden wurden, sage ausdrücklich, dass die Recherche nicht belegt ist.
 Thema: {frage}
 Einordnung (Meeting): {titel}
 """
@@ -38,7 +40,10 @@ async def recherchieren(client, frage: str, titel: str = "") -> dict:
         # Nestor Basis: Mistral Conversations-API mit web_search (coach/mistral.py) – gleiche Rückgabe wie unten
         erg = await client.websuche(EINST.recherche_modell,
                                     AUFTRAG.format(frage=frage, titel=titel or "-") + MISTRAL_ZUSATZ)
-        return {"text": vorlesbar(erg["text"]), "quellen": erg["quellen"], "sekunden": round(time.monotonic() - t0, 1),
+        text = erg["text"]
+        if not erg["quellen"]:
+            text = "Keine überprüfbaren Webquellen gefunden – die folgende Antwort ist nicht als Recherche belegt.\n\n" + text
+        return {"text": text, "quellen": erg["quellen"], "sekunden": round(time.monotonic() - t0, 1),
                 "tokens_rein": erg["tokens_rein"], "tokens_raus": erg["tokens_raus"], "suchen": erg["suchen"]}
     antwort = await client.responses.create(
         model=EINST.recherche_modell,
@@ -57,6 +62,9 @@ async def recherchieren(client, frage: str, titel: str = "") -> dict:
                     gesehen.add(url)
                     quellen.append({"titel": (getattr(a, "title", "") or url)[:120], "url": url})
     nutzung = getattr(antwort, "usage", None)
-    return {"text": vorlesbar(antwort.output_text or ""), "quellen": quellen[:5],
+    text = antwort.output_text or ""
+    if not quellen:
+        text = "Keine überprüfbaren Webquellen gefunden – die folgende Antwort ist nicht als Recherche belegt.\n\n" + text
+    return {"text": text, "quellen": quellen[:5],
             "sekunden": round(time.monotonic() - t0, 1),
             "tokens_rein": getattr(nutzung, "input_tokens", None), "tokens_raus": getattr(nutzung, "output_tokens", None)}

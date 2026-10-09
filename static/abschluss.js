@@ -6,6 +6,21 @@ let letzterStand = null;
 let nachlademen = null;
 let spendeLaeuft = false;
 let spendeGespeichert = false;
+let rueckkehrTimer = null;
+function rueckkehrAnzeigen(bis) {
+  if (!bis || rueckkehrTimer) return;
+  $("btn-fertig").disabled = true;
+  $("btn-fertig").textContent = "Abgeschlossen – Rückkehrfrist läuft";
+  const hinweis = document.createElement("p");
+  hinweis.setAttribute("role", "status");
+  $("btn-fertig").after(hinweis);
+  const tick = () => {
+    const rest = Math.max(0, Math.ceil(bis - Date.now() / 1000));
+    hinweis.textContent = `Paket und Datenspende bleiben noch ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")} verfügbar. Danach automatische Löschung.`;
+    if (!rest) { clearInterval(rueckkehrTimer); location.href = "/"; }
+  };
+  rueckkehrTimer = setInterval(tick, 1000); tick();
+}
 // Gewünschte Reihenfolge: Daten spenden, Kosten ausgleichen, Dokument und Download.
 $("ab-inhalt").append($("ab-datenspende"), $("ab-unterstuetzung"), $("ab-protokoll"), $("ab-paket"));
 
@@ -18,6 +33,7 @@ async function laden() {
     return;
   }
   letzterStand = await r.json();
+  rueckkehrAnzeigen(letzterStand.rueckkehr_bis);
   $("ab-leer").hidden = true;
   $("ab-kopf").hidden = false;
   $("ab-inhalt").hidden = false;
@@ -47,6 +63,8 @@ function dokumentHtml() {
     const r = letzterStand.regelanalyse ?? {};
     h += `<h3>Regelanalyse</h3><h4>Redeanteile</h4><ul>${Object.entries(r.redeanteile ?? {}).map(([n,s]) => `<li>${esc(n)}: ${Math.round(s)} s</li>`).join("") || "<li>Keine Daten</li>"}</ul>`;
     h += `<h4>Hinweise</h4><ul>${(r.hinweise ?? []).map((x) => `<li>${Math.floor(x.zeit/60)}:${String(Math.round(x.zeit%60)).padStart(2,"0")} · ${esc(x.text)}</li>`).join("") || "<li>Keine Hinweise</li>"}</ul>`;
+    const d = r.dynamik ?? {};
+    h += `<h4>Gesprächsdynamik · experimentelle Schätzung</h4><p>${esc(d.ueberlappungen ?? 0)} Sprecherüberlappungen · ${esc(d.unterbrechungen ?? 0)} mögliche Unterbrechungen. Keine Bewertung von Personen.</p>`;
   }
   return h;
 }
@@ -140,7 +158,7 @@ $("btn-spende").onclick = async () => {
     $("sp-danke").textContent = "Upload fehlgeschlagen. Die Daten sind noch hier – bitte erneut versuchen oder das ZIP sichern.";
   } finally {
     spendeLaeuft = false;
-    $("btn-fertig").disabled = false;
+    $("btn-fertig").disabled = Boolean(rueckkehrTimer);
     $("btn-spende").textContent = spendeGespeichert ? "Datenspende gespeichert ✓" : "Erneut spenden";
     spendeKnopfAktualisieren();
   }
@@ -151,10 +169,10 @@ window.addEventListener("beforeunload", (e) => {
 
 $("btn-fertig").onclick = async () => {
   if (spendeLaeuft) return;
-  if (!confirm("Meetingdaten jetzt endgültig löschen? Danach kannst du weder das Paket herunterladen noch Daten spenden.")) return;
+  if (!confirm("Abschließen? Du kannst noch 5 Minuten zu Paket und Datenspende zurückkehren. Danach werden die Meetingdaten automatisch gelöscht.")) return;
   try {
-    await api("/api/abschluss/fertig");
-    location.href = "/";
+    const d = await api("/api/abschluss/schliessen");
+    rueckkehrAnzeigen(d.rueckkehr_bis);
   } catch {
     // Bei einem Fehler auf der Abschlussseite bleiben, damit das Paket noch gesichert werden kann.
   }

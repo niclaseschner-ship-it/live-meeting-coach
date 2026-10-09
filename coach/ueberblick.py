@@ -97,11 +97,21 @@ def kopf(meeting) -> dict:
     }
 
 
-def material(meeting) -> str:
+def material(meeting, fokus: str | None = None) -> str:
     """Meeting-Text wie beim Live-Bild plus die festgestellten Ergebnisse je Punkt (Regel 10)."""
-    teile = [meeting_text(meeting)]
+    aktuell = bool(fokus and re.search(r"aktuell|aktueller|aktuellen|dieser|laufend", fokus, re.I))
+    i = meeting.aktiver_punkt
+    if aktuell and 0 <= i < len(meeting.agenda):
+        p = meeting.agenda[i]
+        teile = [f"Titel: {meeting.titel}\nAgendapunkt {i + 1}: {p.titel}\nZiel: {p.ziel or '-'}",
+                 "Transkript:", "\n".join(f"[{mmss(s.start)}] {s.sprecher}: {s.text}"
+                                           for s in meeting.punkt_transkript(i) if s.text)]
+    else:
+        teile = [meeting_text(meeting)]
     erg = []
     for i, e in sorted(meeting.ergebnisse.items()):
+        if aktuell and i != meeting.aktiver_punkt:
+            continue
         if not (0 <= i < len(meeting.agenda)):
             continue
         zeile = f"{i + 1}. {meeting.agenda[i].titel}: Ergebnis: {e.get('ergebnis') or 'keins ausgesprochen'}"
@@ -118,9 +128,9 @@ def material(meeting) -> str:
 async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | None = None) -> tuple[dict, dict]:
     """Liefert (überblick, nutzung). `vorher`: der letzte Überblick (für „neu seit dem letzten Stand“)."""
     t0 = time.monotonic()
-    stoff = material(meeting)
+    stoff = material(meeting, fokus)
     alt = ""
-    if vorher:
+    if vorher and vorher.get("fokus") == fokus:
         alt = json.dumps({k: vorher.get(k) for k in ("entschieden", "offen", "aufgaben", "ausserhalb")},
                          ensure_ascii=False)
     auftrag = AUFTRAG.format(fokus=FOKUS.format(fokus=fokus) if fokus else "",
