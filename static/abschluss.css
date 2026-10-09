@@ -23,6 +23,10 @@
 .ab-qr svg { width: 120px; height: 120px; display: block; }
 
 .ab-fertig { justify-self: center; min-width: 160px; }
+.ab-dokument { margin: 16px 0; padding: 22px; border: 1px solid var(--rand); border-radius: var(--radius); background: #fff; color: #172033; }
+.ab-dokument h1 { font-size: 24px; color: #312e81; }.ab-dokument h3 { color: #312e81; margin-bottom: 5px; }
+.ab-dokument ul { margin-top: 4px; }.dok-luecke { color: #b91c1c; }.ab-dokument-aktionen { display:flex; gap:10px; flex-wrap:wrap; }
+@media print { body > .kopf, .ab-kopfzeile, .ab-dokument-karte > :not(.ab-dokument), .ab-seite > :not(#ab-inhalt), #ab-inhalt > :not(.ab-dokument-karte) { display:none !important; } .ab-dokument { border:0; padding:0; } }
 
 @media (max-width: 560px) {
   .ab-kacheln { grid-template-columns: 1fr; }

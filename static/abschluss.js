@@ -19,7 +19,44 @@ async function laden() {
   $("ab-inhalt").hidden = false;
   kopfDarstellen(letzterStand);
   darstellen(letzterStand);
+  dokumentDarstellen();
 }
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function dokumentHtml() {
+  const d = letzterStand?.dokument;
+  if (!d) return "<p>Das Dokument wird noch erstellt …</p>";
+  const gruppe = (titel, key, felder) => {
+    const xs = d[key] ?? [];
+    const zeilen = xs.length ? xs.map((x) => `<li>${felder.map((f) => x[f]
+      ? esc(x[f]) : `<strong class="dok-luecke">${esc(f)} fehlt</strong>`).join(" · ")}</li>`).join("") : "<li>Keine</li>";
+    return `<h3>${titel}</h3><ul>${zeilen}</ul>`;
+  };
+  let h = `<h1>${esc(d.kopf?.titel || "Meeting")}</h1><p>${esc(d.kopf?.datum || "")} · ${Math.round((d.kopf?.dauer_sekunden || 0)/60)} Minuten</p>`;
+  h += gruppe("Entscheidungen", "entscheidungen", ["was","status","wer"]);
+  h += gruppe("Aufgaben", "aufgaben", ["was","wer","bis"]);
+  h += gruppe("Offene Punkte", "offene_punkte", ["was","wer","bis"]);
+  h += gruppe("Risiken", "risiken", ["was","wer","reaktion"]);
+  h += gruppe("Parkplatz", "parkplatz", ["was"]);
+  h += `<h3>Agenda</h3><ul>${(d.agenda ?? []).map((p) => `<li>${esc(p.nr)}. ${esc(p.titel)} – ${esc(p.soll_minuten)} min geplant, ${esc(p.ist_minuten)} min genutzt</li>`).join("") || "<li>Keine</li>"}</ul>`;
+  if ($("dok-regeln").checked) {
+    const r = letzterStand.regelanalyse ?? {};
+    h += `<h3>Regelanalyse</h3><h4>Redeanteile</h4><ul>${Object.entries(r.redeanteile ?? {}).map(([n,s]) => `<li>${esc(n)}: ${Math.round(s)} s</li>`).join("") || "<li>Keine Daten</li>"}</ul>`;
+    h += `<h4>Hinweise</h4><ul>${(r.hinweise ?? []).map((x) => `<li>${Math.floor(x.zeit/60)}:${String(Math.round(x.zeit%60)).padStart(2,"0")} · ${esc(x.text)}</li>`).join("") || "<li>Keine Hinweise</li>"}</ul>`;
+  }
+  return h;
+}
+function dokumentDarstellen() { $("ab-dokument").innerHTML = dokumentHtml(); }
+$("dok-regeln").onchange = dokumentDarstellen;
+$("btn-kopieren").onclick = async () => {
+  const html = dokumentHtml(); const text = $("ab-dokument").innerText;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({"text/html": new Blob([html], {type:"text/html"}), "text/plain": new Blob([text], {type:"text/plain"})})]);
+    $("dok-meldung").textContent = "Formatiert kopiert.";
+  } catch { await navigator.clipboard.writeText(text); $("dok-meldung").textContent = "Als Text kopiert."; }
+  $("dok-meldung").hidden = false;
+};
+$("btn-drucken").onclick = () => window.print();
 
 // Abschluss-Kopf (Ticket #17 Punkt 3): „Danke! 11 Minuten · 4 Punkte · 2 Entscheidungen“
 function kopfDarstellen(z) {

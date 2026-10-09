@@ -18,7 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from . import zugang
-from .abschluss import OrdnerAblage, paket, spenden_dateien, stufen
+from .abschluss import OrdnerAblage, meeting_daten, paket, spenden_dateien, stufen
 from .ablage_r2 import AblageFehler, R2Ablage
 from .config import EINST, WORKER_USER_AGENT, schluessel_info, schluessel_speichern
 
@@ -101,6 +101,9 @@ async def abschluss():
                    if name and not eigener else None),
         "paypal_allgemein": f"https://paypal.me/{name}" if name else None,
         "ablage_fertig": coach.archiv.fertig,
+        "dokument": meeting_daten(coach.archiv.ordner) if coach.archiv.fertig else None,
+        "regelanalyse": {"redeanteile": coach.meeting.redeanteile(),
+                          "hinweise": [{"zeit": h.zeit, "text": h.text} for h in coach.meeting.hinweise]},
     }
 
 

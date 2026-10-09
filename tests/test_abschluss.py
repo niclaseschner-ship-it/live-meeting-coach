@@ -7,7 +7,7 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-from coach.abschluss import OrdnerAblage, paket, spenden_dateien, stufen
+from coach.abschluss import OrdnerAblage, meeting_html, meeting_markdown, paket, spenden_dateien, stufen
 from coach.config import EINST
 from coach.pipeline import Coach
 from coach.server import app
@@ -73,13 +73,30 @@ def test_paket_ohne_aufnahme_ohne_debug_und_ohne_bericht(archiv_pfad):
     daten = paket(c.archiv.ordner, mit_aufnahme=False)
     with zipfile.ZipFile(io.BytesIO(daten)) as z:
         namen = set(z.namelist())
-    assert {"transkript.md", "agenda.md", "hinweise.md"} <= namen
+    assert {"transkript.md", "agenda.md", "hinweise.md", "meeting.md", "meeting.html",
+            "meeting-mit-regelanalyse.html"} <= namen
     assert "bericht.json" not in namen
     assert "aufnahme.wav" not in namen
     assert not any(n.startswith("debug/") for n in namen)
     with zipfile.ZipFile(io.BytesIO(daten)) as z:
         agenda = z.read("agenda.md").decode("utf-8")
     assert "Start" in agenda
+
+
+def test_meeting_dokument_ist_kopierbar_und_markiert_luecken():
+    daten = {
+        "kopf": {"titel": "Planung & Start", "datum": "2026-10-09", "dauer_sekunden": 125},
+        "entscheidungen": [{"was": "Loslegen", "status": "beschlossen", "wer": ""}],
+        "aufgaben": [], "offene_punkte": [], "risiken": [], "parkplatz": [], "agenda": [],
+    }
+    md = meeting_markdown(daten, {"redeanteile": {"Alex": 12.4}, "hinweise": []})
+    assert "# Planung & Start" in md
+    assert "Loslegen · beschlossen · ⚠ fehlt" in md
+    assert "## Regelanalyse" in md and "Alex: 12 s" in md
+    html = meeting_html(daten)
+    assert "<!doctype html>" in html
+    assert "Planung &amp; Start" in html
+    assert "<script" not in html
 
 
 def test_paket_mit_aufnahme_enthaelt_wav(archiv_pfad):

@@ -80,7 +80,7 @@ async def lauf(material: str, stufe: str, transkript: str | None, antwort: bool)
     wechsel = {int(k[:2]) * 60 + int(k[3:]): p for k, p in cfg["wechsel"].items()}
     ende = art.geplantes_ende()
     fuenf_bei = max(ende - 300, ende / 2) if ende else None
-    aus: dict = {"material": material, "stufe": stufe, "modell": P.EINST.analyse_modell, "nachfragen": [],
+    aus: dict = {"material": material, "stufe": stufe, "modell": P.EINST.analyse_modell, "abschnitte": [],
                  "zusammenfassung": None}
     for s in saetze:
         for t in sorted(wechsel):
@@ -89,35 +89,23 @@ async def lauf(material: str, stufe: str, transkript: str | None, antwort: bool)
                 m.virtuelle_zeit = float(t)
                 alt = m.aktiver_punkt
                 m.punkt_wechseln(ziel)
-                gefragt = await art.punkt_abgeschlossen(alt)
-                if gefragt:
-                    aus["nachfragen"].append({"zeit": t, "punkt": alt + 1, "text": art.rueckfrage.text})
-                    art.rueckfrage = None
+                karte = await art.abschnitt_abschliessen(alt, float(t), "punkt")
+                if karte:
+                    aus["abschnitte"].append({"zeit": t, "punkt": alt + 1, "karte": karte})
         if fuenf_bei is not None and s.start >= fuenf_bei and aus["zusammenfassung"] is None:
             m.virtuelle_zeit = s.start
             await art.erkennen()
-            aus["zusammenfassung"] = {"zeit": s.start, "text": art.zusammenfassung()[0]}
+            aus["zusammenfassung"] = {"zeit": s.start, "dokument": art.standardgliederung()}
         m.virtuelle_zeit = s.ende
         m.transkript.append(s)
-        neu = sum(x.dauer for x in art._neue_saetze())
-        from coach.artefakte import MIN_SPRACHE, SPAETESTENS_SEKUNDEN, SPRACHE_SEKUNDEN
-
-        if neu >= SPRACHE_SEKUNDEN[stufe] or (neu >= MIN_SPRACHE and m.jetzt() - art.letzter_lauf >= SPAETESTENS_SEKUNDEN):
-            await art.erkennen()
+        # Live wird seit Ticket #27 nicht mehr minutenweise analysiert: Punktwechsel, der explizite
+        # Antwortbogen und das Meeting-Ende lösen die Erkennung aus. Der Benchmark bildet genau das ab.
     await art.erkennen()
     aus["artefakte"] = [a.bild() for a in art.liste]
     if antwort:
-        satz, wer = cfg["antwort"]
-        luecken = art.luecken_liste(3)
-        from coach.artefakte import Rueckfrage, frage_zu
-
-        art.rueckfrage = Rueckfrage("nachfrage", " ".join(frage_zu(a) for a in luecken), [a.id for a in luecken],
-                                    m.jetzt(), m.jetzt() + 30)
-        vorher = {a.id: a.bild() for a in luecken}
-        ok = await art.antwort_deuten(satz, wer)
-        aus["antwort"] = {"gefragt": art.rueckfrage.text if art.rueckfrage else None, "satz": satz, "erkannt": ok,
-                          "danach": [a.bild() for a in art.liste if a.id in vorher or a.herkunft == "stimme"],
-                          "vorher": list(vorher.values())}
+        # Das Schließen per Stimme läuft heute über den Antwortbogen und ist in tests/test_artefakte.py abgedeckt.
+        # Hier halten wir die verbleibenden Lücken fest, ohne den längst entfernten Rückfrage-Popup zu simulieren.
+        aus["luecken"] = [a.bild() for a in art.luecken_liste(3)]
     aufrufe = [e for e in nutzung if e.get("art") == "artefakte"]
     usd = sum(kosten.dollar(e) for e in aufrufe)
     sprache = sum(s.dauer for s in saetze)
@@ -137,15 +125,13 @@ def zeigen(aus: dict) -> None:
               + (f" | status={a['status']}" if a["typ"] == "entscheidung" else "")
               + (f" | reaktion={a['reaktion']} hoch={a['hoch']}" if a["typ"] == "risiko" else "")
               + f" | k={a['konfidenz']:.2f}{luecke}")
-    for n in aus["nachfragen"]:
-        print(f"\nNachfrage nach Punkt {n['punkt']} ({n['zeit']} s): {n['text']}")
+    for n in aus["abschnitte"]:
+        print(f"\nStille Abschnittskarte nach Punkt {n['punkt']} ({n['zeit']} s): {n['karte'].get('titel')}")
     if aus["zusammenfassung"]:
-        print(f"\nFünf-Minuten-Zusammenfassung ({aus['zusammenfassung']['zeit']:.0f} s): {aus['zusammenfassung']['text']}")
-    if aus.get("antwort"):
-        a = aus["antwort"]
-        print(f"\nAntwort „{a['satz']}“ auf: {a['gefragt']} → erkannt={a['erkannt']}")
-        for x in a["danach"]:
-            print(f"   {x['id']}. {x['was']} | wer={x['wer']} | bis={x['bis']} | Lücken={x['luecken']}")
+        print(f"\nFünf-Minuten-Stand ({aus['zusammenfassung']['zeit']:.0f} s): "
+              f"{aus['zusammenfassung']['dokument']['luecken']} Lücken")
+    if aus.get("luecken"):
+        print(f"\nOffene Lücken: {len(aus['luecken'])}")
     print(f"\nKosten: {json.dumps(aus['kosten'], ensure_ascii=False)}")
 
 

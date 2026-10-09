@@ -6,6 +6,7 @@ so bleibt diese Datei unabhängig davon, ob das Meeting noch läuft oder der Coa
 
 from __future__ import annotations
 
+import html
 import io
 import json
 import math
@@ -60,6 +61,75 @@ def _bericht(ordner: Path) -> dict:
     return json.loads((ordner / "bericht.json").read_text(encoding="utf-8"))
 
 
+def meeting_daten(ordner: Path) -> dict:
+    """Korrigier- und kopierbare Standardgliederung aus Ticket #22."""
+    pfad = Path(ordner) / "meeting.json"
+    return json.loads(pfad.read_text(encoding="utf-8")) if pfad.exists() else {
+        "kopf": {"titel": _bericht(Path(ordner)).get("titel", "Meeting")}, "entscheidungen": [], "aufgaben": [],
+        "offene_punkte": [], "risiken": [], "parkplatz": [], "agenda": [], "luecken": 0,
+    }
+
+
+def meeting_markdown(d: dict, regelanalyse: dict | None = None) -> str:
+    k = d.get("kopf", {})
+    out = [f"# {k.get('titel') or 'Meeting'}", "", f"**Datum:** {k.get('datum') or '–'}  ",
+           f"**Dauer:** {_mmss(k.get('dauer_sekunden') or 0)}", ""]
+    def liste(titel: str, key: str, felder: tuple[str, ...]) -> None:
+        out.extend([f"## {titel}", ""])
+        werte = d.get(key) or []
+        if not werte:
+            out.extend(["_Keine._", ""])
+            return
+        for x in werte:
+            teile = [str(x.get(f) or "⚠ fehlt") for f in felder]
+            out.append("- " + " · ".join(teile))
+        out.append("")
+    liste("Entscheidungen", "entscheidungen", ("was", "status", "wer"))
+    liste("Aufgaben", "aufgaben", ("was", "wer", "bis"))
+    liste("Offene Punkte", "offene_punkte", ("was", "wer", "bis"))
+    liste("Risiken", "risiken", ("was", "wer", "reaktion"))
+    liste("Parkplatz", "parkplatz", ("was",))
+    out.extend(["## Agenda", ""])
+    agenda = d.get("agenda") or []
+    if not agenda:
+        out.append("_Keine._")
+    for p in agenda:
+        out.append(f"- {p.get('nr') or '–'}. {p.get('titel') or '⚠ fehlt'} – "
+                   f"{p.get('soll_minuten') or 0} min geplant, {p.get('ist_minuten') or 0} min genutzt")
+    if regelanalyse:
+        out.extend(["", "## Regelanalyse", "", "### Redeanteile", ""])
+        out.extend(f"- {n}: {s:.0f} s" for n, s in (regelanalyse.get("redeanteile") or {}).items())
+        out.extend(["", "### Hinweise", ""])
+        out.extend(f"- [{_mmss(h.get('zeit', 0))}] {h.get('text', '')}" for h in regelanalyse.get("hinweise") or [])
+    return "\n".join(out).strip() + "\n"
+
+
+def meeting_html(d: dict, regelanalyse: dict | None = None) -> str:
+    """Eigenständiges, druckbares HTML; Word/Outlook übernehmen Tabellen und Überschriften beim Kopieren."""
+    md = meeting_markdown(d, regelanalyse)
+    # Bewusst kleiner eigener Renderer für die von uns erzeugte, geschlossene Markdown-Struktur.
+    teile = []
+    in_liste = False
+    for zeile in md.splitlines():
+        if zeile.startswith("- "):
+            if not in_liste:
+                teile.append("<ul>")
+                in_liste = True
+            teile.append(f"<li>{html.escape(zeile[2:])}</li>")
+            continue
+        if in_liste:
+            teile.append("</ul>")
+            in_liste = False
+        if zeile.startswith("# "): teile.append(f"<h1>{html.escape(zeile[2:])}</h1>")
+        elif zeile.startswith("## "): teile.append(f"<h2>{html.escape(zeile[3:])}</h2>")
+        elif zeile.startswith("### "): teile.append(f"<h3>{html.escape(zeile[4:])}</h3>")
+        elif zeile:
+            teile.append(f"<p>{html.escape(zeile).replace('**', '')}</p>")
+    if in_liste:
+        teile.append("</ul>")
+    return "<!doctype html><html lang='de'><meta charset='utf-8'><title>Nestor Meeting</title><style>body{font:11pt Arial;max-width:850px;margin:35px auto;color:#172033}h1,h2{color:#312e81}li{margin:.35em 0}@media print{body{margin:0}}</style><body>" + "".join(teile) + "</body></html>"
+
+
 def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
     """ZIP für die Runde: Protokoll, Abschlussbild bzw. Überblick, Transkript, Agenda, Hinweise, meeting.json und
     tasks.json (Ticket #26) – ohne debug/ und bericht.json."""
@@ -70,6 +140,11 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
         protokoll = ordner / "protokoll.md"
         if protokoll.exists():
             z.write(protokoll, "protokoll.md")
+        meeting = meeting_daten(ordner)
+        analyse = {"redeanteile": bericht.get("redeanteile", {}), "hinweise": bericht.get("hinweise", [])}
+        z.writestr("meeting.md", meeting_markdown(meeting))
+        z.writestr("meeting.html", meeting_html(meeting))
+        z.writestr("meeting-mit-regelanalyse.html", meeting_html(meeting, analyse))
         # Abschlussbild (Premium) bzw. Überblick als Text (Basis: steht an der Stelle des Bilds, Lastenheft 4.7)
         for bild in ("zusammenfassung.png", "zusammenfassung.svg", "ueberblick.md", "meeting.json", "tasks.json"):
             if (ordner / bild).exists():

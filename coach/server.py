@@ -419,12 +419,20 @@ async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
             await alt.close(code=4001)
     await senden()
     zuletzt_pegel, spitze = 0.0, 0.0
+    beginn = letzter_empfang = time.monotonic()
+    pakete = bytezahl = luecken = 0
     try:
         while True:
             daten = await ws.receive_bytes()
             if audio["ws"] is not ws:
                 break
-            audio["letzt"] = time.monotonic()
+            jetzt = time.monotonic()
+            if pakete and jetzt - letzter_empfang > 0.25:
+                luecken += 1
+            letzter_empfang = jetzt
+            pakete += 1
+            bytezahl += len(daten)
+            audio["letzt"] = jetzt
             spitze = max(spitze, pegel(daten))  # lauteste Stelle seit der letzten Anzeige
             if audio["letzt"] - zuletzt_pegel >= PEGEL_TAKT:
                 pegel_senden(spitze, audio["quelle"])
@@ -434,7 +442,12 @@ async def ws_audio(ws: WebSocket, quelle: str = "laptop"):
         pass
     finally:
         if audio["ws"] is ws:
-            ereignis("mikro_weg", quelle=audio["quelle"], still_s=round(time.monotonic() - audio["letzt"], 1))
+            ende = time.monotonic()
+            audio_s = bytezahl / (24_000 * 2)
+            wand_s = max(0.0, ende - beginn)
+            ereignis("mikro_weg", quelle=audio["quelle"], still_s=round(ende - audio["letzt"], 1),
+                     pakete=pakete, audio_s=round(audio_s, 2), wand_s=round(wand_s, 2),
+                     drift_s=round(audio_s - wand_s, 2), luecken=luecken)
             audio.update(ws=None, quelle=None)
             await senden()
 

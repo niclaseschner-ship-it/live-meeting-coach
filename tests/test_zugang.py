@@ -79,6 +79,24 @@ def test_ein_mikrofon_zur_zeit_und_laufzeitmessung():
         assert '"pong"' in ws.receive_text()
 
 
+def test_audio_websocket_protokolliert_transportmessung(monkeypatch):
+    gemessen = []
+
+    async def aufnehmen(_daten):
+        return None
+
+    monkeypatch.setattr(server.coach, "hoeren_zufuehren", aufnehmen)
+    monkeypatch.setattr(server, "ereignis", lambda art, **daten: gemessen.append((art, daten)))
+    lokal = TestClient(app, client=("127.0.0.1", 5000))
+    with lokal.websocket_connect("/ws/audio?quelle=laptop") as mikro:
+        mikro.send_bytes(bytes(4_800))  # 100 ms PCM, 24 kHz, 16 bit mono
+        mikro.send_bytes(bytes(4_800))
+    _, daten = next(e for e in gemessen if e[0] == "mikro_weg")
+    assert daten["pakete"] == 2
+    assert daten["audio_s"] == 0.2
+    assert "wand_s" in daten and "drift_s" in daten and daten["luecken"] == 0
+
+
 def test_zweiter_start_und_umrichten_waehrend_des_meetings_abgewiesen(monkeypatch):
     from coach import server
 
