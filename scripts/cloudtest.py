@@ -1123,6 +1123,12 @@ def pruefpunkte_berechnen(referenz_roh: dict, zustaende: list[dict], hinweise: l
 
     for e in referenz.get("ereignisse", []):
         name = f"Ereignis „{e['ereignis']}“ bei {e['zeit_s']:.0f}s"
+        if e["ereignis"] == "monolog":
+            # Im Referenzschema heißt jeder ununterbrochene Redebeitrag „monolog“ – auch Beiträge von deutlich
+            # weniger als der konfigurierten 60-s-Regelschwelle. Das ist ein Audio-/Sprechersegment, nicht die
+            # Erwartung eines Regelhinweises. Die Schwelle selbst wird deterministisch in test_analyse geprüft.
+            pruefen(name, "beobachtet", "Sprachblock der Referenz; kein Regelverstoß ohne 60 s fortlaufende Rede")
+            continue
         if e["ereignis"] not in LOKAL_OHNE_KI and offline_lauf:
             pruefen(name, "offline", "braucht Text-/Themen-KI, mit LMC_OFFLINE nicht verfügbar")
             continue
