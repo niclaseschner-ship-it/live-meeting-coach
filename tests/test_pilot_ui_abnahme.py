@@ -9,12 +9,52 @@ import asyncio
 import json
 import os
 import re
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
 from pathlib import Path
 
 import pytest
 from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def isolierter_ui_mockserver(tmp_path_factory):
+    """Mock-Klicktests dürfen keine laufende Pilot-/Paralleltestrunde übernehmen."""
+    if os.environ.get("LMC_UI_TEST_URL"):
+        yield
+        return
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    folder = tmp_path_factory.mktemp("ui-mockserver")
+    env = {**os.environ, "LMC_OFFLINE": "1", "LMC_ARCHIV": str(folder / "meetings"),
+           "LMC_SCHLUESSEL_DATEI": str(folder / "schluessel"), "LMC_KOPPLUNG_DATEI": str(folder / "kopplung")}
+    process = subprocess.Popen([sys.executable, "-m", "uvicorn", "coach.server:app", "--host", "127.0.0.1", "--port", str(port)],
+                               cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.environ["LMC_UI_TEST_URL"] = f"http://127.0.0.1:{port}"
+    try:
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                with urllib.request.urlopen(os.environ["LMC_UI_TEST_URL"], timeout=1):
+                    break
+            except OSError:
+                assert process.poll() is None and time.monotonic() < deadline, "UI-Mockserver startet nicht"
+                time.sleep(0.1)
+        yield
+    finally:
+        os.environ.pop("LMC_UI_TEST_URL", None)
+        process.terminate()
+        try:
+            process.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
 
 
 @pytest.mark.parametrize("skript,seite", [("handy.js", "handy.html"), ("app.js", "index.html")])

@@ -121,6 +121,7 @@ class Lauf:
                              "offline_semantisch_bestanden": False}
 
     def pruefen(self, name: str, ok: bool, detail: str = "") -> None:
+        print(f"[{self.stufe}] {'OK' if ok else 'FEHLT'}: {name}", flush=True)
         self.pruefungen.append({"name": name, "status": "ok" if ok else "fehlt", "detail": detail})
         if not ok:
             self.fehler.append(name + (": " + detail if detail else ""))
@@ -143,11 +144,18 @@ class Lauf:
         rows = "".join(
             f"<tr><td>{html.escape(p['status'])}</td><td>{html.escape(p['name'])}</td>"
             f"<td>{html.escape(p['detail'])}</td></tr>" for p in self.pruefungen)
+        bilder = "".join(f'<figure><figcaption>{html.escape(p.stem)}</figcaption><a href="screenshots/{p.name}">'
+                         f'<img loading="lazy" src="screenshots/{p.name}"></a></figure>'
+                         for p in sorted((self.ordner / "screenshots").glob("*.png")))
         (self.ordner / "bericht.html").write_text(
-            "<!doctype html><meta charset=utf-8><title>UI-Abnahme</title>"
-            "<h1>UI-Klickabnahme</h1><p>KI-Semantik wird nur im Online-Lauf gewertet. Offline-Läufe sind "
+            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>UI-Abnahme</title>"
+            "<style>body{font:16px system-ui;margin:24px auto;max-width:1100px;padding:16px;color:#182033}"
+            "table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}"
+            "img{max-width:100%;border:1px solid #ddd}figure{margin:30px 0}figcaption{font-weight:700}</style>"
+            f"<h1>UI-Klickabnahme · {html.escape(self.stufe)}</h1><p>KI-Semantik: {html.escape(self.belege['ki_semantik'])}.</p>"
+            "<p>KI-Semantik wird nur im Online-Lauf gewertet. Offline-Läufe sind "
             "separat gekennzeichnet und können semantisch nicht bestehen.</p>"
-            f"<table><thead><tr><th>Status</th><th>Prüfung</th><th>Beleg</th></tr></thead><tbody>{rows}</tbody></table>",
+            f"<table><thead><tr><th>Status</th><th>Prüfung</th><th>Beleg</th></tr></thead><tbody>{rows}</tbody></table>{bilder}",
             encoding="utf-8")
 
 
