@@ -198,7 +198,7 @@ class Einstellungen:
     basis_live_delay_ms: int = int(_zahl("LMC_BASIS_LIVE_DELAY_MS", 240))  # Text der Frage ~0,6 s nach Sprechende
     basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch (Knopfdruck)
     basis_stimme_modell: str = os.getenv("LMC_BASIS_STIMME_MODELL", "voxtral-mini-tts-latest")
-    basis_stimme: str = os.getenv("LMC_BASIS_STIMME", "01a1188b-54f4-71a8-86df-df69e318948c")  # Thorsten (voice_id)
+    basis_stimme: str = os.getenv("LMC_BASIS_STIMME", "01a1200c-7cff-7218-b298-8cea4fe89203")  # Nova euphorisch
     richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.7)  # 10 Fragen + 2 Recherchen ≈ 0,72 $/h (#15)
     richtwert_premium_eur: float = _zahl("LMC_RICHTWERT_PREMIUM_EUR", 2.0)
 

@@ -12,3 +12,11 @@ Zweck: Aus dieser Datei ist im Mistral-Konto die gespeicherte Stimme „nestor-t
 Geht die Stimme verloren (anderes Konto, eigener Schlüssel „mistral-nestor“), lässt sie sich damit neu anlegen:
 Voices-API von Mistral (Name, Datei als ref_audio), danach die neue voice_id in LMC_BASIS_STIMME eintragen.
 Nicht löschen: die gespeicherten Stimmen „nic-de“ und „nestor-thorsten-de“ im Mistral-Konto (Ticket #13, Tabu).
+
+nestor-nova-euphorisch-test – aktuelle Basisstimme
+==================================================
+
+Voice-ID: 01a1200c-7cff-7218-b298-8cea4fe89203
+Quelle: vollständig KI-generierte OpenAI-Nova-Referenz mit fröhlicher, warmer Coaching-Regie; erzeugbar mit
+        scripts/euphorische_stimme.py. Daraus als Mistral-Custom-Voice gespeichert.
+Kennzeichnung: Die Stimme ist KI-generiert. Keine reale Sprecherin wird dargestellt oder nachgeahmt.

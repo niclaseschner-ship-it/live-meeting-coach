@@ -41,7 +41,7 @@ def test_stufe_basis_tauscht_jedes_modell_gegen_mistral_und_zurueck():
     for f in ("analyse_modell", "assistent_modell", "recherche_modell"):
         assert getattr(EINST, f) == "mistral-medium-latest"
     assert EINST.live_modell.startswith("voxtral") and EINST.text_modell.startswith("voxtral")
-    assert EINST.stimme_modell.startswith("voxtral") and EINST.stimme == mistral.THORSTEN
+    assert EINST.stimme_modell.startswith("voxtral") and EINST.stimme == mistral.NOVA_EUPHORISCH
     assert EINST.assistent_modus == "text" and EINST.bild_anbieter == "text" and EINST.nachfrage_sekunden == 0
     # kein einziges OpenAI-Modell übrig
     assert not any(str(getattr(EINST, f)).startswith(("gpt", "o4")) for f in config._STUFEN_FELDER)

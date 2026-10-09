@@ -46,6 +46,9 @@ BASIS_URL = os.getenv("LMC_MISTRAL_URL", "https://api.mistral.ai/v1")
 # coach/stimmen/thorsten_ref.wav, damit sie sich neu anlegen lässt). Mit voice_id ~0,5 s bis zum ersten Ton,
 # mit mitgeschickter Referenz ~1,1 s (Machbarkeitsprobe 07./08.10.).
 THORSTEN = "01a1188b-54f4-71a8-86df-df69e318948c"
+# Aus einer ausdrücklich fröhlich/mitreißend angewiesenen, KI-generierten OpenAI-Nova-Referenz erzeugt.
+# Niclas hat die korrekt dekodierte Mistral-Probe am 09.10.2026 als neue Basisstimme ausgewählt.
+NOVA_EUPHORISCH = "01a1200c-7cff-7218-b298-8cea4fe89203"
 WIEDERHOLUNGEN = 4  # 429: so oft erneut versuchen (Wartezeit 0,5 → 1 → 2 → 4 s, mit Zufallsanteil)
 TTS_ZWEITER_VERSUCH = 1.6  # s ohne ersten Ton → zweite Anfrage parallel (Ausreißer bis 10 s gemessen)
 
@@ -248,7 +251,7 @@ class _Sprache:
 
     def create(self, *, model: str, input: str, voice: str | None = None, response_format: str = "pcm", **_):
         """Die Stil-Anweisung (`instructions`) von OpenAI gibt es bei Voxtral nicht – sie fällt weg."""
-        return _TtsStrom(self._c, {"model": model, "input": input, "voice_id": voice or THORSTEN,
+        return _TtsStrom(self._c, {"model": model, "input": input, "voice_id": voice or NOVA_EUPHORISCH,
                                    "response_format": "pcm", "stream": True})
 
 

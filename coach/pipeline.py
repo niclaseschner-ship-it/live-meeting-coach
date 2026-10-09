@@ -415,7 +415,7 @@ class Coach:
         if "assistent" in daten:
             self.assistent.aktiv = bool(daten["assistent"])
         if EINST.stufe == "basis":
-            # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Thorsten, Überblick als Text)
+            # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Nova euphorisch, Überblick als Text)
             daten = {k: v for k, v in daten.items() if k not in ("modus", "stimme", "bild_anbieter")}
         if daten.get("modus") in ("gespraech", "text"):
             object.__setattr__(EINST, "assistent_modus", daten["modus"])

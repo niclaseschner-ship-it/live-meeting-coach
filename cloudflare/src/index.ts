@@ -53,8 +53,10 @@ export class Nestor extends Container<Env> {
       LMC_BETRIEB: "cloud",
       LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
       LMC_WORKER_URL: env.WORKER_URL,
-      OPENAI_API_KEY: env.OPENAI_API_KEY,
+      // Pilotstart: ausschließlich Basis/Mistral. Premium wird erst nach dem Pilot bewusst zugeschaltet.
+      OPENAI_API_KEY: "",
       LMC_MISTRAL_SCHLUESSEL: env.MISTRAL_API_KEY ?? "",
+      LMC_STUFE: "basis",
       // Startseite, Rechtstexte, Unterstützung – als Secrets gesetzt, damit nichts davon im Repo steht
       LMC_PAYPAL_ME: env.PAYPAL_ME ?? "",
       LMC_IMPRESSUM_NAME: env.IMPRESSUM_NAME ?? "",
