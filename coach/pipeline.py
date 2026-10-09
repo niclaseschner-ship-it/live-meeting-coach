@@ -27,7 +27,7 @@ NAME_WARTEN_SEKUNDEN = 600.0
 FENSTER_LUECKE = 10.0  # Sätze, die so lange vor dem ersten neuen Satz endeten, gehören nicht mehr ins Fenster
 KONTEXT_SEKUNDEN = 30.0  # so viel Gesprochenes vor dem Fenster geht als Kontext mit (wie früher zwei Abschnitte)
 
-STIMMEN = ("cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad", "echo", "shimmer")
+STIMMEN = ("nova", "cedar", "marin", "coral", "sage", "verse", "alloy", "ash", "ballad", "echo", "shimmer")
 
 log = logging.getLogger("coach")
 NUTZUNG = WURZEL / "logs" / "nutzung.jsonl"

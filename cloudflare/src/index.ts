@@ -9,6 +9,10 @@
 import { Container, getContainer } from "@cloudflare/containers";
 import { cookieLesen, cookiePruefen, cookieSigniere, kundeFuerPasswort, type Kundenliste } from "./anmeldung";
 import { KundenZaehler } from "./zaehler";
+import {
+  interessentLesen, interessentenListe, interessentSpeichern, normalisiereAnmeldung, pinErzeugen, pinMailSenden, pinPruefen,
+  pinSeite, registrierungsSeite,
+} from "./pilotzugang";
 
 export { KundenZaehler };
 
@@ -26,6 +30,10 @@ export interface Env {
   WORKER_GEHEIMNIS: string; // Secret – beweist dem Coach, dass eine Anfrage vom Worker kommt
   OPENAI_API_KEY: string; // Secret – Niclas' Schlüssel, eigenes OpenAI-Projekt mit Ausgabenlimit
   MISTRAL_API_KEY?: string; // Secret – Nestor Basis (Ticket #13); ohne ihn ist Basis auf der Startseite nicht wählbar
+  GMAIL_SMTP_PASSWORT: string; // Secret – vorhandenes Gmail-App-Passwort für Login-PINs
+  PIN_GEHEIMNIS: string; // Secret – hasht PINs vor der Ablage
+  MAIL_VON: string; // Secret/Var – verifizierter Absender, z. B. Nestor <login@example.de>
+  AUTO_FREIGABE?: string; // "0" = neue Interessenten warten auf manuelle Freigabe, sonst sofort aktiv
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
   // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
 }
@@ -146,10 +154,34 @@ const ANMELDEN_SEITE = (fehler: boolean) => `<!doctype html>
 
 async function handleAnmelden(request: Request, env: Env): Promise<Response> {
   if (request.method === "GET") {
-    const fehler = new URL(request.url).searchParams.has("falsch");
-    return new Response(ANMELDEN_SEITE(fehler), { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (new URL(request.url).searchParams.has("alt")) {
+      const fehler = new URL(request.url).searchParams.has("falsch");
+      return new Response(ANMELDEN_SEITE(fehler), { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    return new Response(registrierungsSeite(), { headers: { "content-type": "text/html; charset=utf-8" } });
   }
   const form = await request.formData();
+  const anmeldung = normalisiereAnmeldung(form);
+  if (anmeldung) {
+    const vorhanden = await interessentLesen(env, anmeldung.email);
+    if (vorhanden && Date.now() - vorhanden.letzter_pin_at < 60_000) {
+      return new Response(registrierungsSeite("Bitte warte eine Minute, bevor du einen neuen Code anforderst."),
+        { status: 429, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    const pin = pinErzeugen();
+    await interessentSpeichern(env, anmeldung, pin);
+    try {
+      await pinMailSenden(env, anmeldung, pin);
+    } catch {
+      return new Response(registrierungsSeite("Der Code konnte gerade nicht verschickt werden. Bitte versuche es später erneut."),
+        { status: 502, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    return new Response(pinSeite(anmeldung.email), { headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  if (!form.has("passwort")) {
+    return new Response(registrierungsSeite("Bitte fülle alle drei Felder vollständig aus."),
+      { status: 400, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
   const passwort = String(form.get("passwort") ?? "");
   const kunde = await kundeFuerPasswort(passwort, kundenliste(env));
   if (!kunde) {
@@ -158,6 +190,37 @@ async function handleAnmelden(request: Request, env: Env): Promise<Response> {
   const cookieWert = await cookieSigniere(kunde, env.COOKIE_GEHEIMNIS);
   const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
   return setzeCookie(antwort, KUNDE_COOKIE, cookieWert, DREISSIG_TAGE);
+}
+
+async function handlePin(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const form = await request.formData();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const pin = String(form.get("pin") ?? "").trim();
+  const ergebnis = await pinPruefen(env, email, pin);
+  if (ergebnis === "wartet") {
+    return new Response(pinSeite(email, "Deine Anfrage wartet noch auf Freigabe."),
+      { status: 403, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  if (ergebnis !== "ok") {
+    return new Response(pinSeite(email, "Der Code ist falsch oder abgelaufen."),
+      { status: 400, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
+  return setzeCookie(antwort, KUNDE_COOKIE, await cookieSigniere(email, env.COOKIE_GEHEIMNIS), DREISSIG_TAGE);
+}
+
+async function maxMeetingsFuer(env: Env, kunde: string): Promise<number> {
+  const legacy = kundenliste(env)[kunde]?.max_meetings;
+  if (legacy) return legacy;
+  const row = await interessentLesen(env, kunde);
+  return row?.status === "aktiv" ? row.max_meetings : 1;
+}
+
+async function handleInteressenten(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) return new Response("Nicht erlaubt.", { status: 403 });
+  const rows = await interessentenListe(env);
+  return Response.json(rows.map(({ pin_hash: _hash, pin_bis: _bis, pin_versuche: _versuche, ...sichtbar }) => sichtbar));
 }
 
 /** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
@@ -197,7 +260,7 @@ async function handleMeetingStart(request: Request, env: Env): Promise<Response>
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
   const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
   if (!meetingId || !kunde) return new Response("meetingId/kunde fehlen.", { status: 400 });
-  const maxMeetings = kundenliste(env)[kunde]?.max_meetings ?? 1;
+  const maxMeetings = await maxMeetingsFuer(env, kunde);
   const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
   const antwort = await zaehler.fetch("https://zaehler/pruefen", {
     method: "POST",
@@ -247,6 +310,12 @@ export default {
     }
     if (pfad === "/anmelden") {
       return handleAnmelden(request, env);
+    }
+    if (pfad === "/pin") {
+      return handlePin(request, env);
+    }
+    if (pfad === "/intern/interessenten") {
+      return handleInteressenten(request, env);
     }
     if (pfad.startsWith("/teaser/")) {
       return env.ASSETS.fetch(request); // Bilder der Anmeldeseite (cloudflare/oeffentlich/teaser/)

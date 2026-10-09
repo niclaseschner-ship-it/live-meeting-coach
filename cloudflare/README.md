@@ -208,6 +208,26 @@ npm install
 npm test
 ```
 
+## Pilotzugang per Mail-PIN
+
+Neue Interessenten registrieren sich mit Name, E-Mail-Adresse und „Woher kennst du Niclas?“. Der Worker speichert
+die Liste im bereits EU-gebundenen R2-Bucket unter `pilot/interessenten/`, verschickt über den vorhandenen Gmail-SMTP-Zugang einen sechsstelligen, zehn Minuten gültigen PIN und setzt nach erfolgreicher
+Prüfung das bisherige signierte Kunden-Cookie. Standardmäßig werden neue Einträge sofort freigeschaltet;
+`AUTO_FREIGABE=0` setzt sie auf `wartet`. Die Liste ist intern über `GET /intern/interessenten` mit
+`X-Nestor-Geheimnis` abrufbar. Bestehende Passwortzugänge bleiben vorerst unter `/anmelden?alt=1` erhalten.
+
+Vor dem ersten Deploy einmalig:
+
+```bash
+npx wrangler secret put GMAIL_SMTP_PASSWORT
+npx wrangler secret put PIN_GEHEIMNIS
+npx wrangler secret put MAIL_VON
+```
+
+`MAIL_VON` ist die zum Gmail-App-Passwort gehörende Adresse. PINs werden nur gehasht gespeichert, laufen nach zehn
+Minuten ab und sind auf fünf Fehlversuche begrenzt. Für Produktion sollte zusätzlich ein Bot-Schutz ergänzt werden,
+wenn die öffentliche Registrierung missbraucht wird.
+
 Prüft die Anmeldung (Passwort → Kunde über den SHA-256-Hash, ohne Namensfeld), die Cookie-Signatur
 (signieren/prüfen/verwerfen bei falschem Geheimnis oder Manipulation) und die `max_meetings`-Zählung
 (Limit, Verfall nach 30 min, keine Doppelzählung, aktives `beenden()` gibt sofort frei – Ticket #12) – reine
