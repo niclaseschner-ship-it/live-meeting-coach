@@ -18,9 +18,14 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { beenden, pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
+import {
+  beenden, pruefenUndAktualisieren, tagesdeckelErreicht, tageskostenBuchen, type Tageskosten, type Zustand,
+} from "./zaehler-logik";
 
-export { VERFALL_MS, beenden, pruefenUndAktualisieren, type Zustand } from "./zaehler-logik";
+export {
+  TAGESDECKEL_USD, VERFALL_MS, beenden, pruefenUndAktualisieren, tagesdeckelErreicht, tageskostenBuchen,
+  type Tageskosten, type Zustand,
+} from "./zaehler-logik";
 
 export class KundenZaehler extends DurableObject {
   async fetch(request: Request): Promise<Response> {
@@ -32,14 +37,27 @@ export class KundenZaehler extends DurableObject {
 
     if (url.pathname === "/pruefen") {
       const { meetingId, maxMeetings } = (await request.json()) as { meetingId: string; maxMeetings: number };
+      // Ticket #64: Tagesdeckel vor dem Gleichzeitigkeits-Limit prüfen – ein erschöpfter Tagesdeckel lässt kein
+      // neues Meeting zu, unabhängig von max_meetings. Laufende Meetings sind davon nicht betroffen (nur /pruefen
+      // beim Start fragt das ab).
+      const tageskosten = await this.ctx.storage.get<Tageskosten>("tageskosten");
+      if (tagesdeckelErreicht(tageskosten, Date.now())) {
+        return Response.json({ erlaubt: false, aktive: Object.keys(zustand).length, tagesdeckel: true });
+      }
       const ergebnis = pruefenUndAktualisieren(zustand, meetingId, maxMeetings, Date.now());
       await this.ctx.storage.put("zustand", ergebnis.zustand);
       return Response.json({ erlaubt: ergebnis.erlaubt, aktive: ergebnis.aktive });
     }
     if (url.pathname === "/beenden") {
-      const { meetingId } = (await request.json()) as { meetingId: string };
+      const { meetingId, kostenUsd } = (await request.json()) as { meetingId: string; kostenUsd?: number };
       const ergebnis = beenden(zustand, meetingId, Date.now());
       await this.ctx.storage.put("zustand", ergebnis.zustand);
+      // Ticket #64: Kosten des beendeten Meetings auf den Tagesdeckel buchen (coach/api_abschluss.py liefert
+      // kostenUsd mit `/intern/meeting-ende`); ohne Angabe oder mit 0 nichts zu buchen.
+      if (typeof kostenUsd === "number" && kostenUsd > 0) {
+        const bisher = await this.ctx.storage.get<Tageskosten>("tageskosten");
+        await this.ctx.storage.put("tageskosten", tageskostenBuchen(bisher, kostenUsd, Date.now()));
+      }
       return Response.json({ aktive: ergebnis.aktive });
     }
     return new Response("Nur POST /pruefen oder /beenden.", { status: 404 });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { beenden, pruefenUndAktualisieren, VERFALL_MS, type Zustand } from "./zaehler-logik";
+import {
+  beenden, pruefenUndAktualisieren, tagesdeckelErreicht, tageskostenBuchen, TAGESDECKEL_USD, VERFALL_MS,
+  type Tageskosten, type Zustand,
+} from "./zaehler-logik";
 
 describe("max_meetings je Kunde", () => {
   it("lässt neue Meetings bis zum Limit zu und sperrt danach", () => {
@@ -72,5 +75,36 @@ describe("aktives Ende (Ticket #12, /beenden)", () => {
     zustand = pruefenUndAktualisieren(zustand, "neu", 5, start + VERFALL_MS + 1000).zustand;
     const r = beenden(zustand, "neu", start + VERFALL_MS + 1000);
     expect(r.aktive).toBe(0); // "alt" war schon verfallen, "neu" wurde gerade aktiv beendet
+  });
+});
+
+describe("Tagesdeckel je Kunde und Tag (Ticket #64, Entscheidung Niclas 10.10.2026)", () => {
+  it("liegt bei 15 $", () => {
+    expect(TAGESDECKEL_USD).toBe(15);
+  });
+
+  it("ist ohne gebuchte Kosten offen", () => {
+    expect(tagesdeckelErreicht(undefined, 1_000_000)).toBe(false);
+  });
+
+  it("ist erreicht, sobald die gebuchten Kosten den Deckel erreichen oder überschreiten", () => {
+    let stand: Tageskosten | undefined = tageskostenBuchen(undefined, 10, 1_000_000);
+    expect(tagesdeckelErreicht(stand, 1_000_000)).toBe(false);
+    stand = tageskostenBuchen(stand, 5, 1_000_000);
+    expect(stand.usd).toBeCloseTo(15);
+    expect(tagesdeckelErreicht(stand, 1_000_000)).toBe(true);
+  });
+
+  it("fängt an einem neuen UTC-Tag wieder bei 0 $ an", () => {
+    const stand = tageskostenBuchen(undefined, 15, Date.UTC(2026, 9, 10, 23, 0));
+    expect(tagesdeckelErreicht(stand, Date.UTC(2026, 9, 10, 23, 30))).toBe(true); // noch derselbe UTC-Tag
+    expect(tagesdeckelErreicht(stand, Date.UTC(2026, 9, 11, 0, 30))).toBe(false); // neuer UTC-Tag
+  });
+
+  it("bucht mehrere Meetings desselben Tages auf denselben Stand", () => {
+    let stand: Tageskosten | undefined = tageskostenBuchen(undefined, 4, 1_000_000);
+    stand = tageskostenBuchen(stand, 6, 1_000_000 + 1000);
+    stand = tageskostenBuchen(stand, 2, 1_000_000 + 2000);
+    expect(stand.usd).toBeCloseTo(12);
   });
 });

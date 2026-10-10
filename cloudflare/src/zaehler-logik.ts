@@ -45,3 +45,37 @@ export function beenden(zustand: Zustand, meetingId: string, jetzt: number): { z
   delete bereinigt[meetingId];
   return { zustand: bereinigt, aktive: Object.keys(bereinigt).length };
 }
+
+/**
+ * Tagesdeckel je Kunde (Ticket #64, Entscheidung Niclas 10.10.2026): 15 $ Kosten je Kunde und Tag. Der Tag ist
+ * der UTC-Kalendertag – einfach und robust gegen Zeitzonen; ein Tageswechsel, der ein paar Stunden neben der
+ * realen Mitternacht liegt, ist für einen Kostendeckel unkritisch.
+ *
+ * Gebucht wird beim Meeting-Ende (`/intern/meeting-ende` in index.ts, `coach/api_abschluss.py` liefert
+ * `kostenUsd` mit); geprüft beim Start (`/intern/meeting-start`, neben `pruefenUndAktualisieren` oben).
+ */
+export const TAGESDECKEL_USD = 15;
+
+export interface Tageskosten {
+  tag: string; // YYYY-MM-DD, UTC
+  usd: number;
+}
+
+function tagUtc(jetzt: number): string {
+  return new Date(jetzt).toISOString().slice(0, 10);
+}
+
+/** Heutiger Stand: ein neuer UTC-Tag fängt wieder bei 0 $ an. */
+function heutigerStand(stand: Tageskosten | undefined, jetzt: number): Tageskosten {
+  const tag = tagUtc(jetzt);
+  return stand && stand.tag === tag ? stand : { tag, usd: 0 };
+}
+
+export function tagesdeckelErreicht(stand: Tageskosten | undefined, jetzt: number, deckel = TAGESDECKEL_USD): boolean {
+  return heutigerStand(stand, jetzt).usd >= deckel;
+}
+
+export function tageskostenBuchen(stand: Tageskosten | undefined, usd: number, jetzt: number): Tageskosten {
+  const heute = heutigerStand(stand, jetzt);
+  return { tag: heute.tag, usd: heute.usd + usd };
+}

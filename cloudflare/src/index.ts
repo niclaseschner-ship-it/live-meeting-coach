@@ -14,7 +14,7 @@ import {
   pinMailSenden, pinPruefen, pinSeite, registrierungsSeite, statusCacheErzeugen,
 } from "./pilotzugang";
 import { IpZaehler } from "./ratenbegrenzung";
-import { containerAufrufenOderAusweichen, mitSicherheitsheadern, workerGeheimnisPasst } from "./sicherheit";
+import { containerAufrufenOderAusweichen, mitSicherheitsheadern, pauseSeite, pausiert, workerGeheimnisPasst } from "./sicherheit";
 import { meetingKurz, telegramMelden } from "./telegram";
 import { meetingBeenden, mitVariantenwahl, varianteText } from "./variantenwahl";
 import { KundenZaehler } from "./zaehler";
@@ -40,6 +40,7 @@ export interface Env {
   PIN_GEHEIMNIS: string; // Secret – hasht PINs vor der Ablage
   MAIL_VON: string; // Secret/Var – verifizierter Absender, z. B. Nestor <login@example.de>
   AUTO_FREIGABE?: string; // "0" = neue Interessenten warten auf manuelle Freigabe, sonst sofort aktiv
+  NESTOR_PAUSE?: string; // Ticket #64, Notschalter: "1" = keine neuen Meetings, laufende bleiben unberührt
   TELEGRAM_BOT_TOKEN?: string; // Secret – bestehender privater Assistenten-Bot
   TELEGRAM_CHAT_ID?: string; // Secret – Niclas' privater Chat
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
@@ -375,11 +376,15 @@ async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionConte
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
-  const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
+  // kostenUsd (Ticket #64): coach/api_abschluss.py liefert die Kosten des beendeten Meetings mit – Grundlage
+  // für den Tagesdeckel je Kunde (zaehler-logik.ts, tageskostenBuchen).
+  const { meetingId, kunde, kostenUsd } = (await request.json()) as {
+    meetingId?: string; kunde?: string; kostenUsd?: number;
+  };
   if (!meetingId) return new Response("meetingId fehlt.", { status: 400 });
   if (kunde) {
     const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
-    await zaehler.fetch("https://zaehler/beenden", { method: "POST", body: JSON.stringify({ meetingId }) });
+    await zaehler.fetch("https://zaehler/beenden", { method: "POST", body: JSON.stringify({ meetingId, kostenUsd }) });
   }
   const container = getContainer(env.NESTOR, meetingId);
   // Ticket #60: erst als beendet markieren – ein altes Handy-Cookie startet danach keinen frischen Container mehr
@@ -395,6 +400,23 @@ async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionConte
     // Zähler ist zu diesem Zeitpunkt ohnehin schon frei.
   }
   melden(ctx, env, `🏁 Nestor: Meeting beendet\nZugang: ${kunde || "unbekannt"}\nMeeting: ${meetingKurz(meetingId)}`);
+  return Response.json({ ok: true });
+}
+
+/** Meeting-Kostendeckel erreicht (Ticket #64): vom Coach gemeldet, sobald die zentrale Sperre
+ * (coach/pipeline.py, `_kosten_pruefen`) den KI-Client für den Rest des Meetings schließt. Reine
+ * Telegram-Weiterleitung über den vorhandenen Rückkanal (api_abschluss.worker_melden) – kein Containerzugriff,
+ * keine Zähler-Logik hier (die steht in zaehler-logik.ts / handleMeetingEnde). */
+async function handleKostenDeckel(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const { meetingId, kunde, stufe, usd } = (await request.json()) as {
+    meetingId?: string; kunde?: string; stufe?: string; usd?: number;
+  };
+  melden(ctx, env, `💸 Nestor: Kostendeckel erreicht\nZugang: ${kunde || "unbekannt"}\nVariante: ${stufe || "?"} `
+    + `(${usd ?? "?"} $)\nMeeting: ${meetingKurz(meetingId ?? "")}`);
   return Response.json({ ok: true });
 }
 
@@ -420,19 +442,22 @@ async function handleKopplungstoken(request: Request, env: Env): Promise<Respons
  * anonymer Aufruf bekommt gar keine. */
 async function meetingAufloesen(
   request: Request, url: URL, env: Env, kunde: string | null,
-): Promise<{ ticket: MeetingTicket | null; neuGemintet: boolean }> {
+): Promise<{ ticket: MeetingTicket | null; neuGemintet: boolean; neuesMeeting: boolean }> {
   const ausCookie = await meetingCookiePruefen(cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE), env.COOKIE_GEHEIMNIS);
-  if (ausCookie) return { ticket: ausCookie, neuGemintet: false };
+  if (ausCookie) return { ticket: ausCookie, neuGemintet: false, neuesMeeting: false };
 
   const kopplungsParam = url.searchParams.get("meeting");
   if (kopplungsParam) {
     const ausToken = await kopplungstokenPruefen(kopplungsParam, env.COOKIE_GEHEIMNIS);
-    if (ausToken) return { ticket: ausToken, neuGemintet: true }; // neues Cookie setzen, Token nicht erneut nötig
-    return { ticket: null, neuGemintet: false }; // fremd/abgelaufen – NIE als meetingId übernehmen
+    // Das Handy koppelt an ein Meeting, das am Laptop schon begonnen hat – kein neues (Ticket #64: NESTOR_PAUSE
+    // betrifft das nicht).
+    if (ausToken) return { ticket: ausToken, neuGemintet: true, neuesMeeting: false };
+    return { ticket: null, neuGemintet: false, neuesMeeting: false }; // fremd/abgelaufen – NIE als meetingId übernehmen
   }
 
-  if (kunde) return { ticket: { meetingId: crypto.randomUUID(), kunde }, neuGemintet: true };
-  return { ticket: null, neuGemintet: false };
+  // Einzige Stelle, die wirklich ein brandneues Meeting mintet (Ticket #64: hier greift NESTOR_PAUSE).
+  if (kunde) return { ticket: { meetingId: crypto.randomUUID(), kunde }, neuGemintet: true, neuesMeeting: true };
+  return { ticket: null, neuGemintet: false, neuesMeeting: false };
 }
 
 /** Die eigentliche Zustellung, vor den Sicherheitsheadern (einzige Aufrufstelle unten im Export). */
@@ -448,6 +473,9 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
   }
   if (pfad === "/intern/meeting-ende") {
     return handleMeetingEnde(request, env, ctx);
+  }
+  if (pfad === "/intern/kosten-deckel") {
+    return handleKostenDeckel(request, env, ctx);
   }
   if (pfad === "/intern/kopplungstoken") {
     return handleKopplungstoken(request, env);
@@ -471,7 +499,7 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
   // Meeting-Zuordnung NUR aus einer gültigen, unabgelaufenen Signatur (Cookie oder Kopplungstoken) – niemals
   // aus einem rohen `?meeting=`-Wert oder unsigniertem Cookie (Ticket #63, Befund 1). Ohne gültige Signatur
   // und ohne Login gibt es gar keine Meeting-ID und damit auch kein `getContainer` weiter unten.
-  const { ticket, neuGemintet } = await meetingAufloesen(request, url, env, kunde);
+  const { ticket, neuGemintet, neuesMeeting } = await meetingAufloesen(request, url, env, kunde);
   const lmcKopplungVorhanden = !!cookieLesen(request.headers.get("Cookie"), "lmc_kopplung");
   const gekoppelt = !!ticket && !kunde && lmcKopplungVorhanden;
 
@@ -483,6 +511,12 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
     // Aufrufe (Ticket #63, Mindestanforderung aus U4): derselbe Hinweis wie zuvor, nur ohne je `getContainer`
     // zu erreichen.
     return new Response("Kein Meeting zugeordnet – bitte den QR-Code am Dashboard scannen.", { status: 400 });
+  }
+  // Notschalter (Ticket #64): genau hier, wo ein brandneues Meeting entstehen würde – ein Handy, das sich an
+  // ein schon laufendes Meeting koppelt, oder ein Cookie für ein laufendes Meeting kommen nie hierher
+  // (neuesMeeting ist dann false), laufende Meetings bleiben also unberührt.
+  if (neuesMeeting && pausiert(env)) {
+    return pauseSeite();
   }
 
   const kopfzeilen = new Headers(request.headers);

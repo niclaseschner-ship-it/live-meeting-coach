@@ -189,9 +189,10 @@ Umfang und Ausgabeform direkt im Button, nicht nur in Hover-Texten. „Zusammenf
 „Lücken klären“, „Protokoll“ heißt „Gesamtprotokoll“. Der Überblick heißt entsprechend der Auswahl
 „Punktüberblick“ oder „Meetingüberblick“; die Auswahl gibt es auch am Handy und wird an den Server übergeben.
 Die bisherigen gesprochenen Aufträge bleiben gültig. Kleine Tags zeigen grobe **Textkosten** in US-Cent
-aus den vorhandenen Modelltarifen und der Kontextlänge; kein Gesamtpreis und keine Obergrenze. Stimme,
-nachgeholte Auswertung und Recherche sind ausdrücklich zusätzlich. Für die lokal erzeugte Protokollliste,
-Bilder und unbekannte Modelle gibt es keine erfundenen festen KI-Preise.
+aus den vorhandenen Modelltarifen und der Kontextlänge; kein Gesamtpreis in der Oberfläche, aber ein
+Kostendeckel je Meeting (Ticket #64, Abschnitt 5). Stimme, nachgeholte Auswertung und Recherche sind
+ausdrücklich zusätzlich. Für die lokal erzeugte Protokollliste, Bilder und unbekannte Modelle gibt es keine
+erfundenen festen KI-Preise.
 
 Die fünf kompakten Kernaktionen stehen in der Leiste unter der Regel-Ampelzone; seltenere Aktionen (Bild,
 Regelprüfung, Frage) sind unter „Weitere Aktionen“ gebündelt. Die Sprechtaste bleibt ein eigener, je nach Stufe
@@ -463,6 +464,7 @@ zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen
 | | |
 |---|---|
 | Kosten | Premium ≤ 2 $ je Stunde, Basis ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll. Mit den Meeting-Artefakten (4.9) Premium etwa 2,2 $, Basis etwa 0,85 $ je Stunde (Richtwert mit 10 Fragen und 2 Recherchen) – Basis liegt damit über dem Ziel; ob seltener erkannt oder das Ziel angehoben wird, ist offen (Entscheidung Niclas) |
+| Kostenbremse (Ticket #64, Entscheidung Niclas 10.10.2026) | Höchstdauer 3 Std. je Meeting (Warnung im Band 10 min vorher, danach geordnetes Ende); Kostendeckel je Meeting 5 $ Premium / 2 $ Basis – danach keine weiteren KI-Aufrufe, lokale Signale (Zeit, Monolog, Überlappung, Sprechererkennung) laufen weiter; Tagesdeckel 15 $ je Zugang und Tag (danach kein neues Meeting). Notschalter `NESTOR_PAUSE` im Worker stoppt neue Meetings, laufende bleiben unberührt. Ausgabenlimits im eigenen OpenAI-Projekt und beim Mistral-Workspace sind operativ zu setzen und gegenzuprüfen – aus dem Repo selbst nicht einsehbar |
 | Datenschutz Basis | In Basis geht kein einziger Aufruf an OpenAI (nachgewiesen über das Nutzungsprotokoll) |
 | Parallele Meetings | gemessen ohne 429: Basis bis 24, Premium bis 8 gleichzeitig ([messung_basis.md](messung_basis.md)); bei Überlast wiederholt Nestor mit Wartezeit und sagt sonst „Ich komme gerade nicht durch, versucht es gleich nochmal.“ |
 | Datenhaltung | Ton und Transkript nur bis zum Abschluss; danach bleibt nur, was heruntergeladen oder gespendet wurde. Nutzungsprotokoll ohne Inhalte. |

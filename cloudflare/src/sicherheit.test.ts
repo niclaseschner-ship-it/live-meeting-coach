@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { containerAufrufenOderAusweichen, mitSicherheitsheadern, workerGeheimnisPasst } from "./sicherheit";
+import {
+  containerAufrufenOderAusweichen, mitSicherheitsheadern, pauseSeite, pausiert, workerGeheimnisPasst,
+} from "./sicherheit";
 
 describe("Worker-Geheimnis für /intern/*", () => {
   it("lässt die richtige Kopfzeile durch", () => {
@@ -62,5 +64,24 @@ describe("Kapazitätsfehler", () => {
   it("reicht WebSocket-Upgrades unverändert durch (sonst gehen Audio- und Handy-Kanal verloren)", () => {
     const upgrade = { status: 101, webSocket: {}, headers: new Headers() } as unknown as Response;
     expect(mitSicherheitsheadern(upgrade)).toBe(upgrade);
+  });
+});
+
+describe("Notschalter NESTOR_PAUSE (Ticket #64)", () => {
+  it("ist ohne gesetzte Variable aus", () => {
+    expect(pausiert({})).toBe(false);
+  });
+
+  it("schaltet nur bei genau \"1\" ein", () => {
+    expect(pausiert({ NESTOR_PAUSE: "1" })).toBe(true);
+    expect(pausiert({ NESTOR_PAUSE: "true" })).toBe(false);
+    expect(pausiert({ NESTOR_PAUSE: "0" })).toBe(false);
+    expect(pausiert({ NESTOR_PAUSE: "" })).toBe(false);
+  });
+
+  it("zeigt eine freundliche Seite statt eines rohen Fehlers", async () => {
+    const antwort = pauseSeite();
+    expect(antwort.status).toBe(503);
+    expect(await antwort.text()).toContain("keine neuen Meetings");
   });
 });
