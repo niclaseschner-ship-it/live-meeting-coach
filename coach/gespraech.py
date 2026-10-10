@@ -106,6 +106,12 @@ karte_zeigen und artefakt_eintragen spricht das System selbst – ruf das Werkze
 """
 
 
+class GespraechGesperrt(RuntimeError):
+    """Ticket #64: Meeting-Kostendeckel erreicht – `starten` verweigert eine neue Realtime-Sitzung. Die
+    Aufrufer (coach/assistent.py: `_gespraech_starten`, `_begruessen_frei`) fangen das wie jeden anderen
+    Verbindungsfehler ab und weichen auf den Text-Weg aus."""
+
+
 class Gespraech:
     def __init__(self, assistent) -> None:
         self.a = assistent
@@ -129,7 +135,15 @@ class Gespraech:
         # conversation.item.truncate auch dann, wenn sie schon fertig erzeugt ist (#20)
         self._wiedergabe: dict | None = None
 
+    def _gesperrt_pruefen(self) -> None:
+        """Ticket #64: Meeting-Kostendeckel erreicht – keine neue Realtime-Sitzung mehr (weder Gespräch noch
+        Begrüßung, die `starten` beide hier aufrufen). Eine schon offene Sitzung schließt `_kosten_pruefen`
+        (coach/pipeline.py) selbst, sobald der Deckel erreicht ist."""
+        if self.coach.ki_gesperrt:
+            raise GespraechGesperrt("Kostendeckel erreicht – kein neues Gespräch.")
+
     async def starten(self, frage: str | None, bogen=None) -> None:
+        self._gesperrt_pruefen()
         # Realtime-Gespräch ist OpenAI – in Basis wirft die Fabrik AnbieterFehler (Ticket #13/#60)
         url, kopf = anbieter.realtime_ws(self.wahl)
         self._ws = await anbieter.ws_verbinden(self.wahl, url, kopf, self.coach.anbieter_verstoss)

@@ -255,6 +255,7 @@ class Begruessung(Gespraech):
 
     # --- Auf- und Abbau ---
     async def starten(self, frage: str | None = None) -> None:
+        self._gesperrt_pruefen()  # Ticket #64: Kostendeckel schon beim Start erreicht – keine neue Sitzung
         # Realtime-Begrüßung gibt es nur in Premium – in Basis wirft die Fabrik AnbieterFehler (Ticket #60)
         url, kopf = anbieter.realtime_ws(self.wahl)
         self._ws = await anbieter.ws_verbinden(self.wahl, url, kopf, self.coach.anbieter_verstoss)

@@ -8,8 +8,15 @@ cloudflare/src/zaehler.test.ts bzw. cloudflare/src/sicherheit.test.ts (vitest).
 from __future__ import annotations
 
 import asyncio
+import time
 
+import pytest
+
+from coach import anbieter as anbieter_mod
 from coach import kosten, pipeline
+from coach.assistent import Bogen
+from coach.begruessung import Begruessung
+from coach.gespraech import Gespraech, GespraechGesperrt
 from coach.pipeline import Coach
 
 
@@ -20,6 +27,30 @@ class _FakeHoerstrom:
 
     async def beenden(self) -> None:
         pass
+
+
+class _FakeStrom:
+    """Attrappe für einen offenen Live-Text- oder Gesprächs-Strom: nur `schliessen()` zählt hier."""
+
+    _ws = None  # Coach.kosten_stand liest live._ws (LiveText-Schnittstelle) – hier nie aktiv
+
+    def __init__(self) -> None:
+        self.geschlossen = False
+
+    async def schliessen(self) -> None:
+        self.geschlossen = True
+
+
+def _ws_verbinden_verboten(monkeypatch: pytest.MonkeyPatch) -> list:
+    """`anbieter.ws_verbinden` darf nach dem Deckel nicht mehr aufgerufen werden – schlägt sonst laut auf."""
+    aufrufe: list = []
+
+    async def _boom(*a, **k):
+        aufrufe.append((a, k))
+        raise AssertionError("ws_verbinden hätte nach dem Kostendeckel nicht aufgerufen werden dürfen")
+
+    monkeypatch.setattr(anbieter_mod, "ws_verbinden", _boom)
+    return aufrufe
 
 
 async def _takt_mit_hintergrund(coach: Coach) -> None:
@@ -103,3 +134,65 @@ def test_hoechstdauer_beendet_das_meeting_geordnet():
 
     assert coach.hoerstrom is None  # hoeren_beenden ist tatsächlich gelaufen
     assert not coach.meeting.laeuft  # normaler Abschluss, kein harter Abbruch
+
+
+# --- Die teuersten Ströme laufen über eigene WebSockets, nicht über self._client ---------------------------
+# (coach/livetext.py, coach/gespraech.py, coach/begruessung.py; alle über coach/anbieter.py:ws_verbinden)
+
+def test_meeting_deckel_schliesst_laufenden_live_text_und_gespraech(monkeypatch, tmp_path):
+    monkeypatch.setattr(pipeline, "KOSTEN", kosten.Zaehler(tmp_path / "nutzung.jsonl"))
+    coach = _coach("premium")
+    pipeline.KOSTEN.buchen({"art": "themen", "modell": "gpt-5.4-mini", "tokens_rein": 0, "tokens_raus": 1_200_000})
+    coach.hoerstrom = _FakeHoerstrom()
+    coach.hoerstrom.live = live = _FakeStrom()
+    coach.assistent.gespraech = gespraech = _FakeStrom()
+
+    asyncio.run(_takt_mit_hintergrund(coach))
+
+    assert coach._client is None
+    assert live.geschlossen  # laufender Live-Text geordnet zu
+    assert gespraech.geschlossen  # laufendes Gespräch geordnet zu
+
+
+def test_gespraech_starten_verweigert_sich_zentral_nach_kostendeckel(monkeypatch):
+    coach = _coach("premium")
+    coach._kosten_gedeckelt = True  # wie von _kosten_pruefen gesetzt, hier ohne den ganzen Takt
+    aufrufe = _ws_verbinden_verboten(monkeypatch)
+
+    g = Gespraech(coach.assistent)
+    with pytest.raises(GespraechGesperrt):
+        asyncio.run(g.starten("Wie weit sind wir?"))
+    assert aufrufe == []
+
+
+def test_begruessung_starten_verweigert_sich_zentral_nach_kostendeckel(monkeypatch):
+    coach = _coach("premium")
+    coach._kosten_gedeckelt = True
+    aufrufe = _ws_verbinden_verboten(monkeypatch)
+
+    b = Begruessung(coach.assistent, vorstellung=False)
+    with pytest.raises(GespraechGesperrt):
+        asyncio.run(b.starten())
+    assert aufrufe == []
+
+
+def test_ansprache_startet_kein_gespraech_nach_kostendeckel(monkeypatch):
+    """Reviewer-Vorgabe: „Ansprache startet kein Gespräch.“ `_gespraech_starten` ist die Stelle, an der eine neue
+    Realtime-Sitzung für eine per Namen gestellte Frage entstünde (coach/assistent.py: `_frage_lauf`)."""
+    coach = _coach("premium")
+    coach._kosten_gedeckelt = True
+    aufrufe = _ws_verbinden_verboten(monkeypatch)
+    text_weg_versucht = []
+
+    async def _stub_antworten(b, bestaetigt=False):
+        text_weg_versucht.append(bestaetigt)
+
+    monkeypatch.setattr(coach.assistent, "_antworten", _stub_antworten)
+    b = Bogen(1, "frage", "Wie weit sind wir?", "stimme", time.monotonic())
+
+    ok = asyncio.run(coach.assistent._gespraech_starten(b))
+
+    assert ok is True  # „behandelt“ – per Rückfall auf den Text-Weg
+    assert aufrufe == []  # keine neue Realtime-Verbindung
+    assert text_weg_versucht  # der Rückfall wurde tatsächlich versucht
+    assert coach.assistent.gespraech is None

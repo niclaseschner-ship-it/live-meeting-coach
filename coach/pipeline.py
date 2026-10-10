@@ -243,6 +243,14 @@ class Coach:
         return (self.startet or self.hoerstrom is not None
                 or (self.archiv is not None and not self.archiv.fertig))
 
+    @property
+    def ki_gesperrt(self) -> bool:
+        """Ticket #64: Meeting-Kostendeckel erreicht – keine neue KI-Verbindung mehr, auch keine, die ohne
+        `self._client` läuft (Realtime-Gespräch/-Begrüßung, coach/gespraech.py, coach/begruessung.py; beide
+        prüfen das vor jedem `anbieter.ws_verbinden`). Laufende Live-Text- und Gesprächsverbindungen schließt
+        `_kosten_pruefen` beim Erreichen selbst – diese Eigenschaft verweigert nur neue."""
+        return self._kosten_gedeckelt
+
     def stufe_setzen(self, stufe: str, nur_knopfdruck: bool = False) -> None:
         """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting. „Nur auf Knopfdruck“ ist ein
         Schalter in Basis (Ticket #13: der frühere Modus „Auf Knopfdruck“), in Premium gibt es ihn nicht.
@@ -566,6 +574,14 @@ class Coach:
         alt, self._client = self._client, None
         if hasattr(alt, "schliessen"):
             hintergrund_leise(alt.schliessen())
+        # Die teuersten Ströme laufen über eigene WebSockets, nicht über self._client (Live-Text:
+        # coach/livetext.py; Realtime-Gespräch/-Begrüßung: coach/gespraech.py, coach/begruessung.py) – sie
+        # bleiben offen, bis sie selbst geschlossen werden. Laufende hier geordnet zu, neue verweigert
+        # `ki_gesperrt` oben zentral in Gespraech.starten (Begruessung erbt davon).
+        if self.hoerstrom is not None and self.hoerstrom.live is not None:
+            hintergrund_leise(self.hoerstrom.live.schliessen())
+        if self.assistent.gespraech is not None:
+            hintergrund_leise(self.assistent.gespraech.schliessen())
         self.entscheider.einmalig(
             self.meeting, "kosten-deckel", "kosten", "warnung", "gruppe",
             f"Kostendeckel für dieses Meeting erreicht ({deckel:.0f} $) – die KI-Auswertung ist für den Rest "
