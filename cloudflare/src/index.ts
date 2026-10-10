@@ -44,6 +44,7 @@ export interface Env {
   TELEGRAM_CHAT_ID?: string; // Secret – Niclas' privater Chat
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
   // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
+  LOKAL_COACH_URL?: string; // NUR Test-Pipeline (#61, `wrangler dev`): lokaler uvicorn statt Container – in prod nie gesetzt
 }
 
 /** Der Nestor-Container selbst: ein Image, 8080, schläft nach Ruhe ein (siehe README zur Begründung). */
@@ -84,6 +85,25 @@ export class Nestor extends Container<Env> {
   async meetingBeenden(): Promise<void> {
     await meetingBeenden(this.wahlSpeicher);
   }
+}
+
+/**
+ * Testnaht der lokalen Klick-E2E (Ticket #61): Ist `LOKAL_COACH_URL` gesetzt (nur `wrangler dev` der Pipeline,
+ * nie in wrangler.jsonc oder als Secret), geht die Anfrage statt an den Meeting-Container an den lokalen Coach.
+ * Pfad, Query, Methode, Kopfzeilen und Körper bleiben gleich; die ursprüngliche Adresse geht als
+ * `X-Forwarded-Host` mit, weil `fetch` den Host aus der Ziel-URL nimmt. Ohne die Variable: `null`.
+ */
+export function lokalerCoach(env: Pick<Env, "LOKAL_COACH_URL">): { fetch(request: Request): Promise<Response> } | null {
+  const ziel = env.LOKAL_COACH_URL;
+  if (!ziel) return null;
+  return {
+    fetch(request: Request): Promise<Response> {
+      const alt = new URL(request.url);
+      const kopf = new Headers(request.headers);
+      kopf.set("X-Forwarded-Host", alt.host);
+      return fetch(new Request(new URL(alt.pathname + alt.search, ziel).toString(), new Request(request, { headers: kopf })));
+    },
+  };
 }
 
 const KUNDE_COOKIE = "nestor_kunde";
@@ -472,7 +492,7 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
   if (kunde) kopfzeilen.set("X-Nestor-Kunde", kunde);
   const weitergeleitet = new Request(request, { headers: kopfzeilen });
 
-  const container = getContainer(env.NESTOR, ticket.meetingId);
+  const container = lokalerCoach(env) ?? getContainer(env.NESTOR, ticket.meetingId);
   let antwort = await containerAufrufenOderAusweichen(
     () => container.fetch(weitergeleitet), (text) => melden(ctx, env, text), pfad,
   );

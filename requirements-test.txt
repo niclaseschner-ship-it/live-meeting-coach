@@ -1,3 +1,6 @@
 # Zusätzlich zu requirements.txt, nur für Testskripte (nicht fürs Docker-Image).
 # Playwright treibt scripts/cloudtest.py; das System-Chromium wird benutzt (kein `playwright install`).
 playwright>=1.48
+# Klick-E2E Stufe B (Ticket #61): QR-Bild dekodieren, Test-Sprache lokal erzeugen (beide mit ARM64-Wheels)
+opencv-python-headless>=4.10
+piper-tts>=1.3

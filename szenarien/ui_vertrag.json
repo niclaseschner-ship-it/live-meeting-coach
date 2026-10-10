@@ -1,0 +1,109 @@
+{
+  "_zweck": "UI-Vertrag (Ticket #61, Stufe A statisch / Stufe B im Klick-Durchlauf). Abgeleitet aus den AUFTRÄGEN, nicht aus dem Code: Wo der Code abweicht, wird die Prüfung rot – das ist gewollt. Bei jedem UI-Auftrag wird zuerst diese Datei vom Auftrag aus geändert (Ticket-Text → Vertragszeile), dann der Code.",
+  "_quellen": {
+    "kernknoepfe": "Pilotfeedback 09.10. (#55) und #66: genau fünf kompakte Kernknöpfe Stand, Zusammenfassen, Lücken, Protokoll, Überblick; Meetingbild, Regelprüfung und Frage nachgeordnet unter „Weitere Aktionen“.",
+    "abschluss": "#67 Punkt 1: Abschlussreihenfolge Datenspende → Unterstützung → Protokoll → Paket.",
+    "handy": "#53/#56: kein Meetingstart ohne gekoppeltes Handy mit aktivem Mikrofon und Ton; genau ein Handy (zweites wird abgewiesen).",
+    "phasen": "#66: Inhalte, die in einer Phase nicht gebraucht werden, sind ausgeblendet – auf Handy und Desktop.",
+    "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe – halten, sprechen, loslassen – mit gleicher Rückmeldung.",
+    "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy."
+  },
+
+  "phasen": ["start", "vorbereitung", "live", "abschluss"],
+  "stufen": ["basis", "premium"],
+  "geraete": ["desktop", "handy"],
+
+  "seiten": {
+    "start": {"desktop": "/static/start.html"},
+    "vorbereitung": {"desktop": "/static/index.html", "handy": "/static/handy.html"},
+    "live": {"desktop": "/static/index.html", "handy": "/static/handy.html"},
+    "abschluss": {"desktop": "/static/abschluss.html", "handy": "/static/handy.html"}
+  },
+
+  "sprechknoepfe": {
+    "bedienmodell": "halten",
+    "rueckmeldung_klasse": "haelt",
+    "rueckmeldung_text": "Ich höre",
+    "knoepfe": [
+      {"id": "agenda-mikro", "geraet": "desktop", "phase": "vorbereitung", "stufen": ["basis", "premium"], "name": "Agenda per Sprache"},
+      {"id": "btn-taste", "geraet": "desktop", "phase": "live", "stufen": ["basis"], "name": "Sprechtaste"},
+      {"id": "btn-fragen", "geraet": "handy", "phase": "live", "stufen": ["basis", "premium"], "name": "Sprechtaste am Handy"}
+    ]
+  },
+
+  "kernknoepfe": [
+    {"knopf": "stand", "beschriftung": "Stand"},
+    {"knopf": "zusammenfassen", "beschriftung": "Zusammenfassen"},
+    {"knopf": "fehlt", "beschriftung": "Lücken"},
+    {"knopf": "protokoll", "beschriftung": "Protokoll"},
+    {"knopf": "ueberblick", "beschriftung": "Überblick"}
+  ],
+  "kernknoepfe_selektor": {"desktop": "#knopf-leiste .knopf-knoepfe .knopf-art", "handy": "#h-nestor-karte .h-knopfraster .h-knopf"},
+  "nachgeordnet": {
+    "_zweck": "Gibt es, aber nur unter „Weitere Aktionen“ – nie neben den fünf Kernknöpfen.",
+    "desktop": ["#knopf-leiste .zusatz-aktionen [data-knopf=\"bild\"]", "#knopf-leiste .zusatz-aktionen [data-knopf=\"regeln\"]", "#knopf-fragen"],
+    "handy": ["#h-nestor-karte .zusatz-aktionen [data-knopf=\"bild\"]", "#h-nestor-karte .zusatz-aktionen [data-knopf=\"regeln\"]"]
+  },
+
+  "bereiche": {
+    "_zweck": "Sichtbarkeitsmatrix. 'pflicht' = muss sichtbar sein; 'verboten' = darf nicht sichtbar sein; 'erlaubt' = darf zusätzlich sichtbar sein (Meldungen, Klappfenster). Jeder andere sichtbare Bereich aus 'kandidaten' ist überzählig und damit ein Fehler.",
+    "kandidaten": {
+      "desktop": ["#regeln-zone", "#knopf-leiste", "#kosten", "#handy-fenster", "#einstellungen", "#band", "#fehler", "#mikro-weg", "#ton-fehlt", "#einrichtung", "#live", "#leiste"],
+      "handy": ["#koppeln", "#warnung", "#mikro-karte", "#ton-fehlt", "#band", "#h-nestor-karte", "#h-verlauf-karte", "#h-transkript-karte", "#h-meeting"],
+      "abschluss": ["#ab-datenspende", "#ab-unterstuetzung", "#ab-protokoll", "#ab-paket"]
+    },
+    "start": {
+      "desktop": {
+        "alle": {"pflicht": ["#karte-basis", "#karte-premium"], "verboten": [], "erlaubt": []}
+      }
+    },
+    "vorbereitung": {
+      "desktop": {
+        "alle": {"pflicht": ["#einrichtung", "#btn-start", "#modus-pill", "#agenda-feld", "#agenda-mikro", "#agenda-senden"],
+                 "verboten": ["#live", "#knopf-leiste", "#regeln-zone", "#leiste", "#btn-stopp"],
+                 "erlaubt": ["#handy-fenster", "#band", "#fehler"]}
+      },
+      "handy": {
+        "alle": {"pflicht": ["#mikro-karte", "#btn-mikro", "#modus"],
+                 "verboten": ["#h-nestor-karte", "#h-verlauf-karte", "#h-transkript-karte", "#koppeln"],
+                 "erlaubt": ["#warnung", "#h-meeting", "#band"]}
+      }
+    },
+    "live": {
+      "desktop": {
+        "alle": {"pflicht": ["#live", "#knopf-leiste", "#btn-stopp", "#modus-pill"],
+                 "verboten": ["#einrichtung", "#btn-start"],
+                 "erlaubt": ["#regeln-zone", "#band", "#fehler", "#leiste", "#kosten", "#mikro-weg", "#ton-fehlt", "#handy-fenster"]},
+        "basis": {"pflicht": ["#btn-taste"], "verboten": [], "erlaubt": []},
+        "premium": {"pflicht": [], "verboten": [], "erlaubt": []}
+      },
+      "handy": {
+        "alle": {"pflicht": ["#h-nestor-karte", "#btn-fragen", "#modus"],
+                 "verboten": ["#koppeln", "#mikro-vorbereitung"],
+                 "erlaubt": ["#mikro-karte", "#h-verlauf-karte", "#h-transkript-karte", "#h-meeting", "#band", "#warnung", "#ton-fehlt"]}
+      }
+    },
+    "abschluss": {
+      "desktop": {
+        "alle": {"pflicht": ["#ab-datenspende", "#ab-protokoll", "#ab-paket", "#btn-fertig"],
+                 "verboten": [],
+                 "erlaubt": ["#ab-unterstuetzung"]}
+      }
+    }
+  },
+
+  "abschluss_reihenfolge": ["#ab-datenspende", "#ab-unterstuetzung", "#ab-protokoll", "#ab-paket"],
+
+  "regeln": [
+    {"id": "start_ohne_handy_gesperrt", "beschreibung": "Desktop: „Meeting starten“ ist deaktiviert, solange kein Handy gekoppelt ist und Mikrofon und Ton aktiviert hat.", "selektor": "#btn-start"},
+    {"id": "start_mit_handy_frei", "beschreibung": "Desktop: nach Kopplung und „Mikrofon und Ton aktivieren“ am Handy wird „Meeting starten“ innerhalb von 10 s klickbar.", "selektor": "#btn-start", "frist_s": 10},
+    {"id": "genau_ein_handy", "beschreibung": "Ein zweites Handy mit demselben QR-Code wird sichtbar abgewiesen.", "selektor": "#koppeln-falsch", "text_enthaelt": "Anderes Handy verbunden"},
+    {"id": "qr_ohne_login", "beschreibung": "Der QR-Code (als Bild dekodiert) führt ein nicht angemeldetes Handy ohne „Kein Meeting zugeordnet“ in dasselbe Meeting.", "verboten_text": "Kein Meeting zugeordnet"},
+    {"id": "stufe_sichtbar", "beschreibung": "Pill zeigt die gewählte Stufe auf Desktop (#modus-pill) und Handy (#modus).", "selektoren": {"desktop": "#modus-pill", "handy": "#modus"}}
+  ],
+
+  "bekannte_abweichungen": {
+    "_zweck": "Prüfungen, die gegen den heutigen Code rot sein dürfen, weil der Auftrag schon als Ticket offen ist. Der Lauf meldet sie als 'bekannt_rot' mit Ticket statt als neuen Fehler. Ist das Ticket erledigt, Eintrag löschen – dann zählt die Prüfung wieder voll. Stand 10.10.: leer – alle Vertragsprüfungen sind gegen main grün (die Abschlussreihenfolge stellt static/abschluss.js:25 zur Laufzeit her, auch wenn abschluss.html sie im Quelltext anders listet).",
+    "_beispiel": {"sichtbarkeit_live_handy": "#66"}
+  }
+}

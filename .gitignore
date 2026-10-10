@@ -33,3 +33,6 @@ cloudflare/node_modules/
 cloudflare/.wrangler/
 cloudflare/dist/
 cloudflare/.dev.vars
+
+# Klick-E2E (Ticket #61): Test-Audio erzeugt tests/e2e/audio_bauen.py neu
+tests/e2e/audio/
