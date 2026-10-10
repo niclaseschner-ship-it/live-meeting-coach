@@ -52,7 +52,8 @@ def staging_werte() -> dict[str, str]:
 
 def staging_sha(url: str) -> str | None:
     try:
-        with urllib.request.urlopen(url.rstrip("/") + "/version", timeout=15) as a:
+        anfrage = urllib.request.Request(url.rstrip("/") + "/version", headers={"User-Agent": "nestor-pipeline-c/1"})
+        with urllib.request.urlopen(anfrage, timeout=15) as a:  # Standard-UA „Python-urllib“ blockt Cloudflare (403)
             return json.load(a).get("git_sha")
     except Exception:  # noqa: BLE001
         return None

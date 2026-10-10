@@ -59,7 +59,8 @@ def main() -> int:
     sha = git("rev-parse", "HEAD")
     haupt = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).parent
     try:
-        with urllib.request.urlopen(STAGING + "/version", timeout=10) as a:
+        anfrage = urllib.request.Request(STAGING + "/version", headers={"User-Agent": "nestor-pipeline-d/1"})
+        with urllib.request.urlopen(anfrage, timeout=10) as a:  # Standard-UA „Python-urllib“ blockt Cloudflare (403)
             staging_sha = json.load(a).get("git_sha")
     except Exception:  # noqa: BLE001
         staging_sha = None
