@@ -12,6 +12,10 @@ Nötige Umgebung:
   NESTOR_APPLICATION_ID    – ID der Container-Anwendung "nestor-nestor"
 
 Aufrufe:
+  rollout_warten.py konto
+      Druckt die Konto-ID aus `GET /accounts` (braucht nur das Token). Rückfall für Konto-Tokens, mit denen
+      `wrangler whoami` an `/memberships` scheitert (Ticket #62); rc=1, wenn nicht genau ein Konto sichtbar ist.
+
   rollout_warten.py instanzen
       Druckt jede nicht-inaktive Instanz; rc=1 wenn mindestens eine läuft, sonst 0. Fürs Deploy-Gate
       ("Abbruch bei laufenden Container-Instanzen außer --erzwingen").
@@ -65,6 +69,21 @@ def aktive_instanzen() -> list[dict]:
     return [i for i in daten.get("instances", []) if i.get("status", {}).get("state") != "inactive"]
 
 
+def cmd_konto(_args: argparse.Namespace) -> int:
+    token = _umgebung("CLOUDFLARE_API_TOKEN")
+    anfrage = urllib.request.Request("https://api.cloudflare.com/client/v4/accounts",
+                                     headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(anfrage, timeout=30) as antwort:
+            konten = json.load(antwort).get("result") or []
+    except urllib.error.HTTPError as e:
+        sys.exit(f"Cloudflare-API /accounts: HTTP {e.code}")
+    if len(konten) != 1:
+        sys.exit(f"Erwartet genau ein Konto, sichtbar: {len(konten)} – CLOUDFLARE_ACCOUNT_ID von Hand setzen.")
+    print(konten[0]["id"])
+    return 0
+
+
 def cmd_instanzen(_args: argparse.Namespace) -> int:
     aktive = aktive_instanzen()
     for i in aktive:
@@ -113,12 +132,15 @@ def cmd_warten(args: argparse.Namespace) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="befehl", required=True)
+    sub.add_parser("konto")
     sub.add_parser("instanzen")
     sub.add_parser("neuester-tag")
     pw = sub.add_parser("warten")
     pw.add_argument("--tag", required=True, help="Bild-Tag, z. B. aus 'rollout_warten.py neuester-tag'")
     pw.add_argument("--frist", type=float, default=600)
     args = p.parse_args()
+    if args.befehl == "konto":
+        return cmd_konto(args)
     if args.befehl == "instanzen":
         return cmd_instanzen(args)
     if args.befehl == "neuester-tag":
