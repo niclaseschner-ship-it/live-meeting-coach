@@ -399,7 +399,7 @@ def test_funkgeraet_reagiert_nicht_auf_den_namen_sondern_auf_die_taste():
         return c, nach_name, gesendet
 
     c, (bogen, vorher, band), gesendet = asyncio.run(ablauf())
-    assert bogen is None and vorher == [] and band == ["Sprechtaste halten, dann fragen"]
+    assert bogen is None and vorher == [] and len(band) == 1 and band[0].startswith("In Basis: Sprechtaste halten")
     assert "Ihr seid bei Punkt eins." in _texte(gesendet)
     assert c.assistent.pausiert
 

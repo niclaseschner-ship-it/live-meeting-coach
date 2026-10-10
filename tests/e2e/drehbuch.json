@@ -93,6 +93,164 @@
       }
     },
     {
+      "id": "schnell_vereinsbus_fehler",
+      "_zweck": "Ticket #72: simulierter Anbieterfehler bei der automatischen Artefakt-Erkennung – muss sichtbar im Band erscheinen; der nächste Takt wiederholt (nach 30 s) und bekommt dann die Regel darunter.",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "nutzer_enthaelt": [
+        "Kauf lohnt"
+      ],
+      "fehler_status": 500,
+      "fehler_sekunden": 20
+    },
+    {
+      "id": "schnell_vereinsbus",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "nutzer_enthaelt": [
+        "Kauf lohnt"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "offen",
+            "was": "Lohnt sich ein Kauf des Vereinsbusses?",
+            "wer": null,
+            "bis": null,
+            "status": null,
+            "vage": false,
+            "konfidenz": 0.8,
+            "zeit": null,
+            "zitat": "Beim Vereinsbus prüfen wir noch, ob sich ein Kauf lohnt."
+          }
+        ]
+      }
+    },
+    {
+      "id": "schnell_beschluss_und_aufgabe",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "nutzer_enthaelt": [
+        "neuntausend",
+        "Sabine"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "entscheidung",
+            "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
+            "wer": "die Runde",
+            "bis": null,
+            "status": "endgueltig",
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": null,
+            "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"
+          },
+          {
+            "nummer": null,
+            "typ": "aufgabe",
+            "was": "Fahrten der Jugend des letzten Jahres liefern",
+            "wer": "Sabine",
+            "bis": "Freitag",
+            "status": null,
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": null,
+            "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."
+          }
+        ]
+      }
+    },
+    {
+      "id": "schnell_beschluss",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "nutzer_enthaelt": [
+        "neuntausend"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "entscheidung",
+            "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
+            "wer": "die Runde",
+            "bis": null,
+            "status": "endgueltig",
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": null,
+            "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"
+          }
+        ]
+      }
+    },
+    {
+      "id": "schnell_aufgabe",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "nutzer_enthaelt": [
+        "Sabine"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "aufgabe",
+            "was": "Fahrten der Jugend des letzten Jahres liefern",
+            "wer": "Sabine",
+            "bis": "Freitag",
+            "status": null,
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": null,
+            "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."
+          }
+        ]
+      }
+    },
+    {
+      "id": "schnell_nichts",
+      "system_enthaelt": [
+        "Schnellprüfung im laufenden Meeting"
+      ],
+      "antwort": {
+        "artefakte": []
+      }
+    },
+    {
       "id": "artefakte_beschluss_und_aufgabe",
       "system_enthaelt": [
         "neutraler Protokollhelfer"
@@ -335,5 +493,6 @@
       "antwort_text": "Beschlossen sind höchstens neuntausend Euro Ausgaben und dreitausendfünfhundert Euro Zuschuss."
     }
   ],
-  "_ansprache": "Satz 4 spricht Nestor mit Namen an. Premium beantwortet ihn per Realtime (440 Hz, Karte „Sommerfest-Budget beschlossen“); Basis ignoriert die Ansprache (Funkgerät: nur Sprechtaste)."
+  "_ansprache": "Satz 4 spricht Nestor mit Namen an. Premium beantwortet ihn per Realtime (440 Hz, Karte „Sommerfest-Budget beschlossen“); Basis ignoriert die Ansprache (Funkgerät: nur Sprechtaste).",
+  "_schnell": "Ticket #72: Satz 2 (beschließen) und Satz 3 (liefert bis Freitag) lösen die Schnell-Erkennung aus – Karte ≤ 60 s. Satz 4 spricht Nestor an und zählt nicht. Satz 5 (prüfen wir noch) bekommt zuerst HTTP 500 (Band), beim nächsten Takt-Versuch das Ergebnis."
 }

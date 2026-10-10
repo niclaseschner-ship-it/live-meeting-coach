@@ -19,6 +19,10 @@ Status) – **nie** ein Schlüssel und nie Audio, nur ob eine Authorization-Kopf
 `tests/e2e/drehbuch.json`; eine Chat-Anfrage ohne passende Regel gibt HTTP 500 und den Protokolleintrag
 `"fehler": "unbekannter_prompt"` mit dem Anfang des Systemprompts (eigener Code, keine Nutzerdaten).
 
+Simulierte Anbieterfehler (Ticket #72): Eine Regel mit `fehler_status` antwortet mit diesem HTTP-Status – ab ihrem
+ersten Treffer `fehler_sekunden` lang (so überstehen auch die eingebauten Wiederholungen des SDK den Fehler nicht),
+danach gilt sie als verbraucht und die nächste passende Regel antwortet. Protokoll: `"fehler": "simuliert"`.
+
 Sprachausgabe trägt einen akustischen Fingerabdruck: OpenAI 440 Hz, Mistral 660 Hz (Drehbuch `tts`).
 
 Start:  python -m tests.e2e.fake_anbieter --log logs/pipeline/<ts>/b/basis/fakes
@@ -67,6 +71,7 @@ class Drehbuch:
     def __init__(self, pfad: Path = DREHBUCH) -> None:
         self.d = json.loads(pfad.read_text(encoding="utf-8"))
         self.saetze = list(self.d["audio"]["meeting_saetze"])
+        self._fehler_seit: dict[str, float] = {}  # Regel-id -> erster Treffer einer Fehler-Regel
 
     def chat(self, nachrichten: list[dict]) -> dict | None:
         def text(n: dict) -> str:
@@ -81,6 +86,10 @@ class Drehbuch:
         for regel in self.d["chat"]:
             if all(s in system for s in regel.get("system_enthaelt", [])) and \
                     all(s in nutzer for s in regel.get("nutzer_enthaelt", [])):
+                if "fehler_status" in regel:
+                    seit = self._fehler_seit.setdefault(regel["id"], time.time())
+                    if time.time() - seit > regel.get("fehler_sekunden", 0):
+                        continue  # verbraucht: die nächste passende Regel antwortet
                 return regel
         return None
 
@@ -139,6 +148,10 @@ def chat_route(a: Anbieter):
             a.protokoll(**basis, status=500, fehler="unbekannter_prompt", prompt_anfang=anfang)
             return JSONResponse({"error": {"message": "Fake: unbekannter Prompt (Drehbuch ergänzen)",
                                            "type": "fake_drehbuch"}}, status_code=500)
+        if "fehler_status" in regel:
+            a.protokoll(**basis, status=regel["fehler_status"], regel=regel["id"], fehler="simuliert")
+            return JSONResponse({"error": {"message": "Fake: simulierter Anbieterfehler", "type": "server_error"}},
+                                status_code=regel["fehler_status"])
         inhalt = Drehbuch.antwort_text(regel)
         a.protokoll(**basis, status=200, regel=regel["id"])
         nutzung = {"prompt_tokens": 100, "completion_tokens": max(1, len(inhalt) // 4), "total_tokens": 100 + len(inhalt) // 4}

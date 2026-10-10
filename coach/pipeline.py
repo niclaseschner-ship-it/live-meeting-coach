@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-from . import aktionen, analyse, anbieter, konfidenz, kosten, regeln, themen
+from . import aktionen, analyse, anbieter, ki_fehler, konfidenz, kosten, regeln, themen
 from .artefakte import Artefakte
 from .assistent import Assistent
 from .config import EINST, WURZEL, schluessel_info
@@ -755,9 +755,9 @@ class Coach:
                 self._client, modell, m, text, self.wahl.analyse_aufwand, ton="ton" in m.regel_ids, kontext=kontext
             )
         except Exception as e:  # noqa: BLE001
-            log.warning("Themen-Zuordnung fehlgeschlagen: %s", fehlertext(e))
-            self.fehler = f"Themen-Zuordnung fehlgeschlagen: {fehlertext(e)}"
+            ki_fehler.melden(self, "themen", e, "nächster Versuch mit dem nächsten Abschnitt.")  # Ticket #72
             return None
+        ki_fehler.erholt(self, "themen")
         nutzung_loggen({"art": "themen", "modell": modell, **nutzung})
         # Erst jetzt prüfen: Die Rückkehr-Ansage kann auch während der Zuordnung gefallen sein
         zurueck = fenster_ab is not None and self._rueckkehr_ab is not None and self._rueckkehr_ab >= fenster_ab
@@ -901,7 +901,7 @@ class Coach:
             async with self.knopf.sperre:  # nicht gleichzeitig mit einem gerade gedrückten Protokoll-Knopf
                 await _protokoll(self, "", am_ende=True)
         except Exception as e:  # noqa: BLE001
-            log.warning("Protokoll am Meetingende fehlgeschlagen: %s", fehlertext(e))
+            ki_fehler.melden(self, "protokoll", e)  # Ticket #72: im Technikbericht statt nur im Log
         finally:
             self._protokoll_laeuft = False
             await self.melden()
@@ -1012,9 +1012,11 @@ class Coach:
         self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "name", "person": person, "name": name})
 
     def taste_hinweis(self) -> None:
-        """Basis hört nicht auf „Nestor“ (Funkgerät, Ticket #27 Nachtrag D): still ins Band, höchstens einmal je Minute."""
-        self.entscheider.vorschlagen(self.meeting, "taste", "hinweis", "gruppe", "Sprechtaste halten, dann fragen",
-                                     schluessel="taste", cooldown=60.0, dauer=12.0)
+        """Basis hört nicht auf „Nestor“ (Funkgerät, Ticket #27 Nachtrag D). Ticket #72: beim ersten ignorierten
+        Ansprechen einmal verständlich ins Band, danach nicht mehr – die Funkgerät-Logik selbst bleibt."""
+        self.entscheider.einmalig(self.meeting, "taste", "taste", "hinweis", "gruppe",
+                                  f"In Basis: Sprechtaste halten, dann fragen – auf „{EINST.assistent_name}, …“ hört "
+                                  f"{EINST.assistent_name} hier nicht.", dauer=20.0)
 
     async def satz(self, seg: Segment, zeilen: list[Segment] | None = None) -> None:
         """Strom 1: fertiger Satz mit Sprecher. Sammelt Text für die Themen-Zuordnung (Strom 4).
@@ -1041,6 +1043,7 @@ class Coach:
             self._abschnitt.append(z)
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
+        self.artefakte.satz(zeilen or [seg])  # Ticket #72: Schnell-Erkennung bei klaren Signalen
         ziel = analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt) if m.laeuft else None
         if ziel is not None:
             # Ausdrückliche Ansage mit Ziel: sofort wechseln, ohne auf die Themen-Zuordnung zu warten
@@ -1279,6 +1282,7 @@ class Coach:
         try:
             self.folie, nutzung = await folie.erstellen(self._client, self.letzte_recherche, wahl=self.wahl)
             self.folie_version += 1
+            ki_fehler.erholt(self, "folie")
             nutzung_loggen({"art": "folie", "modell": self.wahl.assistent_modell, **nutzung})
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "folie", "titel": self.folie["titel"]})
             if karte:
@@ -1287,7 +1291,7 @@ class Coach:
                                      "folie": self.folie})
             return self.folie
         except Exception as e:  # noqa: BLE001
-            log.warning("Folie fehlgeschlagen: %s", fehlertext(e))
+            ki_fehler.melden(self, "folie", e)  # Ticket #72
             return None
         finally:
             self._folie_laeuft = False
@@ -1317,6 +1321,7 @@ class Coach:
             nutzung_loggen({"art": "ueberblick", "modell": self.wahl.analyse_modell, **nutzung})
             self.ueberblick = u
             self.ueberblick_version += 1
+            ki_fehler.erholt(self, "ueberblick")
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "ueberblick", "version": self.ueberblick_version,
                                    "fokus": fokus})
             if karte:
@@ -1324,8 +1329,8 @@ class Coach:
                                      + u["laufzeit"], "punkte": ueberblick.punkte(u), "ueberblick": u, "still": True})
             return u
         except Exception as e:  # noqa: BLE001
-            log.warning("Überblick fehlgeschlagen: %s", fehlertext(e))
             self.onepager_fehler = f"Überblick fehlgeschlagen: {fehlertext(e)}"
+            ki_fehler.melden(self, "ueberblick", e)  # Ticket #72
             return None
         finally:
             self._ueberblick_laeuft = False
@@ -1394,6 +1399,7 @@ class Coach:
             self.onepager_version += 1
             self.onepager_stand = stand
             self.onepager_fehler = None
+            ki_fehler.erholt(self, "bild")
             self.bilder[self.onepager_version] = self.onepager_png or self.onepager_svg
             for v in sorted(self.bilder)[:-6]:  # die letzten sechs Bilder bleiben für die Karten im Verlauf
                 self.bilder.pop(v, None)
@@ -1406,8 +1412,8 @@ class Coach:
                             "sekunden": round(time.monotonic() - t0), "schritte": erg.get("messung")})
             self.protokoll.append({"zeit": stand, "art": "onepager", "version": self.onepager_version, "fokus": fokus})
         except Exception as e:  # noqa: BLE001
-            log.warning("Live-Bild fehlgeschlagen: %s", fehlertext(e))
             self.onepager_fehler = f"Live-Bild fehlgeschlagen: {str(e)[:160] or fehlertext(e)}"
+            ki_fehler.melden(self, "bild", e)  # Ticket #72
         finally:
             self._onepager_laeuft = False
             if self._onepager_nachholen:

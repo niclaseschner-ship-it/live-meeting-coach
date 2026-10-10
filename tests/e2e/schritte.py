@@ -635,3 +635,95 @@ async def handy_abschluss(handy: Page, lauf: Lauf) -> None:
     await warte(handy, "() => document.body.dataset.phase === 'abschluss'", 20)
     await vertrag_pruefen(handy, "abschluss", "handy", lauf.stufe, lauf)
     await lauf.bild(handy, "handy_abschluss")
+
+
+# --- Ticket #72: Ergebnisse zeitnah und nie still ----------------------------------------------------------------------
+class Ergebnisuhr:
+    """Liest während des Meetings mit – nur lesend, alle 0,5 s: wann ein Drehbuchsatz im Zustand des Dashboards ankam
+    und wann ein Text sichtbar auf der Verlaufsbühne bzw. im Band stand (Wanduhr des Testlaufs)."""
+
+    SAETZE = ("beschließen", "Sabine liefert", "Kauf lohnt")
+    VERLAUF = ("9.000", "Sabine", "Freitag", "Vereinsbus")
+    BAND = ("Ergebnis-Erkennung gestört", "In Basis: Sprechtaste halten")
+
+    def __init__(self, page: Page) -> None:
+        self.page = page
+        self.satz: dict[str, float] = {}
+        self.verlauf: dict[str, float] = {}
+        self.band: dict[str, float] = {}
+        self.artefakte: list[str] = []
+        self.taste_hinweise = 0
+        self._task: asyncio.Task | None = None
+
+    def starten(self) -> None:
+        self._task = asyncio.ensure_future(self._lauf())
+
+    def stoppen(self) -> None:
+        if self._task:
+            self._task.cancel()
+
+    async def _lauf(self) -> None:
+        while True:
+            try:
+                d = await self.page.evaluate("""() => {
+                  const z = (typeof zustand !== 'undefined' && zustand) || {};
+                  const band = document.getElementById('band');
+                  return { buehne: document.getElementById('vl-buehne')?.innerText || '',
+                    band: band && !band.hidden ? band.innerText : '',
+                    segmente: (z.segmente || []).map((s) => s.text),
+                    artefakte: ((z.artefakte || {}).liste || []).map((a) => a.was),
+                    taste: (z.hinweise || []).filter((h) => h.art === 'taste').length };
+                }""")
+            except Exception:  # noqa: BLE001 – Seite lädt gerade neu
+                await asyncio.sleep(0.5)
+                continue
+            jetzt = time.monotonic()
+            for k in self.SAETZE:
+                if any(k in s for s in d["segmente"]):
+                    self.satz.setdefault(k, jetzt)
+            for k in self.VERLAUF:
+                if k in d["buehne"]:
+                    self.verlauf.setdefault(k, jetzt)
+            for k in self.BAND:
+                if k in d["band"]:
+                    self.band.setdefault(k, jetzt)
+            self.artefakte, self.taste_hinweise = d["artefakte"], max(self.taste_hinweise, d["taste"])
+            await asyncio.sleep(0.5)
+
+    def abstand(self, satz: str, *sichtbar: str) -> float | None:
+        if satz not in self.satz or any(k not in self.verlauf for k in sichtbar):
+            return None
+        return max(self.verlauf[k] for k in sichtbar) - self.satz[satz]
+
+
+async def ergebnisse_zeitnah_pruefen(page: Page, uhr: Ergebnisuhr, lauf: Lauf) -> None:
+    """Ticket #72: Entscheidung und Aufgabe mit Termin stehen ≤ 60 s nach dem Satz als Karte im Verlauf (Schnell-
+    Erkennung); der simulierte HTTP-500 der Artefakt-Erkennung steht sichtbar im Band, der nächste Takt holt das
+    Ergebnis doch; Basis erklärt das Funkgerät einmal im Band."""
+    lauf.schritt("Ergebnisse zeitnah, Anbieterfehler sichtbar (#72)")
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 90 and not (
+            uhr.abstand("beschließen", "9.000") is not None and uhr.abstand("Sabine liefert", "Sabine", "Freitag") is not None
+            and any("Vereinsbus" in a for a in uhr.artefakte)):
+        await asyncio.sleep(1)
+    for name, satz, sichtbar in (("Entscheidung (9.000 €)", "beschließen", ("9.000",)),
+                                 ("Aufgabe mit Termin (Sabine, Freitag)", "Sabine liefert", ("Sabine", "Freitag"))):
+        d = uhr.abstand(satz, *sichtbar)
+        lauf.pruefen(f"{name} erscheint ≤ 60 s nach dem Satz als Karte im Verlauf", d is not None and d <= 60,
+                     f"{d:.1f} s nach dem Satz" if d is not None else
+                     f"Satz gesehen={satz in uhr.satz}, sichtbar={[k for k in sichtbar if k in uhr.verlauf]}")
+    regeln = fake_regeln(lauf)
+    simuliert = "schnell_vereinsbus_fehler" in regeln
+    lauf.pruefen("Simulierter Anbieterfehler (HTTP 500) bei der Artefakt-Erkennung sichtbar im Band",
+                 simuliert and "Ergebnis-Erkennung gestört" in uhr.band,
+                 f"Fake-500={simuliert}, Band={'Ergebnis-Erkennung gestört' in uhr.band}"
+                 + (f", {uhr.band['Ergebnis-Erkennung gestört'] - uhr.satz['Kauf lohnt']:.1f} s nach dem Satz"
+                    if "Ergebnis-Erkennung gestört" in uhr.band and "Kauf lohnt" in uhr.satz else ""))
+    lauf.pruefen("Nach dem Fehler wiederholt der nächste Takt – das Ergebnis kommt doch",
+                 any("Vereinsbus" in a for a in uhr.artefakte) and "schnell_vereinsbus" in regeln,
+                 f"Artefakte: {uhr.artefakte}")
+    if lauf.stufe == "basis":
+        lauf.pruefen("Basis: beim ignorierten „Nestor, …“ einmal „In Basis: Sprechtaste halten“ im Band",
+                     "In Basis: Sprechtaste halten" in uhr.band and uhr.taste_hinweise == 1,
+                     f"Band={'In Basis: Sprechtaste halten' in uhr.band}, Hinweise={uhr.taste_hinweise}")
+    await lauf.bild(page, "ergebnisse_zeitnah")

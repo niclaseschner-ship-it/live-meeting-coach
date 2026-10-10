@@ -14,7 +14,7 @@ const ART_LUECKE = { was: "was genau?", wer: "wer?", bis: "bis wann?", status: "
 const VK_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie", stand: "Wo stehen wir?",
   regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick", zusammenfassung: "Zusammenfassung",
   fehlt: "Was noch fehlt", festgehalten: "Festgehalten", punkt: "Zusammenfassung", bild: "Live-Bild",
-  beispiel: "So nutzt ihr Nestor" };
+  beispiel: "So nutzt ihr Nestor", ergebnis: "Gerade festgehalten" };
 const STILL_VORN_SEKUNDEN = 60;
 let ergebnisSignal = false; // nur durch Klick einschaltbar, keine zusätzliche KI
 let signalAudio = null;
@@ -176,7 +176,7 @@ function karteBauen(k, z) {
   if (k.art === "folie" && k.folie) { a.append(folieInhalt(k.folie)); return a; }
   if (k.art === "ueberblick" && k.ueberblick) { a.append(ueberblickInhalt(k.ueberblick)); return a; }
   a.append(el("h3", {}, k.titel ?? ""));
-  if (k.frage && k.frage !== k.titel && !["zusammenfassung", "punkt", "fehlt", "festgehalten", "bild"].includes(k.art)) {
+  if (k.frage && k.frage !== k.titel && !["zusammenfassung", "punkt", "fehlt", "festgehalten", "ergebnis", "bild"].includes(k.art)) {
     a.append(el("p", { class: "vk-frage" }, k.art === "beispiel" ? k.frage : `„${k.frage}“`));
   }
   if (k.art === "bild") {

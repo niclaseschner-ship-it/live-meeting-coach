@@ -253,3 +253,21 @@ beide passen zum beschriebenen Symptom „Ergebnisse wurden nicht mehr befüllt�
 Dashboard einen Alarm ausgelöst hätte. Für die Praxis heißt das: Punkt 2 aus Abschnitt 3 (sichtbare Fehler auch
 im automatischen Pfad) behebt den einen Fall; eine deutlichere Erinnerung an den Protokoll-Knopf im
 Knopfdruck-Modus behebt den anderen.
+
+### Nachtrag Ticket #72: was sich seitdem geändert hat
+
+- **Kein stiller Ausfall mehr.** Alle Hintergrund-KI-Aufrufe (Artefakte, Themen, Überblick, Live-Bild, Folie,
+  Recherche, Protokoll am Ende) melden Fehler über eine Stelle, `coach/ki_fehler.py`: rote Zeile im Band (je Bereich
+  höchstens einmal je Minute), Fehlerzeile im Dashboard, Ereignis `ki_fehler` im Protokoll, in der Ablage
+  (`debug/ereignisse.jsonl`) und in `technik.json`. Die Artefakt-Erkennung versucht es beim nächsten fälligen Takt
+  wieder (30 s, dann doppelt so lange, höchstens 5 min); klappt es, verschwinden Fehlerzeile und Band-Hinweis
+  (`ki_erholt`).
+- **Ergebnisse zeitnah.** Neben der gebündelten Vollauswertung prüft eine Schnell-Erkennung jeden fertigen Satz mit
+  einem lokalen Signalwort-Filter (`artefakte.signal()`: beschlossen/entschieden, Aufgabe mit Person, Termin/Frist,
+  offen ist, Risiko). Nur bei Treffer läuft ein kleiner Aufruf (`artefakte.SCHNELL`, Zuordnungsmodell der Stufe:
+  Premium `gpt-5.4-mini`, Basis `mistral-small-latest`, über die Anbieterfabrik); Neues erscheint als Karte
+  „Gerade festgehalten“, in der Klick-E2E binnen 60 s nach dem Satz. Ansprachen an Nestor zählen nicht. Die
+  Vollauswertung sieht die schnell erkannten Artefakte mit Nummer; derselbe Typ aus demselben Satz wird zusätzlich
+  im Code zusammengeführt. Deckel: 60 Schnell-Aufrufe je Meetingstunde.
+- **Basis erklärt das Funkgerät.** Beim ersten ignorierten „Nestor, …“ steht einmal „In Basis: Sprechtaste halten,
+  dann fragen …“ im Band, danach nicht mehr.
