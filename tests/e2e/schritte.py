@@ -339,8 +339,19 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
         return False
     await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     await page.mouse.down()
-    rueck = await warte(page, f"() => document.querySelector({json.dumps(selektor)})?.classList.contains("
-                              f"{json.dumps(modell['rueckmeldung_klasse'])})", 5)
+    haelt = (f"() => document.querySelector({json.dumps(selektor)})?.classList.contains("
+             f"{json.dumps(modell['rueckmeldung_klasse'])})")
+    rueck = await warte(page, haelt, 1.5 if lauf.echt else 5)
+    if not rueck and lauf.echt:
+        # Stufe C: das Handy-Layout verschiebt sich laufend (Band, Nestor-Karte) – ein Druck auf die vorher gemessene
+        # Stelle kann danebengehen. Einmal neu messen und erneut drücken; im Beleg vermerkt, nicht verschwiegen.
+        await page.mouse.up()
+        lauf.belege.setdefault("sprechknopf_wiederholt", []).append({"knopf": name, "box_vorher": box})
+        box = await knopf.bounding_box() or box
+        await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        await page.mouse.down()
+        rueck = await warte(page, haelt, 3)
+        lauf.belege["sprechknopf_wiederholt"][-1].update(box_nachher=box, ok=rueck)
     hinweis = ""
     for kandidat in ("#agenda-antwort", "#taste-text", "#fragen-text"):
         if await sichtbar(page, kandidat) and modell["rueckmeldung_text"] in await text(page, kandidat):
