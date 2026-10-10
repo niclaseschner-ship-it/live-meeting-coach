@@ -162,7 +162,7 @@ def test_start_meldet_dem_worker_meeting_id_und_kunde(monkeypatch, cloud_betrieb
     r = _client().post("/api/start", headers=headers)
     assert r.status_code == 200
     assert aufgerufen["pfad"] == "/intern/meeting-start"
-    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme", "stufe": "basis", "modus": "live"}
+    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme", "stufe": "basis"}
     assert aufgerufen.get("gestartet") is True
 
 

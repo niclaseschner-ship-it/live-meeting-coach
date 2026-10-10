@@ -165,11 +165,10 @@ async def immer_nachfragen(request: Request, call_next):
     global _variantenwahl_wiederhergestellt
     if not _variantenwahl_wiederhergestellt and EINST.betrieb == "cloud" and zugang.worker_geheimnis_passt(request.scope):
         stufe = request.headers.get("X-Nestor-Stufe")
-        modus = request.headers.get("X-Nestor-Modus")
-        if not coach.wahl_gesperrt and stufe in anbieter.STUFEN and modus in anbieter.MODI:
-            if coach.stufe != stufe or coach.modus != modus:
+        if not coach.wahl_gesperrt and stufe in anbieter.STUFEN:
+            if coach.stufe != stufe:
                 try:
-                    coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+                    coach.stufe_setzen(stufe)
                 except (ValueError, anbieter.AnbieterFehler) as e:
                     logging.getLogger("coach").error("Gespeicherte Variante nicht übernommen: %s", type(e).__name__)
             _variantenwahl_wiederhergestellt = True
@@ -427,7 +426,7 @@ async def start(request: Request):
             or time.monotonic() - audio["letzt"] > LUECKE
             or lautsprecher not in verbindungen or geraet.get(lautsprecher) != "handy"):
         raise HTTPException(409, "Erst den QR-Code scannen und am Handy Mikrofon und Ton einschalten. Dann Meeting starten.")
-    # Ab hier ist die Wahl gesperrt (/api/stufe, /api/modus → 409), auch während der Worker-Meldung im Thread.
+    # Ab hier ist die Wahl gesperrt (/api/stufe → 409), auch während der Worker-Meldung im Thread.
     coach.startet = True
     try:
         if EINST.betrieb == "cloud":
@@ -443,8 +442,7 @@ async def start(request: Request):
                 coach._cloud_meeting = {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)}
                 rueckmeldung = await asyncio.to_thread(
                     api_abschluss.worker_melden, "/intern/meeting-start",
-                    {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope), "stufe": wahl.stufe,
-                     "modus": wahl.modus},
+                    {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope), "stufe": wahl.stufe},
                 )
                 if rueckmeldung is not None and not rueckmeldung.get("erlaubt", True):
                     if rueckmeldung.get("tagesdeckel"):
@@ -567,7 +565,7 @@ async def folie_neu():
     """Letzte Recherche mit Quellen als Folie – im Meeting als Bogen („Hier ist die Folie“, Ticket #27)."""
     from .assistent import BogenBelegt
 
-    if coach.hoerstrom is None or coach.knopfdruck:
+    if coach.hoerstrom is None:
         return {"ok": coach.folie_starten()}
     try:
         coach.assistent.bogen_starten("folie", "Folie", "knopf")

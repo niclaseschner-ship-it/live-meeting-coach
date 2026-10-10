@@ -154,10 +154,6 @@ class Einstellungen:
     spenden: str = os.getenv("LMC_SPENDEN", str(WURZEL / "spenden"))
 
     # --- Startseite (Lastenheft Abschnitt 2/3/6): Kostenrichtwerte, Unterstützung, Rechtstexte ---
-    # Richtwerte für die Startseite (Lastenheft Abschnitt 3). "Knopfdruck" gemessen Ticket #7
-    # (docs/messung_knopfdruck.md): ~0,3-0,4 $/h bei 4 Knopfdrücken im echten Betrieb (API statt Codex).
-    richtwert_live_eur: float = _zahl("LMC_RICHTWERT_LIVE_EUR", 2.0)
-    richtwert_knopfdruck_eur: float = _zahl("LMC_RICHTWERT_KNOPFDRUCK_EUR", 0.4)
     paypal_me: str = os.getenv("LMC_PAYPAL_ME", "")  # leer = noch kein PayPal.me-Link, Unterstützung entfällt
     impressum_name: str = os.getenv("LMC_IMPRESSUM_NAME", "")
     impressum_anschrift: str = os.getenv("LMC_IMPRESSUM_ANSCHRIFT", "")
@@ -183,7 +179,7 @@ class Einstellungen:
     zuordnung_modell: str = os.getenv("LMC_ZUORDNUNG_MODELL", "")  # leer = analyse_modell
     basis_live_modell: str = os.getenv("LMC_BASIS_LIVE_MODELL", "voxtral-mini-transcribe-realtime-2602")
     basis_live_delay_ms: int = int(_zahl("LMC_BASIS_LIVE_DELAY_MS", 240))  # Text der Frage ~0,6 s nach Sprechende
-    basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch (Knopfdruck)
+    basis_transkription: str = os.getenv("LMC_BASIS_TRANSKRIPTION", "voxtral-mini-latest")  # Batch je Äußerung
     basis_stimme_modell: str = os.getenv("LMC_BASIS_STIMME_MODELL", "voxtral-mini-tts-latest")
     basis_stimme: str = os.getenv("LMC_BASIS_STIMME", "01a1200c-7cff-7218-b298-8cea4fe89203")  # Nova euphorisch
     richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.7)  # 10 Fragen + 2 Recherchen ≈ 0,72 $/h (#15)

@@ -14,7 +14,7 @@ from .artefakte import Artefakte
 from .assistent import Assistent
 from .config import EINST, WURZEL, schluessel_info
 from .entscheider import Entscheider
-from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
+from .knopfdruck import Knopfstand
 from .zustand import Agendapunkt, Meeting, Segment
 
 VORLAUF_MAX = 40  # so viele schon eingeordnete Sätze bleiben für Fensteranfang und Kontext der Zuordnung
@@ -89,7 +89,7 @@ def gleichzeitig_regel(regeln: list[str]) -> str | None:
 
 
 class WahlGesperrt(RuntimeError):
-    """Stufe/Modus lassen sich nur zwischen zwei Meetings wechseln (Ticket #60)."""
+    """Stufe lässt sich nur zwischen zwei Meetings wechseln (Ticket #60)."""
 
 
 class Coach:
@@ -154,9 +154,6 @@ class Coach:
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
-        # Startseite (Ticket #1): "live" oder "knopfdruck". Knopfdruck (Ticket #6): ohne Knopf kein KI-Aufruf –
-        # die Weichen stehen an jeder Stelle, die sonst von selbst einen KI-Dienst ruft (Suche: `self.knopfdruck`).
-        self.modus = "live"
         self.knopf = Knopfstand()  # Knopf-Analysen (coach/knopfdruck.py)
         self.aeusserungen: list = []  # Regel 1: Äußerungen mit Sprecherabschnitten und Pegel (unterbrechung.py)
         self._unterbrechungen_gemeldet: set[float] = set()
@@ -168,10 +165,6 @@ class Coach:
         # Server beim echten /api/start gesetzt (coach/server.py) – der Coach selbst sieht keine Anfrage mehr,
         # sobald der Takt mitten im Meeting läuft.
         self._cloud_meeting: dict | None = None
-
-    @property
-    def knopfdruck(self) -> bool:
-        return self.modus == "knopfdruck"
 
     @property
     def karenz_bloecke(self) -> int:
@@ -251,15 +244,12 @@ class Coach:
         `_kosten_pruefen` beim Erreichen selbst – diese Eigenschaft verweigert nur neue."""
         return self._kosten_gedeckelt
 
-    def stufe_setzen(self, stufe: str, nur_knopfdruck: bool = False) -> None:
-        """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting. „Nur auf Knopfdruck“ ist ein
-        Schalter in Basis (Ticket #13: der frühere Modus „Auf Knopfdruck“), in Premium gibt es ihn nicht.
+    def stufe_setzen(self, stufe: str) -> None:
+        """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting.
         Baut eine neue, unveränderliche Anbieterwahl und den Client dazu; im Meeting `WahlGesperrt`."""
         if self.wahl_gesperrt:
             raise WahlGesperrt("Während des Meetings nicht wechselbar.")
-        modus = "knopfdruck" if stufe == "basis" and nur_knopfdruck else "live"
-        self.wahl = anbieter.wahl_fuer(stufe, modus, **(self._premium_vorlieben if stufe == "premium" else {}))
-        self.modus = modus
+        self.wahl = anbieter.wahl_fuer(stufe, **(self._premium_vorlieben if stufe == "premium" else {}))
         self.client_neu()
 
     def client_neu(self) -> None:
@@ -310,7 +300,7 @@ class Coach:
             zeit_rot_prozent=EINST.zeit_rot_prozent,
             ueberlappung_min=EINST.ueberlappung_min_sekunden,
             ueberlappung_halte=EINST.ueberlappung_halte_sekunden,
-            themen_aktiv=self._client is not None and not self.knopfdruck,
+            themen_aktiv=self._client is not None,
             zickzack_fenster=EINST.zickzack_fenster_sekunden,
             zickzack_wechsel=EINST.zickzack_wechsel,
         )
@@ -320,7 +310,6 @@ class Coach:
                 "regel_status": self.regel_status(ampeln),
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,
-                "modus": self.modus,
                 "stufe": self.stufe,
                 "einstellungen": self.einstellungen(),
                 "referenzen": list(self.referenzen),
@@ -354,8 +343,8 @@ class Coach:
                 # Einstufung verlässlich/experimentell für Regeln und Signale, eine Quelle (Lastenheft 4.3,
                 # Ticket „Konfidenz“) statt verstreuter Badges.
                 "signale": konfidenz.katalog(),
-                # Knöpfe gibt es in beiden Stufen (Ticket #13); „offen“ (nicht Transkribiertes) nur bei Knopfdruck
-                "knopf": self.knopf.schnappschuss(self.hoerstrom if self.knopfdruck else None),
+                # Knöpfe gibt es in beiden Stufen gleich (Ticket #13)
+                "knopf": self.knopf.schnappschuss(),
             }
         )
         return daten
@@ -409,10 +398,6 @@ class Coach:
                 n = len(self.artefakte.liste)
                 detail = (f"{len(offen)} Lücke{'n' if len(offen) > 1 else ''} offen" if offen
                           else f"{n} festgehalten" if n else "noch nichts festgehalten")
-            if self.knopfdruck and rid in KNOPF_REGELN:
-                # Diese Regeln brauchen den Text – im Modus Knopfdruck nur der Stand des letzten Knopfs
-                k = self.knopf.regeln.get(rid)
-                farbe, detail = (k["farbe"], k["detail"]) if k else ("grau", "auf Knopfdruck")
             if not m.laeuft and not m.segmente:
                 farbe = "grau"
             aus.append({"id": rid, "titel": r.titel.split(" – ")[0], "farbe": farbe, "detail": detail,
@@ -740,7 +725,7 @@ class Coach:
         """FR-05: Abgleich Gespräch ↔ aktueller Agendapunkt per Sprachmodell. `fenster_ab`: Beginn des eingeordneten
         Fensters – fiel seitdem eine Rückkehr-Ansage, kommt kein Fokus-Hinweis mehr (Ticket #24)."""
         m = self.meeting
-        if not m.agenda or self.knopfdruck:  # Knopfdruck: kein Themen-Abgleich und keine Ton-Prüfung im Lauf
+        if not m.agenda:
             return None
         if self._client is None:
             self.entscheider.einmalig(
@@ -778,7 +763,7 @@ class Coach:
             for h in m.hinweise:
                 if h.art == "fokus":
                     h.dauer = min(h.dauer, max(0, m.jetzt() - h.zeit))
-        if alt != m.aktiver_punkt and not self.knopfdruck and self._client is not None and m.laeuft:
+        if alt != m.aktiver_punkt and self._client is not None and m.laeuft:
             # Ticket #27: still die Zusammenfassung des abgeschlossenen Punkts als Karte (Artefakte nur aus diesem
             # Abschnitt); mit der Regel „Ergebnisse festhalten“ Lücken markiert und ein Band-Hinweis
             hintergrund(self.artefakte.abschnitt_abschliessen(alt, m.jetzt(), "punkt"))
@@ -826,12 +811,8 @@ class Coach:
             log.warning("Live-Text nicht verbunden: %s", fehlertext(e))
             self.fehler = f"Live-Text nicht verbunden: {fehlertext(e)}"
             self.hoerstrom.live = None
-        if self.knopfdruck:
-            # Statt der gesprochenen Begrüßung (ginge an die Sprachausgabe): Einverständnis als Hinweis im Dashboard
-            self.entscheider.einmalig(self.meeting, "knopf-einverstaendnis", "info", "hinweis", "gruppe",
-                                      einverstaendnis(self.meeting))
         await self.melden()
-        if self.assistent.aktiv and self._client is not None and not self.knopfdruck:
+        if self.assistent.aktiv and self._client is not None:
             hintergrund(self.assistent.begruessen())
 
     async def hoeren_zufuehren(self, pcm24k: bytes) -> None:
@@ -855,17 +836,16 @@ class Coach:
         self.meeting.beenden()
         if self.assistent.gespraech:
             await self.assistent.gespraech.schliessen()
-        # Knopfdruck: auch am Ende nichts ohne Knopf – Ergebnisse und Bild gibt es, wenn vorher gedrückt wurde
         basis = self.bild_als_text
-        if basis and not self.knopfdruck and self._client is not None:
+        if basis and self._client is not None:
             # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb
             # am Ende das Protokoll wie beim Knopf: die letzten Sätze auf Artefakte prüfen (Ticket #26), daraus
             # protokoll.md (Ticket #15).
             self._protokoll_laeuft = True
             hintergrund(self._protokoll_am_ende())
-        elif not self.knopfdruck and self._client is not None:
+        elif self._client is not None:
             hintergrund(self.artefakte.erkennen())  # Ticket #26: die letzten Sätze noch auswerten, ohne Nachfrage
-        if self.onepager_am_ende and not self.knopfdruck:
+        if self.onepager_am_ende:
             if basis:  # Abschluss-Überblick; entsteht gerade einer (Zuruf, Takt), wird er danach nachgeholt
                 frisch = (self.ueberblick is not None and not self._ueberblick_laeuft
                           and self.meeting.jetzt() - self.ueberblick["stand"] < 30)
@@ -1025,14 +1005,6 @@ class Coach:
         m = self.meeting
         if self.assistent.eigene_sprache(seg.start, seg.ende, seg.text):
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
-        if self.knopfdruck:
-            # Sätze kommen erst beim Knopf, gesammelt: nur ins Transkript. Keine Ansage-Erkennung (der Wechsel käme
-            # Minuten zu spät), keine Namen aus Text, keine Themen-Zuordnung, kein Nestor. Gemeldet wird danach.
-            for z in zeilen or [seg]:
-                z.sprecher = self.namen.get(z.sprecher, z.sprecher)
-                m.transkript.append(z)
-            m.transkript.sort(key=lambda s: s.start)
-            return
         if self.assistent.vorstellung_bis is not None:
             self.name_lernen(seg.sprecher, seg.text, seg.start, seg.ende)
         for z in zeilen or [seg]:
@@ -1083,7 +1055,7 @@ class Coach:
         oder `abschnitt_max_sekunden` nach dem ersten offenen Satz. Sonst wartet das Ende einer Abschweifung vor einer
         Pause auf den nächsten Satz (Cloud-Lauf 08.10.: 30 s Pause, Hinweis 76 s nach Beginn). Ist zu wenig neu
         Gesprochenes da (ein „Gut.“), wandert es nur in den Vorlauf – kein Hinweis aus einem einzelnen kurzen Satz."""
-        if not self._abschnitt or self.knopfdruck:
+        if not self._abschnitt:
             return
         m = self.meeting
         jetzt = m.jetzt()

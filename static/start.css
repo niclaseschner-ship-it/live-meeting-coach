@@ -46,14 +46,6 @@ body { background: var(--bg); }
 .s-cloudflare { margin: -10px 0 0; text-align: center; font-size: 13px; color: var(--text-3); }
 .s-quelloffen { margin: -6px 0 0; text-align: center; font-size: 12px; color: var(--text-3); }
 .s-quelloffen a { color: var(--text-3); }
-.s-schalter { display: flex !important; flex-direction: row; gap: 10px; align-items: flex-start; padding: 12px 14px;
-  border-radius: var(--radius); font-weight: 400;
-  background: var(--flaeche); border: 1px solid var(--rand); font-size: 13.5px; line-height: 1.45; color: var(--text-2);
-  cursor: pointer; }
-.s-schalter input { margin-top: 3px; flex: none; width: auto; }
-.s-schalter[hidden] { display: none !important; }
-.s-schalter strong { color: var(--text); }
-
 .s-schluessel { margin: -6px 0 0; }
 .s-schluessel summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-3); list-style: none; }
 .s-schluessel summary::-webkit-details-marker { display: none; }

@@ -160,7 +160,7 @@ async def _startkarten_mock(status: int, netzfehler: bool = False, doppel: bool 
 def test_startkarte_verarbeitet_http409_ueber_die_ui():
     anfragen, meldung, enabled, url = asyncio.run(_startkarten_mock(409))
     assert len(anfragen) == 1
-    assert anfragen[0] == {"stufe": "basis", "nur_knopfdruck": False}
+    assert anfragen[0] == {"stufe": "basis"}
     assert meldung == "Mock"
     assert enabled
     assert url.endswith("/")
@@ -178,7 +178,7 @@ def test_startkarte_bleibt_bei_netzwerkfehler_auf_der_startseite():
 def test_startkarte_doppelclick_waehrend_anfrage_blockiert_zweite_auswahl():
     anfragen, meldung, enabled, url = asyncio.run(_startkarten_mock(409, doppel=True))
     assert len(anfragen) == 1
-    assert all(x == {"stufe": "basis", "nur_knopfdruck": False} for x in anfragen)
+    assert all(x == {"stufe": "basis"} for x in anfragen)
     assert meldung == "Mock"
     assert enabled
     assert url.endswith("/")

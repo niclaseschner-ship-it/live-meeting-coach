@@ -111,9 +111,8 @@ def test_erkennung_ergaenzt_statt_doppelt_und_kennt_quelle_und_agendapunkt():
 
 def test_keine_staendige_erkennung_mehr():
     """Ticket #27: kein Lauf je Minute Sprache – erkannt wird beim Abschnittsende und auf Anfrage."""
-    async def lauf(knopfdruck: bool):
+    async def lauf():
         c, _ = _coach({"artefakte": []})
-        c.modus = "knopfdruck" if knopfdruck else "live"
         for i in range(8):  # 8 × 8 s Sprache
             _satz(c, "Person 1", f"Satz {i}", i * 10.0, i * 10.0 + 8)
             c.artefakte.takt()
@@ -121,8 +120,7 @@ def test_keine_staendige_erkennung_mehr():
         await asyncio.sleep(0.01)
         return c
 
-    assert asyncio.run(lauf(False))._client.anfragen == []
-    assert asyncio.run(lauf(True))._client.anfragen == []
+    assert asyncio.run(lauf())._client.anfragen == []
 
 
 # --- Zusammenfassung beim Punktwechsel (still) -----------------------------------------------------------------

@@ -42,7 +42,7 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Stufen Basis und Premium (Abschnitt 3) mit je einem
    Satz, wie man mit Nestor spricht (Premium wie ein Telefon, Basis wie ein Funkgerät), zur Verarbeitung und den
    erwarteten Kosten je Stunde, und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und
-   Datenschutz. Der Schalter „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (Ticket #27; der Code bleibt).
+   Datenschutz.
 3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
    eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
@@ -99,16 +99,15 @@ Live-Bild.
 | Löschen | „Nein“ in der Begrüßung oder später „Nestor, nein“ löscht alles | dasselbe – Einwilligung und Nein bleiben per Stimme |
 | Kosten (Richtwert) | ~2 € je Stunde | ~0,7 € je Stunde |
 
-**Schalter „Nur auf Knopfdruck“ (nur Basis):** vorerst aus dem Angebot (Ticket #27) – auf der Startseite
-ausgeblendet, der Code bleibt. Ohne Knopf geht dann nichts an Mistral: Der Ton bleibt auf dem Server, Transkript,
-Fokus, Ton-Prüfung, Ergebnisse und Überblick gibt es nur auf Knopfdruck (Abschnitt 4.2), Nestor spricht nicht und
-antwortet als Karte. Zeit, Redeanteile, Überlappung und Monolog laufen lokal weiter. Zusätzlich „letzte 5 Minuten
-verwerfen“ und „alles verwerfen“. Kosten ~0,1–0,2 € je Stunde.
+**Der Modus „Nur auf Knopfdruck“ ist ausgebaut (Ticket #71, Niclas 10.10.2026).** Er lief zuletzt ohnehin nicht
+mehr im Angebot (Ticket #27) und deckte nur einen Sparfall ab, den die Sprechtaste (Basis) heute abdeckt. Es gibt
+nur noch den einen Ablauf: Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick laufen laufend; die fünf
+Kernaktionen (Abschnitt 4.2) bleiben unverändert in beiden Stufen verfügbar.
 
-**Variantenwahl (Ticket #54):** Die Startseite wartet auf die Serverbestätigung der gewählten Stufe und des Modus,
-bevor sie zum Meeting wechselt. Im Cloudbetrieb bleibt die bestätigte Auswahl im Durable Object gespeichert und
-wird für Folgeanfragen serverseitig wiederhergestellt; Browser-Header können sie nicht überschreiben. Der Start
-sendet zusätzlich die erwartete Stufe, damit ein nicht passender Serverzustand mit einer verständlichen 409-Meldung
+**Variantenwahl (Ticket #54):** Die Startseite wartet auf die Serverbestätigung der gewählten Stufe, bevor sie zum
+Meeting wechselt. Im Cloudbetrieb bleibt die bestätigte Auswahl im Durable Object gespeichert und wird für
+Folgeanfragen serverseitig wiederhergestellt; Browser-Header können sie nicht überschreiben. Der Start sendet
+zusätzlich die erwartete Stufe, damit ein nicht passender Serverzustand mit einer verständlichen 409-Meldung
 abgewiesen wird.
 
 Die Startseite zeigt je Stufe einen Satz, wie man mit Nestor spricht, und zwei Plus- und zwei Minus-Stichpunkte
@@ -126,7 +125,7 @@ Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hin
 (AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das (seit 08.10.2026 öffentliche, seit 0da0713 unter
 AGPL-3.0 lizenzierte) GitHub-Repo – solange das Repo privat gewesen wäre, hätte dieser Hinweis entfallen.
 
-Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription auf Knopfdruck
+Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription je Äußerung
 `voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
 Überblick, Folie), Zuordnung alle ~15 s `mistral-small-latest` (im Vergleich gleich gut, ein Zehntel der Kosten),
 Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts-latest` mit der über
@@ -161,8 +160,7 @@ Satz mit Zweck oder Anlass zum Ziel, eine Uhrzeit „von–bis“ zur Gesamtdaue
 Minutenangabe gleichmäßig verteilt werden. Titel, Ziel und Teilnehmende überschreibt das Modell nur, wenn sie
 leer sind oder die Eingabe eindeutig ein neues Meeting beschreibt; ein gezielter Änderungswunsch („Ziel ist
 eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbeitbar. Über dasselbe Feld lässt sie
-sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“. Mit „Nur auf Knopfdruck“ gilt
-das Absenden einer Spracheingabe als Knopfdruck.
+sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“.
 
 **Pilotfeedback (Ticket #49):** Auch eine freie Beschreibung eines Vorhabens ohne fertige Tagesordnung
 ergibt einen strukturierten Agendaentwurf, nicht bloß ein befülltes Ziel. Fehlende Minuten werden geschätzt
@@ -215,12 +213,9 @@ Sätze. Während ein Bogen läuft, sind die Knöpfe gesperrt (sichtbar: „Nesto
   halten, fragen, loslassen; der Ton der Frage wird transkribiert und wie „Nestor, …“ beantwortet. Was während des
   Haltens gesagt wird, löst nicht zusätzlich eine Antwort über den Live-Text aus.
 
-Mit **„Nur auf Knopfdruck“** (Basis, vorerst aus dem Angebot) transkribiert ein Knopfdruck zuerst den bisher noch
-nicht transkribierten Ton und führt dann die Analyse aus; die Antwort kommt als Karte ohne Stimme, Zusammenfassen und
-Was fehlt sind dort das Protokoll. Gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)): 1,8–3,9 s je
-Knopf. Weitere Regeln dieses Modus: Agendawechsel nur per Klick; am Meetingende keine automatische Auswertung;
-**Verwerfen** entfernt Ton, Transkript und alles daraus Abgeleitete aus dem Zeitraum (die Aufnahme wird dort zu
-Stille), Redeanteile bleiben. Ältere Messung mit OpenAI-Transkription und Codex: [messung_knopfdruck.md](messung_knopfdruck.md).
+Gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)): 1,8–3,9 s je Knopf. Der frühere Modus „Nur auf
+Knopfdruck“ (Basis, mit eigenem „Verwerfen“ für Ton und Transkript) ist ausgebaut (Ticket #71) – Historie in
+[messung_knopfdruck.md](messung_knopfdruck.md).
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
@@ -269,8 +264,7 @@ Transkript, Agenda mit Zeitnutzung und Hinweisen, `technik.json` (verwendete Stu
 dazu `meeting.json` (Standardgliederung, Abschnitt 4.9) und `tasks.json` (nur die Aufgaben: was, wer, bis wann,
 Lücken, bestätigt) als Grundlage für das Export-Dokument (#22). In Premium ist das Protokoll die Analyse hinter dem
 Abschlussbild; Basis hat kein Bild und erstellt es am Meetingende wie der Knopf „Protokoll“ (Ergebnisse je
-Agendapunkt). Mit „Nur auf Knopfdruck“ gibt es Protokoll und Überblick nur, wenn vorher gedrückt wurde.
-Die Aufnahme ist nur auf ausdrücklichen Wunsch dabei.
+Agendapunkt). Die Aufnahme ist nur auf ausdrücklichen Wunsch dabei.
 
 ### 4.5 Unterstützung
 
@@ -391,8 +385,6 @@ Agendapunkte müssen keine Entscheidung haben.
   löst den Bogen „Zusammenfassen“ aus (Zusammenfassung aus den Artefakten plus höchstens drei Lücken – zuerst
   Aufgaben ohne Wer, dann ohne Termin, dann unklare Entscheidungen bzw. hohe Risiken). Ein bloßes „Ja“ in den Raum
   wirkt nicht; in Premium geht „Nestor, gib mir die Zusammenfassung“, in Basis die Sprechtaste.
-- **Nur auf Knopfdruck:** keine automatische Erkennung; Artefakte entstehen nur über den Protokoll-Knopf; der
-  Band-Knopf „Zusammenfassen ›“ wirkt dort wie der Protokoll-Knopf.
 - **Standardgliederung** (`meeting.json`, für Abschluss und Export #22): Kopf (Titel, Datum, Dauer, Ziel, „Ziel
   erreicht?“ – offen, bis die Korrekturansicht aus #22 es abfragt), Entscheidungen, Aufgaben (Was/Wer/Bis wann, Lücken),
   offene Punkte, Risiken, Parkplatz, Agenda Soll/Ist. Das Dokument selbst (Grafik, Regelanalyse, Anhang) kommt mit #22.

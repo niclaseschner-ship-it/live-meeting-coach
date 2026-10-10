@@ -7,7 +7,7 @@ from coach.server import app, coach
 @pytest.fixture
 def cloud(monkeypatch):
     from coach import server
-    stufe, modus = coach.stufe, coach.modus
+    stufe = coach.stufe
     betrieb, geheimnis = EINST.betrieb, EINST.worker_geheimnis
     monkeypatch.setenv("LMC_OFFLINE", "1")
     monkeypatch.setattr(server, "_variantenwahl_wiederhergestellt", False)
@@ -15,13 +15,13 @@ def cloud(monkeypatch):
     object.__setattr__(EINST, "worker_geheimnis", "nur-test")
     coach.stufe_setzen("basis")
     yield TestClient(app), {"X-Nestor-Geheimnis": "nur-test", "X-Nestor-Kunde": "test",
-                           "X-Nestor-Stufe": "premium", "X-Nestor-Modus": "live"}
+                           "X-Nestor-Stufe": "premium"}
     monkeypatch.undo()  # erst den Testzustand (z. B. ein vorgetäuschter Hörstrom), dann die Wahl zurück
     if stufe is None:
-        coach.wahl, coach.modus = None, modus
+        coach.wahl = None
         coach.client_neu()
     else:
-        coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+        coach.stufe_setzen(stufe)
     object.__setattr__(EINST, "betrieb", betrieb)
     object.__setattr__(EINST, "worker_geheimnis", geheimnis)
 

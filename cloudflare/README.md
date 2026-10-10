@@ -136,8 +136,8 @@ Koordinationszustand (Meeting-ID, Cookie-Zuordnung), nicht die Meetinginhalte se
 
 Gesetzt auf **`20m`** (`src/index.ts`, Klasse `Nestor`). Begründung in zwei Teilen:
 
-1. **Während des Meetings** ist das kein Problem: Beide Modi (Lastenheft §3, „Live" und „Auf Knopfdruck")
-   schicken den Ton durchgehend zum Server, alle ~100 ms über die offene WebSocket `/ws/audio`
+1. **Während des Meetings** ist das kein Problem: Der Ton geht durchgehend zum Server, alle ~100 ms über die
+   offene WebSocket `/ws/audio`
    (`coach/server.py`, `ws_audio`) – das sind laufend eingehende Anfragen auf der Verbindung, die den
    Inaktivitäts-Timer unabhängig von seiner Länge immer wieder zurücksetzen. Ein laufendes Meeting schläft
    also nicht ein, ganz unabhängig vom genauen `sleepAfter`-Wert.

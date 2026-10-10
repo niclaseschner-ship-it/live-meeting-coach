@@ -68,7 +68,6 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
             "stufe": coach.stufe,
             "anbieter": ({"mistral": "Mistral", "openai": "OpenAI"}[w.anbieter] if (w := coach.wahl) else None),
             "ziele": sorted(w.hosts) if w else [],
-            "modus": coach.modus,
             "live_text": w.text_modell if w else None,
             "live_modell": w.live_modell if w else None,
             "live_art": EINST.live_art,
@@ -152,25 +151,6 @@ class Archiv:
         self._wav_schliessen()
         (self.ordner / "aufnahme.wav").unlink(missing_ok=True)
         self.ereignis("einwand", aufnahme_geloescht=True)
-
-    def ausschneiden(self, seit: float) -> None:
-        """Knopfdruck „verwerfen“ (Ticket #6): den Ton ab Meetingzeit `seit` bis jetzt löschen.
-
-        Die Datei wird an der Stelle gekürzt und auf die alte Länge mit Nullen (Stille) wieder aufgefüllt: der Inhalt
-        ist weg, die Zeitachse bleibt – Transkript-, Hinweis- und Sprecherzeiten passen weiter zur Aufnahme, und die
-        Aufnahme läuft danach einfach weiter. `seit=0` löscht alles Bisherige.
-        """
-        self.ereignis("verworfen", ab_s=round(seit, 1), aufnahme=self._wav is not None)
-        if self._wav is None or self._datei is None:
-            return
-        self._datei.flush()
-        ende = self._datei.tell()
-        frames = self._wav.getnframes()  # bisher geschrieben; die Audiodaten stehen am Ende der Datei
-        beginn = ende - frames * 2
-        ab = beginn + min(frames, max(0, round(seit * 24000))) * 2
-        self._datei.truncate(ab)
-        self._datei.truncate(ende)  # wieder verlängern: das neue Stück liest sich als Nullen
-        self._datei.seek(ende)
 
     def ereignis(self, art: str, **daten) -> None:
         z = {"zeit": time.strftime("%Y-%m-%dT%H:%M:%S"), "meeting_s": round(self.coach.meeting.jetzt(), 1),

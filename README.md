@@ -111,7 +111,7 @@ Schlüssel `OPENAI_API_KEY` bzw. `MISTRAL_API_KEY` (oder `LMC_MISTRAL_SCHLUESSEL
 | 5 Live-Bild | `coach/bild_gpt.py` | Premium: ausschließlich OpenAI, Fortschreibung des letzten Bildes; *in Basis kein Bildmodell, Überblick als Mistral-Text* |
 | 5 Überblick | `coach/ueberblick.py` | Überblick als Text (Entschieden, Offen, Aufgaben, Außerhalb, Neu) aus einem Textaufruf, Zahlen gegen das Material geprüft; in beiden Stufen, in Basis statt des Live-Bilds |
 | Sprachassistent | `coach/assistent.py`, `coach/gespraech.py` | Ansprache per Name im Live-Text, Realtime-Gespräch (gpt-realtime) bzw. Rückfall GPT-5.4-mini + Sprachausgabe; *mistral-medium + Voxtral TTS, Stimme Thorsten (`coach/stimmen/`)* |
-| Knöpfe | `coach/knopfdruck.py`, `coach/api_knopfdruck.py` | Wo stehen wir · Regeln · Überblick · Protokoll · Nestor fragen (am Handy halten), in beiden Stufen gleich; „Nur auf Knopfdruck“ in Basis |
+| Knöpfe | `coach/knopfdruck.py`, `coach/api_knopfdruck.py` | Wo stehen wir · Regeln · Überblick · Protokoll · Nestor fragen (am Handy halten), in beiden Stufen gleich |
 | Regeln, Signale | `coach/analyse.py`, `coach/entscheider.py` | Ampeln, Countdown, Cooldown |
 | Zusammenführung | `coach/hoeren.py`, `coach/pipeline.py` | Hörstrom, Meeting-Zustand, Abspielmodus |
 

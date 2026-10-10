@@ -1,82 +1,62 @@
-"""Knopf-Endpunkte (Ticket #6, Lastenheft 4.2; seit Ticket #13 in beiden Stufen, mit und ohne „Nur auf Knopfdruck“).
+"""Knopf-Endpunkte (Ticket #6, Lastenheft 4.2; seit Ticket #13 in beiden Stufen gleich).
 
     POST /api/knopf/<art>       art: stand | regeln | ueberblick | protokoll | bild | frage ({"text"})
-    POST /api/knopf/verwerfen   {"minuten": 5 | null}          – nur bei „Nur auf Knopfdruck“
     GET  /api/knopf/protokoll.md
     POST /api/frage/halten      {"an": true|false}             – „Nestor fragen“ am Handy wird gehalten/losgelassen
     POST /api/frage/audio       WAV (24 kHz mono) im Körper     – die gehaltene Frage: transkribieren, dann antworten
 
-Ohne „Nur auf Knopfdruck“ ist jeder Knopf ein Antwortbogen (Ticket #27, coach/assistent.py): Bestätigung, Karte im
-Verlauf, ein bis zwei Sätze; während ein Bogen läuft, sind die Knöpfe gesperrt (409). Mit „Nur auf Knopfdruck“
-antwortet ein Knopf sofort; Fortschritt und Ergebnis kommen über die WebSocket (coach/knopfdruck.py). Je Art eine
-eigene Route statt /api/knopf/{art}: so findet test_dashboard_endpunkte_existieren jeden Aufruf aus app.js.
+Jeder Knopf ist ein Antwortbogen (Ticket #27, coach/assistent.py): Bestätigung, Karte im Verlauf, ein bis zwei
+Sätze; während ein Bogen läuft, sind die Knöpfe gesperrt (409). Je Art eine eigene Route statt /api/knopf/{art}:
+so findet test_dashboard_endpunkte_existieren jeden Aufruf aus app.js.
 Der `coach` ist die eine laufende Instanz aus server.py, spät importiert (sonst Ringimport beim Hochfahren).
 """
 
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from . import knopfdruck
-from .knopfdruck import ARTEN, KnopfFehler
+from .knopfdruck import ARTEN
 
 router = APIRouter()
 
 
-async def _an_alle(nachricht: dict) -> None:
-    from .server import _an_alle
-
-    await _an_alle(json.dumps(nachricht, ensure_ascii=False))
-
-
 def _knopf(art: str):
     async def knopf(daten: dict | None = None) -> dict:
-        from .pipeline import hintergrund
         from .server import coach
 
         from .assistent import BogenBelegt
         from .bogen import NAMEN as BOGEN_NAMEN
-        from .config import EINST
 
         frage = str((daten or {}).get("text") or "").strip()[:500]
         if art == "frage" and not frage:
             raise HTTPException(400, "Keine Frage.")
-        if not coach.knopfdruck:
-            # Live (Ticket #27): jeder Knopf ist ein Antwortbogen, die getippte Frage wie eine gesprochene
-            if coach.hoerstrom is None or coach._client is None:
-                raise HTTPException(409, "Es läuft kein Meeting." if coach.hoerstrom is None else "Kein KI-Schlüssel.")
-            try:
-                await coach.hoerstrom.text_abwarten()
-            except TimeoutError as e:
-                raise HTTPException(409, str(e)) from e
-            if art == "frage":
-                coach.assistent.frage_beantworten(frage, "getippt")
-                return {"ok": True}
-            ziel = knopfdruck.BOGEN[art]
-            if (daten or {}).get("band"):  # Band-Knopf gedrückt: der Hinweis ist erledigt – auf allen Seiten weg
-                jetzt = coach.meeting.jetzt()
-                for h in coach.meeting.hinweise:
-                    if (h.aktion or {}).get("bogen") == art and jetzt - h.zeit < h.dauer:
-                        h.dauer = max(0.0, jetzt - h.zeit)
-            if ziel == "bild" and coach.bild_als_text:
-                ziel = "ueberblick"  # Basis: kein Bildmodell
-            try:
-                coach.assistent.bogen_starten(ziel, BOGEN_NAMEN.get(ziel, ziel), "band" if (daten or {}).get("band")
-                                              else "knopf", fokus="aktueller Agendapunkt" if
-                                              art == "ueberblick" and (daten or {}).get("umfang", "aktuell") == "aktuell"
-                                              else "gesamtes Meeting" if art == "ueberblick" else "")
-            except BogenBelegt as e:
-                raise HTTPException(409, str(e)) from e
-            await coach.melden()
-            return {"ok": True}
+        if coach.hoerstrom is None or coach._client is None:
+            raise HTTPException(409, "Es läuft kein Meeting." if coach.hoerstrom is None else "Kein KI-Schlüssel.")
         try:
-            knopfdruck.reservieren(coach, art)
-        except KnopfFehler as e:
+            await coach.hoerstrom.text_abwarten()
+        except TimeoutError as e:
             raise HTTPException(409, str(e)) from e
-        hintergrund(knopfdruck.ausfuehren(coach, art, frage, _an_alle))
+        if art == "frage":
+            coach.assistent.frage_beantworten(frage, "getippt")
+            return {"ok": True}
+        ziel = knopfdruck.BOGEN[art]
+        if (daten or {}).get("band"):  # Band-Knopf gedrückt: der Hinweis ist erledigt – auf allen Seiten weg
+            jetzt = coach.meeting.jetzt()
+            for h in coach.meeting.hinweise:
+                if (h.aktion or {}).get("bogen") == art and jetzt - h.zeit < h.dauer:
+                    h.dauer = max(0.0, jetzt - h.zeit)
+        if ziel == "bild" and coach.bild_als_text:
+            ziel = "ueberblick"  # Basis: kein Bildmodell
+        try:
+            coach.assistent.bogen_starten(ziel, BOGEN_NAMEN.get(ziel, ziel), "band" if (daten or {}).get("band")
+                                          else "knopf", fokus="aktueller Agendapunkt" if
+                                          art == "ueberblick" and (daten or {}).get("umfang", "aktuell") == "aktuell"
+                                          else "gesamtes Meeting" if art == "ueberblick" else "")
+        except BogenBelegt as e:
+            raise HTTPException(409, str(e)) from e
+        await coach.melden()
         return {"ok": True}
 
     knopf.__name__ = f"knopf_{art}"
@@ -85,25 +65,6 @@ def _knopf(art: str):
 
 for _art in ARTEN:
     router.add_api_route(f"/api/knopf/{_art}", _knopf(_art), methods=["POST"])
-
-
-@router.post("/api/knopf/verwerfen")
-async def knopf_verwerfen(daten: dict) -> dict:
-    from .server import coach
-
-    if not coach.knopfdruck:
-        raise HTTPException(409, "Verwerfen gibt es nur im Modus „Auf Knopfdruck“.")
-    if coach.hoerstrom is None:
-        raise HTTPException(409, "Es läuft kein Meeting.")
-    minuten = daten.get("minuten")
-    if minuten is not None:
-        try:
-            minuten = float(minuten)
-        except (TypeError, ValueError) as e:
-            raise HTTPException(400, "Ungültige Minutenzahl.") from e
-        if not 0 < minuten <= 600:
-            raise HTTPException(400, "Ungültige Minutenzahl.")
-    return await knopfdruck.verwerfen(coach, minuten)
 
 
 @router.get("/api/knopf/protokoll.md")
@@ -138,9 +99,9 @@ async def frage_halten(daten: dict) -> dict:
 @router.post("/api/frage/audio")
 async def frage_audio(request: Request) -> dict:
     """Die gehaltene Frage als WAV: mit dem Transkriptionsmodell der Stufe in Text, dann wie eine gesprochene Frage
-    (Live: Stimme + Karte) bzw. wie der Knopf „Nestor fragen“ (Nur auf Knopfdruck: Karte)."""
+    (Stimme + Karte)."""
     from .config import EINST
-    from .pipeline import fehlertext, hintergrund, nutzung_loggen
+    from .pipeline import fehlertext, nutzung_loggen
     from .server import coach
 
     if coach.hoerstrom is None:
@@ -168,12 +129,5 @@ async def frage_audio(request: Request) -> dict:
         coach.assistent.halten_abbrechen()
         await coach.melden()
         return {"ok": False, "frage": frage, "grund": "Nichts verstanden – bitte noch einmal halten und fragen."}
-    if coach.knopfdruck:
-        try:
-            knopfdruck.reservieren(coach, "frage")
-        except KnopfFehler as e:
-            raise HTTPException(409, str(e)) from e
-        hintergrund(knopfdruck.ausfuehren(coach, "frage", frage, _an_alle))
-    else:
-        coach.assistent.frage_beantworten(frage, "taste")
+    coach.assistent.frage_beantworten(frage, "taste")
     return {"ok": True, "frage": frage}

@@ -4,7 +4,7 @@ Der Coach spricht überall mit einem Client, der sich wie `openai.AsyncOpenAI` v
 die Teile nach, die der Coach braucht – dadurch bleibt der Rest des Codes für beide Stufen gleich:
 
     chat.completions.create        OpenAI-kompatibler Endpunkt von Mistral (nur base_url und Modell getauscht)
-    audio.transcriptions.create    Voxtral Transcribe (Batch, Knopfdruck und „sparsam“)
+    audio.transcriptions.create    Voxtral Transcribe (Batch je Äußerung, „sparsam“)
     audio.speech.with_streaming_response.create
                                    Voxtral TTS mit gespeicherter Stimme (voice_id Thorsten), gestreamt; liefert
                                    wie OpenAI PCM 16 bit 24 kHz (Mistral sendet float32 – hier umgewandelt)
