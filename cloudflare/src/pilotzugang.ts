@@ -6,6 +6,8 @@ export interface PilotEnv {
   GMAIL_SMTP_PASSWORT: string;
   MAIL_VON: string;
   AUTO_FREIGABE?: string;
+  TESTZUGANG?: string; // Secret/Var – NUR Dev/Staging (Ticket #75), siehe testzugangLesen() unten
+  WORKER_NAME?: string; // Var – muss in wrangler.jsonc exakt den Worker-Namen tragen; "nestor" blockiert TESTZUGANG hart
 }
 
 export interface Anmeldung {
@@ -22,7 +24,6 @@ export interface Interessent extends Anmeldung {
   pin_hash: string;
   pin_bis: number;
   pin_versuche: number;
-  max_meetings: number;
 }
 
 async function schluessel(email: string): Promise<string> {
@@ -67,7 +68,7 @@ export async function interessentSpeichern(env: PilotEnv, a: Anmeldung, pin: str
   await interessentSchreiben(env, {
     ...a, status, erstellt_at: alt?.erstellt_at ?? jetzt, letzter_pin_at: jetzt,
     letzter_login_at: alt?.letzter_login_at, pin_hash: hash, pin_bis: jetzt + 10 * 60_000,
-    pin_versuche: 0, max_meetings: alt?.max_meetings ?? 1,
+    pin_versuche: 0,
   });
 }
 
@@ -106,8 +107,9 @@ export function statusCacheErzeugen(): StatusCache {
 
 const STATUS_CACHE_MS = 5 * 60 * 1000;
 
-/** `true`, solange der Kunde kein Interessenten-Datensatz mit Status "gesperrt"/"wartet" hat. Legacy-
- * Passwortkunden (aus dem Secret KUNDEN, kein Interessenten-Datensatz) bleiben wie bisher vertraut. */
+/** `true`, solange der Kunde kein Interessenten-Datensatz mit Status "gesperrt"/"wartet" hat. Ein Zugang ohne
+ * jeden Datensatz (z. B. der Testzugang unten, Ticket #75 – er legt bewusst nie einen R2-Eintrag an) bleibt
+ * damit vertraut, genau wie früher die Legacy-Passwortkunden. */
 export async function kundeAktiv(env: PilotEnv, kunde: string, cache: StatusCache, jetzt = Date.now()): Promise<boolean> {
   const treffer = cache.daten.get(kunde);
   if (treffer && treffer.bis > jetzt) return treffer.aktiv;
@@ -115,6 +117,54 @@ export async function kundeAktiv(env: PilotEnv, kunde: string, cache: StatusCach
   const aktiv = row ? row.status === "aktiv" : true;
   cache.daten.set(kunde, { aktiv, bis: jetzt + STATUS_CACHE_MS });
   return aktiv;
+}
+
+/**
+ * Testzugang für die Test-Pipeline (Ticket #75, Entscheidung Niclas 10.10.2026): Mail + fester, gehashter PIN
+ * aus dem Secret/Var TESTZUGANG (JSON `{"mail":"...","pinHash":"<sha256 hex des PIN>"}`). Legt NIE einen
+ * R2-Datensatz an und verschickt NIE eine Mail – `handleAnmelden`/`handlePin` (index.ts) fragen ihn vor dem
+ * echten Pilotzugang ab. In PROD darf er nie wirken: zusätzlich zur Abwesenheit in `wrangler.jsonc` blockiert
+ * `WORKER_NAME === "nestor"` ihn hart im Code, auch falls das Secret versehentlich dort gesetzt wäre.
+ */
+export interface Testzugang {
+  mail: string;
+  pinHash: string;
+}
+
+export function testzugangLesen(env: Pick<PilotEnv, "TESTZUGANG">): Testzugang | null {
+  if (!env.TESTZUGANG) return null;
+  try {
+    const t = JSON.parse(env.TESTZUGANG) as Partial<Testzugang>;
+    if (typeof t.mail === "string" && typeof t.pinHash === "string") {
+      return { mail: t.mail.toLowerCase(), pinHash: t.pinHash.toLowerCase() };
+    }
+  } catch { /* kaputtes Secret – wie "nicht gesetzt" behandeln */ }
+  return null;
+}
+
+export function testzugangErlaubt(workerName: string | undefined): boolean {
+  // Geschlossen im Zweifel: ohne ausdrücklichen Nicht-prod-Namen kein Testzugang
+  return !!workerName && workerName !== "nestor";
+}
+
+/** `true`, wenn `email` der konfigurierte Testzugang ist und er in dieser Umgebung wirken darf. */
+export function testzugangMailPasst(env: Pick<PilotEnv, "TESTZUGANG" | "WORKER_NAME">, email: string): boolean {
+  const t = testzugangLesen(env);
+  if (!t) return false;
+  if (!testzugangErlaubt(env.WORKER_NAME)) {
+    console.error("Ticket #75: TESTZUGANG ist gesetzt, aber WORKER_NAME ist \"nestor\" (prod) – wird ignoriert.");
+    return false;
+  }
+  return email.toLowerCase() === t.mail;
+}
+
+/** null = kein Testzugang zuständig (normaler Mail-PIN-Fluss prüft weiter), sonst "ok"/"falsch". */
+export async function testzugangPinPruefen(
+  env: Pick<PilotEnv, "TESTZUGANG" | "WORKER_NAME">, email: string, pin: string,
+): Promise<"ok" | "falsch" | null> {
+  if (!testzugangMailPasst(env, email)) return null;
+  const t = testzugangLesen(env)!;
+  return (await sha256Hex(pin)) === t.pinHash ? "ok" : "falsch";
 }
 
 export async function interessentenListe(env: PilotEnv): Promise<Interessent[]> {

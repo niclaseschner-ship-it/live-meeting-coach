@@ -4,7 +4,7 @@ import {
   type Tageskosten, type Zustand,
 } from "./zaehler-logik";
 
-describe("max_meetings je Kunde", () => {
+describe("Höchstzahl gleichzeitiger Meetings je Zugang", () => {
   it("lässt neue Meetings bis zum Limit zu und sperrt danach", () => {
     let zustand: Zustand = {};
     const jetzt = 1_000_000;
@@ -39,6 +39,17 @@ describe("max_meetings je Kunde", () => {
 
   it("die Verfallszeit ist 30 min, nicht mehr 6 h (Ticket #12)", () => {
     expect(VERFALL_MS).toBe(30 * 60 * 1000);
+  });
+
+  it("mit dem festen Limit 1 (Ticket #75): ein zweites gleichzeitiges Meeting desselben Zugangs wird abgewiesen", () => {
+    let zustand: Zustand = {};
+    const jetzt = 1_000_000;
+    let r = pruefenUndAktualisieren(zustand, "m1", 1, jetzt);
+    expect(r.erlaubt).toBe(true);
+    zustand = r.zustand;
+    r = pruefenUndAktualisieren(zustand, "m2", 1, jetzt);
+    expect(r.erlaubt).toBe(false);
+    expect(r.aktive).toBe(1);
   });
 });
 

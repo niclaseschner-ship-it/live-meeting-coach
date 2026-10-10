@@ -80,7 +80,9 @@ class Dienste:
         self.stufe = stufe
         self.prozesse: list[tuple[str, subprocess.Popen]] = []
         self.geheimnis = secrets.token_hex(16)
-        self.passwort = secrets.token_urlsafe(12)
+        # Ticket #75: Testzugang statt Testpasswort – Mail + sechsstelliger PIN, nur für diesen Lauf gültig.
+        self.test_mail = f"e2e-{secrets.token_hex(4)}@nestor.lokal"
+        self.test_pin = f"{secrets.randbelow(1_000_000):06d}"
         self.tmp = CACHE / "tmp"
         self.tmp.mkdir(parents=True, exist_ok=True)
 
@@ -119,12 +121,15 @@ class Dienste:
 
     def worker(self) -> None:
         env = self._basis_env()
-        kunden = json.dumps({"e2e": {"hash": hashlib.sha256(self.passwort.encode()).hexdigest(), "max_meetings": 5}})
+        # Ticket #75: TESTZUGANG statt KUNDEN – Mail + PIN-Hash, nur für diesen lokalen wrangler-dev-Lauf
+        # gültig. WORKER_NAME ungleich "nestor" hält den prod-Schutz in pilotzugang.ts konsistent erfüllt.
+        testzugang = json.dumps({"mail": self.test_mail, "pinHash": hashlib.sha256(self.test_pin.encode()).hexdigest()})
         befehl = ["npx", "wrangler", "dev", "--enable-containers=false", "--compatibility-date", KOMPAT_DATUM,
                   "--local-protocol", "https", "--ip", "127.0.0.1", "--port", str(WORKER_PORT),
                   "--persist-to", str(self.ordner / "wrangler-state"), "--show-interactive-dev-session=false",
                   "--var", f"LOKAL_COACH_URL:http://127.0.0.1:{COACH_PORT}", "--var", f"WORKER_GEHEIMNIS:{self.geheimnis}",
-                  "--var", f"COOKIE_GEHEIMNIS:{secrets.token_hex(16)}", "--var", f"KUNDEN:{kunden}",
+                  "--var", f"COOKIE_GEHEIMNIS:{secrets.token_hex(16)}", "--var", f"TESTZUGANG:{testzugang}",
+                  "--var", "WORKER_NAME:nestor-e2e-lokal",
                   "--var", f"WORKER_URL:{WORKER_URL}", "--var", "AUTO_FREIGABE:0"]
         env["WRANGLER_SEND_METRICS"] = "false"
         self._starten("worker", befehl, env, cwd=WURZEL / "cloudflare")
@@ -211,7 +216,8 @@ class Ziel:
     Staging-Worker mit echten Anbietern – echt=True, Worker-Geheimnis fürs Anbieterprotokoll, Kostendeckel je Lauf."""
 
     url: str
-    passwort: str
+    test_mail: str
+    test_pin: str
     audio: dict[str, Path]
     echt: bool = False
     intern_geheimnis: str = ""
@@ -246,7 +252,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
 
         async def ablauf() -> None:
             nonlocal handy_ctx, handy, uhr
-            await schritte.anmelden(seite, ziel.url, ziel.passwort, lauf)
+            await schritte.anmelden(seite, ziel.url, ziel.test_mail, ziel.test_pin, lauf)
             await schritte.stufe_waehlen(seite, stufe, lauf)
             await schritte.agenda_text(seite, lauf)
             await schritte.agenda_sprache(seite, lauf, ziel.agenda_halten_s)
@@ -336,7 +342,8 @@ def stufe_fahren(basis: Path, stufe: str, rauch: bool) -> schritte.Lauf:
         dienste.warten("http://127.0.0.11:18011/bereit", 30, "Fake-OpenAI")  # 404, nicht protokolliert
         dienste.warten(f"http://127.0.0.1:{COACH_PORT}/api/start", 90, "Coach")
         dienste.warten(f"{WORKER_URL}/anmelden", 120, "Worker (wrangler dev)")
-        ziel = Ziel(url=WORKER_URL, passwort=dienste.passwort, audio=audio_bauen.bauen(), rss=dienste.rss_mb)
+        ziel = Ziel(url=WORKER_URL, test_mail=dienste.test_mail, test_pin=dienste.test_pin,
+                    audio=audio_bauen.bauen(), rss=dienste.rss_mb)
         lauf = asyncio.run(durchlauf(ordner, stufe, rauch, ziel))
     finally:
         dienste.stoppen()

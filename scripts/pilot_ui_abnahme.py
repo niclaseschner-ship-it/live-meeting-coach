@@ -41,7 +41,8 @@ RATE = 24_000
 # Sämtliche UI-Stellen stehen hier, damit Anpassungen an der Oberfläche gezielt
 # und zentral nachgeführt werden können.
 UI = {
-    "password": 'input[name="passwort"]',
+    # Ticket #75: der Passwortweg ist entfernt – dieses Skript ist seit #61/#75 durch tests/e2e/lauf.py
+    # ersetzt und nur noch als manuelles Werkzeug erhalten.
     "basis_card": "#karte-basis",
     "premium_card": "#karte-premium",
     "stage": "#modus-pill",
@@ -237,21 +238,10 @@ async def zustand(page: Page) -> dict:
 
 
 async def anmelden(page: Page, url: str, passwort: str, lauf: Lauf) -> None:
-    await page.goto(url, wait_until="domcontentloaded")
-    if "anmelden" in page.url and not await page.locator(UI["password"]).count():
-        await page.goto(url.rstrip("/") + "/anmelden?alt=1", wait_until="domcontentloaded")
-    feld = page.locator(UI["password"])
-    if await feld.count():
-        if not passwort:
-            raise RuntimeError("Loginformular sichtbar, aber Passwort-Umgebungsvariable leer")
-        await feld.fill(passwort)
-        await page.get_by_role("button", name=re.compile("Anmelden", re.I)).click()
-        await page.wait_for_load_state("domcontentloaded")
-        if await page.locator(UI["password"]).count() or "falsch" in page.url:
-            raise RuntimeError("Testpasswort wurde abgewiesen")
-        lauf.pruefen("Testpasswort-Login über UI", True)
-    else:
-        lauf.pruefen("Login nicht erforderlich", True, "Startseite wurde ohne Loginformular angezeigt")
+    # Ticket #75: der Passwortweg ist entfernt – dieses (unbenutzte, durch tests/e2e/lauf.py ersetzte) Skript
+    # kann nicht mehr einloggen. Siehe tests/e2e/schritte.py::anmelden für den aktuellen Mail-PIN-Weg.
+    raise RuntimeError("Passwort-Login entfernt (Ticket #75) – scripts/pilot_ui_abnahme.py ist veraltet, "
+                       "siehe tests/e2e/lauf.py")
 
 
 async def stufe_waehlen(page: Page, stufe: str, lauf: Lauf) -> None:

@@ -1,9 +1,7 @@
 # Nestor auf Cloudflare (Ticket #5)
 
-Dieser Ordner ist der Cloudflare-Worker, der vor Nestor steht: Kundenpasswort prüfen, je Meeting einen
-eigenen Container starten, Datenspenden nach R2 weiterleiten. Ausgerollt ist hier noch nichts – das Ticket
-baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb fehlt der Workers-Paid-Plan
-(5 $/Monat).
+Dieser Ordner ist der Cloudflare-Worker, der vor Nestor steht: Zugang prüfen (Mail-PIN, Ticket #75 – kein
+Passwortweg mehr), je Meeting einen eigenen Container starten, Datenspenden nach R2 weiterleiten.
 
 ## Einrichten (wenn der Plan da ist)
 
@@ -16,7 +14,6 @@ baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb
    npx wrangler secret put COOKIE_GEHEIMNIS      # ebenso, unabhängig vom WORKER_GEHEIMNIS
    npx wrangler secret put OPENAI_API_KEY        # Niclas' Schlüssel, eigenes Projekt mit Ausgabenlimit
    npx wrangler secret put MISTRAL_API_KEY       # Nestor Basis (Mistral, EU) – geht als LMC_MISTRAL_SCHLUESSEL in den Container
-   npx wrangler secret put KUNDEN                # siehe "Kunden pflegen" unten
    npx wrangler secret put PAYPAL_ME             # Name aus paypal.me/<name>
    npx wrangler secret put IMPRESSUM_NAME
    npx wrangler secret put IMPRESSUM_MAIL
@@ -24,41 +21,29 @@ baut und prüft nur lokal (`wrangler deploy --dry-run`). Für den echten Betrieb
    npx wrangler secret put TELEGRAM_CHAT_ID
    # optional: IMPRESSUM_ANSCHRIFT (ohne entfällt die Zeile)
    ```
-4. **Passwort-Hash erzeugen** (für das Secret `KUNDEN`) – SHA-256 des Klartext-Passworts, klein geschrieben:
-   ```
-   python3 -c "import hashlib; print(hashlib.sha256(input().encode()).hexdigest())"
-   ```
-   (Passwort eintippen, Enter – nichts wird protokolliert.) Alternativ mit Node:
-   `node -e "crypto.subtle.digest('SHA-256', new TextEncoder().encode(process.argv[1])).then(b => console.log(Buffer.from(b).toString('hex')))" 'IhrPasswort'`
-5. **R2-Bucket anlegen**, Jurisdiktion EU (Lastenheft §5):
+4. **R2-Bucket anlegen**, Jurisdiktion EU (Lastenheft §5):
    ```
    npx wrangler r2 bucket create nestor-spenden --jurisdiction=eu
    ```
-6. **`WORKER_URL` eintragen:** nach dem ersten Deploy zeigt `wrangler deploy` die *.workers.dev-Adresse (oder
+5. **`WORKER_URL` eintragen:** nach dem ersten Deploy zeigt `wrangler deploy` die *.workers.dev-Adresse (oder
    die eigene Domain, falls eingerichtet). Diese Adresse in `wrangler.jsonc` unter `vars.WORKER_URL`
    eintragen (sie steht dort nur als Platzhalter) und erneut deployen – der Container braucht sie, um die
    Datenspende beim Worker abzuliefern (`coach/ablage_r2.py`).
-7. **Deploy:** `npx wrangler deploy`.
+6. **Deploy:** `npx wrangler deploy`.
 
-## Kunden pflegen
+## Zugang (Ticket #75: nur noch Mail-PIN)
 
-Das Secret `KUNDEN` ist ein JSON-Objekt, ein Eintrag je Kunde:
+Der frühere Passwortweg (Secret `KUNDEN`, feste Kundenliste) ist entfernt (Entscheidung Niclas 10.10.2026).
+Einziger Zugang ist der Mail-PIN-Dialog aus „Pilotzugang per Mail-PIN“ unten; ein Zugang (eine Mailadresse)
+führt höchstens EIN Meeting gleichzeitig – fest, kein Feld mehr je Kunde (`src/zaehler.ts`).
 
-```json
-{ "firma-a": { "hash": "<sha256 hex>", "max_meetings": 3 },
-  "firma-b": { "hash": "<sha256 hex>", "max_meetings": 1 } }
-```
-
-Einen Kunden hinzufügen oder sperren: die JSON-Datei lokal ändern und neu setzen
-(`npx wrangler secret put KUNDEN` fragt interaktiv nach dem neuen Inhalt, oder `... < datei.json`). Einen
-Kunden sperren heißt: seinen Eintrag entfernen (oder `max_meetings: 0` setzen) und neu setzen – es gibt kein
-separates Nutzerkonto, das Passwort selbst ist die Identität (ein Formular-Feld, kein Name, siehe
-`src/anmeldung.ts`).
+Für die Test-Pipeline (B/C) gibt es zusätzlich den **Testzugang** `TESTZUGANG`: ein Secret/Var, NUR für
+Dev/Staging, NIE für prod gesetzt – siehe eigener Abschnitt unten.
 
 ## Wie es zusammenspielt
 
 ```
-Browser ──Passwort──► /anmelden (Worker, Cookie nestor_kunde, signiert MIT Ablaufzeit in COOKIE_GEHEIMNIS)
+Browser ──Mail+PIN──► /anmelden, /pin (Worker, Cookie nestor_kunde, signiert MIT Ablaufzeit in COOKIE_GEHEIMNIS)
 Browser ──Anfrage───► Worker prüft Cookie, wählt/erzeugt Meeting-ID (signiertes Cookie nestor_meeting)
 Worker  ──fetch()───► Container (idFromName(meetingId)), Kopfzeilen X-Nestor-Geheimnis/-Kunde/-Meeting
 Coach   ──/intern/spende/<name>──► Worker (X-Nestor-Geheimnis) ──► R2 (nestor-spenden)
@@ -67,11 +52,11 @@ Coach   ──/intern/kopplungstoken──► Worker (X-Nestor-Geheimnis) ──
 
 Innen (`coach/zugang.py`) gibt es im Cloud-Betrieb kein „am Laptop“ mehr: Eine Anfrage mit dem richtigen
 `X-Nestor-Geheimnis` bekommt dieselben Rechte wie früher der Laptop, weil der Worker die eigentliche Prüfung
-(das Kundenpasswort) schon gemacht hat. Ohne das Geheimnis gibt es 403 für alles – auch für Pfade, die sonst
+(Mail-PIN) schon gemacht hat. Ohne das Geheimnis gibt es 403 für alles – auch für Pfade, die sonst
 offen sind (Handy, Rechtstexte) –, denn eine solche Anfrage ist gar nicht über den Worker gekommen.
 
 Das Handy koppelt weiterhin über den Kopplungscode (`/handy?k=...`, unverändert in `coach/server.py`), nicht
-über das Kundenpasswort – deshalb lässt der Worker `/handy` und seine Bausteine auch ohne `nestor_kunde`-
+über den Mail-PIN-Login – deshalb lässt der Worker `/handy` und seine Bausteine auch ohne `nestor_kunde`-
 Cookie durch (siehe „Worker-Härtung“ unten: nur mit gültiger Signatur, nie mit einer rohen Meeting-ID). Die
 Meeting-Zuordnung (welcher Container) läuft über den Worker: Der QR-Code, den `/api/kopplung` zeigt, trägt
 `?meeting=<kopplungstoken>` – ein vom Worker signiertes, 15 Minuten gültiges Token (`/intern/kopplungstoken`,
@@ -154,14 +139,15 @@ Verbindung), reicht auch die enger gelesene Variante der Doku („eingehende Anf
 sicher zu sein. `20m` ist deshalb bewusst großzügig für die Einrichtungsphase gewählt, nicht weil das Meeting
 selbst länger bräuchte.
 
-## `max_meetings` je Kunde (Ticket #12: Start- und Ende-Signal)
+## Höchstens ein Meeting je Zugang (Ticket #12: Start- und Ende-Signal; Ticket #75: Limit fest 1)
 
-Ein kleines Durable Object `KundenZaehler` (eins je Kunde, `src/zaehler.ts`) zählt gestartete Meeting-IDs.
-Anders als im ursprünglichen Stand (Ticket #5) zählt ein Meeting nicht mehr schon beim ersten Seitenaufruf:
+Ein kleines Durable Object `KundenZaehler` (eins je Zugang, `src/zaehler.ts`) zählt gestartete Meeting-IDs.
+Anders als im ursprünglichen Stand (Ticket #5) zählt ein Meeting nicht mehr schon beim ersten Seitenaufruf.
+Seit Ticket #75 ist das Limit fest **1** je Zugang – kein Feld mehr je Kunde, keine Kundenliste:
 
 - **Start:** `coach/server.py` meldet den echten Start (`POST /api/start`, nicht das bloße Ansehen der
   Startseite) an den Worker: `POST /intern/meeting-start` mit `X-Nestor-Geheimnis`, Meeting-ID und Kunde. Erst
-  das zählt gegen `max_meetings` (`zaehler-logik.ts`, `pruefenUndAktualisieren`).
+  das zählt gegen das Limit (`index.ts`, `maxMeetingsFuer`; `zaehler-logik.ts`, `pruefenUndAktualisieren`).
 - **Aktives Ende:** `coach/api_abschluss.py` meldet „Fertig“ (`POST /api/abschluss/fertig`) als
   Hintergrundaufgabe – also erst, nachdem die Antwort beim Browser ist – an den Worker: `POST
   /intern/meeting-ende`. Der Worker gibt den Platz sofort frei (`beenden()`) **und stoppt den Container**
@@ -219,7 +205,8 @@ Neue Interessenten registrieren sich mit Name, E-Mail-Adresse und „Woher kenns
 die Liste im bereits EU-gebundenen R2-Bucket unter `pilot/interessenten/`, verschickt über den vorhandenen Gmail-SMTP-Zugang einen sechsstelligen, zehn Minuten gültigen PIN und setzt nach erfolgreicher
 Prüfung das bisherige signierte Kunden-Cookie. Standardmäßig werden neue Einträge sofort freigeschaltet;
 `AUTO_FREIGABE=0` setzt sie auf `wartet`. Die Liste ist intern über `GET /intern/interessenten` mit
-`X-Nestor-Geheimnis` abrufbar. Bestehende Passwortzugänge bleiben vorerst unter `/anmelden?alt=1` erhalten.
+`X-Nestor-Geheimnis` abrufbar. Der frühere Passwortweg (`/anmelden?alt=1`, Secret `KUNDEN`) ist entfernt
+(Ticket #75, Entscheidung Niclas 10.10.2026) – Mail-PIN ist der einzige Zugang.
 
 Vor dem ersten Deploy einmalig:
 
@@ -233,13 +220,33 @@ npx wrangler secret put MAIL_VON
 Minuten ab und sind auf fünf Fehlversuche begrenzt. Für Produktion sollte zusätzlich ein Bot-Schutz ergänzt werden,
 wenn die öffentliche Registrierung missbraucht wird.
 
-Prüft die Anmeldung (Passwort → Kunde über den SHA-256-Hash, ohne Namensfeld), die Cookie-Signatur
-(signieren/prüfen/verwerfen bei falschem Geheimnis oder Manipulation) und die `max_meetings`-Zählung
-(Limit, Verfall nach 30 min, keine Doppelzählung, aktives `beenden()` gibt sofort frei – Ticket #12) – reine
-Funktionen, ohne Miniflare/Workers-Laufzeit nötig (`src/anmeldung.ts`, `src/zaehler-logik.ts`). Die neuen
-`/intern/meeting-start`/`/intern/meeting-ende`-Routen in `index.ts` selbst (Container `stop()`, Cookie-Pfad)
-brauchen die Workers-Laufzeit und sind darum nicht separat unit-getestet – geprüft über `tsc --noEmit` und,
-für den Rückruf von der Coach-Seite, `tests/test_meeting_ende.py` (Python, Netz gemockt).
+Prüft die Cookie-Signatur (signieren/prüfen/verwerfen bei falschem Geheimnis oder Manipulation) und die
+Zählung (Limit 1, Verfall nach 30 min, keine Doppelzählung, aktives `beenden()` gibt sofort frei –
+Ticket #12/#75) – reine Funktionen, ohne Miniflare/Workers-Laufzeit nötig (`src/anmeldung.ts`,
+`src/zaehler-logik.ts`, `src/pilotzugang.ts`). Die neuen `/intern/meeting-start`/`/intern/meeting-ende`-Routen
+in `index.ts` selbst (Container `stop()`, Cookie-Pfad) brauchen die Workers-Laufzeit und sind darum nicht
+separat unit-getestet – geprüft über `tsc --noEmit` und, für den Rückruf von der Coach-Seite,
+`tests/test_meeting_ende.py` (Python, Netz gemockt).
+
+## Testzugang für die Test-Pipeline (Ticket #75, NUR Dev/Staging)
+
+`TESTZUGANG` ist ein Secret/Var mit fester Mail und gehashtem PIN, JSON `{"mail":"...","pinHash":"<sha256
+hex des PIN>"}`. `handleAnmelden`/`handlePin` (`index.ts`) fragen ihn über `testzugangPinPruefen`
+(`pilotzugang.ts`) VOR dem echten Mail-PIN-Fluss ab: er legt nie einen R2-Datensatz an und verschickt nie
+eine Mail. In prod gibt es ihn nicht – weder als Var/Secret in `wrangler.jsonc` noch wirksam im Code: Ist
+`WORKER_NAME` (Var, muss den echten Worker-Namen tragen) gleich `"nestor"`, wird ein trotzdem gesetztes
+`TESTZUGANG` hart ignoriert und über `console.error` geloggt.
+
+- **Lokal** (`wrangler dev`, Stufe B): `tests/e2e/lauf.py` erzeugt Mail/PIN pro Lauf selbst und setzt sie per
+  `--var TESTZUGANG:<json> --var WORKER_NAME:<ungleich "nestor">` beim Start von `wrangler dev` – kein Secret
+  nötig, nichts verlässt den lokalen Prozess.
+- **Staging** (Stufe C): als Secret, NICHT als Var (Secrets stehen nie in `wrangler.jsonc`):
+  ```bash
+  npx wrangler secret put TESTZUGANG --env staging   # JSON {"mail":"...","pinHash":"..."} über stdin/Pipe
+  ```
+  Mail und PIN nur in `~/.cache/lmc-e2e/staging.env` (chmod 600), nie in der Hausablage; `tests/e2e/lauf_c.py`
+  liest sie dort (`STAGING_TESTZUGANG_MAIL`/`STAGING_TESTZUGANG_PIN`). `deploy/staging_einrichten.sh` erzeugt
+  frische Werte und setzt das Secret – siehe „Staging“ unten.
 
 ## Worker-Härtung (Ticket #63)
 
@@ -367,7 +374,7 @@ Handy-Abnahme **Stufe D** (`docs/abnahme_manuell.md`). Adresse: `https://nestor-
 | Durable Objects | eigene Namensräume | eigene Namensräume (eigenes Skript) – kein Zähler, keine Variantenwahl wird geteilt |
 | Container | `max_instances: 10` | `max_instances: 1`, gleiches Image, `jurisdiction: eu` |
 | R2 | `nestor-spenden` (eu) | `nestor-spenden-staging` (eu) – Datenspenden und Interessenten getrennt |
-| Login | Kunden + Mail-PIN | ein Testzugang `staging-e2e`, Wegwerfpasswort |
+| Login | Mail-PIN (Ticket #75) | `TESTZUGANG`-Secret: Wegwerf-Mail + sechsstelliger Wegwerf-PIN |
 | Telegram | an Niclas | **aus** (keine `TELEGRAM_*`-Secrets) |
 | KI-Schlüssel | `openai-nestor`, `mistral-api-key` | dieselben (Entscheidung Niclas 10.10.2026) – Schutz über den Kostendeckel je Lauf in Stufe C (Premium 1 €, Basis 0,30 €) |
 
@@ -381,10 +388,11 @@ scripts/pipeline.sh c --stufe beide # danach: Stufe C gegen genau diesen Stand
 `deploy.sh --staging` ruft `deploy/staging_einrichten.sh` auf: vor dem Deploy legt es den R2-Bucket an (falls er
 fehlt), nach dem ersten Deploy setzt es die Secrets per `wrangler secret put --env staging`, Werte nur per Pipe:
 
-- `WORKER_GEHEIMNIS`, `COOKIE_GEHEIMNIS`, `PIN_GEHEIMNIS` und das Testpasswort (als SHA-256 in `KUNDEN`) sind
-  **frische Zufallswerte nur für Staging**, nicht von prod kopiert und bewusst nicht in der Hausablage. Sie liegen
-  in `~/.cache/lmc-e2e/staging.env` (chmod 600) auf dem Pi; Stufe C und D lesen sie dort. Geht die Datei
-  verloren: löschen, `deploy/staging_einrichten.sh --nur-secrets` – erzeugt und setzt neue Werte.
+- `WORKER_GEHEIMNIS`, `COOKIE_GEHEIMNIS`, `PIN_GEHEIMNIS` und der Testzugang (Mail + SHA-256 des PIN, als
+  `TESTZUGANG`, Ticket #75) sind **frische Zufallswerte nur für Staging**, nicht von prod kopiert und bewusst
+  nicht in der Hausablage. Sie liegen in `~/.cache/lmc-e2e/staging.env` (chmod 600) auf dem Pi; Stufe C und D
+  lesen sie dort. Geht die Datei verloren: löschen, `deploy/staging_einrichten.sh --nur-secrets` – erzeugt und
+  setzt neue Werte.
 - `OPENAI_API_KEY` ← `sudo -n zugang holen openai-nestor`, `MISTRAL_API_KEY` ← `sudo -n zugang holen mistral-api-key`.
 - Kein `GMAIL_SMTP_PASSWORT`/`MAIL_VON`: die Mail-PIN-Registrierung ist in Staging nicht benutzbar (gewollt).
 

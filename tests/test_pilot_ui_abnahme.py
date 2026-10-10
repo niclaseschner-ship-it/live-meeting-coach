@@ -81,10 +81,6 @@ def test_ui_selektoren_stehen_alle_in_den_vorgesehenen_html_dateien():
     js = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "static").glob("*.js"))
     dokumente = "\n".join(html.values()) + "\n" + js
     for key, selector in UI.items():
-        if key == "password":
-            source = (ROOT / "cloudflare/src/index.ts").read_text(encoding="utf-8")
-            assert 'name="passwort"' in source
-            continue
         ids = __import__("re").findall(r"#([A-Za-z][A-Za-z0-9_-]*)", selector)
         assert ids, f"{key} hat keine zentral definierte ID"
         assert all(f'id="{ident}"' in dokumente or f'id: "{ident}"' in dokumente or
