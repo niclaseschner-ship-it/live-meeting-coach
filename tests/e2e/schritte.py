@@ -8,12 +8,16 @@ Regeln für alles hier:
 - Sichtbarkeit, Reihenfolge und Bedienmodell kommen aus `szenarien/ui_vertrag.json`. Weicht der Code ab und steht
   die Prüfung in `bekannte_abweichungen`, wird sie als `bekannt_rot` mit Ticket gemeldet, nicht verschwiegen.
 
-Dieselben Funktionen sollen später Stufe C (echte Anbieter, Staging) fahren; der Unterschied liegt nur im Lauf.
+Dieselben Funktionen fahren Stufe C (Ticket #62, echte Anbieter auf Staging, tests/e2e/lauf_c.py); der Unterschied
+liegt nur im Lauf: `Lauf(echt=True)` prüft gegen Sollfragmente (Regex aus drehbuch.json → audio_c.sollfragmente)
+statt gegen die wörtlichen Antworten der Fakes, und es kommen Prüfungen dazu, die nur mit echten Modellen Sinn haben
+(Monolog live, Imperativ, Anbieterprotokoll der Hostwache, Kostendeckel je Lauf).
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import html
 import json
 import re
@@ -27,6 +31,7 @@ from playwright.async_api import Browser, Page
 WURZEL = Path(__file__).resolve().parents[2]
 VERTRAG = json.loads((WURZEL / "szenarien" / "ui_vertrag.json").read_text(encoding="utf-8"))
 DREHBUCH = json.loads((WURZEL / "tests" / "e2e" / "drehbuch.json").read_text(encoding="utf-8"))
+SOLL_C = DREHBUCH["audio_c"]["sollfragmente"]
 HANDY = {"is_mobile": True, "has_touch": True, "viewport": {"width": 390, "height": 844},
          "user_agent": ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
                         "Chrome/140.0.0.0 Mobile Safari/537.36")}
@@ -68,16 +73,18 @@ class Abbruch(RuntimeError):
 
 # --- Bericht ----------------------------------------------------------------------------------------------------------
 class Lauf:
-    def __init__(self, ordner: Path, stufe: str, rauch: bool) -> None:
+    def __init__(self, ordner: Path, stufe: str, rauch: bool, echt: bool = False) -> None:
         self.ordner = ordner
         (ordner / "screenshots").mkdir(parents=True, exist_ok=True)
         self.stufe = stufe
         self.rauch = rauch
+        self.echt = echt  # Stufe C: echte Modelle, Sollfragmente statt wörtlicher Fake-Antworten
+        self.t_mikro: float | None = None  # monotonic beim Tippen auf „Mikrofon und Ton“ – Start der Handy-WAV
         self.start = time.monotonic()
         self.gestartet = datetime.now().astimezone()
         self.pruefungen: list[dict] = []
         self.screenshots: list[str] = []
-        self.belege: dict = {"stufe": stufe, "rauch": rauch, "gestartet": self.gestartet.isoformat()}
+        self.belege: dict = {"stufe": stufe, "rauch": rauch, "echt": echt, "gestartet": self.gestartet.isoformat()}
         self.schritt_zeiten: list[tuple[str, float]] = []
 
     def _eintrag(self, name: str, status: str, detail: str = "", ticket: str = "") -> None:
@@ -134,20 +141,23 @@ class Lauf:
         filme = "".join(f"<figure><figcaption>{html.escape(v)}</figcaption><video controls src='{html.escape(v)}'>"
                         "</video></figure>" for v in (videos or []))
         anbieter = html.escape(json.dumps(self.belege.get("anbieterbeweis", {}), ensure_ascii=False, indent=2))
+        kosten = (f"<h2>Kosten (Kostenzähler der App)</h2><pre>{html.escape(json.dumps(self.belege['kosten'], ensure_ascii=False, indent=2))}</pre>"
+                  if "kosten" in self.belege else "")
         (self.ordner / "bericht.html").write_text(
             "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-            f"<title>Klick-E2E {html.escape(self.stufe)}</title>"
+            f"<title>Klick-E2E {'C' if self.echt else 'B'} {html.escape(self.stufe)}</title>"
             "<style>body{font:15px system-ui;margin:24px auto;max-width:1100px;padding:0 16px;color:#182033}"
             "table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid #ddd;"
             "vertical-align:top}img,video{max-width:100%;border:1px solid #ddd}figure{margin:24px 0}"
             "figcaption{font-weight:600}pre{background:#f1f5f9;padding:12px;overflow:auto}</style>"
-            f"<h1>Klick-E2E Stufe B · {html.escape(self.stufe)}{' · Rauch' if self.rauch else ''}</h1>"
+            f"<h1>Klick-E2E Stufe {'C (Staging, echte Anbieter)' if self.echt else 'B'} · {html.escape(self.stufe)}"
+            f"{' · Rauch' if self.rauch else ''}</h1>"
             f"<p>{self.gestartet:%d.%m.%Y %H:%M} · Dauer {self.belege['dauer_s']} s · "
             + " · ".join(f"{k}: {v}" for k, v in zaehl.items()) + "</p>"
             "<p>ok = erfüllt · fehlt = rot · bekannt_rot = Abweichung vom Auftrag, Ticket offen · offen = in diesem "
             "Lauf nicht geprüft · ausstehend = braucht erst das genannte Ticket.</p>"
             f"<table><tr><th>Status</th><th>Prüfung</th><th>Ticket</th><th>Beleg</th><th>t [s]</th></tr>{zeilen}</table>"
-            f"<h2>Anbieterbeweis</h2><pre>{anbieter}</pre><h2>Videos</h2>{filme}<h2>Screenshots</h2>{bilder}",
+            f"<h2>Anbieterbeweis</h2><pre>{anbieter}</pre>{kosten}<h2>Videos</h2>{filme}<h2>Screenshots</h2>{bilder}",
             encoding="utf-8")
         return self.ordner / "bericht.html"
 
@@ -173,6 +183,16 @@ async def sichtbar(page: Page, selektor: str) -> bool:
 async def text(page: Page, selektor: str) -> str:
     loc = page.locator(selektor)
     return (await loc.first.inner_text()).strip() if await loc.count() else ""
+
+
+def passt(muster: str, text: str) -> bool:
+    """Sollfragment (Regex, Groß/Klein egal) – Stufe C prüft echte Modellausgaben nicht wörtlich."""
+    return bool(re.search(muster, text or "", re.IGNORECASE))
+
+
+async def karten(page: Page) -> list[dict]:
+    """Karten des Verlaufs aus dem Dashboard-Zustand (lesend, Zusatzbeleg zur sichtbaren Bühne)."""
+    return await page.evaluate("() => (typeof zustand !== 'undefined' && zustand && zustand.karten) || []") or []
 
 
 async def zustand(page: Page) -> dict:
@@ -277,13 +297,22 @@ async def agenda_text(page: Page, lauf: Lauf) -> None:
     lauf.pruefen("Unklare Agenda-Eingabe → sichtbare Rückfrage", fertig and rueck.startswith("Rückfrage:"), rueck[:120])
     await feld.fill(DREHBUCH["audio"]["agenda_satz"])
     await feld.press("Enter")
-    soll = next(r["antwort"] for r in DREHBUCH["chat"] if r["id"] == "agenda_entwurf")
-    fertig = await warte(page, f"() => document.getElementById('f-titel')?.value === {json.dumps(soll['titel'])}", 60)
+    if lauf.echt:
+        # echtes Modell: Titel nicht vorhersagbar – Tabelle muss beide Punkte aus dem Satz tragen
+        fertig = await warte(page, "() => (document.getElementById('f-titel')?.value || '').trim().length > 0 && "
+                                   "document.querySelectorAll('#agenda-tabelle .agenda-zeile').length >= 2", 90)
+    else:
+        soll = next(r["antwort"] for r in DREHBUCH["chat"] if r["id"] == "agenda_entwurf")
+        fertig = await warte(page, f"() => document.getElementById('f-titel')?.value === {json.dumps(soll['titel'])}", 60)
     titel = await page.locator("#f-titel").input_value()
     punkte = [await page.locator('#agenda-tabelle .agenda-zeile input[placeholder="Punkt"]').nth(i).input_value()
               for i in range(await page.locator("#agenda-tabelle .agenda-zeile").count())]
-    lauf.pruefen("Agenda-Entwurf per Text übernommen (Titel und Punkte aus der Antwort)",
-                 fertig and punkte == [p["titel"] for p in soll["punkte"]], f"Titel={titel!r}, Punkte={punkte}")
+    if lauf.echt:
+        ok = fertig and all(any(passt(m, p) for p in punkte) for m in SOLL_C["agenda_punkte"])
+    else:
+        ok = fertig and punkte == [p["titel"] for p in soll["punkte"]]
+    lauf.pruefen("Agenda-Entwurf per Text übernommen (Titel und Punkte aus der Antwort)", ok,
+                 f"Titel={titel!r}, Punkte={punkte}")
     await lauf.bild(page, "agenda_text")
 
 
@@ -323,13 +352,15 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
     return rueck
 
 
-async def agenda_sprache(page: Page, lauf: Lauf) -> None:
+async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
+    """sekunden: Haltedauer – Stufe C hält bis nach dem Satzende der Agenda-WAV (echte Transkription)."""
     lauf.schritt("Agenda per Sprache (Agenda-Mikro wie jeden Sprechknopf bedienen)")
     vorher = await page.locator("#agenda-tabelle .agenda-zeile").count()
-    await sprechknopf_halten(page, "#agenda-mikro", 7.5, lauf, "Agenda-Mikro")
+    await sprechknopf_halten(page, "#agenda-mikro", sekunden, lauf, "Agenda-Mikro")
     fertig = await warte(page, "() => document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden' && "
                                "(document.getElementById('agenda-antwort')?.textContent || '').length > 0 && "
-                               "!(document.getElementById('agenda-antwort')?.textContent || '').startsWith('Agenda wird')", 60)
+                               "!(document.getElementById('agenda-antwort')?.textContent || '').startsWith('Agenda wird')",
+                         90 if lauf.echt else 60)
     antwort = await text(page, "#agenda-antwort")
     zeilen = await page.locator("#agenda-tabelle .agenda-zeile").count()
     lauf.pruefen("Agenda per Sprache verarbeitet (Antwort sichtbar, Tabelle steht)",
@@ -406,7 +437,7 @@ async def handy_mikro(page: Page, handy: Page, lauf: Lauf) -> None:
     await vertrag_pruefen(handy, "vorbereitung", "handy", lauf.stufe, lauf)
     await lauf.bild(handy, "handy_vorbereitung")
     await handy.locator("#btn-mikro").tap()
-    t0 = time.monotonic()
+    t0 = lauf.t_mikro = time.monotonic()  # ab hier läuft die Fake-Mikro-WAV des Handys (Stufe C: Imperativ-Takt)
     frei = await warte(page, "() => !document.getElementById('btn-start')?.disabled", 10)
     lauf.pruefen("„Meeting starten“ wird ≤ 10 s nach Mikro/Ton am Handy klickbar", frei,
                  f"{time.monotonic() - t0:.1f} s, Knopf: {await text(page, '#btn-start')!r}")
@@ -472,7 +503,46 @@ async def ton_abwarten(handy: Page, lauf: Lauf, name: str, sekunden: float = 40)
                                                     "s": round(time.monotonic() - t0, 1)})
 
 
+# Stufe C: welche Kartenart ein Kernknopf erzeugt und welches Sollfragment sie tragen muss (echte Modelle)
+KNOPF_KARTE = {"stand": ({"stand"}, r"Sommerfest|Budget|Vereinsbus|Punkt"),
+               "zusammenfassen": ({"zusammenfassung"}, r"9[.\s]?000|neuntausend|Budget|Sabine"),
+               "fehlt": ({"fehlt"}, r"\w"),
+               "protokoll": ({"festgehalten", "protokoll"}, r"Sabine|9[.\s]?000|neuntausend|Budget"),
+               "ueberblick": ({"ueberblick", "bild"}, r"Budget|Vereinsbus|Sommerfest|Sabine|Bild")}
+
+
+async def kernknopf_echt(page: Page, art: str, lauf: Lauf, sekunden: float = 90) -> None:
+    """Stufe C: nach dem Klick eine NEUE Karte der passenden Art, sichtbar auf der Bühne, mit Sollfragment."""
+    beschriftung = next(k["beschriftung"] for k in VERTRAG["kernknoepfe"] if k["knopf"] == art)
+    arten, muster = KNOPF_KARTE[art]
+    frei = await warte(page, f"() => !document.querySelector('#knopf-leiste [data-knopf=\"{art}\"]')?.disabled", 90)
+    if not frei:
+        lauf.pruefen(f"Kernknopf {beschriftung}", False, "blieb gesperrt")
+        return
+    vorher = max((k.get("id", 0) for k in await karten(page)), default=0)
+    await page.locator(f'#knopf-leiste [data-knopf="{art}"]').click()
+    t0, neu = time.monotonic(), None
+    while time.monotonic() - t0 < sekunden and neu is None:
+        neu = next((k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") in arten), None)
+        if neu is None:
+            await asyncio.sleep(1)
+    titel = (neu or {}).get("titel") or ""
+    sichtbar_ = bool(neu) and await warte(
+        page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(titel[:40])})", 10)
+    inhalt = json.dumps(neu or {}, ensure_ascii=False) + await text(page, "#vl-buehne")
+    lauf.pruefen(f"Kernknopf {beschriftung}: neue Karte ({'/'.join(sorted(arten))}) sichtbar mit Sollfragment",
+                 bool(neu) and sichtbar_ and passt(muster, inhalt),
+                 f"nach {time.monotonic() - t0:.0f} s: {titel[:60]!r}, sichtbar={sichtbar_}" if neu
+                 else f"keine neue Karte in {sekunden:.0f} s; Bühne: {(await text(page, '#vl-buehne'))[:120]!r}")
+    lauf.belege.setdefault("karten_c", []).append({"knopf": art, "titel": titel[:80],
+                                                   "punkte": [str(x)[:80] for x in (neu or {}).get("punkte", [])][:4]})
+    await lauf.bild(page, f"knopf_{art}")
+
+
 async def kernknopf(page: Page, art: str, soll: str, lauf: Lauf, sekunden: float = 60) -> None:
+    if lauf.echt:
+        await kernknopf_echt(page, art, lauf)
+        return
     beschriftung = next(k["beschriftung"] for k in VERTRAG["kernknoepfe"] if k["knopf"] == art)
     knopf = page.locator(f'#knopf-leiste [data-knopf="{art}"]')
     frei = await warte(page, f"() => !document.querySelector('#knopf-leiste [data-knopf=\"{art}\"]')?.disabled", 60)
@@ -491,6 +561,18 @@ async def transkript_pruefen(page: Page, lauf: Lauf, sekunden: float = 120) -> N
     lauf.schritt("Sprache über das Fake-Mikro des Handys, sichtbares Transkript")
     saetze = DREHBUCH["audio"]["meeting_saetze"]
     await page.locator("#btn-transkript").click()
+    if lauf.echt:
+        muster = SOLL_C["meeting_saetze"]
+        letzter = json.dumps(muster[-1])
+        da = await warte(page, f"() => new RegExp({letzter}, 'i').test(document.getElementById('transkript')?.innerText || '')",
+                         sekunden + 30)
+        t = await text(page, "#transkript")
+        fehlend = [m for m in muster if not passt(m, t)]
+        lauf.pruefen("Alle Meeting-Sätze (Sollfragmente) im sichtbaren Transkript", da and not fehlend,
+                     f"fehlend: {fehlend}" if fehlend else "")
+        await lauf.bild(page, "transkript")
+        await page.locator("#leiste-zu").click()
+        return
     letzter = json.dumps(saetze[-1][:30])
     da = await warte(page, f"() => (document.getElementById('transkript')?.innerText || '').includes({letzter})", sekunden)
     t = await text(page, "#transkript")
@@ -532,15 +614,34 @@ async def beenden_und_abschluss(page: Page, lauf: Lauf, download: Path) -> None:
         technik = json.loads(z.read("technik.json")) if "technik.json" in namen else {}
         protokoll = z.read("meeting.md").decode("utf-8", "replace") if "meeting.md" in namen else ""
         transkript = z.read("transkript.md").decode("utf-8", "replace") if "transkript.md" in namen else ""
+        meeting_json = json.loads(z.read("meeting.json")) if "meeting.json" in namen else {}
     pflicht = {"meeting.md", "transkript.md", "agenda.md", "technik.json"}
     lauf.pruefen("ZIP enthält Pflichtdateien", pflicht <= namen, f"fehlt: {sorted(pflicht - namen)}")
     lauf.belege["technik_json_stufe"] = {k: technik.get(k) for k in ("stufe", "anbieter") if k in technik}
     lauf.pruefen("technik.json nennt die gewählte Stufe", lauf.stufe in json.dumps(technik, ensure_ascii=False).lower(),
                  json.dumps(lauf.belege["technik_json_stufe"], ensure_ascii=False))
-    lauf.pruefen("Protokoll enthält Beschluss (9.000 €) und Aufgabe (Sabine, Freitag)",
-                 bool(re.search(r"9\.?000", protokoll)) and "Sabine" in protokoll and "Freitag" in protokoll)
-    lauf.pruefen("Transkript im ZIP enthält die Drehbuchsätze",
-                 all(s[:30] in transkript for s in DREHBUCH["audio"]["meeting_saetze"]))
+    if lauf.echt:
+        lauf.pruefen("Protokoll enthält Beschluss (9.000 €) und Aufgabe (Sabine, Freitag)",
+                     all(passt(SOLL_C[k], protokoll) for k in ("beschluss", "aufgabe", "termin")),
+                     "; ".join(f"{k}={passt(SOLL_C[k], protokoll)}" for k in ("beschluss", "aufgabe", "termin")))
+        fehlend = [m for m in SOLL_C["meeting_saetze"] + [SOLL_C["monolog"]] if not passt(m, transkript)]
+        lauf.pruefen("Transkript im ZIP enthält die Meeting-Sätze und den Monolog (Sollfragmente)", not fehlend,
+                     f"fehlend: {fehlend}" if fehlend else "")
+        anbieter_soll = "OpenAI" if lauf.stufe == "premium" else "Mistral"
+        domain = "openai.com" if lauf.stufe == "premium" else "mistral.ai"
+        gesehen = technik.get("gesehene_ziele") or []
+        fremd = [g for g in gesehen if not g.get("erlaubt") or not g.get("ziel", "").split(":")[0].endswith(domain)]
+        lauf.belege["technik_json_stufe"]["gesehene_ziele"] = gesehen
+        lauf.pruefen(f"technik.json: Anbieter {anbieter_soll}, Hostwache sah nur {domain}-Ziele",
+                     technik.get("anbieter") == anbieter_soll and bool(gesehen) and not fremd,
+                     f"anbieter={technik.get('anbieter')!r}, gesehen={[(g.get('ziel'), g.get('anzahl')) for g in gesehen]}")
+        if meeting_json.get("kosten"):
+            lauf.belege.setdefault("kosten", {})["zip_meeting_json"] = meeting_json["kosten"]
+    else:
+        lauf.pruefen("Protokoll enthält Beschluss (9.000 €) und Aufgabe (Sabine, Freitag)",
+                     bool(re.search(r"9\.?000", protokoll)) and "Sabine" in protokoll and "Freitag" in protokoll)
+        lauf.pruefen("Transkript im ZIP enthält die Drehbuchsätze",
+                     all(s[:30] in transkript for s in DREHBUCH["audio"]["meeting_saetze"]))
 
     lauf.schritt("Datenspende mit Feedback")
     await page.locator("#sp-einverstanden").check()
@@ -559,6 +660,14 @@ async def ton_auswerten(handy: Page, stufe: str, lauf: Lauf) -> None:
     soll, fremd = (tts["openai_hz"], tts["mistral_hz"]) if stufe == "premium" else (tts["mistral_hz"], tts["openai_hz"])
     log = await handy.evaluate("() => window.__tonLog || []")
     (lauf.ordner / "ton_handy.json").write_text(json.dumps(log), encoding="utf-8")
+    if lauf.echt:
+        # Echte Stimmen haben keine feste Tonhöhe – der Anbieterbeweis läuft in C über die Hostwache; hier nur:
+        # am Handy klang überhaupt Nestors Stimme (Begrüßung, Antworten), gemessen am Ausgang des Lautsprechers.
+        sekunden = len(log) / 10
+        lauf.belege["ton_handy_s"] = round(sekunden, 1)
+        lauf.pruefen("Handy gibt Nestors Stimme hörbar aus (Begrüßung und Antworten)", sekunden >= 5,
+                     f"{sekunden:.1f} s Ton am Handy")
+        return
     nahe = lambda hz, ziel: abs(hz - ziel) <= 15  # noqa: E731
     n_soll = sum(1 for e in log if nahe(e["hz"], soll))
     n_fremd = sum(1 for e in log if nahe(e["hz"], fremd))
@@ -575,6 +684,30 @@ def fake_regeln(lauf: Lauf) -> list[str]:
         if p.exists():
             aus += [json.loads(z) for z in p.read_text(encoding="utf-8").splitlines()]
     return [e["regel"] for e in sorted(aus, key=lambda e: e["t"]) if e.get("regel")]
+
+
+async def ansprache_pruefen_echt(page: Page, handy: Page, uhr: "Ergebnisuhr", lauf: Lauf) -> None:
+    """Stufe C: „Nestor, wie viel Budget …?“ – Premium antwortet hörbar am Handy (Realtime) oder als Karte mit der
+    Zahl; Basis (Funkgerät) gibt keine Antwort ohne Sprechtaste."""
+    t0 = time.monotonic()
+    while "ansprache" not in uhr.satz_wand and time.monotonic() - t0 < 30:
+        await asyncio.sleep(1)
+    gesagt = uhr.satz_wand.get("ansprache")
+    if lauf.stufe == "premium":
+        await asyncio.sleep(25)  # Zeit für die gesprochene Antwort
+        log = await handy.evaluate("() => window.__tonLog || []")
+        nach = [e for e in log if gesagt and e["t"] >= gesagt * 1000 - 1000 and e["t"] <= gesagt * 1000 + 30_000]
+        antwort = [k for k in await karten(page) if k.get("art") == "antwort"
+                   and passt(SOLL_C["beschluss"], json.dumps(k, ensure_ascii=False))]
+        lauf.pruefen("Premium: Ansprache „Nestor, …“ per Sprache beantwortet (Ton am Handy oder Karte mit 9.000)",
+                     bool(gesagt) and (len(nach) >= 10 or bool(antwort)),
+                     f"Satz erkannt={bool(gesagt)}, Ton danach {len(nach) / 10:.1f} s, Antwortkarten mit Zahl {len(antwort)}")
+        await lauf.bild(page, "ansprache_premium")
+    else:
+        await asyncio.sleep(10)
+        antwort = [k for k in await karten(page) if k.get("art") == "antwort"]
+        lauf.pruefen("Basis: Ansprache „Nestor, …“ ohne Sprechtaste bleibt unbeantwortet", bool(gesagt) and not antwort,
+                     f"Satz erkannt={bool(gesagt)}, Antwortkarten {len(antwort)}")
 
 
 async def ansprache_pruefen(page: Page, lauf: Lauf) -> None:
@@ -595,7 +728,17 @@ async def ansprache_pruefen(page: Page, lauf: Lauf) -> None:
                      f"Antwort-Regeln {geantwortet}, Karte={sichtbar_}")
 
 
-async def sprechtaste_wirkung(page: Page, lauf: Lauf) -> None:
+async def sprechtaste_wirkung(page: Page, lauf: Lauf, vorher: int = 0) -> None:
+    if lauf.echt:
+        # Die Desktop-WAV beginnt bei jedem Halten von vorn („Bitte bereite …“) – geprüft wird: es kommt eine Antwort
+        t0, neu = time.monotonic(), []
+        while time.monotonic() - t0 < 60 and not neu:
+            neu = [k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") != "ergebnis"]
+            await asyncio.sleep(1)
+        lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar", bool(neu),
+                     f"{(neu[0].get('art'), (neu[0].get('titel') or '')[:60]) if neu else 'keine neue Karte in 60 s'}")
+        await lauf.bild(page, "sprechtaste")
+        return
     da = await warte(page, "() => (document.getElementById('vl-buehne')?.innerText || '').includes('Antwort: Wer liefert die Fahrten')", 60)
     regeln = fake_regeln(lauf)
     lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar",
@@ -645,14 +788,25 @@ class Ergebnisuhr:
     SAETZE = ("beschließen", "Sabine liefert", "Kauf lohnt")
     VERLAUF = ("9.000", "Sabine", "Freitag", "Vereinsbus")
     BAND = ("Ergebnis-Erkennung gestört", "In Basis: Sprechtaste halten")
+    # Stufe C: dieselben Schlüssel, aber als Regex (echte Transkription/Modelle schreiben nicht wörtlich gleich)
+    SAETZE_C = {"beschließen": r"beschlie(ß|ss)en", "Sabine liefert": r"Sabine", "Kauf lohnt": r"Kauf|lohnt",
+                "ansprache": r"wie viel Budget|wieviel Budget", "monolog": r"Tombola|Hüpfburg|Kuchenbuffet|Schulband",
+                "imperativ": r"b[üu]nd"}
+    VERLAUF_C = {"9.000": r"9[.\s]?000|neuntausend", "Sabine": r"Sabine", "Freitag": r"Freitag",
+                 "Vereinsbus": r"Vereinsbus"}
 
-    def __init__(self, page: Page) -> None:
+    def __init__(self, page: Page, echt: bool = False) -> None:
         self.page = page
+        self.echt = echt
         self.satz: dict[str, float] = {}
+        self.satz_wand: dict[str, float] = {}  # time.time() – vergleichbar mit Date.now() der Seiten (Ton-Protokoll)
         self.verlauf: dict[str, float] = {}
         self.band: dict[str, float] = {}
+        self.band_texte: list[str] = []
         self.artefakte: list[str] = []
         self.taste_hinweise = 0
+        self.monolog: list[tuple[float, int, str]] = []  # (monotonic, Sekunden laut Anzeige, Farbe) – nur Änderungen
+        self.karten: list[dict] = []
         self._task: asyncio.Task | None = None
 
     def starten(self) -> None:
@@ -668,25 +822,49 @@ class Ergebnisuhr:
                 d = await self.page.evaluate("""() => {
                   const z = (typeof zustand !== 'undefined' && zustand) || {};
                   const band = document.getElementById('band');
+                  const kurz = [...document.querySelectorAll('#regel-ampeln .ampel')]
+                    .find((a) => /kurz/i.test(a.querySelector('strong')?.textContent || ''));
                   return { buehne: document.getElementById('vl-buehne')?.innerText || '',
                     band: band && !band.hidden ? band.innerText : '',
                     segmente: (z.segmente || []).map((s) => s.text),
                     artefakte: ((z.artefakte || {}).liste || []).map((a) => a.was),
-                    taste: (z.hinweise || []).filter((h) => h.art === 'taste').length };
+                    taste: (z.hinweise || []).filter((h) => h.art === 'taste').length,
+                    kurz: kurz ? { detail: kurz.querySelector('.detail')?.textContent || '',
+                                   farbe: ['rot', 'gelb', 'gruen', 'grau'].find((f) => kurz.classList.contains(f)) || '',
+                                   sichtbar: !!kurz.offsetParent } : null,
+                    karten: (z.karten || []).map((k) => ({ id: k.id, art: k.art, titel: k.titel || '' })) };
                 }""")
             except Exception:  # noqa: BLE001 – Seite lädt gerade neu
                 await asyncio.sleep(0.5)
                 continue
-            jetzt = time.monotonic()
-            for k in self.SAETZE:
-                if any(k in s for s in d["segmente"]):
-                    self.satz.setdefault(k, jetzt)
-            for k in self.VERLAUF:
-                if k in d["buehne"]:
-                    self.verlauf.setdefault(k, jetzt)
+            jetzt, wand = time.monotonic(), time.time()
+            if self.echt:
+                for k, m in self.SAETZE_C.items():
+                    if any(passt(m, s) for s in d["segmente"]) and k not in self.satz:
+                        self.satz[k], self.satz_wand[k] = jetzt, wand
+                for k, m in self.VERLAUF_C.items():
+                    if passt(m, d["buehne"]):
+                        self.verlauf.setdefault(k, jetzt)
+            else:
+                for k in self.SAETZE:
+                    if any(k in s for s in d["segmente"]):
+                        self.satz.setdefault(k, jetzt)
+                for k in self.VERLAUF:
+                    if k in d["buehne"]:
+                        self.verlauf.setdefault(k, jetzt)
             for k in self.BAND:
                 if k in d["band"]:
                     self.band.setdefault(k, jetzt)
+            if d["band"] and d["band"] not in self.band_texte:
+                self.band_texte.append(d["band"][:160])
+            if d["kurz"]:
+                treffer = re.search(r"(\d+):(\d\d) am Stück", d["kurz"]["detail"])
+                sek = int(treffer[1]) * 60 + int(treffer[2]) if treffer else 0
+                if not self.monolog or self.monolog[-1][1:] != (sek, d["kurz"]["farbe"]):
+                    self.monolog.append((jetzt, sek, d["kurz"]["farbe"]))
+            for k in d["karten"]:
+                if all(k["id"] != x["id"] for x in self.karten):
+                    self.karten.append({**k, "t": jetzt})
             self.artefakte, self.taste_hinweise = d["artefakte"], max(self.taste_hinweise, d["taste"])
             await asyncio.sleep(0.5)
 
@@ -702,7 +880,8 @@ async def ergebnisse_zeitnah_pruefen(page: Page, uhr: Ergebnisuhr, lauf: Lauf) -
     Ergebnis doch; Basis erklärt das Funkgerät einmal im Band."""
     lauf.schritt("Ergebnisse zeitnah, Anbieterfehler sichtbar (#72)")
     t0 = time.monotonic()
-    while time.monotonic() - t0 < 90 and not (
+    grenze = 60 if lauf.echt else 90  # C: der Imperativ (Basis: Sprechtaste im WAV-Takt) darf nicht verpasst werden
+    while time.monotonic() - t0 < grenze and not (
             uhr.abstand("beschließen", "9.000") is not None and uhr.abstand("Sabine liefert", "Sabine", "Freitag") is not None
             and any("Vereinsbus" in a for a in uhr.artefakte)):
         await asyncio.sleep(1)
@@ -712,6 +891,20 @@ async def ergebnisse_zeitnah_pruefen(page: Page, uhr: Ergebnisuhr, lauf: Lauf) -
         lauf.pruefen(f"{name} erscheint ≤ 60 s nach dem Satz als Karte im Verlauf", d is not None and d <= 60,
                      f"{d:.1f} s nach dem Satz" if d is not None else
                      f"Satz gesehen={satz in uhr.satz}, sichtbar={[k for k in sichtbar if k in uhr.verlauf]}")
+    if lauf.echt:
+        # Kein simulierter Fehler in C – stattdessen: der offene Punkt Vereinsbus wird erkannt, und jeder echte
+        # Anbieterfehler, der im Band stand, wird als Beleg mitgeschrieben (nicht verschwiegen)
+        lauf.pruefen("Offener Punkt/Prüfauftrag Vereinsbus als Ergebnis erkannt",
+                     any(passt(SOLL_C["offen"], a or "") for a in uhr.artefakte), f"Artefakte: {uhr.artefakte}")
+        gestoert = [t for t in uhr.band_texte if "gestört" in t or "Fehler" in t]
+        lauf.belege["band_fehler"] = gestoert
+        lauf.pruefen("Keine Anbieterstörung im Band (echte KI-Aufrufe liefen durch)", not gestoert, "; ".join(gestoert)[:200])
+        if lauf.stufe == "basis":
+            lauf.pruefen("Basis: beim ignorierten „Nestor, …“ einmal „In Basis: Sprechtaste halten“ im Band",
+                         "In Basis: Sprechtaste halten" in uhr.band and uhr.taste_hinweise >= 1,
+                         f"Band={'In Basis: Sprechtaste halten' in uhr.band}, Hinweise={uhr.taste_hinweise}")
+        await lauf.bild(page, "ergebnisse_zeitnah")
+        return
     regeln = fake_regeln(lauf)
     simuliert = "schnell_vereinsbus_fehler" in regeln
     lauf.pruefen("Simulierter Anbieterfehler (HTTP 500) bei der Artefakt-Erkennung sichtbar im Band",
@@ -727,3 +920,135 @@ async def ergebnisse_zeitnah_pruefen(page: Page, uhr: Ergebnisuhr, lauf: Lauf) -
                      "In Basis: Sprechtaste halten" in uhr.band and uhr.taste_hinweise == 1,
                      f"Band={'In Basis: Sprechtaste halten' in uhr.band}, Hinweise={uhr.taste_hinweise}")
     await lauf.bild(page, "ergebnisse_zeitnah")
+
+
+# --- Ticket #62: nur Stufe C (echte Anbieter auf Staging) --------------------------------------------------------------
+def handy_wav_lage(name: str = "meeting_c") -> list[dict]:
+    return json.loads((WURZEL / "tests" / "e2e" / "audio" / f"{name}.json").read_text(encoding="utf-8"))["saetze"]
+
+
+async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf: Lauf, schwelle: float = 60) -> None:
+    """#57/#67 auf echter Strecke: ein Block einer Stimme ≥ 90 s mit Pausen < 2 s → die Monologanzeige („Sich kurz
+    fassen“, mm:ss am Stück) wächst live und erreicht die Schwelle; danach „Nestor, bündel mir mal die Ergebnisse.“
+    → Zusammenfassen. Premium hört den Namen; Basis (Funkgerät) braucht die Sprechtaste – das Handy hält sie im Takt
+    der WAV genau über dem Imperativ (Startzeit der WAV = Tippen auf „Mikrofon und Ton“)."""
+    lauf.schritt("Monolog-Block live und natürlicher Imperativ „bündel mir mal die Ergebnisse“")
+    lage = handy_wav_lage()
+    imp = next(x for x in lage if x["art"] == "imperativ")
+    mono = [x for x in lage if x["art"] == "monolog"]
+    lauf.belege["monolog_block_s"] = round(mono[-1]["ende"] - mono[0]["start"], 1)
+    t_mikro = lauf.t_mikro or time.monotonic()
+    vorher = max((k["id"] for k in uhr.karten), default=0)
+    if lauf.stufe == "basis":
+        bis = t_mikro + imp["start"] - 0.6
+        if time.monotonic() > bis:
+            lauf.pruefen("Basis: Sprechtaste rechtzeitig vor dem Imperativ gehalten", False,
+                         f"{time.monotonic() - bis:.1f} s zu spät – Ablauf davor dauerte zu lange")
+        else:
+            await asyncio.sleep(bis - time.monotonic())
+            frei = await warte(handy, "() => !document.getElementById('btn-fragen')?.disabled", 2)
+            await sprechknopf_halten(handy, "#btn-fragen", imp["ende"] - imp["start"] + 1.0, lauf,
+                                     "Sprechtaste (Handy) über dem Imperativ")
+            if not frei:
+                lauf.belege["imperativ_taste_war_gesperrt"] = True
+    else:
+        rest = t_mikro + imp["ende"] - time.monotonic()
+        if rest > 0:
+            await asyncio.sleep(rest)
+    t0 = time.monotonic()
+    karte = None
+    while time.monotonic() - t0 < 60 and karte is None:
+        karte = next((k for k in uhr.karten if k["id"] > vorher and k["art"] == "zusammenfassung"), None)
+        await asyncio.sleep(1)
+    ab_imperativ = (karte["t"] - (t_mikro + imp["ende"])) if karte else None
+    lauf.pruefen("Imperativ „bündel mir mal die Ergebnisse“ löst Zusammenfassen aus (Karte im Verlauf)", bool(karte),
+                 f"Karte {karte['titel']!r} {ab_imperativ:.0f} s nach Satzende" if karte
+                 else f"keine Zusammenfassungs-Karte binnen 60 s; Imperativ im Transkript={'imperativ' in uhr.satz}")
+    await lauf.bild(page, "imperativ")
+
+    # Monologanzeige: Werte während des Blocks (Lage relativ zur WAV) – wächst sie live, erreicht sie die Schwelle?
+    von, bis_ = t_mikro + mono[0]["start"], t_mikro + mono[-1]["ende"] + 8
+    block = [(t - t_mikro, sek, farbe) for t, sek, farbe in uhr.monolog if von <= t <= bis_]
+    werte = [sek for _, sek, _ in block]
+    steigend = sum(1 for a, b in zip(werte, werte[1:]) if b > a)
+    lauf.belege["monolog_anzeige"] = [(round(t, 1), sek, farbe) for t, sek, farbe in block][:200]
+    lauf.pruefen("Monologanzeige wächst live während des Blocks (≥ 10 steigende Schritte)", steigend >= 10,
+                 f"{steigend} Schritte, Werte {werte[:3]}…{werte[-3:]}")
+    hoch = max(werte, default=0)
+    farbe_erreicht = any(f in ("gelb", "rot") for _, sek, f in block if sek >= schwelle)
+    lauf.pruefen(f"Monologanzeige erreicht die Schwelle ({schwelle:.0f} s) und färbt sich",
+                 hoch >= schwelle and farbe_erreicht, f"höchstens {hoch} s, Farbe ab Schwelle={farbe_erreicht}")
+
+
+async def anbieterprotokoll_pruefen(page: Page, url: str, geheimnis: str, lauf: Lauf) -> None:
+    """Anbieterbeweis ohne Fakes: die Hostwache im Staging-Container nennt, welche Ziele sie gesehen hat. Lesend, mit
+    den Cookies des Desktops (führt in denselben Container) und dem Worker-Geheimnis in X-Nestor-Intern."""
+    lauf.schritt("Anbieterprotokoll der Hostwache lesen (vor dem Beenden – danach stoppt der Container)")
+    antwort = await page.context.request.get(url.rstrip("/") + "/api/intern/anbieter-protokoll",
+                                             headers={"X-Nestor-Intern": geheimnis})
+    daten = await antwort.json() if antwort.ok else {}
+    domain = "openai.com" if lauf.stufe == "premium" else "mistral.ai"
+    gesehen = daten.get("gesehen") or []
+    fremd = [g for g in gesehen if not g.get("erlaubt") or not g.get("ziel", "").split(":")[0].endswith(domain)]
+    lauf.belege["anbieterbeweis"] = {"http": antwort.status, **daten}
+    lauf.pruefen(f"Hostwache (Staging): nur {domain}-Ziele kontaktiert, keine Abweisung",
+                 antwort.ok and daten.get("stufe") == lauf.stufe and bool(gesehen) and not fremd,
+                 f"HTTP {antwort.status}, stufe={daten.get('stufe')!r}, "
+                 f"gesehen={[(g.get('ziel'), g.get('anzahl'), g.get('erlaubt')) for g in gesehen]}")
+
+
+class Kostenwache:
+    """Deckel je Lauf (Entscheidung Niclas 10.10.2026): alle 5 s den Kostenstand des Dashboards lesen (lesend, wie
+    die Anzeige „… $“ ihn zeigt). Über dem Deckel: Lauf über die Oberfläche beenden („Beenden“-Klick) und als
+    „Deckel gerissen“ markieren. Der Kostenzähler rechnet in Dollar; verglichen wird vorsichtig Dollar gegen den
+    Euro-Deckel (1 $ < 1 €, der Lauf endet also eher zu früh als zu spät)."""
+
+    EUR_JE_USD = 0.86  # nur für die Anzeige im Bericht
+
+    def __init__(self, page: Page, deckel_eur: float, lauf: Lauf) -> None:
+        self.page, self.deckel, self.lauf = page, deckel_eur, lauf
+        self.usd = 0.0
+        self.gerissen = False
+
+    async def lesen(self) -> float:
+        try:
+            k = await self.page.evaluate("() => (typeof zustand !== 'undefined' && zustand && zustand.kosten) || null")
+        except Exception:  # noqa: BLE001 – Seite lädt neu oder ist schon auf /abschluss
+            k = None
+        if k:
+            self.usd = max(self.usd, float(k.get("meeting") or 0), float(k.get("heute") or 0))
+        return self.usd
+
+    async def wachen(self) -> None:
+        while True:
+            if await self.lesen() >= self.deckel:
+                self.gerissen = True
+                return
+            await asyncio.sleep(5)
+
+    def beleg(self) -> dict:
+        return {"usd_dashboard": round(self.usd, 4), "eur_geschaetzt": round(self.usd * self.EUR_JE_USD, 4),
+                "deckel_eur": self.deckel, "gerissen": self.gerissen}
+
+
+async def mit_kostendeckel(ablauf, wache: Kostenwache, lauf: Lauf) -> None:
+    """Führt den Ablauf aus, solange die Kostenwache nicht anschlägt; schlägt sie an, wird der Ablauf abgebrochen und
+    das Meeting über die Oberfläche beendet."""
+    arbeit = asyncio.ensure_future(ablauf)
+    waechter = asyncio.ensure_future(wache.wachen())
+    fertig, _ = await asyncio.wait({arbeit, waechter}, return_when=asyncio.FIRST_COMPLETED)
+    if waechter in fertig and not arbeit.done():
+        arbeit.cancel()
+        with contextlib.suppress(BaseException):
+            await arbeit
+        try:
+            if await sichtbar(wache.page, "#btn-stopp"):
+                await wache.page.locator("#btn-stopp").click()
+        except Exception:  # noqa: BLE001
+            pass
+        lauf.pruefen(f"Kostendeckel je Lauf ({wache.deckel:.2f} €) eingehalten", False,
+                     f"Deckel gerissen bei {wache.usd:.2f} $ – Meeting über „Beenden“ abgebrochen")
+        raise Abbruch("Deckel gerissen")
+    waechter.cancel()
+    await wache.lesen()
+    arbeit.result()

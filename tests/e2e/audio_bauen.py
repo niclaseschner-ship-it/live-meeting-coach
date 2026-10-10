@@ -7,6 +7,8 @@ Sprache aus Piper (lokales TTS, Stimme `de_DE-thorsten-medium`, Thorsten-Voice C
                                     (Chromium spielt die Datei in Schleife – das Polster verhindert eine Wiederholung
                                     im Testfenster)
   tests/e2e/audio/agenda_e2e.wav    Desktop-Mikro: der Agenda-Satz (Agenda per Sprache, Sprechtaste)
+  tests/e2e/audio/meeting_c.wav     Stufe C (--c): dieselben Meeting-Sätze, dann Monolog-Block ≥ 90 s einer Stimme
+                                    (Pausen < 2 s) und der Imperativ „Nestor, bündel mir mal die Ergebnisse.“
   tests/e2e/audio/*.json            Lage der Sätze in der Datei (Sekunden)
 
 Beide 24 kHz, mono, PCM16. tests/e2e/audio/ ist per .gitignore (*.wav) ausgenommen – dieses Skript erzeugt alles neu.
@@ -95,10 +97,50 @@ def bauen(neu: bool = False) -> dict[str, Path]:
     return ziele
 
 
+def bauen_c(neu: bool = False) -> dict[str, Path]:
+    """Stufe C (Ticket #62): Handy-Mikro mit den Meeting-Sätzen (gleiche Lage wie B), danach Monolog-Block ≥ 90 s und
+    der Imperativ an Nestor (`meeting_c.wav`); Desktop-Mikro ist dieselbe `agenda_e2e.wav` wie in B."""
+    voll = json.loads((HIER / "drehbuch.json").read_text(encoding="utf-8"))
+    d, c = voll["audio"], voll["audio_c"]
+    ziele = {"meeting": AUSGABE / "meeting_c.wav", "agenda": bauen(neu)["agenda"]}
+    stempel = AUSGABE / "stand_c.json"
+    soll = json.dumps({"audio": d, "audio_c": c}, sort_keys=True, ensure_ascii=False)
+    if not neu and ziele["meeting"].exists() and stempel.exists() and stempel.read_text("utf-8") == soll:
+        return ziele
+    stimme = stimme_laden(d["stimme"])
+
+    teile, lage, pos = [stille(d["meeting_vorlauf_s"])], [], d["meeting_vorlauf_s"]
+
+    def satz(text: str, art: str, pause: float) -> None:
+        nonlocal pos
+        a = sprechen(stimme, text)
+        lage.append({"text": text, "art": art, "start": round(pos, 2), "ende": round(pos + len(a) / RATE, 2)})
+        teile.extend([a, stille(pause)])
+        pos += len(a) / RATE + pause
+
+    for i, s in enumerate(d["meeting_saetze"]):
+        letzter = i == len(d["meeting_saetze"]) - 1
+        satz(s, "meeting", c["pause_vor_monolog_s"] if letzter else d["meeting_pause_s"])
+    beginn, i = pos, 0
+    pausen = c["monolog_pausen_s"]
+    while pos - beginn < c["monolog_min_s"]:  # reicht der Text nicht, beginnt er von vorn – Hauptsache eine Stimme
+        s = c["monolog_saetze"][i % len(c["monolog_saetze"])]
+        satz(s, "monolog", pausen[i % len(pausen)])
+        i += 1
+    teile[-1] = stille(c["pause_vor_imperativ_s"])  # letzte Monologpause durch die längere Pause ersetzen
+    pos += c["pause_vor_imperativ_s"] - pausen[(i - 1) % len(pausen)]
+    satz(c["imperativ"], "imperativ", c["nachlauf_s"])
+    schreiben(ziele["meeting"], np.concatenate(teile), lage)
+    stempel.write_text(soll, encoding="utf-8")
+    return ziele
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--neu", action="store_true", help="auch neu bauen, wenn die Dateien zum Drehbuch passen")
-    for name, pfad in bauen(p.parse_args().neu).items():
+    p.add_argument("--c", action="store_true", help="Stufe C: meeting_c.wav (Monolog-Block, Imperativ) bauen")
+    args = p.parse_args()
+    for name, pfad in (bauen_c(args.neu) if args.c else bauen(args.neu)).items():
         info = json.loads(pfad.with_suffix(".json").read_text(encoding="utf-8"))
         print(f"{name}: {pfad} ({info['dauer_s']} s, {len(info['saetze'])} Sätze)")
 

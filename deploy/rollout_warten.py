@@ -95,9 +95,12 @@ def cmd_instanzen(_args: argparse.Namespace) -> int:
 
 def cmd_neuester_tag(_args: argparse.Namespace) -> int:
     rollouts = _get("/rollouts?limit=1")
-    if not rollouts:
-        sys.exit("Kein Rollout gefunden.")
-    bild = rollouts[0].get("target_configuration", {}).get("image", "")
+    if rollouts:
+        bild = rollouts[0].get("target_configuration", {}).get("image", "")
+    else:
+        # Erster Deploy einer Umgebung (Ticket #62, Staging): die Anwendung wird mit ihrem Image angelegt, ohne
+        # Rollout-Eintrag – dann gilt das Image der Anwendung selbst.
+        bild = _get("").get("configuration", {}).get("image", "")
     tag = bild.rsplit(":", 1)[-1] if ":" in bild else ""
     if not tag:
         sys.exit(f"Konnte kein Bild-Tag aus {bild!r} lesen.")
@@ -116,6 +119,8 @@ def cmd_warten(args: argparse.Namespace) -> int:
             None,
         )
         status = rollout.get("status") if rollout else "wartet"
+        if rollout is None and not rollouts:
+            status = "completed"  # frisch angelegte Anwendung ohne Rollout-Historie (siehe neuester-tag)
         if status != bisheriger_status:
             print(f"Container-Rollout {args.tag}: {status}", flush=True)
             bisheriger_status = status

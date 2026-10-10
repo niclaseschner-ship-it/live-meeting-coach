@@ -4,9 +4,14 @@
 #   scripts/pipeline.sh a                                   Stufe A: pytest + Worker-Tests + TypeScript (~1,5 min)
 #   scripts/pipeline.sh b [--stufe basis|premium|beide] [--rauch]
 #                                                           Stufe B: lokale Klick-E2E gegen Fake-Anbieter, 0 €
+#   scripts/pipeline.sh c [--stufe premium|basis|beide]     Stufe C: dieselbe Klick-E2E gegen Staging mit ECHTEN
+#                                                           Anbietern (Deckel je Lauf: Premium 1 €, Basis 0,30 €)
+#   scripts/pipeline.sh d                                   Stufe D: Handy-Checkliste (docs/abnahme_manuell.md) abhaken
 #
-# Nichts hier ruft einen echten KI-Anbieter, deployt oder pusht. Temporäres liegt unter ~/.cache/lmc-e2e
-# (auf dem Pi ist /tmp eine RAM-Disk). Stufe B prüft vorher, ob ≥ 2 GB Arbeitsspeicher frei sind.
+# A und B rufen keinen echten KI-Anbieter. C kostet echtes Geld und braucht vorher `deploy/deploy.sh --staging`
+# (Staging muss den aktuellen Git-Stand tragen). Nichts hier deployt oder pusht. Temporäres liegt unter
+# ~/.cache/lmc-e2e (auf dem Pi ist /tmp eine RAM-Disk). Stufe B prüft vorher, ob ≥ 2 GB Arbeitsspeicher frei sind.
+# Freigaben fürs Deploy-Gate (an den Commit gebunden): logs/pipeline/<sha>/b.ok, c_<stufe>.ok, d.json.
 set -euo pipefail
 
 WURZEL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -56,6 +61,12 @@ stufe_b() {
 
 case "${1:-}" in
   a) shift; stufe_a "$@" ;;
+  # Stufe C (Ticket #62): Staging hat genau einen Container – ein C-Lauf zur Zeit. Freigabe c_<stufe>.ok schreibt
+  # tests/e2e/lauf_c.py selbst, je grüner Stufe, und nur wenn Staging genau HEAD trägt.
+  c) shift; exec 8>"${HOME}/.cache/lmc-e2e/pipeline-c.lock"
+     if ! flock -n 8; then echo "▸ Ein anderer Stufe-C-Lauf läuft – warte …"; flock 8; fi
+     (cd "$WURZEL" && "$PY" -m tests.e2e.lauf_c --ordner "$AUSGABE/c" "$@") ;;
+  d) shift; (cd "$WURZEL" && "$PY" scripts/abnahme_d.py "$@") ;;
   # Ein B-Lauf zur Zeit auf der Maschine: feste Ports (18000/18787, Fakes) und ~1,5 GB RAM – parallele Läufe aus
   # mehreren Worktrees würden sich gegenseitig rot färben. Wartet, statt abzubrechen.
   b) shift; exec 9>"${HOME}/.cache/lmc-e2e/pipeline-b.lock"
@@ -66,5 +77,5 @@ case "${1:-}" in
        else echo "▸ Ein anderer Stufe-B-Lauf läuft – warte …"; flock 9; fi
      fi
      stufe_b "$@" ;;
-  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
+  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
 esac
