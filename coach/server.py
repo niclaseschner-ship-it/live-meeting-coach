@@ -232,10 +232,20 @@ async def kopplung(request: Request):
         # Die Handy-Adresse kommt aus der Anfrage (Host), nicht aus tailscale; die Meeting-Kennung des Worker
         # (Cookie `nestor_meeting`, hier als Kopfzeile) muss mit in die URL, damit das gescannte Handy im
         # selben Meeting-Container landet wie das Dashboard (der Worker wählt den Container über `?meeting=`).
+        # Ticket #63: Die nackte Meeting-ID gehört nicht mehr in den QR-Code – der Worker signiert dafür ein
+        # kurzlebiges Kopplungstoken (`/intern/kopplungstoken`, gleiches Vertrauensverhältnis wie bei
+        # `/intern/meeting-start`); ohne gültige Signatur startet der Worker später keinen Container. Der
+        # Coach selbst kennt das Signier-Geheimnis nicht und kann das Token darum nicht selbst bauen.
         host = request.headers.get("host")
         basis = zugang.adresse_aus_host(host) if host else None
         meeting = zugang.meeting_id(request.scope)
-        url = f"{basis}/handy?k={zugang.code()}&meeting={meeting}" if basis and meeting else None
+        token = None
+        if meeting:
+            antwort_token = api_abschluss.worker_melden(
+                "/intern/kopplungstoken", {"meetingId": meeting, "kunde": zugang.kunde(request.scope)},
+            )
+            token = antwort_token.get("token") if antwort_token else None
+        url = f"{basis}/handy?k={zugang.code()}&meeting={token}" if basis and token else None
         befehl = None
     else:
         basis = zugang.adresse()
