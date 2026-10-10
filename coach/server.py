@@ -260,7 +260,7 @@ async def kopplung(request: Request):
         # Tailscale erlaubt HTTPS nur auf 443, 8443 und 10000 – also höchstens drei Coaches auf einem Laptop
         https = {8000: 443, 8001: 8443}.get(EINST.port, 10000)
         befehl = f"tailscale serve --bg {EINST.port}" if https == 443 else f"tailscale serve --bg --https={https} {EINST.port}"
-    svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2) if url else None
+    svg = segno.make(url, error="m").svg_inline(scale=5, dark="#1E1B4B", border=2, omitsize=True) if url else None
     return {"code": zugang.code(), "adresse": url, "qr": svg, "befehl": befehl}
 
 
