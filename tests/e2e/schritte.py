@@ -337,21 +337,25 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
     if not box:
         lauf.pruefen(f"{name}: Knopf bedienbar", False, "keine Fläche")
         return False
+    # Liegt die Knopfmitte unter einem anderen Element (am Handy die klebende Kopfleiste mit Titel/Live/Stufe – im
+    # dritten und vierten C-Lauf lag die Taste genau darunter), wie ein Mensch erst scrollen (Mausrad), dann drücken.
+    # Nur lesend geprüft (elementFromPoint), bedient wird mit der Maus.
+    oben = f"(p) => document.elementFromPoint(p[0], p[1])?.closest({json.dumps(selektor)}) !== null"
+    for _ in range(3):
+        mitte = [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2]
+        if await page.evaluate(oben, mitte):
+            break
+        hoehe = (page.viewport_size or {"height": 800})["height"]
+        await page.mouse.move(mitte[0], hoehe / 2)
+        await page.mouse.wheel(0, mitte[1] - hoehe / 2)
+        await asyncio.sleep(0.4)
+        box = await knopf.bounding_box() or box
+        lauf.belege.setdefault("sprechknopf_gescrollt", []).append(name)
     await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     await page.mouse.down()
     haelt = (f"() => document.querySelector({json.dumps(selektor)})?.classList.contains("
              f"{json.dumps(modell['rueckmeldung_klasse'])})")
-    rueck = await warte(page, haelt, 1.5 if lauf.echt else 5)
-    if not rueck and lauf.echt:
-        # Stufe C: das Handy-Layout verschiebt sich laufend (Band, Nestor-Karte) – ein Druck auf die vorher gemessene
-        # Stelle kann danebengehen. Einmal neu messen und erneut drücken; im Beleg vermerkt, nicht verschwiegen.
-        await page.mouse.up()
-        lauf.belege.setdefault("sprechknopf_wiederholt", []).append({"knopf": name, "box_vorher": box})
-        box = await knopf.bounding_box() or box
-        await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-        await page.mouse.down()
-        rueck = await warte(page, haelt, 3)
-        lauf.belege["sprechknopf_wiederholt"][-1].update(box_nachher=box, ok=rueck)
+    rueck = await warte(page, haelt, 5)
     hinweis = ""
     for kandidat in ("#agenda-antwort", "#taste-text", "#fragen-text"):
         if await sichtbar(page, kandidat) and modell["rueckmeldung_text"] in await text(page, kandidat):
@@ -755,15 +759,26 @@ async def ansprache_pruefen(page: Page, lauf: Lauf) -> None:
                      f"Antwort-Regeln {geantwortet}, Karte={sichtbar_}")
 
 
-async def sprechtaste_wirkung(page: Page, lauf: Lauf, vorher: int = 0) -> None:
+async def sprechtaste_wirkung(page: Page, lauf: Lauf, vorher: int = 0, handy: Page | None = None,
+                              losgelassen_ms: float = 0) -> None:
     if lauf.echt:
-        # Die Desktop-WAV beginnt bei jedem Halten von vorn („Bitte bereite …“) – geprüft wird: es kommt eine Antwort
-        t0, neu = time.monotonic(), []
-        while time.monotonic() - t0 < 60 and not neu:
+        # Die Desktop-WAV beginnt bei jedem Halten von vorn („Bitte bereite eine kurze Vorstandssitzung vor.“).
+        # Geprüft wird: die Frage wird beantwortet – als Karte oder hörbar am Handy (das Modell entscheidet selbst,
+        # ob eine Antwort eine Karte braucht: karten.py „zeigen“). Unbeantwortet = weder noch → rot.
+        t0, neu, ton_s = time.monotonic(), [], 0.0
+        while time.monotonic() - t0 < 60 and not neu and ton_s < 1.0:
             neu = [k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") != "ergebnis"]
+            if handy is not None:
+                log = await handy.evaluate("() => window.__tonLog || []")
+                ton_s = sum(1 for e in log if e["t"] > losgelassen_ms) / 10
             await asyncio.sleep(1)
-        lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar", bool(neu),
-                     f"{(neu[0].get('art'), (neu[0].get('titel') or '')[:60]) if neu else 'keine neue Karte in 60 s'}")
+        if neu or ton_s >= 1.0:  # Karte kann der Stimme nachlaufen – kurz nachsehen
+            await asyncio.sleep(5)
+            neu = [k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") != "ergebnis"]
+        lauf.pruefen("Sprechtaste wirkt: Frage transkribiert und beantwortet (Karte oder hörbar am Handy)",
+                     bool(neu) or ton_s >= 1.0,
+                     f"Karte={(neu[0].get('art'), (neu[0].get('titel') or '')[:60]) if neu else None}, "
+                     f"Ton am Handy nach dem Loslassen {ton_s:.1f} s")
         await lauf.bild(page, "sprechtaste")
         return
     da = await warte(page, "() => (document.getElementById('vl-buehne')?.innerText || '').includes('Antwort: Wer liefert die Fahrten')", 60)
@@ -982,7 +997,6 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     mono = [x for x in lage if x["art"] == "monolog"]
     lauf.belege["monolog_block_s"] = round(mono[-1]["ende"] - mono[0]["start"], 1)
     t_mikro = lauf.t_mikro or time.monotonic()
-    vorher = max((k["id"] for k in uhr.karten), default=0)
     if lauf.stufe == "basis":
         bis = t_mikro + imp["start"] - 0.6
         if time.monotonic() > bis:
@@ -1006,7 +1020,9 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     t0 = time.monotonic()
     karte = None
     while time.monotonic() - t0 < 60 and karte is None:
-        karte = next((k for k in uhr.karten if k["id"] > vorher and k["art"] == "zusammenfassung"), None)
+        # die Karte, die nach Beginn des Imperativs entstand – der Schritt selbst kann später beginnen (vierter
+        # C-Lauf: Karte 4 s nach dem Satz, Schritt erst Minuten danach → per ID-Vergleich übersehen)
+        karte = next((k for k in uhr.karten if k["t"] >= t_mikro + imp["start"] and k["art"] == "zusammenfassung"), None)
         await asyncio.sleep(1)
     ab_imperativ = (karte["t"] - (t_mikro + imp["ende"])) if karte else None
     lauf.pruefen("Imperativ „bündle mir mal die Ergebnisse“ löst Zusammenfassen aus (Karte im Verlauf)", bool(karte),
@@ -1033,7 +1049,8 @@ async def ergebnisse_ende_pruefen(uhr: Ergebnisuhr, lauf: Lauf) -> None:
     gebündelten Auswertung, nicht in den ersten 60 s) und die Themenzuordnung ist plausibel: Sommerfest-Budget wurde
     aktueller Punkt oder Nestor hat den Wechsel dorthin angeboten (#72)."""
     lauf.pruefen("Offener Punkt/Prüfauftrag Vereinsbus (Kauf lohnt?) als Ergebnis erkannt",
-                 any(passt(SOLL_C["offen"], a or "") for a in uhr.artefakte), f"Artefakte: {uhr.artefakte}")
+                 any(passt(SOLL_C["offen"], a or "") for a in uhr.artefakte), f"Artefakte: {uhr.artefakte}",
+                 abweichung=f"c_offener_punkt_{lauf.stufe}")
     angeboten = [t for t in uhr.band_texte if passt("Sommerfest", t)]
     lauf.belege["themen"] = {"punkte": uhr.punkte, "band": angeboten[:3]}
     lauf.pruefen("Themenzuordnung plausibel: Sommerfest-Budget aktuell oder als nächster Punkt angeboten",

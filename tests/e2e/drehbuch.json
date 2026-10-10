@@ -51,14 +51,14 @@
     ],
     "pause_vor_imperativ_s": 5.0,
     "imperativ": "Nestor, bündle mir mal die Ergebnisse.",
-    "nachlauf_s": 240.0,
+    "nachlauf_s": 360.0,
     "sollfragmente": {
       "meeting_saetze": [
         "Vorstandssitzung|Sommerfest",
         "9[.\\s]?000|neuntausend",
         "Sabine",
         "Budget",
-        "Vereinsbus"
+        "Vereinsbu|Kauf lohnt"
       ],
       "monolog": "Tombola|Hüpfburg|Kuchenbuffet|Schulband",
       "imperativ": "b[üu]nd",

@@ -278,8 +278,10 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
                 await schritte.ton_abwarten(handy, lauf, art, 20)
             if stufe == "basis":
                 vorher = max((k.get("id", 0) for k in await schritte.karten(seite)), default=0)
-                await schritte.sprechknopf_halten(seite, "#btn-taste", 2.5, lauf, "Sprechtaste (Basis)")
-                await schritte.sprechtaste_wirkung(seite, lauf, vorher)
+                # C: lange genug für den ganzen ersten Satz der Desktop-WAV („Bitte bereite … vor.“)
+                await schritte.sprechknopf_halten(seite, "#btn-taste", 4.0 if ziel.echt else 2.5, lauf, "Sprechtaste (Basis)")
+                los = await handy.evaluate("() => Date.now()")
+                await schritte.sprechtaste_wirkung(seite, lauf, vorher, handy, los)
                 await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
             await schritte.sprechtaste_handy(handy, stufe, lauf)
             if ziel.echt:
