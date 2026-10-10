@@ -888,9 +888,10 @@ class Assistent:
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
+            from .ki_fehler import melden
             from .mistral import ist_ueberlast
 
-            log.warning("Recherche fehlgeschlagen: %s", type(e).__name__)
+            melden(c, "recherche", e, band=False)  # Ticket #72: die Karte zeigt es, Protokoll und Technikbericht auch
             c._karte_ablegen({"art": "recherche", "frage": frage, "titel": frage[:80], "still": True,
                               "punkte": [UEBERLAST if ist_ueberlast(e) else "Die Recherche hat leider nicht geklappt."]})
             await c.melden()

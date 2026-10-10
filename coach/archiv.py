@@ -75,6 +75,8 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
             "analyse": w.analyse_modell if w else None,
             "stimme": w.stimme_modell if w else None,
             "gespraech": w.realtime_modell if w and w.premium and w.assistent_modus == "gespraech" else None,
+            # Ticket #72: Ausfälle der Hintergrund-KI (Bereich, Fehlerart, Meetingzeit) und ihre Erholung
+            "ki_fehler": [e for e in getattr(coach, "protokoll", []) if e.get("art") in ("ki_fehler", "ki_erholt")],
         },
         "fehler": coach.fehler,
     }

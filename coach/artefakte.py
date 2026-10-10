@@ -17,6 +17,14 @@ Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_art
   `artefakt_eintragen`, Basis per Sprechtaste: `AKTION: eintragen`) – Nestor sagt „Notiert“, die Karte wird grün;
   oder Klick auf die Lücke in der Karte.
 
+- **Schnell-Erkennung bei klaren Signalen** (Ticket #72): Fällt in einem fertigen Satz ein klares Signal
+  („beschlossen“, „machst du bis“, „Termin“, „offen ist“ – Vorfilter `signal()`, lokal und kostenlos), prüft ein
+  kleiner, günstiger Aufruf nur diese Sätze (Zuordnungsmodell der Stufe, über die Anbieterfabrik). Neues kommt als
+  Karte „Gerade festgehalten“ in den Verlauf, meist binnen 10–20 s. Die gebündelte Vollauswertung bleibt; sie sieht die
+  schnell erkannten Artefakte mit Nummer und ergänzt sie, statt sie doppelt anzulegen (`uebernehmen`).
+- **Kein stiller Ausfall** (Ticket #72): Scheitert ein Aufruf, steht das sichtbar im Band (coach/ki_fehler.py), und
+  der nächste Takt versucht es wieder (30 s, dann 60, 120 … höchstens 5 min Abstand).
+
 Im Modus „Nur auf Knopfdruck“ erkennt Nestor nichts von selbst – nur der Protokoll-Knopf schickt Text an das Modell.
 """
 
@@ -56,6 +64,12 @@ MAX_ZEICHEN_PARALLEL = 3500  # auf Anfrage (Bogen) kleinere Stücke, alle gleich
 MIN_KONFIDENZ = 0.4       # darunter wird nichts festgehalten
 FRAGE_KONFIDENZ = 0.5     # darunter fragt Nestor nicht nach (die Karte bleibt sichtbar)
 FUENF_MINUTEN = 300.0
+# Schnell-Erkennung (Ticket #72)
+SAMMELN_SEKUNDEN = 4.0    # nach dem Signalsatz kurz warten: „… bis Freitag“ kommt oft im nächsten Satz
+SCHNELL_KONTEXT = 20.0    # so viel Gesprochenes davor geht als Kontext mit
+SCHNELL_MAX_STUNDE = 60   # Deckel je Meetingstunde; darüber übernimmt die gebündelte Auswertung allein
+WIEDERHOLEN_AB = 30.0     # erster neuer Versuch nach einem Fehler, danach doppelt so lange, höchstens …
+WIEDERHOLEN_MAX = 300.0
 
 
 def _text(v, n: int = 160) -> str | None:
@@ -117,6 +131,7 @@ class Artefakt:
     abgelehnt: bool = False          # die Runde wollte die Nachfrage nicht – nie wieder fragen
     geaendert: float = 0.0
     gemeinsam: bool = False          # ausdrücklich gemeinsame Verantwortlichkeit, kein vages „jemand“
+    schnell: bool = False            # von der Schnell-Erkennung angelegt (Ticket #72)
 
     def luecken(self) -> list[str]:
         """Fehlende Pflichtfelder in Anzeigereihenfolge. Leer = vollständig."""
@@ -241,6 +256,55 @@ def nachricht(meeting, liste: list[Artefakt], neu: list, kontext: list) -> str:
             f"Schon festgehalten:\n{_artefakte_text(liste)}\n\n"
             + (f"Kontext (schon ausgewertet):\n" + "\n".join(zeile(s) for s in kontext) + "\n\n" if kontext else "")
             + "NEUE Sätze:\n" + "\n".join(zeile(s) for s in neu))
+
+
+# --- Schnell-Erkennung bei klaren Signalen (Ticket #72) ---------------------------------------------------------
+_TAG = (r"(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|morgen|übermorgen|heute|monatsende|"
+        r"jahresende|ende\s+(?:der|des|nächster|kommender)\s+\w+|(?:die\s+)?nächste[nrm]?\s+woche|kw\s*\d+|"
+        r"\d{1,2}\.\s*(?:\d{1,2}\.?|januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|"
+        r"dezember))")
+SIGNALE = {
+    "entscheidung": re.compile(
+        r"\b(?:beschlie(?:ß|ss)en|beschlossen|beschluss|entschieden|entscheiden\s+wir|wir\s+entscheiden|geeinigt|"
+        r"einigen\s+uns|halten\s+(?:wir\s+)?(?:das\s+)?fest|festgehalten|machen\s+wir\s+so|abgemacht|vereinbart|"
+        r"festgelegt|legen\s+(?:wir\s+)?(?:uns\s+)?fest)\b", re.IGNORECASE),
+    "aufgabe": re.compile(
+        r"\b(?:machst\s+du|kannst\s+du|übernimmst\s+du|übernimm\w*|übernehme|kümmer\w*|ich\s+mach(?:e)?\b|"
+        r"liefer\w*|schick\w*|erledig\w*|bis\s+(?:zum\s+|spätestens\s+)?" + _TAG + r")", re.IGNORECASE),
+    "termin": re.compile(
+        r"\b(?:termin|frist|deadline|stichtag|wiedervorlage|spätestens|am\s+" + _TAG + r")", re.IGNORECASE),
+    "offen": re.compile(
+        r"\b(?:offen\s+ist|ist\s+(?:noch\s+)?offen|bleibt\s+offen|offene\s+frage|(?:noch|müssen\s+wir)\s+(?:\w+\s+){0,2}"
+        r"klären|klären\s+wir|ungeklärt|parken|kommen\s+wir\s+(?:noch\s+)?(?:darauf\s+)?zurück|prüfen\s+wir\s+noch|"
+        r"noch\s+prüfen)", re.IGNORECASE),
+    "risiko": re.compile(r"\b(?:risiko|gefahr|gefährdet|könnte\s+uns)", re.IGNORECASE),
+}
+
+
+def signal(text: str) -> str | None:
+    """Lokaler Vorfilter, kostenlos: welche Art Ergebnis ein Satz ankündigt (oder None). Nur bei Treffer läuft die
+    Schnell-Erkennung – die meisten Sätze kosten also nichts."""
+    for art, muster in SIGNALE.items():
+        if muster.search(text or ""):
+            return art
+    return None
+
+
+SCHNELL = """\
+Schnellprüfung im laufenden Meeting (Deutsch): Die NEUEN Sätze enthalten ein Signalwort für ein Meeting-Ergebnis.
+Prüfe nur diese neuen Sätze, ob wirklich eines darin steckt:
+- entscheidung: etwas gilt ab jetzt; status "endgueltig" (beschlossen), "vorlaeufig" oder "vorschlag"; wer = wer
+  entschieden hat („die Runde“, eine Person).
+- aufgabe: jemand soll nach dem Meeting etwas Konkretes tun; wer = genannte Person oder bei Ich-Form der Sprecher;
+  bis = Termin wie gesagt; vage = true bei bloßem „prüfen/anschauen“ ohne Ergebnis.
+- offen: Frage oder Punkt, der für später liegen bleibt; wer klärt, bis wann.
+- risiko: mögliches künftiges Problem (Ursache → Auswirkung).
+Nicht dazu: alles an den Assistenten „Nestor“, der Ablauf des Meetings, Berichte über Vergangenes, Ideen ohne Zusage.
+Nur ausdrücklich Gesagtes, fehlende Felder null. Relative Fristen anhand des Meetingdatums auflösen.
+Ergänzt ein Satz ein schon festgehaltenes Artefakt (Termin, Verantwortliche, Beschluss eines Vorschlags), gib dessen
+nummer und nur die neuen Felder an – nie doppelt anlegen. Im Zweifel eine leere Liste.
+Antworte nur mit JSON: {"artefakte": [{"nummer": null, "typ": "aufgabe", "was": "…", "wer": null, "bis": null,
+"status": null, "vage": false, "konfidenz": 0.8, "zeit": "mm:ss", "zitat": "…"}]}."""
 
 
 async def _json_aufruf(client, modell: str, system: str, nutzer: str, aufwand: str = "") -> tuple[dict, dict]:
@@ -396,6 +460,13 @@ class Artefakte:
         self._abschnitt_laeuft = False
         self.fuenf_gefragt = False
         self.verlauf: list[dict] = []  # Zusammenfassungen, Abschnitte (ohne Inhalte der Sätze) für den Bericht
+        # Ticket #72: Schnell-Erkennung und Wiederholung nach einem Fehler
+        self._schnell_ab: float | None = None  # frühester Signalsatz, der noch auf die Schnell-Erkennung wartet
+        self._schnell_laeuft = False
+        self._schnell_zeiten: list[float] = []  # Meetingzeiten der Schnell-Aufrufe (Deckel je Stunde)
+        self._voll_offen = False                 # gebündelte Erkennung scheiterte – der Takt holt sie nach
+        self._wiederholen_um: float | None = None
+        self._abstand = WIEDERHOLEN_AB
 
     # --- Daten ---------------------------------------------------------------------------------------------
     def holen(self, nr: int) -> Artefakt | None:
@@ -410,8 +481,10 @@ class Artefakte:
         self.liste.append(a)
         return a
 
-    def uebernehmen(self, e: dict, quelle_zeit: float, saetze: list | None = None) -> Artefakt | None:
-        """Ein normalisierter Eintrag aus der Erkennung: neues Artefakt oder Ergänzung eines bestehenden."""
+    def uebernehmen(self, e: dict, quelle_zeit: float, saetze: list | None = None,
+                    schnell: bool = False) -> Artefakt | None:
+        """Ein normalisierter Eintrag aus der Erkennung: neues Artefakt oder Ergänzung eines bestehenden.
+        `schnell`: kommt aus der Schnell-Erkennung (Ticket #72)."""
         m = self.coach.meeting if self.coach else None
         e = dict(e)
         quelle_text = " ".join(s.text for s in saetze or [])
@@ -424,6 +497,11 @@ class Artefakte:
         a = self.holen(e["nummer"]) if e.get("nummer") else None
         if a is None and e.get("typ") and e.get("was"):
             a = next((x for x in self.liste if x.typ == e["typ"] and aehnlich(x.was, e["was"])), None)
+        if a is None and not schnell and e.get("typ") and e.get("zeit") is not None:
+            # Ticket #72: Die Vollauswertung formuliert ein schnell erkanntes Artefakt anders – derselbe Typ aus demselben
+            # Satz (±2 s) und keine andere Person ist dasselbe Artefakt, keine Dublette.
+            a = next((x for x in self.liste if x.schnell and x.typ == e["typ"] and abs(x.zeit - e["zeit"]) <= 2.0
+                      and (not e.get("wer") or not x.wer or x.wer == e["wer"])), None)
         if a is not None:
             self._ergaenzen(a, e)
             return a
@@ -625,6 +703,17 @@ class Artefakte:
 
             self._abschnitt_laeuft = True
             hintergrund(self.abschnitt_abschliessen(m.aktiver_punkt if m.agenda else None, m.jetzt(), "zeit"))
+        if (self._wiederholen_um is not None and m.jetzt() >= self._wiederholen_um and not c.knopfdruck
+                and c._client is not None):
+            # Ticket #72: nach einem Fehler beim nächsten fälligen Takt noch einmal
+            from .pipeline import hintergrund
+
+            self._wiederholen_um = None
+            if self._voll_offen and not self.laeuft:
+                self._voll_offen = False
+                hintergrund(self.erkennen())
+            if self._schnell_ab is not None and not self._schnell_laeuft:
+                self._schnell_starten(0.0)
         self._fuenf_pruefen()
 
     def _stuecke(self, neu: list, groesse: int = MAX_ZEICHEN) -> list[list]:
@@ -639,10 +728,10 @@ class Artefakte:
             stuecke.append(stueck)
         return stuecke
 
-    def _kontext_vor(self, t: float) -> list:
+    def _kontext_vor(self, t: float, sekunden: float = KONTEXT_SEKUNDEN) -> list:
         kontext, dauer = [], 0.0
         for s in reversed([x for x in self.coach.meeting.transkript if x.text and x.ende <= t]):
-            if dauer >= KONTEXT_SEKUNDEN:
+            if dauer >= sekunden:
                 break
             kontext.insert(0, s)
             dauer += s.dauer
@@ -658,9 +747,6 @@ class Artefakte:
         """Alle noch nicht ausgewerteten Sätze (bis `bis`) auswerten, in Stücken. `parallel`: auf Anfrage alle Stücke
         gleichzeitig (Bogen unter 15 s); sonst nacheinander, damit jedes Stück die Ergebnisse des vorigen sieht.
         Liefert die Zahl neuer/ergänzter Artefakte."""
-        from .config import EINST
-        from .pipeline import fehlertext, nutzung_loggen
-
         c = self.coach
         self.laeuft = True
         n = 0
@@ -685,13 +771,20 @@ class Artefakte:
                             break
                         self._uebernehmen_alle(ergebnisse[-1], st)
                         ergebnisse[-1] = None  # schon übernommen
+                fehler = None
                 for st, erg in zip(stuecke, ergebnisse):
                     if isinstance(erg, Exception):
-                        log.warning("Artefakt-Erkennung fehlgeschlagen: %s", fehlertext(erg))
+                        fehler = erg
                         break  # beim nächsten Lauf noch einmal ab hier
                     if erg is not None:
                         n += self._uebernehmen_alle(erg, st)
                     self.bis = max(self.bis, max(s.ende for s in st))
+                if fehler is not None:  # Ticket #72: sichtbar statt nur im Log, und der Takt wiederholt
+                    self._voll_offen = True
+                    self._fehler(fehler)
+                else:
+                    self._voll_offen = False
+                    self._erfolg()
                 self.letzter_lauf = c.meeting.jetzt()
                 c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "artefakte", "saetze": len(neu),
                                     "stuecke": len(stuecke), "parallel": parallel, "anzahl": len(self.liste)})
@@ -713,6 +806,125 @@ class Artefakte:
             if e and self.uebernehmen(e, stueck[0].start, stueck):
                 n += 1
         return n
+
+    # --- Fehler und Wiederholung (Ticket #72) ----------------------------------------------------------------
+    def _fehler(self, e: BaseException) -> None:
+        """Sichtbar melden (Band, Fehlerzeile, Technikbericht) und den nächsten Versuch planen – Abstand wächst."""
+        from .ki_fehler import melden
+
+        m = self.coach.meeting
+        abstand = self._abstand
+        self._wiederholen_um = m.jetzt() + abstand
+        self._abstand = min(WIEDERHOLEN_MAX, abstand * 2)
+        melden(self.coach, "artefakte", e, f"Nestor versucht es in {int(abstand)} s noch einmal." if m.laeuft else "")
+
+    def _erfolg(self) -> None:
+        from .ki_fehler import erholt
+
+        self._abstand = WIEDERHOLEN_AB
+        if self._voll_offen:  # der Anbieter antwortet wieder: die gescheiterte Vollauswertung gleich nachholen
+            self._wiederholen_um = self._jetzt()
+        else:
+            erholt(self.coach, "artefakte")
+
+    # --- Schnell-Erkennung (Ticket #72) -------------------------------------------------------------------------
+    def satz(self, saetze: list) -> None:
+        """Vom Coach je fertigem Satz: lokaler Signal-Vorfilter; bei Treffer startet die Schnell-Erkennung (nach
+        kurzem Sammeln, damit „… bis Freitag“ im Folgesatz mitkommt). Ansprachen an Nestor zählen nicht."""
+        from .assistent import angesprochen
+
+        c = self.coach
+        if c is None or c.knopfdruck or c._client is None or not c.meeting.laeuft:
+            return
+        text = " ".join(s.text for s in saetze if s.text)
+        if not text or angesprochen(text) or not signal(text):
+            return
+        start = min(s.start for s in saetze)
+        self._schnell_ab = start if self._schnell_ab is None else min(self._schnell_ab, start)
+        if not self._schnell_laeuft and self._wiederholen_um is None:  # nach einem Fehler wartet sie auf den Takt
+            self._schnell_starten(SAMMELN_SEKUNDEN)
+
+    def _schnell_starten(self, warten: float) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # ohne Ereignisschleife (Tests): keine Hintergrundaufgaben
+        from .pipeline import hintergrund
+
+        self._schnell_laeuft = True
+        hintergrund(self._schnell_lauf(warten))
+
+    async def _schnell_lauf(self, warten: float) -> None:
+        from .assistent import angesprochen
+        from .pipeline import nutzung_loggen
+
+        c = self.coach
+        m = c.meeting
+        try:
+            if warten:
+                await asyncio.sleep(warten)
+            while self._schnell_ab is not None and c._client is not None and not c.knopfdruck:
+                jetzt = m.jetzt()
+                self._schnell_zeiten = [t for t in self._schnell_zeiten if jetzt - t < 3600]
+                if len(self._schnell_zeiten) >= SCHNELL_MAX_STUNDE:
+                    self._schnell_ab = None  # Deckel erreicht: die gebündelte Auswertung holt es nach
+                    c.protokoll.append({"zeit": jetzt, "art": "artefakte_schnell_deckel"})
+                    return
+                ab, self._schnell_ab = self._schnell_ab, None
+                neu = [s for s in m.transkript if s.text and s.start >= ab - 0.05 and not angesprochen(s.text)]
+                if not neu:
+                    continue
+                self._schnell_zeiten.append(jetzt)
+                t0 = time.monotonic()
+                modell = c.wahl.zuordnung_modell
+                kontext = self._kontext_vor(neu[0].start, SCHNELL_KONTEXT)
+                try:
+                    roh, nutzung = await _json_aufruf(c._client, modell, SCHNELL, nachricht(m, self.liste, neu, kontext),
+                                                      c.wahl.analyse_aufwand)
+                except Exception as e:  # noqa: BLE001 – sichtbar melden, der Takt versucht es wieder
+                    self._schnell_ab = ab if self._schnell_ab is None else min(ab, self._schnell_ab)
+                    self._fehler(e)
+                    await c.melden()
+                    return
+                nutzung_loggen({"art": "artefakte", "schnell": True, "modell": modell, **nutzung})
+                self._erfolg()
+                neue = []
+                for e in roh.get("artefakte") or []:
+                    e = normalisieren(e)
+                    if not e:
+                        continue
+                    vorher = len(self.liste)
+                    a = self.uebernehmen(e, neu[0].start, neu, schnell=True)
+                    if a is not None and len(self.liste) > vorher:
+                        a.schnell = True
+                        neue.append(a)
+                self.ableiten()
+                c.protokoll.append({"zeit": m.jetzt(), "art": "artefakte_schnell", "saetze": len(neu),
+                                    "neu": [a.id for a in neue], "sekunden": round(time.monotonic() - t0, 2)})
+                if neue:
+                    self._ergebnis_karte(neue)
+                await c.melden()
+        finally:
+            self._schnell_laeuft = False
+
+    def _ergebnis_karte(self, neue: list[Artefakt]) -> None:
+        """Karte „Gerade festgehalten“. Ist die neueste Karte schon eine solche und jünger als eine Minute, wächst sie
+        mit (Entscheidung und Aufgabe aus zwei Sätzen in einer Karte). Still: eine frische Antwort bleibt vorn."""
+        from .bogen import artefakt_karte
+
+        c = self.coach
+        m = c.meeting
+        regel = "ergebnisse" in m.regel_ids
+        letzte = c.karten[-1] if c.karten else None
+        if letzte is not None and letzte.get("art") == "ergebnis" and m.jetzt() - letzte["zeit"] < 60:
+            dazu = artefakt_karte(c, "ergebnis", letzte["titel"], neue, regel)
+            letzte["ids"] = letzte["ids"] + dazu["ids"]
+            letzte["punkte"] = letzte["punkte"] + dazu["punkte"]
+            letzte["luecken_vorher"] = {**letzte["luecken_vorher"], **dazu["luecken_vorher"]}
+            return
+        p = neue[0].punkt
+        titel = f"Punkt {p + 1} · {m.agenda[p].titel}" if p is not None and 0 <= p < len(m.agenda) else "Aus dem Gespräch"
+        c._karte_ablegen(artefakt_karte(c, "ergebnis", titel, neue, regel, still=True, frage="Festgehalten"))
 
     async def nachholen(self) -> int:
         """Auf Anfrage (Zusammenfassen, Was fehlt, Protokoll): nur den laufenden Abschnitt nachholen, parallel."""
