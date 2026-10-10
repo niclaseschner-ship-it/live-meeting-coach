@@ -217,9 +217,16 @@ echter_deploy() {
     log "wrangler deploy ${WRANGLER_ENV[*]} (GIT_SHA=$sha)"
     (cd "$arbeitsordner/cloudflare" && npx wrangler deploy "${WRANGLER_ENV[@]}" \
       --var "GIT_SHA:$sha" --var "BUILD_ZEIT:$bauzeit" --keep-vars)
-    if [ "$STAGING" = 1 ] && ! (cd "$arbeitsordner/cloudflare" && npx wrangler secret list --env staging 2>/dev/null) \
-         | grep -q '"WORKER_GEHEIMNIS"'; then
-      log "Staging hat noch keine Secrets – setze sie (deploy/staging_einrichten.sh --nur-secrets)"
+    # Fehlt auch nur eines der Staging-Secrets (z. B. TESTZUGANG, neu seit #75), alle aus staging.env nachsetzen
+    if [ "$STAGING" = 1 ]; then
+      vorhanden="$(cd "$arbeitsordner/cloudflare" && npx wrangler secret list --env staging 2>/dev/null || true)"
+      fehlt=0
+      for n in WORKER_GEHEIMNIS COOKIE_GEHEIMNIS TESTZUGANG; do
+        grep -q "\"$n\"" <<<"$vorhanden" || fehlt=1
+      done
+    fi
+    if [ "$STAGING" = 1 ] && [ "$fehlt" = 1 ]; then
+      log "Staging-Secrets unvollständig – setze sie (deploy/staging_einrichten.sh --nur-secrets)"
       "$WURZEL/deploy/staging_einrichten.sh" --nur-secrets
     fi
     export NESTOR_APPLICATION_ID="${NESTOR_APPLICATION_ID:-$(cloudflare_anwendung_id "$arbeitsordner")}"
