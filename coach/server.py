@@ -574,14 +574,6 @@ async def onepager_analyse():
     return Response(coach.onepager_analyse, media_type="text/markdown; charset=utf-8")
 
 
-@app.post("/api/block")
-async def block(start: float = Form(...), datei: UploadFile = File(...)):
-    """Version 1 (Blöcke, OpenAI-Diarisierung) – Rückfallweg, vom Dashboard nicht mehr genutzt."""
-    wav = await datei.read()
-    hintergrund(coach.block_verarbeiten(wav, start))
-    return {"ok": True}
-
-
 @app.post("/api/punkt")
 async def punkt(daten: dict):
     coach.punkt_wechseln(int(daten["index"]))

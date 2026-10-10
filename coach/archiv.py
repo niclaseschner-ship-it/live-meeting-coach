@@ -67,7 +67,6 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
             "stufe": coach.stufe,
             "anbieter": "Mistral" if coach.stufe == "basis" else "OpenAI",
             "modus": coach.modus,
-            "transkription": EINST.transkriptions_modell,
             "live_text": EINST.text_modell,
             "live_modell": EINST.live_modell,
             "live_art": EINST.live_art,

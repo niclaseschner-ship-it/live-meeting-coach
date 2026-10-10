@@ -63,7 +63,7 @@ async def verdichten(client, frage: str, antwort: str, kontext: str | None = Non
                 AUFTRAG.format(name=EINST.assistent_name, frage=frage or "-", antwort=antwort))}],
             response_format={"type": "json_object"},
             **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {})),
-            FRIST if EINST.ki != "codex" else 40)  # über das Abo dauert ein Aufruf ~5–10 s
+            FRIST)
     except (asyncio.TimeoutError, Exception):  # noqa: BLE001 – lieber die Sätze zeigen als nichts
         return ersatz, {}
     nutzung = {"tokens_rein": getattr(r.usage, "prompt_tokens", None),

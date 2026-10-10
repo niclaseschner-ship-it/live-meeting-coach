@@ -219,7 +219,7 @@ async def moderationssatz(coach, karte: dict, ersatz: str) -> str:
             model=modell,
             messages=[{"role": "user", "content": SATZ.format(name=EINST.assistent_name, karte=karte_als_text(karte))}],
             **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {})),
-            SATZ_FRIST if EINST.ki != "codex" else 40)
+            SATZ_FRIST)
     except Exception as e:  # noqa: BLE001
         log.info("Moderationssatz nicht formuliert (%s) – Ersatz", type(e).__name__)
         return ersatz

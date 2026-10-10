@@ -85,8 +85,6 @@ def dollar(e: dict) -> float:
                 + (raus.get("text_tokens") or 0) * REALTIME["text_raus"]
                 + (raus.get("audio_tokens") or 0) * REALTIME["audio_raus"]) / 1e6
     if art == "onepager":
-        if e.get("anbieter") != "openai":
-            return 0.0  # Claude-Abo
         summe = BILD + (BILD_VORLAGE if e.get("fortschreibung") else 0.0)
         for s in e.get("schritte") or []:
             summe += _tokens(s.get("modell", "").split("+")[0], s.get("tokens_rein"), s.get("tokens_raus"))

@@ -21,8 +21,7 @@ def _zahl(name: str, standard: float) -> float:
 @dataclass(frozen=True)
 class Einstellungen:
     # Modelle
-    # Sprecherspur (wer spricht wann) und Text (was wird gesagt) kommen aus zwei Modellen, siehe transkription.py
-    transkriptions_modell: str = os.getenv("LMC_TRANSKRIPTION", "gpt-4o-transcribe-diarize")
+    # Text je Äußerung (Live-Text „sparsam“, Sprechtaste, Agenda per Sprache) – Premium-Modell, Basis siehe unten
     text_modell: str = os.getenv("LMC_TEXT", "gpt-4o-transcribe")
     analyse_modell: str = os.getenv("LMC_ANALYSE", "gpt-5.4-mini")  # 04.10.: genauer bei Agenda-Wechseln als gpt-5 minimal
     # Ohne feste Sprache hat das Modell deutsche Rede ins Englische übersetzt (02.10.2026)
@@ -83,25 +82,14 @@ class Einstellungen:
     abschnitt_ruhe_sekunden: float = _zahl("LMC_ABSCHNITT_RUHE_SEKUNDEN", 5)
     abschnitt_max_sekunden: float = _zahl("LMC_ABSCHNITT_MAX_SEKUNDEN", 15)
     abschnitt_min_sekunden: float = _zahl("LMC_ABSCHNITT_MIN_SEKUNDEN", 4)
-    # Live-Bild als One-Pager (FR-10), gezeichnet von Claude über das Abo (claude -p)
-    # Tests ohne API-Kosten: Text-KI über das ChatGPT-Abo (coach/ki_abo.py), Transkript aus dem Zwischenspeicher,
-    # keine Sprachausgabe. Im echten Meeting bleiben alle drei aus.
-    ki: str = os.getenv("LMC_KI", "openai")  # openai | codex
-    codex_befehl: str = os.getenv("LMC_CODEX_BEFEHL", "ssh -o BatchMode=yes -o ConnectTimeout=10 pi codex")
-    codex_aufwand: str = os.getenv("LMC_CODEX_AUFWAND", "low")
+    # Tests ohne API-Kosten: Transkript aus dem Zwischenspeicher, keine Sprachausgabe. Im echten Meeting beides aus.
     text_cache: str = os.getenv("LMC_TEXT_CACHE", "")  # Ordner; leer = aus
     stimme_aus: bool = os.getenv("LMC_STIMME_AUS") == "1"
-    claude_befehl: str = os.getenv("LMC_CLAUDE_BEFEHL", "ssh -o BatchMode=yes -o ConnectTimeout=10 buddyboard claude")
-    # Live-Bild: „openai“ (GPT-5.4 + Bildgenerator, wie ChatGPT; Fortschreibung des letzten Bildes; ~8 ct/Bild)
-    # oder „claude“ (SVG über das Claude-Abo per claude -p; kostenlos, Layout schwächer)
-    bild_anbieter: str = os.getenv("LMC_BILD_ANBIETER", "openai")
+    # Live-Bild (Premium): GPT-5.4 + Bildgenerator, wie ChatGPT; Fortschreibung des letzten Bildes; ~8 ct/Bild
+    bild_anbieter: str = "openai"
     bild_modell: str = os.getenv("LMC_BILD_MODELL", "gpt-image-2")
     bild_text_modell: str = os.getenv("LMC_BILD_TEXT_MODELL", "gpt-5.4")
     bild_qualitaet: str = os.getenv("LMC_BILD_QUALITAET", "medium")
-    onepager_analyse_modell: str = os.getenv("LMC_ONEPAGER_ANALYSE", "opus")
-    onepager_zeichen_modell: str = os.getenv("LMC_ONEPAGER_ZEICHNEN", "sonnet")
-    onepager_analyse_aufwand: str = os.getenv("LMC_ONEPAGER_ANALYSE_AUFWAND", "low")  # gemessen: halbiert die Zeit
-    onepager_zeichen_aufwand: str = os.getenv("LMC_ONEPAGER_ZEICHNEN_AUFWAND", "low")
     onepager_minuten: float = _zahl("LMC_ONEPAGER_MINUTEN", 10)
     # Aufnahmen für den Abspielmodus (WAV, 24 kHz mono, daneben <name>.json mit Einrichtung)
     aufnahmen: str = os.getenv("LMC_AUFNAHMEN", str(WURZEL / "testbibliothek" / "audio"))
@@ -202,14 +190,6 @@ class Einstellungen:
     richtwert_basis_eur: float = _zahl("LMC_RICHTWERT_BASIS_EUR", 0.7)  # 10 Fragen + 2 Recherchen ≈ 0,72 $/h (#15)
     richtwert_premium_eur: float = _zahl("LMC_RICHTWERT_PREMIUM_EUR", 2.0)
 
-    def __post_init__(self) -> None:
-        # Keine versteckten Abo-/Claude-Wege, auch lokal: Premium OpenAI, Basis Mistral.
-        # Die Basiswerte (inklusive Textüberblick) werden anschließend durch stufe_setzen eingesetzt.
-        if self.ki != "openai":
-            object.__setattr__(self, "ki", "openai")
-        if self.bild_anbieter != "openai":
-            object.__setattr__(self, "bild_anbieter", "openai")
-
 
 EINST = Einstellungen()
 
@@ -218,7 +198,7 @@ EINST = Einstellungen()
 # Eine Stufe ist ein Satz Einstellungen. Premium = was beim Start aus Umgebung/.env kam (wie bisher); Basis tauscht
 # jedes Modell gegen sein Mistral-Gegenstück. Der Coach baut danach seinen Client neu (pipeline.Coach.stufe_setzen).
 STUFEN = ("basis", "premium")
-_STUFEN_FELDER = ("live_modell", "text_modell", "transkriptions_modell", "analyse_modell", "analyse_aufwand",
+_STUFEN_FELDER = ("live_modell", "text_modell", "analyse_modell", "analyse_aufwand",
                   "zuordnung_modell",
                   "assistent_modell", "assistent_aufwand", "recherche_modell", "recherche_aufwand", "stimme_modell",
                   "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden", "einordnen_aufwand")
@@ -229,7 +209,6 @@ def basis_werte() -> dict:
     e = EINST
     return {
         "live_modell": e.basis_live_modell, "text_modell": e.basis_transkription,
-        "transkriptions_modell": e.basis_transkription,
         "analyse_modell": e.basis_text_modell, "assistent_modell": e.basis_text_modell,
         "recherche_modell": e.basis_text_modell, "zuordnung_modell": e.basis_zuordnung_modell,
         "analyse_aufwand": "", "assistent_aufwand": "", "recherche_aufwand": "",  # Mistral kennt „low“ nicht

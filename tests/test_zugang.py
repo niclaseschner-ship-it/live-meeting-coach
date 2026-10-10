@@ -170,12 +170,6 @@ def test_selbes_handy_darf_neu_laden_ohne_zwei_verbindungen():
 
 # --- Cloud-Betrieb (Ticket #5): kein „am Laptop“ mehr, dafür das Worker-Geheimnis ------------------------
 
-def test_cloud_erzwingt_openai_auch_bei_falscher_umgebung():
-    """config.py: Abo-Wege sind in der Cloud aus – unabhängig davon, was LMC_KI/LMC_BILD_ANBIETER sagen."""
-    einst = Einstellungen(betrieb="cloud", ki="codex", bild_anbieter="claude")
-    assert einst.ki == "openai" and einst.bild_anbieter == "openai"
-
-
 def test_cloud_ohne_geheimnis_403_fuer_alles(cloud):
     c = TestClient(app, client=("10.1.2.3", 5000))
     assert c.get("/api/zustand").status_code == 403

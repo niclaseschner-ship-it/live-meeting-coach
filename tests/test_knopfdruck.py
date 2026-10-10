@@ -86,11 +86,11 @@ def test_ohne_knopf_kein_ki_aufruf_lokale_signale_laufen(monkeypatch):
             andere.append("livetext")
 
     async def kein_bild(*a, **k):
-        andere.append("claude-bild")
+        andere.append("bild")
         raise RuntimeError("Bild ohne Knopf")
 
     monkeypatch.setattr("coach.hoeren.LiveText", KeinLiveText)
-    monkeypatch.setattr("coach.onepager.erzeugen", kein_bild)
+    monkeypatch.setattr("coach.bild_gpt.erzeugen", kein_bild)
     monkeypatch.setattr("coach.gespraech.Gespraech", KeinLiveText)
     _einstellen(onepager_minuten=0.25, live_art="schnell", stimme_aus=False)  # live: Bild im Takt alle 15 s
 

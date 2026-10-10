@@ -31,8 +31,9 @@ Version-2-Spezifikation (jetzt [docs/archiv/spezifikation_v2.md](docs/archiv/spe
 ## Was das Dashboard zeigt
 
 - **Mitte: Live-Bild** – ein One-Pager zum Stand des Meetings (Kernaussage, Themen mit Status,
-  Entscheidungen, offene Fragen, Beziehungen, Abschweifungen). Claude zeichnet ihn auf Knopfdruck,
-  alle 10 Minuten und am Ende (~1,5–2 min je Bild) und schreibt das letzte Bild dabei fort.
+  Entscheidungen, offene Fragen, Beziehungen, Abschweifungen). In Premium zeichnet ihn OpenAI (`coach/bild_gpt.py`)
+  auf Anfrage und am Ende und schreibt das letzte Bild dabei fort; Basis hat kein Bildmodell und zeigt stattdessen
+  einen Überblick als Text (Mistral).
 - **Links:** Countdown des aktuellen Punkts, Agenda mit Status, Vorschlag zum Weiterschalten.
 - **Rechts:** vier Signale (Monolog, Agenda & Zeit, Fokus, Sprecherüberlappung), aktueller Hinweis,
   Redeanteile ohne Bewertung.
@@ -67,8 +68,8 @@ der Meeting-Zusammenfassung als Bild.
   abschaltbar, die Kopfleiste zeigt „Aufnahme“, und nach einem „Nein“ in der Begrüßung wird sie gelöscht.
 - **Eigener OpenAI-Schlüssel:** Jede Person trägt ihren API-Schlüssel im Dashboard unter Einstellungen ein
   (wird bei OpenAI geprüft, liegt dann nur in `~/.live-meeting-coach/openai_schluessel`, nie im Browser oder Log).
-  Alternativ `OPENAI_API_KEY` in `.env`; der Eintrag im Dashboard hat Vorrang. Live-Text, Kontext, Nestor und
-  Live-Bild laufen alle über diesen einen Schlüssel. Grobe Kosten je Meetingstunde: ~2 $ mit Bild alle 10 min.
+  Alternativ `OPENAI_API_KEY` in `.env`; der Eintrag im Dashboard hat Vorrang. In Premium laufen Live-Text, Kontext,
+  Nestor und Live-Bild alle über diesen einen Schlüssel (Basis nutzt den Mistral-Schlüssel des Servers).
 - **Live-Text schnell oder sparsam** (Einstellungen): Standard ist „schnell“ (Streaming, Text schon beim
   Sprechen, ~1,02 $/h). „Sparsam“ schickt jede Äußerung einzeln (~0,36 $/h); Sätze erscheinen erst nach dem Satzende (im Mittel ~1 s, bis ~4 s)
   und Nestor antwortet entsprechend später. Sprecher, Redeanteile, Monolog und Unterbrechungen sind nicht betroffen.

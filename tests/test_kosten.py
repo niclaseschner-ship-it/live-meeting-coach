@@ -14,11 +14,10 @@ def test_preise_der_einzelnen_funktionen():
     assert kosten.dollar({"art": "themen", "modell": "gpt-5.4-mini", "tokens_rein": 1e6, "tokens_raus": 1e6}) == pytest.approx(5.25)
     # Recherche: Tokens plus Websuche
     assert kosten.dollar({"art": "recherche", "modell": "gpt-5.4-mini", "tokens_rein": 0, "tokens_raus": 0}) == pytest.approx(0.01)
-    # Live-Bild über OpenAI: Pauschale + Text-Tokens von gpt-5.4; über das Claude-Abo kostenlos
+    # Live-Bild über OpenAI: Pauschale + Text-Tokens von gpt-5.4
     bild = {"art": "onepager", "anbieter": "openai", "fortschreibung": False,
             "schritte": [{"modell": "gpt-5.4+gpt-image-2", "tokens_rein": 4000, "tokens_raus": 800}]}
     assert kosten.dollar(bild) == pytest.approx(0.05 + 0.01 + 0.012)
-    assert kosten.dollar({"art": "onepager", "anbieter": "claude-abo"}) == 0
     # Gespräch: Audio rein ohne Cache, Cache billig, Audio raus teuer
     gespraech = {"art": "gespraech", "details_rein": {"audio_tokens": 1000, "text_tokens": 2000, "cached_tokens": 1500,
                                                       "cached_tokens_details": {"audio_tokens": 500, "text_tokens": 1000}},

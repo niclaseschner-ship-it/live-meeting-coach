@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-from . import aktionen, analyse, konfidenz, kosten, regeln, themen, transkription
+from . import aktionen, analyse, konfidenz, kosten, regeln, themen
 from .artefakte import Artefakte
 from .assistent import Assistent
 from .config import EINST, WURZEL, ki_verfuegbar, mistral_schluessel, openai_schluessel, schluessel_info
@@ -114,7 +114,7 @@ class Coach:
         self._fenster_ab = 0.0  # frühere Sätze gehören nicht mehr ins Fenster (Punktwechsel, Rückkehr-Ansage)
         self._rueckkehr_ab: float | None = None  # Beginn der letzten Rückkehr-Ansage („zurück zur Datenbank“)
         self._themen_sperre = asyncio.Lock()
-        # Live-Bild (One-Pager, FR-10): gezeichnet von Claude über das Abo
+        # Live-Bild (One-Pager, FR-10): Premium zeichnet mit OpenAI (coach/bild_gpt.py), Basis schreibt den Überblick
         self.onepager_svg: str | None = None
         self.onepager_png: bytes | None = None  # Live-Bild von OpenAI (Rasterbild)
         # Recherche als Folie: letztes Rechercheergebnis und die daraus gebaute Folie
@@ -517,38 +517,6 @@ class Coach:
             teile.append(m.transkript[-1].text)
         return " ".join(teile)[-800:]
 
-    async def block_verarbeiten(self, wav: bytes, start: float) -> None:
-        if self.knopfdruck or EINST.stufe == "basis":
-            # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription mit OpenAI-Diarisierung – nicht ohne
-            # Knopf, und nicht in Basis (dort geht nichts an OpenAI)
-            return  # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription – nicht ohne Knopf
-        async with self._sperre:
-            if self._client is None:
-                self.fehler = "Kein KI-Schlüssel – in den Einstellungen eintragen."
-                await self.melden()
-                return
-            dauer, pegel = transkription.wav_info(wav)
-            if pegel < transkription.STILLE_RMS:
-                self.meeting.letztes_block_ende = max(self.meeting.letztes_block_ende, start + dauer)
-                return
-            try:
-                spur, saetze, text_sekunden = await transkription.transkribieren(
-                    self._client, EINST.transkriptions_modell, EINST.text_modell, wav,
-                    self.referenzen, EINST.sprache, self.vokabel_prompt(),
-                )
-            except Exception as e:  # noqa: BLE001 – Fehler sichtbar machen, nicht abstürzen
-                log.warning("Transkription fehlgeschlagen: %s", fehlertext(e))
-                self.fehler = f"Transkription fehlgeschlagen: {fehlertext(e)}"
-                await self.melden()
-                return
-            self.fehler = None
-            nutzung_loggen({"art": "sprecherspur", "modell": EINST.transkriptions_modell, "sekunden_audio": round(dauer, 1)})
-            nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(text_sekunden, 1)})
-            self.meeting.letztes_block_ende = max(self.meeting.letztes_block_ende, start + dauer)
-            spur_segmente = [Segment(r["sprecher"], "", start + r["start"], start + r["ende"]) for r in spur]
-            saetze_segmente = [Segment(r["sprecher"], r["text"], start + r["start"], start + r["ende"]) for r in saetze]
-            await self._segmente_verarbeiten(spur_segmente, saetze_segmente)
-
     # --- Denken ------------------------------------------------------------
     async def _segmente_verarbeiten(self, spur: list[Segment], saetze: list[Segment] | None = None) -> None:
         """spur: wer spricht wann; saetze: Text mit Sprecher (in der Simulation identisch mit spur)."""
@@ -795,7 +763,7 @@ class Coach:
                     or self.artefakte.laeuft):
                 break
             await asyncio.sleep(1)
-        await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
+        await asyncio.sleep(8)  # Ergebnisprüfung des letzten Punkts
         try:
             archiv.schreiben(endgueltig=True)
         except OSError as e:
@@ -1309,7 +1277,7 @@ class Coach:
                                  "titel": f"Live-Bild · Stand {analyse.mmss(stand)}" + (f" · {fokus}" if fokus else ""),
                                  "version": self.onepager_version, "format": "png" if self.onepager_png else "svg",
                                  "still": True})
-            nutzung_loggen({"art": "onepager", "anbieter": "openai" if self.onepager_png else "claude-abo",
+            nutzung_loggen({"art": "onepager", "anbieter": "openai",
                             "fortschreibung": vorher is not None,
                             "sekunden": round(time.monotonic() - t0), "schritte": erg.get("messung")})
             self.protokoll.append({"zeit": stand, "art": "onepager", "version": self.onepager_version, "fokus": fokus})

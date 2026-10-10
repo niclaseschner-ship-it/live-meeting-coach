@@ -2,7 +2,7 @@
 
 Ein Aufruf reicht für beides: eine neue Agenda aus Fließtext oder einer eingefügten Tabelle, oder eine
 Änderung an einer bestehenden (`bisher`). Benutzt denselben Client-Weg wie `coach/themen.py`
-(`coach._client`, Modell aus `EINST`), damit `LMC_KI=codex` greift.
+(`coach._client`, Modell aus der Anbieterwahl des Meetings, coach/anbieter.py).
 """
 
 from __future__ import annotations

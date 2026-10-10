@@ -88,18 +88,6 @@ def test_ueberlappungsampel_durch_mischung_und_zurueck():
 
 # --- Live-Bild (One-Pager) -----------------------------------------------
 
-def test_svg_wird_entschaerft():
-    from coach.onepager import svg_herausloesen
-
-    roh = ('Hier ist es:\n<svg viewBox="0 0 10 10"><script>alert(1)</script>'
-           '<a href="https://x.y"><rect onclick="x()" width="5"/></a>'
-           '<foreignObject><div>x</div></foreignObject><use href="#icon"/></svg>\nFertig.')
-    svg = svg_herausloesen(roh)
-    assert svg.startswith("<svg") and svg.endswith("</svg>")
-    assert "script" not in svg and "onclick" not in svg and "foreignObject" not in svg
-    assert 'href="#"' in svg and 'href="#icon"' in svg
-
-
 def test_meeting_text_enthaelt_agenda_status_und_transkript():
     from coach.onepager import meeting_text
     from coach.zustand import Segment

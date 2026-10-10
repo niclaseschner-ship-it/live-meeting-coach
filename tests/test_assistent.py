@@ -266,24 +266,6 @@ def test_karte_ohne_modell_und_kurze_antworten():
                                                            "Offen ist der Puffer für Getränke.", "Mehr nicht."]}
 
 
-def test_abo_client_leitet_chat_an_codex_und_den_rest_an_die_api(monkeypatch):
-    import asyncio
-
-    from coach import ki_abo
-
-    async def attrappe(prompt):
-        assert "Antworte ausschließlich mit gültigem JSON" in prompt and "### EINGABE\nHallo" in prompt
-        return '```json\n{"ok": true}\n```'
-
-    monkeypatch.setattr(ki_abo, "codex", attrappe)
-    api = type("Api", (), {"audio": "echte-api"})()
-    c = ki_abo.AboClient(api)
-    r = asyncio.run(c.chat.completions.create(model="x", messages=[{"role": "user", "content": "Hallo"}],
-                                              response_format={"type": "json_object"}))
-    assert r.choices[0].message.content == '{"ok": true}' and r.usage.prompt_tokens == 0
-    assert c.audio == "echte-api"
-
-
 def test_name_aus_der_vorstellung():
     from coach.assistent import name_aus
 

@@ -123,7 +123,7 @@ async def ausfuehren(coach, art: str, frage: str = "", senden=None) -> dict | No
     from .pipeline import _zeit_loggen, fehlertext
 
     hs = coach.hoerstrom
-    zeiten = {"ausloeser": "knopf", "art": art, "meeting_s": round(coach.meeting.jetzt(), 1), "ki": EINST.ki}
+    zeiten = {"ausloeser": "knopf", "art": art, "meeting_s": round(coach.meeting.jetzt(), 1)}
     t0 = time.monotonic()
 
     async def melden(schritt: str, anteil: float, **extra) -> None:
