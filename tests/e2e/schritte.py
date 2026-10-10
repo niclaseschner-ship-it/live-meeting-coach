@@ -248,22 +248,35 @@ async def kernknoepfe_pruefen(page: Page, geraet: str, lauf: Lauf) -> None:
 
 
 # --- Ablauf ----------------------------------------------------------------------------------------------------------
-async def anmelden(page: Page, url: str, passwort: str, lauf: Lauf) -> None:
-    lauf.schritt("Anmelden über die Worker-Anmeldeseite")
+async def anmelden(page: Page, url: str, mail: str, pin: str, lauf: Lauf) -> None:
+    """Ticket #75: kein Passwortweg mehr – Login nur noch über den Mail-PIN-Dialog, per UI-Klicks mit dem
+    Testzugang (TESTZUGANG, nur Dev/Staging): Registrierungsformular ausfüllen, „Code anfordern“, PIN eintippen.
+    Der Testzugang beantwortet den Code sofort mit dem festen PIN statt einer echten Mail (siehe
+    cloudflare/src/pilotzugang.ts, testzugangPinPruefen) – kein Mail-Abruf nötig."""
+    lauf.schritt("Anmelden über den Mail-PIN-Dialog (Testzugang)")
     await page.goto(url, wait_until="domcontentloaded")
-    if "anmelden" in page.url and not await page.locator('input[name="passwort"]').count():
-        await page.goto(url.rstrip("/") + "/anmelden?alt=1", wait_until="domcontentloaded")
-    feld = page.locator('input[name="passwort"]')
-    if not await feld.count():
-        lauf.pruefen("Anmeldeseite des Workers erscheint", False, f"URL {page.url}")
-        raise Abbruch("Keine Anmeldeseite – läuft der Worker davor?")
-    await feld.fill(passwort)
+    name_feld = page.locator('input[name="name"]')
+    if not await name_feld.count():
+        lauf.pruefen("Registrierungsseite des Workers erscheint", False, f"URL {page.url}")
+        raise Abbruch("Keine Registrierungsseite – läuft der Worker davor?")
+    await name_feld.fill("E2E Testlauf")
+    await page.locator('input[name="email"]').fill(mail)
+    await page.locator('textarea[name="herkunft"]').fill("Automatisierte Test-Pipeline")
+    await page.locator('input[name="datenschutz"]').check()
+    await page.get_by_role("button", name=re.compile("Code anfordern", re.I)).click()
+    await page.wait_for_load_state("domcontentloaded")
+    pin_feld = page.locator('input[name="pin"]')
+    ok = await pin_feld.count() > 0
+    lauf.pruefen("Registrierung führt zum PIN-Dialog", ok, page.url.split("?")[0])
+    if not ok:
+        raise Abbruch("Kein PIN-Feld nach der Registrierung – Testzugang falsch konfiguriert?")
+    await pin_feld.fill(pin)
     await page.get_by_role("button", name=re.compile("Anmelden", re.I)).click()
     await page.wait_for_load_state("domcontentloaded")
-    ok = not await page.locator('input[name="passwort"]').count() and "falsch" not in page.url
-    lauf.pruefen("Login mit Testpasswort über den Worker", ok, page.url.split("?")[0])
+    ok = not await page.locator('input[name="pin"]').count() and not page.url.rstrip("/").endswith("/pin")
+    lauf.pruefen("Login über den Mail-PIN-Dialog mit dem Testzugang", ok, page.url.split("?")[0])
     if not ok:
-        raise Abbruch("Testpasswort abgewiesen")
+        raise Abbruch("Testzugang-PIN abgewiesen")
 
 
 async def stufe_waehlen(page: Page, stufe: str, lauf: Lauf) -> None:

@@ -146,7 +146,8 @@ def main() -> int:
         uhr = Speicheruhr()
         uhr.start()
         t0 = time.monotonic()
-        ziel = Ziel(url=url, passwort=werte["STAGING_PASSWORT"], audio=audio, echt=True,
+        ziel = Ziel(url=url, test_mail=werte["STAGING_TESTZUGANG_MAIL"], test_pin=werte["STAGING_TESTZUGANG_PIN"],
+                    audio=audio, echt=True,
                     intern_geheimnis=werte["STAGING_WORKER_GEHEIMNIS"], deckel_eur=DECKEL_EUR[stufe],
                     agenda_halten_s=agenda_ende + 1.0)
         lauf = asyncio.run(durchlauf(ordner, stufe, False, ziel))

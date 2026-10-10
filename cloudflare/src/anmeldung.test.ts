@@ -1,23 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cookieLesen, cookiePruefen, cookieSigniere, kundeFuerPasswort, sha256Hex, type Kundenliste } from "./anmeldung";
-
-describe("Passwort -> Kunde", () => {
-  it("findet den richtigen Kunden über den Hash seines Passworts", async () => {
-    const kunden: Kundenliste = {
-      acme: { hash: await sha256Hex("geheim-acme"), max_meetings: 3 },
-      beta: { hash: await sha256Hex("geheim-beta"), max_meetings: 1 },
-    };
-    expect(await kundeFuerPasswort("geheim-acme", kunden)).toBe("acme");
-    expect(await kundeFuerPasswort("geheim-beta", kunden)).toBe("beta");
-  });
-
-  it("liefert null bei falschem Passwort oder leerer Liste", async () => {
-    const kunden: Kundenliste = { acme: { hash: await sha256Hex("geheim-acme"), max_meetings: 3 } };
-    expect(await kundeFuerPasswort("falsch", kunden)).toBeNull();
-    expect(await kundeFuerPasswort("", kunden)).toBeNull();
-    expect(await kundeFuerPasswort("irgendwas", {})).toBeNull();
-  });
-});
+import { cookieLesen, cookiePruefen, cookieSigniere } from "./anmeldung";
 
 describe("Cookie-Signatur", () => {
   it("signiert und prüft denselben Wert erfolgreich", async () => {

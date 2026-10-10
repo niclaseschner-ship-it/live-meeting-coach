@@ -36,8 +36,9 @@ const GEHEIM = "cookie-geheim";
 const env = {
   WORKER_GEHEIMNIS: "worker-geheim",
   COOKIE_GEHEIMNIS: GEHEIM,
-  KUNDEN: "{}",
   SPENDEN: { get: async () => null, put: async () => undefined, list: async () => ({ objects: [] }) },
+  // Ticket #75: /anmelden und /pin prüfen über diese DO-Bindung die IP-Ratenbegrenzung – hier immer erlaubt.
+  RATENBEGRENZUNG: { idFromName: () => "id", get: () => ({ fetch: async () => Response.json({ erlaubt: true }) }) },
 } as unknown as Parameters<typeof worker.fetch>[1];
 const ctx = { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext;
 
@@ -128,6 +129,30 @@ describe("Angemeldet", () => {
     expect(aufrufe[0].meetingId).toMatch(/^[0-9a-f-]{36}$/);
     expect(aufrufe[0].kopf["x-nestor-kunde"]).toBe("pilot");
     expect(antwort.headers.get("Set-Cookie") ?? "").toMatch(/nestor_meeting=/);
+  });
+});
+
+describe("Ticket #75: nur noch Mail-PIN, kein Passwortweg", () => {
+  it("/anmelden mit nur einem Passwortfeld wird abgewiesen (400, kein Cookie)", async () => {
+    const form = new URLSearchParams({ passwort: "irgendwas" });
+    const antwort = await worker.fetch(new Request("https://nestor.test/anmelden", {
+      method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" },
+    }), env, ctx);
+    expect(antwort.status).toBe(400);
+    expect(antwort.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("TESTZUGANG wird ignoriert, wenn WORKER_NAME 'nestor' (prod) ist", async () => {
+    const testEnv = {
+      ...env, WORKER_NAME: "nestor",
+      TESTZUGANG: JSON.stringify({ mail: "e2e@nestor.lokal", pinHash: "egal" }),
+    } as typeof env;
+    const form = new URLSearchParams({ email: "e2e@nestor.lokal", pin: "123456" });
+    const antwort = await worker.fetch(new Request("https://nestor.test/pin", {
+      method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" },
+    }), testEnv, ctx);
+    expect(antwort.status).toBe(400); // fällt auf den normalen (hier erfolglosen) Mail-PIN-Fluss zurück
+    expect(antwort.headers.get("Set-Cookie")).toBeNull();
   });
 });
 

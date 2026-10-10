@@ -1,6 +1,7 @@
 /**
- * KundenZaehler: ein Durable Object je Kunde, zählt dessen gleichzeitig laufende Meetings gegen
- * `max_meetings` (Secret KUNDEN). Durchsetzung "mit vertretbarem Aufwand" (Ticket #5) – bewusst einfach:
+ * KundenZaehler: ein Durable Object je Kunde, zählt dessen gleichzeitig laufende Meetings gegen das feste
+ * Limit von 1 je Zugang (Ticket #75, Entscheidung Niclas 10.10.2026 – keine Kundenliste, kein Feld je Kunde
+ * mehr; `index.ts`, `maxMeetingsFuer`). Durchsetzung "mit vertretbarem Aufwand" (Ticket #5) – bewusst einfach:
  *
  * - Ein Meeting zählt erst, wenn es wirklich gestartet wurde: `/pruefen`, aufgerufen von `/intern/meeting-start`
  *   in `index.ts`, das wiederum der Coach beim echten `/api/start` aufruft (Ticket #12) – nicht mehr schon beim
@@ -38,7 +39,7 @@ export class KundenZaehler extends DurableObject {
     if (url.pathname === "/pruefen") {
       const { meetingId, maxMeetings } = (await request.json()) as { meetingId: string; maxMeetings: number };
       // Ticket #64: Tagesdeckel vor dem Gleichzeitigkeits-Limit prüfen – ein erschöpfter Tagesdeckel lässt kein
-      // neues Meeting zu, unabhängig von max_meetings. Laufende Meetings sind davon nicht betroffen (nur /pruefen
+      // neues Meeting zu, unabhängig vom Limit. Laufende Meetings sind davon nicht betroffen (nur /pruefen
       // beim Start fragt das ab).
       const tageskosten = await this.ctx.storage.get<Tageskosten>("tageskosten");
       if (tagesdeckelErreicht(tageskosten, Date.now())) {

@@ -5,9 +5,10 @@
 #   deploy/staging_einrichten.sh [--nur-bucket | --nur-secrets]
 #
 # Was es tut:
-#   1. ~/.cache/lmc-e2e/staging.env (chmod 600) anlegen, falls sie fehlt: frisches Testpasswort, frisches
-#      COOKIE_GEHEIMNIS, WORKER_GEHEIMNIS und PIN_GEHEIMNIS – NICHT von prod kopiert und bewusst NICHT in der
-#      Hausablage (Wegwerfwerte nur für Staging; geht die Datei verloren, einfach löschen und neu einrichten).
+#   1. ~/.cache/lmc-e2e/staging.env (chmod 600) anlegen, falls sie fehlt: frischer Testzugang (Mail + sechs-
+#      stelliger PIN, Ticket #75 – kein Passwortweg mehr), frisches COOKIE_GEHEIMNIS, WORKER_GEHEIMNIS und
+#      PIN_GEHEIMNIS – NICHT von prod kopiert und bewusst NICHT in der Hausablage (Wegwerfwerte nur für
+#      Staging; geht die Datei verloren, einfach löschen und neu einrichten).
 #   2. R2-Bucket `nestor-spenden-staging` (EU-Jurisdiction) anlegen, falls er fehlt.
 #   3. Secrets des Workers `nestor-staging` setzen (`wrangler secret put --env staging`), Werte ausschließlich per
 #      Pipe: die Wegwerfwerte aus staging.env, die API-Schlüssel aus der Hausablage (`sudo -n zugang holen
@@ -39,9 +40,10 @@ if [ ! -f "$STAGING_ENV" ]; then
   mkdir -p "$(dirname "$STAGING_ENV")"
   ( umask 077
     {
-      echo "# Staging-Wegwerfwerte (Ticket #62) – nicht von prod, nicht in der Hausablage. Nie committen."
+      echo "# Staging-Wegwerfwerte (Ticket #62/#75) – nicht von prod, nicht in der Hausablage. Nie committen."
       echo "STAGING_URL=https://nestor-staging.niclas-eschner.workers.dev"
-      echo "STAGING_PASSWORT=$(openssl rand -hex 16)"
+      echo "STAGING_TESTZUGANG_MAIL=testzugang@nestor-staging.lokal"
+      echo "STAGING_TESTZUGANG_PIN=$(python3 -c 'import secrets; print(f"{secrets.randbelow(1000000):06d}")')"
       echo "STAGING_WORKER_GEHEIMNIS=$(openssl rand -hex 32)"
       echo "STAGING_COOKIE_GEHEIMNIS=$(openssl rand -hex 32)"
       echo "STAGING_PIN_GEHEIMNIS=$(openssl rand -hex 32)"
@@ -74,9 +76,10 @@ setzen() {  # setzen <NAME>  – Wert kommt über stdin
 wert STAGING_WORKER_GEHEIMNIS | tr -d '\n' | setzen WORKER_GEHEIMNIS
 wert STAGING_COOKIE_GEHEIMNIS | tr -d '\n' | setzen COOKIE_GEHEIMNIS
 wert STAGING_PIN_GEHEIMNIS | tr -d '\n' | setzen PIN_GEHEIMNIS
-# KUNDEN: ein Testzugang „staging-e2e“ mit dem Hash des Wegwerfpassworts (Klartext verlässt staging.env nie)
-HASH="$(wert STAGING_PASSWORT | tr -d '\n' | sha256sum | cut -d' ' -f1)"
-printf '{"staging-e2e": {"hash": "%s", "max_meetings": 2}}' "$HASH" | setzen KUNDEN
+# TESTZUGANG (Ticket #75): Mail + Hash des Wegwerf-PIN (Klartext verlässt staging.env nie). Nie für prod –
+# dort blockiert zusätzlich WORKER_NAME="nestor" im Code (pilotzugang.ts, testzugangErlaubt).
+PIN_HASH="$(wert STAGING_TESTZUGANG_PIN | tr -d '\n' | sha256sum | cut -d' ' -f1)"
+printf '{"mail": "%s", "pinHash": "%s"}' "$(wert STAGING_TESTZUGANG_MAIL)" "$PIN_HASH" | setzen TESTZUGANG
 sudo -n zugang holen openai-nestor | tr -d '\n' | setzen OPENAI_API_KEY
 sudo -n zugang holen mistral-api-key | tr -d '\n' | setzen MISTRAL_API_KEY
 log "Staging-Secrets vollständig (Telegram bewusst aus)."

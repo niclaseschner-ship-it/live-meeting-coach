@@ -2,17 +2,10 @@
  * Anmeldung und Cookies – reine Funktionen, ohne Workers-Laufzeit außer WebCrypto (auch unter Node
  * vorhanden), damit sie sich ohne Miniflare testen lassen (`npm test`).
  *
- * Kunden stehen im Secret KUNDEN als JSON: {"<kunde>": {"hash": "<sha256 hex>", "max_meetings": 3}}.
- * Das Passwort selbst bestimmt den Kunden – es gibt kein eigenes Namensfeld im Formular (Lastenheft:
- * "Link + Passwort"), darum wird der Hash gegen alle Kunden geprüft.
+ * Ticket #75 (Entscheidung Niclas 10.10.2026): der frühere Passwortweg über ein Secret KUNDEN (feste
+ * Kundenliste) ist entfernt. Einziger Zugang ist der Mail-PIN-Dialog (`pilotzugang.ts`); diese Datei liefert
+ * ihm nur noch die reine Krypto (Hash, Cookie-Signatur) – die frühere `kundeFuerPasswort`-Prüfung ist Geschichte.
  */
-
-export interface KundenEintrag {
-  hash: string;
-  max_meetings: number;
-}
-
-export type Kundenliste = Record<string, KundenEintrag>;
 
 const ENKODIERUNG = new TextEncoder();
 
@@ -33,19 +26,6 @@ export function gleichZeitkonstant(a: string, b: string): boolean {
   let unterschied = 0;
   for (let i = 0; i < a.length; i++) unterschied |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return unterschied === 0;
-}
-
-/** Passwort gegen alle Kunden prüfen – liefert den Kundennamen oder null. */
-export async function kundeFuerPasswort(passwort: string, kunden: Kundenliste): Promise<string | null> {
-  if (!passwort) return null;
-  const hash = await sha256Hex(passwort);
-  let treffer: string | null = null;
-  // über alle Einträge laufen (nicht beim ersten Treffer abbrechen), damit die Laufzeit nicht verrät,
-  // an welcher Stelle der Liste ein Kunde steht
-  for (const [name, eintrag] of Object.entries(kunden)) {
-    if (gleichZeitkonstant(hash, eintrag.hash.toLowerCase())) treffer = name;
-  }
-  return treffer;
 }
 
 async function hmacSchluessel(geheimnis: string): Promise<CryptoKey> {

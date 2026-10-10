@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { sha256Hex } from "./anmeldung";
 import {
   type Interessent, kundeAktiv, normalisiereAnmeldung, type PilotEnv, pinHash, pinSeite, registrierungsSeite,
-  statusCacheErzeugen,
+  statusCacheErzeugen, testzugangMailPasst, testzugangPinPruefen,
 } from "./pilotzugang";
 
 describe("Pilot-Registrierung", () => {
@@ -37,8 +38,35 @@ function envMit(datensatz: Interessent | null): PilotEnv {
 
 const INTERESSENT_BASIS: Interessent = {
   name: "Ada", email: "ada@example.de", herkunft: "Workshop", erstellt_at: 0, letzter_pin_at: 0,
-  pin_hash: "", pin_bis: 0, pin_versuche: 0, max_meetings: 1, status: "aktiv",
+  pin_hash: "", pin_bis: 0, pin_versuche: 0, status: "aktiv",
 };
+
+describe("Testzugang (Ticket #75): Mail + fester PIN, nur Dev/Staging", () => {
+  const mail = "e2e@nestor.lokal";
+  const env = async () => ({ TESTZUGANG: JSON.stringify({ mail, pinHash: await sha256Hex("123456") }) });
+
+  it("passt bei richtiger Mail und WORKER_NAME ungleich 'nestor'", async () => {
+    const e = { ...(await env()), WORKER_NAME: "nestor-staging" };
+    expect(testzugangMailPasst(e, mail)).toBe(true);
+    expect(await testzugangPinPruefen(e, mail, "123456")).toBe("ok");
+    expect(await testzugangPinPruefen(e, mail, "000000")).toBe("falsch");
+  });
+
+  it("ist für jede andere Mail nicht zuständig (null, normaler Fluss prüft weiter)", async () => {
+    const e = { ...(await env()), WORKER_NAME: "nestor-staging" };
+    expect(await testzugangPinPruefen(e, "jemand@anderes.de", "123456")).toBeNull();
+  });
+
+  it("wird in prod (WORKER_NAME 'nestor') hart ignoriert, selbst wenn das Secret gesetzt ist", async () => {
+    const e = { ...(await env()), WORKER_NAME: "nestor" };
+    expect(testzugangMailPasst(e, mail)).toBe(false);
+    expect(await testzugangPinPruefen(e, mail, "123456")).toBeNull();
+  });
+
+  it("ist ohne gesetztes Secret nie zuständig", async () => {
+    expect(await testzugangPinPruefen({ WORKER_NAME: "nestor-staging" }, mail, "123456")).toBeNull();
+  });
+});
 
 describe("Status-Cache (gesperrt/wartet wirkt sofort, Ticket #63)", () => {
   it("ist aktiv ohne Interessenten-Datensatz (Legacy-Passwortkunde)", async () => {

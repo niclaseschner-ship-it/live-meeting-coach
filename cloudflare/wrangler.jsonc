@@ -43,8 +43,12 @@
 
   // Öffentlich, keine Geheimnisse: eigene Adresse für den Rückruf aus dem Container (Datenspende). Nach dem
   // ersten `wrangler deploy` mit der echten *.workers.dev-Adresse (oder einer eigenen Domain) füllen.
+  // WORKER_NAME (Ticket #75): muss exakt "name" oben entsprechen – blockiert TESTZUGANG hart im Code (prod
+  // darf keinen Testzugang kennen, selbst falls das Secret hier versehentlich gesetzt würde; siehe
+  // cloudflare/src/pilotzugang.ts, testzugangErlaubt). TESTZUGANG selbst steht hier bewusst NICHT.
   "vars": {
-    "WORKER_URL": "https://nestor.niclas-eschner.workers.dev"
+    "WORKER_URL": "https://nestor.niclas-eschner.workers.dev",
+    "WORKER_NAME": "nestor"
   },
 
   // Staging (Ticket #62, Stufe C): eigener Worker `nestor-staging` mit eigenen Durable-Object-Namensräumen (eigenes
@@ -77,9 +81,12 @@
       "r2_buckets": [
         { "binding": "SPENDEN", "bucket_name": "nestor-spenden-staging", "jurisdiction": "eu" }
       ],
+      // TESTZUGANG (Ticket #75) wird hier NICHT als Var gesetzt (Secrets stehen nie in wrangler.jsonc) –
+      // siehe README.md „Staging“: `npx wrangler secret put TESTZUGANG --env staging`.
       "vars": {
         "WORKER_URL": "https://nestor-staging.niclas-eschner.workers.dev",
-        "AUTO_FREIGABE": "0"
+        "AUTO_FREIGABE": "0",
+        "WORKER_NAME": "nestor-staging"
       }
     }
   }
