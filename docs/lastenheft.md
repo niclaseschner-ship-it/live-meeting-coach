@@ -41,9 +41,8 @@ Mail + Code ─► Startseite ─► Meeting einrichten ─► Meeting ─► Ab
 
 1. **Zugang:** Anmeldung mit Name, Mail-Adresse und Herkunft („wie kennst du Nestor“); ein sechsstelliger Code
    per Mail schaltet den Zugang frei. Standard ist automatische Freischaltung, umstellbar auf manuelle Prüfung.
-   Kein gemeinsames Passwort mehr als Hauptweg.
-   <!-- prüfen: Höchstzahl gleichzeitiger Meetings je neuem Zugang ist aktuell 1 – bisher stand hier „ein
-   Zugang kann mehrere Meetings gleichzeitig führen“; endgültiger Wert? -->
+   Der Mail-Code ist vorerst der einzige Zugangsweg, kein Passwort. Ein Zugang führt höchstens **ein** Meeting
+   gleichzeitig (Entscheidung Niclas, 10.10.2026).
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Stufen Basis und Premium (Abschnitt 3) mit je einem
    Satz, wie man mit Nestor spricht (Premium wie ein Telefon, Basis wie ein Funkgerät), zur Verarbeitung und den
    erwarteten Kosten je Stunde, und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und
@@ -483,10 +482,9 @@ zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
 - **Zugang:** Pilot-Tester melden sich mit Name, Mail-Adresse und Herkunft an; ein per Mail verschickter
-  sechsstelliger Code schaltet frei (Status aktiv/wartet/gesperrt, Standard automatisch aktiv). Daneben besteht
-  eine feste Kundenliste (Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings) weiter.
-  <!-- prüfen: ist die Passwort-Kundenliste weiterhin der reguläre Weg für zahlende/bestehende Kunden, oder nur
-  Übergangsrest neben dem Mail-Code? --> Ein Meeting zählt gegen das Platzlimit erst ab dem echten Start
+  sechsstelliger Code schaltet frei (Status aktiv/wartet/gesperrt, Standard automatisch aktiv). Einen Passwortweg
+  gibt es vorerst nicht; die frühere feste Kundenliste entfällt (Entscheidung Niclas, 10.10.2026, Umsetzung #75).
+  Ein Zugang führt höchstens ein Meeting gleichzeitig. Ein Meeting zählt gegen das Platzlimit erst ab dem echten Start
   (`/api/start`), nicht schon beim Ansehen der Startseite. „Fertig“ im Abschluss gibt seinen Platz sofort frei
   und schließt den Container, ohne „Fertig“ erst nach 30 Minuten ohne Anfrage.
 - **Mistral-Schlüssel (Basis):** Niclas' Schlüssel als Secret `MISTRAL_API_KEY`, im Container als
