@@ -261,6 +261,10 @@ def begruessungstext(meeting, basis: bool = False, namen: bool | None = None) ->
     Feste Fassung: Rückfall der freien Begrüßung (coach/begruessung.py, Ticket #23) und Standard in Basis. Nestor sagt
     in der Begrüßung alles (Ticket #27) und endet mit der Bitte um die Namen – danach kein Startsatz mehr. Ein Nein ist
     kurz nach der Begrüßung als einfaches „Nein“ möglich und später jederzeit als „Nestor, nein“ (`spaetes_nein`).
+
+    Ticket #67: die Begrüßung ist für alle auch die erste Vorstellung des Produkts – deshalb ein kurzer Satz, was
+    Nestor tut (Agenda/Zeit, Ergebnisse festhalten, auf Zuruf zusammenfassen/recherchieren), bevor die Einwilligung
+    kommt.
     """
     name = EINST.assistent_name
     regeln = [NACH_ID[r].titel.split(" – ")[0] for r in meeting.regel_ids if r in NACH_ID]
@@ -269,7 +273,8 @@ def begruessungstext(meeting, basis: bool = False, namen: bool | None = None) ->
         liste = ", ".join(regeln[:-1]) + (" und " if len(regeln) > 1 else "") + regeln[-1]
         teil_regeln = f" Ihr habt euch diese Regeln vorgenommen: {liste}."
     teil_regeln += _weitere_regeln_satz(meeting)
-    gruss = (f"Hallo, ich bin {name}, euer Moderationsassistent.{teil_regeln} Ich höre mit: Agenda, Zeit, Gesprächsfluss. "
+    gruss = (f"Hallo, ich bin {name}, euer Moderationsassistent.{teil_regeln} Ich höre mit, behalte Agenda und Zeit "
+             f"im Blick, halte eure Ergebnisse fest und fasse auf Zuruf zusammen oder recherchiere etwas für euch. "
              f"Nicht einverstanden? Sagt Nein – auch später mit "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
