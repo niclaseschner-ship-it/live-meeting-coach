@@ -122,48 +122,25 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 // ---------- Knöpfe ----------
 // nur das zuhörende Handy übernimmt die Stimme – ein zweites Handy als reine Fernbedienung nimmt sie nicht weg
 // Sprechtaste (Ticket #13/#27): halten, fragen, loslassen → ein Antwortbogen wie bei „Nestor, …“; drücken unterbricht
-// Nestor. In Basis der einzige Weg (Funkgerät), in Premium die Alternative zum Namen. Mit „Nur auf Knopfdruck“ kommt
-// die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf.
-let haelt = false;
-async function haltenAn(e) {
-  e.preventDefault();
-  if (haelt || $("btn-fragen").disabled) return;
-  haelt = true;
-  $("btn-fragen").classList.add("haelt"); $("fragen-text").textContent = "Ich höre … loslassen zum Senden";
-  if (mikro.laeuft()) stimme.bereit();
-  stimme.stopp(); // die Taste unterbricht Nestor
-  try {
-    await halten.start();
-    await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
-  } catch (err) {
-    haelt = false; halten.teile = null; haltenText();
-    hinweisLokal(`Mikrofon nicht verfügbar: ${err.message ?? err}`);
-  }
+// Nestor. In Basis der einzige Weg (Funkgerät), in Premium die Rückfall-Taste zum Namen (#66: klein unter „Weitere
+// Aktionen“). Mit „Nur auf Knopfdruck“ kommt die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server
+// nicht noch einmal als Zuruf. Bedienmodell und Rückmeldung wie jeder Sprechknopf (basis.js: sprechknopf, #66).
+const fragenRuhe = () => (zustand?.stufe === "premium" ? "Sprechtaste (falls der Name nicht ankommt)" : "Sprechtaste – halten und sprechen");
+const fragen = sprechknopf($("btn-fragen"), {
+  ...frageHalten,
+  anzeige: (text) => { $("fragen-text").textContent = text; },
+  ruhe: fragenRuhe,
+  start: () => { if (mikro.laeuft()) stimme.bereit(); stimme.stopp(); return frageHalten.start(); },
+});
+// #66: Basis → große Taste als Hauptbedienung; Premium → klein unter „Weitere Aktionen“
+function fragenPlatzieren(stufe) {
+  const premium = stufe === "premium";
+  const ziel = $(premium ? "fragen-rueckfall" : "fragen-haupt");
+  const knopf = $("btn-fragen");
+  if (knopf.parentElement !== ziel && !fragen.haelt) ziel.append(knopf);
+  knopf.classList.toggle("primaer", !premium);
+  knopf.classList.toggle("rueckfall", premium);
 }
-function haltenText() {
-  $("btn-fragen").classList.remove("haelt"); $("fragen-text").textContent = "Sprechtaste – halten und sprechen";
-}
-async function haltenAus() {
-  if (!haelt) return;
-  haelt = false; haltenText();
-  const wav = await halten.ende();
-  if (wav.byteLength < 44 + RATE * 2 * 0.5) { // unter einer halben Sekunde: versehentlich getippt
-    fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: false }) });
-    return hinweisLokal("Zum Fragen gedrückt halten, sprechen, dann loslassen.");
-  }
-  $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor hört die Frage …";
-  try {
-    const r = await fetch("/api/frage/audio", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
-    const d = await r.json().catch(() => ({}));
-    $("knopf-stand").textContent = !r.ok ? (d.detail ?? `Fehler ${r.status}`) : !d.ok ? d.grund : `„${d.frage}“`;
-  } catch {
-    $("knopf-stand").textContent = "Laptop nicht erreichbar.";
-  }
-  setTimeout(() => { $("knopf-stand").hidden = true; }, 8000);
-}
-$("btn-fragen").addEventListener("pointerdown", haltenAn);
-for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-fragen").addEventListener(ev, haltenAus);
-$("btn-fragen").addEventListener("contextmenu", (e) => e.preventDefault());
 let handyKnopfWartet = false;
 document.querySelectorAll(".h-knopf").forEach((b) => { b.onclick = async () => {
   if (handyKnopfWartet) return;
@@ -264,9 +241,8 @@ function chipsRendern() {
 function rendern() {
   aktionshilfeRendern(zustand ?? {}, ".h-knopf", $("h-ueberblick-umfang").value);
   const z = zustand; if (!z) return;
-  const aktiv = !!(z.laeuft || z.simulation);
-  const beendet = !aktiv && (z.segmente.length > 0 || z.zeit > 0);
-  $("app").dataset.phase = aktiv ? "meeting" : beendet ? "beendet" : "vorbereitung";
+  const phase = phaseVon(z); // vom Server (Ticket #66)
+  const aktiv = phase === "live", beendet = phase === "abschluss";
   const m = z.mikro ?? {};
   $("titel").textContent = z.titel || "Nestor";
   $("untertitel-kopf").textContent = z.ziel || "Meeting-Coach";
@@ -282,11 +258,6 @@ function rendern() {
       : "Ohne bestätigte Variante startet kein Meeting – am Laptop auf der Startseite wählen.";
   $("zeit").textContent = mmss(z.zeit);
   $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
-  $("mikro-karte").hidden = beendet;
-  $("h-nestor-karte").hidden = !aktiv;
-  $("h-verlauf-karte").hidden = !aktiv;
-  $("h-transkript-karte").hidden = !aktiv;
-  $("h-meeting").hidden = beendet;
 
   // Warnung: Mikrofon weg, eigener Hinweis oder Fehler vom Server
   const eigenesWeg = mikroGewollt && !mikro.laeuft();
@@ -295,11 +266,21 @@ function rendern() {
     : m.weg ? (m.quelle ? `Seit ${Math.round(m.luecke)} s kein Ton vom ${m.quelle === "handy" ? "Handy" : "Laptop"}.` : "Kein Mikrofon verbunden – Nestor hört nichts.")
     : z.fehler ?? null;
   $("warnung").hidden = !warnung; $("warnung").textContent = warnung ?? "";
-  $("ton-fehlt").hidden = !aktiv || !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
 
   // Band (Ticket #27)
   bandRendern(z, $("band"));
-  $("band").hidden = !aktiv || $("band").hidden;
+  const bandHatInhalt = !$("band").hidden;
+
+  // Sichtbarkeit je Phase – eine Stelle für alle Bereiche (static/phase.js, Vertrag szenarien/ui_vertrag.json)
+  phaseAnzeigen(phase, "handy", {
+    "band": bandHatInhalt,
+    "ton-fehlt": !!(z.hoeren && z.assistent?.aktiv && !z.lautsprecher),
+    "mikro-erklaerung": !z.hoeren,
+    "btn-stopp": !z.simulation,
+  });
+  fragenPlatzieren(z.stufe);
+  $("fragen-hinweis").hidden = !(aktiv && z.stufe === "premium" && z.modus !== "knopfdruck");
+  fragen.ruhe();
 
   // Nestor
   const a = z.assistent;
@@ -311,7 +292,7 @@ function rendern() {
   const fragenDa = aktiv && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
   const bogen = !nurKnopf && a?.bogen;
   const frageBeschaeftigt = handyKnopfWartet || !!z.knopf?.laeuft || !!bogen;
-  $("btn-fragen").disabled = (!fragenDa || frageBeschaeftigt) && !haelt;
+  $("btn-fragen").disabled = (!fragenDa || frageBeschaeftigt) && !fragen.haelt;
   document.querySelectorAll(".h-knopf").forEach((b) => {
     b.disabled = handyKnopfWartet || !aktiv || !!z.knopf?.laeuft || !!bogen;
     if (b.dataset.knopf === "bild") b.hidden = z.stufe === "basis"; // Basis: kein Bildmodell
@@ -330,9 +311,6 @@ function rendern() {
   const hier = mikro.laeuft();
   $("btn-mikro").disabled = mikroStartet || ws?.readyState !== WebSocket.OPEN;
   $("mikro-titel").textContent = aktiv ? "Raummikrofon" : "Meeting vorbereiten";
-  $("mikro-vorbereitung").hidden = aktiv || beendet;
-  $("mikro-erklaerung").hidden = !!z.hoeren || beendet;
-  $("btn-mikro").hidden = beendet;
   const bereit = z.handys && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
   $("mikro-vorbereitung").textContent = mikroStartet ? "Mikrofon wird aktiviert – erlaube den Zugriff, falls dein Browser fragt."
     : bereit ? "✓ Mikrofon und Ton sind bereit. Du kannst das Meeting jetzt am Laptop starten. Lass diese Seite offen."
@@ -344,11 +322,9 @@ function rendern() {
     : z.hoeren ? "Handy hört zu – tippen zum Beenden" : "Bereit – hört zu, sobald das Meeting startet";
   $("quelle").textContent = !z.hoeren && !m.quelle ? "" : m.quelle === "handy" ? (hier ? "dieses Handy" : "ein anderes Handy")
     : m.quelle === "laptop" ? "Laptop hört zu" : "niemand hört zu";
-  $("btn-stumm").hidden = !aktiv;
   $("btn-stumm").textContent = z.stumm ? "Stumm aus – wieder zuhören" : "Stumm schalten";
 
   // Meeting
-  $("btn-start").hidden = aktiv || beendet;
   const startBereit = !!z.handys && m.quelle === "handy" && m.luecke != null && m.luecke <= 3 && z.lautsprecher === "handy";
   $("btn-start").disabled = !startBereit;
   if (!aktiv && !beendet) {
@@ -357,7 +333,6 @@ function rendern() {
         : m.quelle !== "handy" ? "Am Handy Mikrofon aktivieren"
           : m.luecke == null || m.luecke > 3 ? "Warte auf Handy-Audio" : "Am Handy Ton aktivieren";
   }
-  $("btn-stopp").hidden = !aktiv || z.simulation;
   $("meeting-text").textContent = aktiv ? "" : beendet ? "Meeting beendet – Zusammenfassung am Laptop. Neues Meeting dort einrichten."
     : "Agenda und Personen am Laptop einrichten; starten geht auch hier.";
 

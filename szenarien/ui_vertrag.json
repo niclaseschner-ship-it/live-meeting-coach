@@ -6,6 +6,8 @@
     "handy": "#53/#56: kein Meetingstart ohne gekoppeltes Handy mit aktivem Mikrofon und Ton; genau ein Handy (zweites wird abgewiesen).",
     "phasen": "#66: Inhalte, die in einer Phase nicht gebraucht werden, sind ausgeblendet – auf Handy und Desktop.",
     "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe – halten, sprechen, loslassen – mit gleicher Rückmeldung.",
+    "sprechtaste_handy": "#66 Kommentar (Referenzlauf 20261010-100500, handy_live): Premium funktioniert wie ein Telefon (Ansprache per Name) – die Sprechtaste ist dort nachgeordnet (unter „Weitere Aktionen“); in Basis (Funkgerät) bleibt sie die große Hauptbedienung.",
+    "handy_kopf": "#66 Kommentar: Der Meeting-Titel in der Handy-Kopfleiste wird nicht auf wenige Buchstaben abgeschnitten.",
     "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy."
   },
 
@@ -24,10 +26,12 @@
     "bedienmodell": "halten",
     "rueckmeldung_klasse": "haelt",
     "rueckmeldung_text": "Ich höre",
+    "_nach_loslassen": "Nach dem Loslassen verschwindet „haelt“, und der Knopf zeigt sichtbar, dass verarbeitet wird (oder das Ergebnis/den Fehler).",
     "knoepfe": [
       {"id": "agenda-mikro", "geraet": "desktop", "phase": "vorbereitung", "stufen": ["basis", "premium"], "name": "Agenda per Sprache"},
       {"id": "btn-taste", "geraet": "desktop", "phase": "live", "stufen": ["basis"], "name": "Sprechtaste"},
-      {"id": "btn-fragen", "geraet": "handy", "phase": "live", "stufen": ["basis", "premium"], "name": "Sprechtaste am Handy"}
+      {"id": "btn-fragen", "geraet": "handy", "phase": "live", "stufen": ["basis", "premium"], "name": "Sprechtaste am Handy",
+       "darstellung": {"basis": "haupt", "premium": "nachgeordnet"}}
     ]
   },
 
@@ -42,7 +46,7 @@
   "nachgeordnet": {
     "_zweck": "Gibt es, aber nur unter „Weitere Aktionen“ – nie neben den fünf Kernknöpfen.",
     "desktop": ["#knopf-leiste .zusatz-aktionen [data-knopf=\"bild\"]", "#knopf-leiste .zusatz-aktionen [data-knopf=\"regeln\"]", "#knopf-fragen"],
-    "handy": ["#h-nestor-karte .zusatz-aktionen [data-knopf=\"bild\"]", "#h-nestor-karte .zusatz-aktionen [data-knopf=\"regeln\"]"]
+    "handy": ["#h-nestor-karte .zusatz-aktionen [data-knopf=\"bild\"]", "#h-nestor-karte .zusatz-aktionen [data-knopf=\"regeln\"]", "#h-nestor-karte .zusatz-aktionen #btn-fragen"]
   },
 
   "bereiche": {
@@ -78,9 +82,11 @@
         "premium": {"pflicht": [], "verboten": [], "erlaubt": []}
       },
       "handy": {
-        "alle": {"pflicht": ["#h-nestor-karte", "#btn-fragen", "#modus"],
+        "alle": {"pflicht": ["#h-nestor-karte", "#modus"],
                  "verboten": ["#koppeln", "#mikro-vorbereitung"],
-                 "erlaubt": ["#mikro-karte", "#h-verlauf-karte", "#h-transkript-karte", "#h-meeting", "#band", "#warnung", "#ton-fehlt"]}
+                 "erlaubt": ["#mikro-karte", "#h-verlauf-karte", "#h-transkript-karte", "#h-meeting", "#band", "#warnung", "#ton-fehlt"]},
+        "basis": {"pflicht": ["#btn-fragen"], "verboten": [], "erlaubt": []},
+        "premium": {"pflicht": [], "verboten": ["#btn-fragen"], "erlaubt": []}
       }
     },
     "abschluss": {
@@ -88,6 +94,11 @@
         "alle": {"pflicht": ["#ab-datenspende", "#ab-protokoll", "#ab-paket", "#btn-fertig"],
                  "verboten": [],
                  "erlaubt": ["#ab-unterstuetzung"]}
+      },
+      "handy": {
+        "alle": {"pflicht": ["#h-meeting", "#meeting-text", "#modus"],
+                 "verboten": ["#h-nestor-karte", "#h-verlauf-karte", "#h-transkript-karte", "#mikro-karte", "#btn-fragen", "#btn-stopp", "#koppeln"],
+                 "erlaubt": ["#warnung"]}
       }
     }
   },

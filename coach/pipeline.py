@@ -274,6 +274,14 @@ class Coach:
                             meeting_sekunden=m.jetzt() if m.gestartet_um is not None else 0.0,
                             geplant_minuten=sum(p.minuten for p in m.agenda))
 
+    def phase(self) -> str:
+        """Ticket #66: die eine Phase, nach der Desktop und Handy schalten (static/phase.js) – abgeleitet, kein
+        eigener Zustand. live = Meeting oder Wiedergabe läuft; abschluss = ein Meeting wurde gestartet und ist vorbei
+        (bis /api/einrichten ein neues anlegt); sonst vorbereitung."""
+        if self.meeting.laeuft or self.simulation_laeuft:
+            return "live"
+        return "abschluss" if self.meeting.gestartet_um is not None else "vorbereitung"
+
     def schnappschuss(self) -> dict:
         daten = self.meeting.schnappschuss(EINST.zeit_rot_prozent)
         ampeln = analyse.prozess_ampeln(
@@ -289,6 +297,7 @@ class Coach:
         )
         daten.update(
             {
+                "phase": self.phase(),
                 "regel_status": self.regel_status(ampeln),
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,

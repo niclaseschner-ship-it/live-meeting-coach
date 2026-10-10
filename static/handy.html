@@ -78,9 +78,14 @@
         <button id="btn-still" class="gross" hidden><span class="i"></span>Stopp</button>
         <button id="btn-fortsetzen" class="gross warn" hidden><span class="i"></span>Wieder zuhören</button>
       </div>
-      <!-- Ticket #13/#27: die Sprechtaste (Funkgerät; in Premium die Alternative zum Namen) und dieselben Knöpfe wie
-           im Dashboard – jeder Knopf ein Antwortbogen, gesperrt, solange Nestor spricht -->
-      <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Sprechtaste – halten und sprechen</span></button>
+      <!-- Ticket #13/#27: die Sprechtaste und dieselben Knöpfe wie im Dashboard – jeder Knopf ein Antwortbogen,
+           gesperrt, solange Nestor spricht. #66: In Basis (Funkgerät) ist die Sprechtaste die Hauptbedienung; in
+           Premium spricht man Nestor mit Namen an wie am Telefon – dort steht sie klein unter „Weitere Aktionen“
+           (handy.js verschiebt sie zwischen #fragen-haupt und #fragen-rueckfall). -->
+      <p id="fragen-hinweis" class="leise" hidden>Sprich Nestor mit Namen an – „Nestor, …“ – er antwortet wie am Telefon.</p>
+      <div id="fragen-haupt">
+        <button id="btn-fragen" class="h-halten primaer"><span class="i"></span><span id="fragen-text">Sprechtaste – halten und sprechen</span></button>
+      </div>
       <p class="frage-kosten leise"></p>
       <label class="h-umfang">Überblick für <select id="h-ueberblick-umfang"><option value="aktuell">Punkt</option><option value="gesamt">Meeting</option></select></label>
       <div class="h-knopfraster">
@@ -93,6 +98,7 @@
       <details class="zusatz-aktionen">
         <summary>Weitere Aktionen</summary>
         <div class="zusatz-aktionen-inhalt">
+          <div id="fragen-rueckfall"></div>
           <button class="h-knopf" data-knopf="bild" data-label="Meetingbild"><span class="aktion-name">Meetingbild</span><span class="aktion-preis"></span></button>
           <button class="h-knopf" data-knopf="regeln" data-label="Regeln prüfen"><span class="aktion-name">Regeln prüfen</span><span class="aktion-preis"></span></button>
           <form id="h-frage-form" class="knopf-frage">
@@ -146,6 +152,7 @@
   </main>
 
   <script src="/static/basis.js"></script>
+  <script src="/static/phase.js"></script>
   <script src="/static/verlauf.js"></script>
   <script src="/static/handy.js"></script>
 </body>

@@ -3,8 +3,12 @@ body { background: var(--bg); padding-bottom: env(safe-area-inset-bottom); overs
 .h-kopf { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--flaeche); border-bottom: 1px solid var(--rand); }
 .h-logo { display: inline-flex; flex: none; }
-.h-titel { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
-.h-titel strong { font-size: 17px; color: var(--marke-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* #66: der Meeting-Titel darf nicht auf „V…“ schrumpfen – die Pills brechen in eine zweite Zeile, der Titel bekommt
+   die Breite neben dem Logo und darf zweizeilig werden */
+.h-kopf { flex-wrap: wrap; row-gap: 6px; }
+.h-titel { display: flex; flex-direction: column; min-width: 0; flex: 1 1 calc(100% - 50px); line-height: 1.2; }
+.h-titel strong { font-size: 17px; color: var(--marke-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .h-titel span { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px 16px 24px; }
@@ -80,8 +84,13 @@ main, .h-karte { min-width: 0; }
 .h-knopfraster button:disabled { opacity: .5; }
 .agenda-knoepfe .icon.haelt { background: var(--rot); border-color: var(--rot); color: #fff; }
 .zusatz-aktionen-inhalt .h-knopf { width: auto; }
-#app[data-phase="meeting"] #mikro-karte .h-mikro { min-height: 44px; padding: 8px 12px; font-size: 15px; border-radius: 12px; }
-#app[data-phase="meeting"] #mikro-karte .h-pegel { max-width: 180px; }
-#app[data-phase="meeting"] #mikro-karte .h-zeile.h-klein { justify-content: flex-start; }
+body[data-phase="live"] #mikro-karte .h-mikro { min-height: 44px; padding: 8px 12px; font-size: 15px; border-radius: 12px; }
+body[data-phase="live"] #mikro-karte .h-pegel { max-width: 180px; }
+body[data-phase="live"] #mikro-karte .h-zeile.h-klein { justify-content: flex-start; }
 #h-frage-form { flex: 1 1 100%; }
 #h-frage-form input { min-width: 0; flex: 1; }
+
+/* #66: Premium – Sprechtaste nur als kleine Rückfall-Taste unter „Weitere Aktionen“ */
+#fragen-rueckfall { flex: 1 1 100%; }
+.h-halten.rueckfall { margin-top: 0; padding: 10px 12px; font-size: 15px; width: auto; justify-content: flex-start; }
+.h-halten.rueckfall .i svg { width: 18px; height: 18px; }

@@ -91,7 +91,7 @@ def test_ui_selektoren_stehen_alle_in_den_vorgesehenen_html_dateien():
                    f'id=\"{ident}\"' in dokumente for ident in ids), \
             f"{key} passt nicht mehr zu static/*.html oder static/*.js"
     agenda_js = (ROOT / "static/agenda.js").read_text(encoding="utf-8")
-    assert 'id: "agenda-mikro"' in agenda_js and 'addEventListener("pointerdown", agendaMikroStart)' in agenda_js
+    assert 'id: "agenda-mikro"' in agenda_js and 'sprechknopf($("agenda-mikro")' in agenda_js
     assert '"agenda-senden"' in agenda_js and '"agenda-tabelle"' in agenda_js
 
 

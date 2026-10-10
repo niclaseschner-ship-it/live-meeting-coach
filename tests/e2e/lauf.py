@@ -253,7 +253,9 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
                     await schritte.sprechknopf_halten(seite, "#btn-taste", 2.5, lauf, "Sprechtaste (Basis)")
                     await schritte.sprechtaste_wirkung(seite, lauf)
                     await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
+                await schritte.sprechtaste_handy(handy, stufe, lauf)
                 await schritte.beenden_und_abschluss(seite, lauf, ordner)
+                await schritte.handy_abschluss(handy, lauf)
         except schritte.Abbruch as e:
             lauf.belege["abbruch"] = str(e)
             await lauf.bild(seite, "abbruch")
