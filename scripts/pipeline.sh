@@ -41,7 +41,12 @@ case "${1:-}" in
   # Ein B-Lauf zur Zeit auf der Maschine: feste Ports (18000/18787, Fakes) und ~1,5 GB RAM – parallele Läufe aus
   # mehreren Worktrees würden sich gegenseitig rot färben. Wartet, statt abzubrechen.
   b) shift; exec 9>"${HOME}/.cache/lmc-e2e/pipeline-b.lock"
-     flock -n 9 || { echo "▸ Ein anderer Stufe-B-Lauf läuft – warte …"; flock 9; }
+     # Unter einem äußeren `flock <dieselbe Datei> scripts/pipeline.sh …` hält der Elternprozess die Sperre schon –
+     # dann nicht noch einmal warten (das wäre eine Selbstblockade).
+     if ! flock -n 9; then
+       if ps -o args= -p "$PPID" | grep -q 'pipeline-b.lock'; then :
+       else echo "▸ Ein anderer Stufe-B-Lauf läuft – warte …"; flock 9; fi
+     fi
      stufe_b "$@" ;;
   *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
 esac
