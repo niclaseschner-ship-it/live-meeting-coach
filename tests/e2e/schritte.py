@@ -335,6 +335,10 @@ async def qr_lesen(page: Page, lauf: Lauf) -> str:
     await page.locator("#btn-handy-vorbereitung").click()
     qr = page.locator("#hf-qr svg")
     await qr.wait_for(state="visible", timeout=20_000)
+    box = await qr.bounding_box()
+    breite = float(await qr.get_attribute("width") or 0)
+    lauf.pruefen("QR-Code vollständig dargestellt (nicht beschnitten)", not breite or (box and box["width"] >= breite - 1),
+                 f"SVG {breite:.0f} px breit, angezeigt {box['width'] if box else 0:.0f} px")
     png = await qr.screenshot()
     (lauf.ordner / "qr.png").write_bytes(png)
     bild = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
@@ -352,7 +356,14 @@ async def qr_lesen(page: Page, lauf: Lauf) -> str:
     lauf.pruefen("QR-Bild dekodiert: /handy mit Kopplungscode und Meeting", bool(url) and teile.path == "/handy"
                  and "k" in q and "meeting" in q, f"Parameter {sorted(q)}")
     if not url:
-        raise Abbruch("QR-Code nicht lesbar")
+        # Der Fehler bleibt rot; damit der Rest des Durchlaufs trotzdem Befunde liefert, geht es mit dem Link
+        # neben dem QR-Code weiter (deutlich als Ersatzweg markiert).
+        link = page.locator("#hf-text a[href]")
+        url = await link.get_attribute("href") if await link.count() else ""
+        lauf.belege["qr_ersatzweg"] = "Link neben dem QR-Code statt dekodiertem Bild"
+        lauf.pruefen("Ersatzweg: Link neben dem QR-Code vorhanden", bool(url))
+        if not url:
+            raise Abbruch("QR-Code nicht lesbar, kein Link")
     return url
 
 
