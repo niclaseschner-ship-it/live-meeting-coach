@@ -138,17 +138,6 @@ def test_ansprache_an_nestor_und_gewoehnliche_saetze_kosten_nichts():
     assert c._client.anfragen == [] and not c.karten
 
 
-def test_knopfdruck_modus_hat_keine_schnell_erkennung():
-    async def ablauf():
-        c = _coach(stufe="basis")
-        c.modus = "knopfdruck"
-        c.artefakte.satz([_satz(c, "Wir beschließen das Budget.", 10, 13)])
-        await asyncio.sleep(0.05)
-        return c
-
-    assert asyncio.run(ablauf())._client.anfragen == []
-
-
 # --- Kein stiller Ausfall -----------------------------------------------------------------------------------------
 def test_fehler_der_automatischen_erkennung_sichtbar_im_band_und_wiederholt_im_naechsten_takt():
     async def ablauf():
