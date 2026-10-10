@@ -7,15 +7,7 @@
   <link rel="icon" href="/static/icons/nestor.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/start.css">
-  <style>
-    /* Nur für die Rechtstexte: schmale Lesespalte statt der Start-Layouts */
-    .r-seite { max-width: 640px; margin: 0 auto; padding: 36px 22px 48px; display: grid; gap: 18px; }
-    .r-seite h1 { font-size: 24px; margin: 0; color: var(--marke-2); }
-    .r-seite h2 { font-size: 16px; text-transform: none; letter-spacing: 0; margin: 18px 0 4px; }
-    .r-seite p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text-2); }
-    .r-seite .r-anschrift { margin: 0; display: grid; gap: 2px; font-size: 15px; color: var(--text-2); }
-    .r-seite a.r-zurueck { font-size: 14px; }
-  </style>
+  <link rel="stylesheet" href="/static/rechtstexte.css">
 </head>
 <body>
   <main class="r-seite">
@@ -36,20 +28,6 @@
       können Fehler enthalten – die Gruppe entscheidet selbst, nicht Nestor.</p>
   </main>
 
-  <script>
-    (async () => {
-      try {
-        const r = await fetch("/api/start");
-        if (!r.ok) return;
-        const d = await r.json();
-        if (d.impressum_name) document.getElementById("imp-name").textContent = d.impressum_name;
-        if (d.impressum_anschrift) {  // ohne Anschrift entfällt die Zeile (privates Projekt, Zugang nur nach Anmeldung)
-          document.getElementById("imp-anschrift").textContent = d.impressum_anschrift;
-          document.getElementById("imp-anschrift-zeile").hidden = false;
-        }
-        if (d.impressum_mail) document.getElementById("imp-mail").textContent = d.impressum_mail;
-      } catch { /* Vorgabe „[wird ergänzt]“ bleibt stehen */ }
-    })();
-  </script>
+  <script src="/static/rechtstexte.js"></script>
 </body>
 </html>

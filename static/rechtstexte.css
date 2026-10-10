@@ -1,0 +1,11 @@
+/* Nur für die Rechtstexte (impressum.html, datenschutz.html): schmale Lesespalte statt der Start-Layouts.
+   Ticket #63: aus dem Inline-<style>-Block hierher verschoben, damit die CSP ohne 'unsafe-inline' für
+   style-src bei diesen beiden Seiten auskommt (für die vom Worker selbst erzeugten Seiten bleibt die
+   dokumentierte, schmale Ausnahme – siehe cloudflare/src/sicherheit.ts). */
+.r-seite { max-width: 640px; margin: 0 auto; padding: 36px 22px 48px; display: grid; gap: 18px; }
+.r-seite h1 { font-size: 24px; margin: 0; color: var(--marke-2); }
+.r-seite h2 { font-size: 16px; text-transform: none; letter-spacing: 0; margin: 18px 0 4px; }
+.r-seite p, .r-seite li { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text-2); }
+.r-seite ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.r-seite .r-anschrift { margin: 0; display: grid; gap: 2px; font-size: 15px; color: var(--text-2); }
+.r-seite a.r-zurueck { font-size: 14px; }
