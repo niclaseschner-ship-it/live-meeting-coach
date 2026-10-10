@@ -7,20 +7,24 @@
  */
 
 import { Container, getContainer } from "@cloudflare/containers";
-import { cookieLesen, cookiePruefen, cookieSigniere, kundeFuerPasswort, type Kundenliste } from "./anmeldung";
-import { KundenZaehler } from "./zaehler";
+import { cookieLesen, kundeFuerPasswort, pruefeMitAblauf, signiereMitAblauf, type Kundenliste } from "./anmeldung";
+import { kopplungstokenPruefen, kopplungstokenSigniere, meetingCookiePruefen, meetingCookieSigniere, type MeetingTicket } from "./meeting";
 import {
-  interessentLesen, interessentenListe, interessentSpeichern, normalisiereAnmeldung, pinErzeugen, pinMailSenden, pinPruefen,
-  pinSeite, registrierungsSeite,
+  interessentLesen, interessentenListe, interessentSpeichern, kundeAktiv, normalisiereAnmeldung, pinErzeugen,
+  pinMailSenden, pinPruefen, pinSeite, registrierungsSeite, statusCacheErzeugen,
 } from "./pilotzugang";
+import { IpZaehler } from "./ratenbegrenzung";
+import { containerAufrufenOderAusweichen, mitSicherheitsheadern, workerGeheimnisPasst } from "./sicherheit";
 import { meetingKurz, telegramMelden } from "./telegram";
 import { mitVariantenwahl } from "./variantenwahl";
+import { KundenZaehler } from "./zaehler";
 
-export { KundenZaehler };
+export { IpZaehler, KundenZaehler };
 
 export interface Env {
   NESTOR: DurableObjectNamespace<Nestor>;
   ZAEHLER: DurableObjectNamespace<KundenZaehler>;
+  RATENBEGRENZUNG: DurableObjectNamespace<IpZaehler>; // Ticket #63: IP-Ratenbegrenzung für /anmelden und /pin
   SPENDEN: R2Bucket;
   ASSETS: Fetcher; // Bilder der Anmeldeseite
   PAYPAL_ME?: string; // Secret – PayPal.me-Name für die Unterstützung
@@ -168,6 +172,29 @@ function melden(ctx: ExecutionContext, env: Env, text: string): void {
   ctx.waitUntil(telegramMelden(env, text).catch((e) => console.error("Telegram-Meldung fehlgeschlagen", e)));
 }
 
+/** Ein kurzlebiger, per Isolate gehaltener Cache: "gesperrt"/"wartet" wirkt binnen ≤5 min, ohne jede Anfrage
+ * gegen R2 zu prüfen (Ticket #63, Befund 3 / U2). Siehe `kundeAktiv` in pilotzugang.ts für die Begründung. */
+const statusCache = statusCacheErzeugen();
+
+/** IP-Ratenbegrenzung für `/anmelden` und `/pin` (Ticket #63, Befund 2): ein `IpZaehler`-Durable-Object je
+ * IP-Adresse, zusätzlich zur bestehenden Pro-Adresse-Sperre in pilotzugang.ts. Fehlt die IP (z. B. im Test),
+ * teilen sich alle Anfragen ein gemeinsames Kontingent – sicherer als gar keine Begrenzung. */
+async function ratenOk(env: Env, request: Request, zweck: string, limit: number, fensterMs: number): Promise<boolean> {
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unbekannt";
+  const stub = env.RATENBEGRENZUNG.get(env.RATENBEGRENZUNG.idFromName(ip));
+  const antwort = await stub.fetch("https://ratenbegrenzung/pruefen", {
+    method: "POST", body: JSON.stringify({ zweck, limit, fensterMs }),
+  });
+  const ergebnis = await antwort.json() as { erlaubt?: boolean };
+  return !!ergebnis.erlaubt;
+}
+
+const ZU_VIELE_VERSUCHE_SEITE = registrierungsSeite("Zu viele Versuche von dieser Verbindung. Bitte später erneut versuchen.");
+const ZU_VIELE_PIN_VERSUCHE_SEITE = `<!doctype html><html lang="de"><head><meta charset="utf-8">` +
+  `<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">` +
+  `<title>Nestor</title></head><body><main style="font:16px system-ui;max-width:420px;margin:48px auto;padding:0 16px">` +
+  `<p>Zu viele Versuche von dieser Verbindung. Bitte in ein paar Minuten erneut versuchen.</p></main></body></html>`;
+
 async function handleAnmelden(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET") {
     if (new URL(request.url).searchParams.has("alt")) {
@@ -176,23 +203,33 @@ async function handleAnmelden(request: Request, env: Env, ctx: ExecutionContext)
     }
     return new Response(registrierungsSeite(), { headers: { "content-type": "text/html; charset=utf-8" } });
   }
+  // IP-Ratenbegrenzung (Ticket #63): max. 8 Anfragen je 10 min, unabhängig davon, ob Registrierung oder
+  // Passwort-Login – schützt vor Mail-Flut und vor massenhaftem Passwort-Raten gleichermaßen.
+  if (!(await ratenOk(env, request, "anmelden", 8, 10 * 60_000))) {
+    return new Response(ZU_VIELE_VERSUCHE_SEITE, { status: 429, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
   const form = await request.formData();
   const anmeldung = normalisiereAnmeldung(form);
   if (anmeldung) {
+    // Gleichlautende Antwort unabhängig vom Registrierungsstand (Ticket #63, Befund 2): ob die Mailadresse
+    // schon bekannt ist oder nicht, der Besucher sieht in jedem Fall dieselbe "Code ist unterwegs"-Seite. Nur
+    // innerhalb der bestehenden 60s-Kühlzeit für dieselbe Adresse wird kein zweiter Code verschickt (schützt
+    // Gmail vor Mail-Flut), ohne das über die Antwort zu verraten.
     const vorhanden = await interessentLesen(env, anmeldung.email);
-    if (vorhanden && Date.now() - vorhanden.letzter_pin_at < 60_000) {
-      return new Response(registrierungsSeite("Bitte warte eine Minute, bevor du einen neuen Code anforderst."),
-        { status: 429, headers: { "content-type": "text/html; charset=utf-8" } });
+    const kuehlzeitAktiv = !!vorhanden && Date.now() - vorhanden.letzter_pin_at < 60_000;
+    if (!kuehlzeitAktiv) {
+      const pin = pinErzeugen();
+      await interessentSpeichern(env, anmeldung, pin);
+      try {
+        await pinMailSenden(env, anmeldung, pin);
+      } catch {
+        // Zustellfehler sind kein Enumerationskanal (betrifft neue wie bekannte Adressen gleich), aber ein
+        // eigener Hinweis ist hier hilfreicher als eine stille Erfolgsseite.
+        return new Response(registrierungsSeite("Der Code konnte gerade nicht verschickt werden. Bitte versuche es später erneut."),
+          { status: 502, headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+      melden(ctx, env, `🟣 Nestor: Zugang angefordert\n${anmeldung.name}\n${anmeldung.email}\nKennt dich über: ${anmeldung.herkunft}`);
     }
-    const pin = pinErzeugen();
-    await interessentSpeichern(env, anmeldung, pin);
-    try {
-      await pinMailSenden(env, anmeldung, pin);
-    } catch {
-      return new Response(registrierungsSeite("Der Code konnte gerade nicht verschickt werden. Bitte versuche es später erneut."),
-        { status: 502, headers: { "content-type": "text/html; charset=utf-8" } });
-    }
-    melden(ctx, env, `🟣 Nestor: Zugang angefordert\n${anmeldung.name}\n${anmeldung.email}\nKennt dich über: ${anmeldung.herkunft}`);
     return new Response(pinSeite(anmeldung.email), { headers: { "content-type": "text/html; charset=utf-8" } });
   }
   if (!form.has("passwort")) {
@@ -204,13 +241,19 @@ async function handleAnmelden(request: Request, env: Env, ctx: ExecutionContext)
   if (!kunde) {
     return Response.redirect(new URL("/anmelden?falsch=1", request.url).toString(), 303);
   }
-  const cookieWert = await cookieSigniere(kunde, env.COOKIE_GEHEIMNIS);
+  const cookieWert = await signiereMitAblauf("kunde", kunde, env.COOKIE_GEHEIMNIS, Date.now(), DREISSIG_TAGE * 1000);
   const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
   return setzeCookie(antwort, KUNDE_COOKIE, cookieWert, DREISSIG_TAGE);
 }
 
 async function handlePin(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  // IP-Ratenbegrenzung (Ticket #63): max. 20 Versuche je 10 min – großzügiger als /anmelden, weil mehrere
+  // echte Nutzer hinter derselben IP (Büro-NAT) PINs eintippen können, aber eng genug gegen Rateversuche über
+  // viele Mailadressen hinweg (die bestehende Sperre in pilotzugang.ts ist nur pro Adresse).
+  if (!(await ratenOk(env, request, "pin", 20, 10 * 60_000))) {
+    return new Response(ZU_VIELE_PIN_VERSUCHE_SEITE, { status: 429, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
   const form = await request.formData();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const pin = String(form.get("pin") ?? "").trim();
@@ -225,25 +268,27 @@ async function handlePin(request: Request, env: Env, ctx: ExecutionContext): Pro
   }
   melden(ctx, env, `✅ Nestor: Zugang bestätigt\n${email}`);
   const antwort = Response.redirect(new URL("/", request.url).toString(), 303);
-  return setzeCookie(antwort, KUNDE_COOKIE, await cookieSigniere(email, env.COOKIE_GEHEIMNIS), DREISSIG_TAGE);
+  const cookieWert = await signiereMitAblauf("kunde", email, env.COOKIE_GEHEIMNIS, Date.now(), DREISSIG_TAGE * 1000);
+  return setzeCookie(antwort, KUNDE_COOKIE, cookieWert, DREISSIG_TAGE);
 }
 
 async function maxMeetingsFuer(env: Env, kunde: string): Promise<number> {
   const legacy = kundenliste(env)[kunde]?.max_meetings;
   if (legacy) return legacy;
   const row = await interessentLesen(env, kunde);
-  return row?.status === "aktiv" ? row.max_meetings : 1;
+  // gesperrt/wartet -> 0 statt 1 (Ticket #63, U2): „gesperrt“ darf kein neues Meeting mehr erlauben.
+  return row?.status === "aktiv" ? row.max_meetings : 0;
 }
 
 async function handleInteressenten(request: Request, env: Env): Promise<Response> {
-  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) return new Response("Nicht erlaubt.", { status: 403 });
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) return new Response("Nicht erlaubt.", { status: 403 });
   const rows = await interessentenListe(env);
   return Response.json(rows.map(({ pin_hash: _hash, pin_bis: _bis, pin_versuche: _versuche, ...sichtbar }) => sichtbar));
 }
 
 /** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
 async function handleSpende(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
-  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
@@ -273,7 +318,7 @@ function offenOhneAnmeldung(pfad: string): boolean {
 /** Meeting-Start melden (Ticket #12): vom Coach aufgerufen (`coach/server.py`, echtes `/api/start`), NICHT vom
  * normalen Seitenaufruf – ein Meeting zählt beim Kunden erst jetzt, nicht schon beim Ansehen der Startseite. */
 async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
@@ -295,7 +340,7 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
  * stoppt den Container – `stop()` (SIGTERM; Doku: developers.cloudflare.com/containers/container-class/) reicht
  * für ein regulär beendetes Meeting, `destroy()` (SIGKILL) wäre nur für ein erzwungenes Ende nötig. */
 async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  if (request.headers.get("X-Nestor-Geheimnis") !== env.WORKER_GEHEIMNIS) {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
@@ -316,65 +361,112 @@ async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionConte
   return Response.json({ ok: true });
 }
 
+/** Mintet das kurzlebige Kopplungstoken für den QR-Code (Ticket #63, U1): vom Coach aufgerufen
+ * (`coach/server.py`, `/api/kopplung`, über das vorhandene `api_abschluss.worker_melden`-Muster), mit dem
+ * schon bekannten Worker-Geheimnis. Der Coach selbst kennt `COOKIE_GEHEIMNIS` nicht und kann das Token darum
+ * nicht selbst signieren – das macht ausschließlich der Worker. */
+async function handleKopplungstoken(request: Request, env: Env): Promise<Response> {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
+  if (!meetingId) return new Response("meetingId fehlt.", { status: 400 });
+  const token = await kopplungstokenSigniere({ meetingId, kunde: kunde ?? "" }, env.COOKIE_GEHEIMNIS);
+  return Response.json({ token });
+}
+
+/** Löst die für `getContainer` maßgebliche Meeting-Identität auf (Ticket #63, Befund 1 / U1): NIE aus dem
+ * rohen `?meeting=`-Parameter oder einem unsignierten Cookie, sondern ausschließlich aus einem gültigen,
+ * unabgelaufenen Meeting-Cookie oder einem gültigen, unabgelaufenen Kopplungstoken aus der QR-URL. Ohne beides
+ * gibt es nur dann eine neue Meeting-ID, wenn ein eingeloggter Kunde sie anfordert (Desktop-Login) – ein rein
+ * anonymer Aufruf bekommt gar keine. */
+async function meetingAufloesen(
+  request: Request, url: URL, env: Env, kunde: string | null,
+): Promise<{ ticket: MeetingTicket | null; neuGemintet: boolean }> {
+  const ausCookie = await meetingCookiePruefen(cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE), env.COOKIE_GEHEIMNIS);
+  if (ausCookie) return { ticket: ausCookie, neuGemintet: false };
+
+  const kopplungsParam = url.searchParams.get("meeting");
+  if (kopplungsParam) {
+    const ausToken = await kopplungstokenPruefen(kopplungsParam, env.COOKIE_GEHEIMNIS);
+    if (ausToken) return { ticket: ausToken, neuGemintet: true }; // neues Cookie setzen, Token nicht erneut nötig
+    return { ticket: null, neuGemintet: false }; // fremd/abgelaufen – NIE als meetingId übernehmen
+  }
+
+  if (kunde) return { ticket: { meetingId: crypto.randomUUID(), kunde }, neuGemintet: true };
+  return { ticket: null, neuGemintet: false };
+}
+
+/** Die eigentliche Zustellung, vor den Sicherheitsheadern (einzige Aufrufstelle unten im Export). */
+async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(request.url);
+  const pfad = url.pathname;
+
+  if (pfad.startsWith("/intern/spende/")) {
+    return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);
+  }
+  if (pfad === "/intern/meeting-start") {
+    return handleMeetingStart(request, env, ctx);
+  }
+  if (pfad === "/intern/meeting-ende") {
+    return handleMeetingEnde(request, env, ctx);
+  }
+  if (pfad === "/intern/kopplungstoken") {
+    return handleKopplungstoken(request, env);
+  }
+  if (pfad === "/anmelden") {
+    return handleAnmelden(request, env, ctx);
+  }
+  if (pfad === "/pin") {
+    return handlePin(request, env, ctx);
+  }
+  if (pfad === "/intern/interessenten") {
+    return handleInteressenten(request, env);
+  }
+  if (pfad.startsWith("/teaser/")) {
+    return env.ASSETS.fetch(request); // Bilder der Anmeldeseite (cloudflare/oeffentlich/teaser/)
+  }
+
+  let kunde = await pruefeMitAblauf<string>("kunde", cookieLesen(request.headers.get("Cookie"), KUNDE_COOKIE), env.COOKIE_GEHEIMNIS, Date.now());
+  if (kunde && !(await kundeAktiv(env, kunde, statusCache))) kunde = null; // gesperrt/wartet wirkt sofort (≤5 min Cache)
+
+  // Meeting-Zuordnung NUR aus einer gültigen, unabgelaufenen Signatur (Cookie oder Kopplungstoken) – niemals
+  // aus einem rohen `?meeting=`-Wert oder unsigniertem Cookie (Ticket #63, Befund 1). Ohne gültige Signatur
+  // und ohne Login gibt es gar keine Meeting-ID und damit auch kein `getContainer` weiter unten.
+  const { ticket, neuGemintet } = await meetingAufloesen(request, url, env, kunde);
+  const lmcKopplungVorhanden = !!cookieLesen(request.headers.get("Cookie"), "lmc_kopplung");
+  const gekoppelt = !!ticket && !kunde && lmcKopplungVorhanden;
+
+  if (!kunde && !gekoppelt && !offenOhneAnmeldung(pfad)) {
+    return Response.redirect(new URL("/anmelden", request.url).toString(), 303);
+  }
+  if (!ticket) {
+    // offenOhneAnmeldung (z. B. /handy ohne noch gültiges Token/Cookie) – bewusst KEIN Container für anonyme
+    // Aufrufe (Ticket #63, Mindestanforderung aus U4): derselbe Hinweis wie zuvor, nur ohne je `getContainer`
+    // zu erreichen.
+    return new Response("Kein Meeting zugeordnet – bitte den QR-Code am Dashboard scannen.", { status: 400 });
+  }
+
+  const kopfzeilen = new Headers(request.headers);
+  kopfzeilen.set("X-Nestor-Geheimnis", env.WORKER_GEHEIMNIS);
+  kopfzeilen.set("X-Nestor-Meeting", ticket.meetingId);
+  kopfzeilen.delete("X-Nestor-Kunde");
+  if (kunde) kopfzeilen.set("X-Nestor-Kunde", kunde);
+  const weitergeleitet = new Request(request, { headers: kopfzeilen });
+
+  const container = getContainer(env.NESTOR, ticket.meetingId);
+  let antwort = await containerAufrufenOderAusweichen(
+    () => container.fetch(weitergeleitet), (text) => melden(ctx, env, text), pfad,
+  );
+  if (neuGemintet) {
+    antwort = setzeCookie(antwort, MEETING_COOKIE, await meetingCookieSigniere(ticket, env.COOKIE_GEHEIMNIS), DREISSIG_TAGE);
+  }
+  return antwort;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    const pfad = url.pathname;
-
-    if (pfad.startsWith("/intern/spende/")) {
-      return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);
-    }
-    if (pfad === "/intern/meeting-start") {
-      return handleMeetingStart(request, env, ctx);
-    }
-    if (pfad === "/intern/meeting-ende") {
-      return handleMeetingEnde(request, env, ctx);
-    }
-    if (pfad === "/anmelden") {
-      return handleAnmelden(request, env, ctx);
-    }
-    if (pfad === "/pin") {
-      return handlePin(request, env, ctx);
-    }
-    if (pfad === "/intern/interessenten") {
-      return handleInteressenten(request, env);
-    }
-    if (pfad.startsWith("/teaser/")) {
-      return env.ASSETS.fetch(request); // Bilder der Anmeldeseite (cloudflare/oeffentlich/teaser/)
-    }
-
-    const kunde = await cookiePruefen(cookieLesen(request.headers.get("Cookie"), KUNDE_COOKIE), env.COOKIE_GEHEIMNIS);
-    const gekoppelt = !!cookieLesen(request.headers.get("Cookie"), "lmc_kopplung")
-      && !!cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE);
-    if (!kunde && !gekoppelt && !offenOhneAnmeldung(pfad)) {
-      return Response.redirect(new URL("/anmelden", request.url).toString(), 303);
-    }
-
-    // Meeting-Zuordnung: Cookie, sonst ?meeting= aus dem QR-Code, sonst (nur mit Login) ein neues Meeting. Zählt
-    // hier noch NICHT gegen max_meetings (Ticket #12) – das meldet der Coach erst beim echten Start
-    // (`/api/start` → `/intern/meeting-start`), damit das bloße Ansehen der Startseite niemanden blockiert.
-    let meetingId = url.searchParams.get("meeting") ?? cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE);
-    let cookieSetzen: string | null = null;
-    if (!meetingId) {
-      if (!kunde) {
-        return new Response("Kein Meeting zugeordnet – bitte den QR-Code am Dashboard scannen.", { status: 400 });
-      }
-      meetingId = crypto.randomUUID();
-      cookieSetzen = meetingId;
-    } else if (url.searchParams.get("meeting")) {
-      cookieSetzen = meetingId; // aus der QR-URL übernommen (Handy) – eigenes Cookie, damit es gekoppelt bleibt
-    }
-
-    const kopfzeilen = new Headers(request.headers);
-    kopfzeilen.set("X-Nestor-Geheimnis", env.WORKER_GEHEIMNIS);
-    kopfzeilen.set("X-Nestor-Meeting", meetingId);
-    kopfzeilen.delete("X-Nestor-Kunde");
-    if (kunde) kopfzeilen.set("X-Nestor-Kunde", kunde);
-    const weitergeleitet = new Request(request, { headers: kopfzeilen });
-
-    const container = getContainer(env.NESTOR, meetingId);
-    let antwort = await container.fetch(weitergeleitet);
-    if (cookieSetzen) antwort = setzeCookie(antwort, MEETING_COOKIE, cookieSetzen, DREISSIG_TAGE);
-    return antwort;
+    return mitSicherheitsheadern(await kern(request, env, ctx));
   },
 } satisfies ExportedHandler<Env>;
