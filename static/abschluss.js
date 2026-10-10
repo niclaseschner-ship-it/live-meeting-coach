@@ -1,6 +1,8 @@
 "use strict";
 
-// Abschlussseite (Lastenheft 2 Schritt 5, 4.4–4.6): Paket, Unterstützung, Datenspende und Feedback.
+// Abschlussseite (Lastenheft 2 Schritt 5, 4.4–4.6): Datenspende, Unterstützung, Protokoll und Paket – in dieser
+// Reihenfolge seit Ticket #67 Punkt 1 auch schon in static/abschluss.html, die Datenspende muss vor dem endgültigen
+// Löschen sichtbar zuerst angeboten werden.
 
 let letzterStand = null;
 let nachlademen = null;
@@ -21,11 +23,10 @@ function rueckkehrAnzeigen(bis) {
   };
   rueckkehrTimer = setInterval(tick, 1000); tick();
 }
-// Gewünschte Reihenfolge: Daten spenden, Kosten ausgleichen, Dokument und Download.
-$("ab-inhalt").append($("ab-datenspende"), $("ab-unterstuetzung"), $("ab-protokoll"), $("ab-paket"));
-
 async function laden() {
-  const r = await fetch("/api/abschluss");
+  // #67 Punkt 2: ohne "no-store" spielt der Browser bei Zurück-/Vorwärts-Navigation die zwischengespeicherte
+  // Antwort von VOR dem Abschließen erneut aus (rueckkehr_bis fehlt dann) statt den echten, aktuellen Stand zu holen.
+  const r = await fetch("/api/abschluss", { cache: "no-store" });
   if (!r.ok) {
     $("ab-leer").hidden = false;
     $("ab-kopf").hidden = true;
