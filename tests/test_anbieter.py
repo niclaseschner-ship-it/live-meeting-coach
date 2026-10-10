@@ -338,6 +338,16 @@ def test_start_ohne_bestaetigte_stufe_409(server_coach, monkeypatch):
     assert TestClient(server.app, client=("127.0.0.1", 5000)).get("/api/start").json()["stufe"] is None
 
 
+def test_start_ohne_schluessel_503_statt_meeting_ohne_ki(server_coach, monkeypatch):
+    server = server_coach
+    assert TestClient(server.app, client=("127.0.0.1", 5000)).post("/api/stufe", json={"stufe": "premium"}).status_code == 200
+    monkeypatch.delenv("LMC_OFFLINE", raising=False)
+    monkeypatch.setattr(server.coach, "_client", None)
+    monkeypatch.setattr(server.coach, "hoeren_starten", lambda: pytest.fail("ohne Schlüssel gestartet"))
+    r = TestClient(server.app, client=("127.0.0.1", 5000)).post("/api/start")
+    assert r.status_code == 503 and "nicht verbunden" in r.json()["detail"]
+
+
 def test_stufenwechsel_im_meeting_409(server_coach, monkeypatch):
     server = server_coach
     web = TestClient(server.app, client=("127.0.0.1", 5000))

@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -414,6 +415,11 @@ async def start(request: Request):
     wahl = coach.wahl
     if wahl is None:
         raise HTTPException(409, "Bitte Variante wählen: Basis oder Premium auf der Startseite.")
+    if coach._client is None and os.getenv("LMC_OFFLINE") != "1":
+        # Fehlende Verbindung ist ein sichtbarer Fehler, kein Meeting ohne KI und nie ein anderer Anbieter
+        raise HTTPException(503, f"Nestor {wahl.stufe.capitalize()} ist gerade nicht verbunden (Zugang zu "
+                                 f"{wahl.anbieter.capitalize()} fehlt). Bitte später erneut versuchen – "
+                                 "ein Wechsel auf einen anderen Anbieter findet nicht statt.")
     erwartet = request.headers.get("X-Nestor-Erwartete-Stufe")
     if erwartet and erwartet != wahl.stufe:
         raise HTTPException(409, "Die gewählte Variante stimmt nicht mit dem Server überein. Bitte auf der Startseite erneut wählen.")
