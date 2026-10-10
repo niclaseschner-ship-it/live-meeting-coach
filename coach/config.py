@@ -4,6 +4,7 @@ Alle Werte lassen sich über Umgebungsvariablen bzw. .env überschreiben.
 Die Standardwerte sind die Demo-Startwerte aus dem Lastenheft.
 """
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -249,6 +250,22 @@ def mistral_schluessel() -> str | None:
     """Nestor Basis: Niclas' Mistral-Schlüssel aus der Umgebung (Secret im Cloud-Betrieb). Kein Eintrag im Dashboard –
     der eigene Schlüssel auf der Startseite ist ein OpenAI-Schlüssel und gilt nur für Premium."""
     return os.getenv("LMC_MISTRAL_SCHLUESSEL") or os.getenv("MISTRAL_API_KEY") or None
+
+
+# --- Version (Ticket #65) -------------------------------------------------------------------------------------
+# `deploy/deploy.sh` schreibt diese Datei unmittelbar vor dem Containerbau (gitignored, landet über
+# `COPY coach ./coach` automatisch im Image). Lokal ohne Deploy gibt es sie nicht – dann bleiben beide Felder
+# None, das ist kein Fehler.
+_VERSIONSDATEI = WURZEL / "coach" / "version.json"
+
+
+def versionsinfo() -> dict:
+    """GIT_SHA und Bauzeit (UTC) des laufenden Stands, für GET /api/version. Kein Geheimnis."""
+    try:
+        daten = json.loads(_VERSIONSDATEI.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"git_sha": None, "gebaut_am": None}
+    return {"git_sha": daten.get("git_sha"), "gebaut_am": daten.get("gebaut_am")}
 
 
 # Anfragen des Containers an den eigenen Worker: Cloudflare weist die Standardkennung von urllib

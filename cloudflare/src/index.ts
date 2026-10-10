@@ -46,6 +46,8 @@ export interface Env {
   WORKER_URL: string; // Var – eigene Adresse, für den Rückruf aus dem Container (Datenspende); nach dem
   // ersten Deploy in wrangler.jsonc eintragen, siehe README.md
   LOKAL_COACH_URL?: string; // NUR Test-Pipeline (#61, `wrangler dev`): lokaler uvicorn statt Container – in prod nie gesetzt
+  GIT_SHA?: string; // Var – von deploy/deploy.sh per `--var GIT_SHA:<sha> --keep-vars` gesetzt (Ticket #65)
+  BUILD_ZEIT?: string; // Var – dito, ISO-8601 UTC; beide ohne Deploy über deploy.sh leer (lokal, `wrangler dev`)
 }
 
 /** Der Nestor-Container selbst: ein Image, 8080, schläft nach Ruhe ein (siehe README zur Begründung). */
@@ -464,6 +466,14 @@ async function meetingAufloesen(
 async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const pfad = url.pathname;
+
+  // Ticket #65: Smoke-Test nach einem Deploy – ohne Container, ohne Login, ohne Kosten. Zeigt den SHA/die
+  // Bauzeit, mit denen DIESER WORKER deployt wurde (`--var GIT_SHA:… --var BUILD_ZEIT:… --keep-vars`,
+  // deploy/deploy.sh). GET /api/version auf dem Container selbst prüft zusätzlich, "falls erreichbar", ob der
+  // Container denselben Stand trägt (coach/server.py).
+  if (pfad === "/version") {
+    return Response.json({ git_sha: env.GIT_SHA ?? null, gebaut_am: env.BUILD_ZEIT ?? null });
+  }
 
   if (pfad.startsWith("/intern/spende/")) {
     return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);

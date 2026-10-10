@@ -1,0 +1,51 @@
+# Reproduzierbares Lockfile fürs Docker-Image (Ticket #65). Löst requirements.txt vollständig auf (inkl.
+# Transitiv-Abhängigkeiten, uvicorn[standard]) und pinnt exakte Versionen statt `>=` – ein Bau zieht immer
+# dieselben Pakete. uvloop/httptools/watchfiles kommen aus dem `standard`-Extra von uvicorn.
+#
+# Neu erzeugen (auf dem Pi zieht /etc/pip.conf sonst piwheels/ARM-Wheels):
+#   pip install pip-tools
+#   python -m piptools compile requirements.txt --output-file=requirements.lock \
+#     --no-annotate --strip-extras --no-emit-index-url --no-header \
+#     --pip-args "--index-url https://pypi.org/simple"
+# Das Dockerfile baut mit --platform linux/amd64 (Cloudflare Containers) – pip löst die Pins dort gegen die
+# amd64-Wheels von PyPI auf; geprüft mit `docker buildx build --platform linux/amd64` (README „Bauen: Pi oder
+# Windows-Laptop?“).
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+click==8.5.0
+fastapi==0.143.0
+flatbuffers==25.12.19
+h11==0.16.0
+httpcore2==2.13.1
+httptools==0.9.0
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.1
+jiter==0.17.0
+numpy==2.5.3
+onnxruntime==1.31.0
+openai==3.28.0
+opentelemetry-api==1.45.1
+packaging==26.3
+pluggy==1.6.0
+protobuf==7.36.2
+pydantic==2.14.0
+pydantic-core==2.50.0
+pygments==2.21.0
+pytest==9.1.1
+python-dotenv==1.2.4
+python-multipart==0.0.32
+pyyaml==6.0.3
+segno==1.6.6
+sherpa-onnx==1.13.8
+sherpa-onnx-core==1.13.8
+sniffio==1.3.1
+starlette==1.7.0
+truststore==0.10.4
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.54.0
+uvloop==0.23.0
+watchfiles==1.3.0
+websockets==17.2

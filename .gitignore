@@ -36,3 +36,6 @@ cloudflare/.dev.vars
 
 # Klick-E2E (Ticket #61): Test-Audio erzeugt tests/e2e/audio_bauen.py neu
 tests/e2e/audio/
+
+# Reproduzierbarer Deploy (Ticket #65): GIT_SHA/Bauzeit, von deploy/deploy.sh vor dem Containerbau erzeugt
+coach/version.json

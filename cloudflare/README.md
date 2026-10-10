@@ -289,3 +289,58 @@ bislang **nur diese Festlegung, nicht automatisiert**: R2 kennt kein TTL von sic
 einen Cron Trigger (`wrangler.jsonc` → `triggers.crons`) mit einem eigenen `scheduled`-Handler, der
 `interessentenListe` nach `erstellt_at` filtert und nie aktivierte, abgelaufene Datensätze löscht – das ist in
 diesem Ticket nicht mehr enthalten (offene Folge-Aufgabe).
+
+## Ausrollen und Zurückrollen (Ticket #65)
+
+Es gibt nur noch EINEN Weg, Nestor auszurollen: **`deploy/deploy.sh`** im Repo-Wurzelordner. Die früheren
+`/tmp/nestor_deploy.py`, `/tmp/nestor_rollout.py`, `/tmp/nestor_ui56_rollout.py` sind Geschichte – sie lagen
+auf der RAM-Disk des Pi, waren nicht versioniert und trugen Konto-/Anwendungs-IDs als Literal im Quelltext.
+
+```
+deploy/deploy.sh [--dry-run] [--ohne-b] [--erzwingen] [--tag-push]
+deploy/deploy.sh --ref <tag-oder-commit> [--erzwingen]      # Rollback / Re-Deploy
+```
+
+Was das Skript macht, in dieser Reihenfolge:
+
+1. **Git-Stand sauber und gepusht** (`git status --porcelain` leer, `HEAD` == Upstream) – nur im Normalfall,
+   nicht bei `--ref`.
+2. **`scripts/pipeline.sh a`** (pytest, Worker-vitest, `tsc --noEmit`).
+3. **GATE_B_C:** `logs/pipeline/<GIT_SHA>/b.ok` muss existieren – diese Markierung schreibt
+   `scripts/pipeline.sh b` selbst, aber nur nach einem grünen Lauf über **beide** Stufen (Basis und Premium;
+   ein Lauf mit `--stufe basis` oder `--stufe premium` allein reicht nicht). Fehlt sie, bricht der Deploy ab;
+   `--ohne-b` übersteuert das mit einer lauten Warnung.
+4. **`coach/version.json`** (gitignored) mit `git_sha` und `gebaut_am` (UTC) – landet über `COPY coach ./coach`
+   automatisch im Image. Build-Args wurden geprüft (`containers[].image_vars` in `wrangler.jsonc` existiert
+   und reicht `--build-arg` an `docker build` durch), aber das bräuchte einen pro Deploy veränderten Eintrag in
+   der versionierten `wrangler.jsonc` – die Datei ist der einfachere, deterministische Weg.
+5. Nur bei `--dry-run`: **`wrangler deploy --dry-run`** (baut das Image wirklich, lokal) und Schluss – kein
+   echter Deploy, kein Rollout, kein Smoke-Test, kein Git-Tag. Braucht kein Cloudflare-Token.
+6. Sonst: **keine laufenden Container-Instanzen** (Cloudflare-Containers-API, `deploy/rollout_warten.py
+   instanzen`) – sonst Abbruch, außer mit `--erzwingen`.
+7. **`wrangler deploy`** mit dem Cloudflare-Token aus `sudo -n zugang holen cloudflare-nestor`, ausschließlich
+   per Umgebungsvariable `CLOUDFLARE_API_TOKEN` an den Unterprozess, nie als Datei oder Log-Zeile. Dabei
+   `--var GIT_SHA:<sha> --var BUILD_ZEIT:<zeit> --keep-vars` – das sind die Felder, die die Worker-Route
+   `/version` zeigt (siehe unten).
+8. **Rollout abwarten** (`deploy/rollout_warten.py neuester-tag` + `warten --tag <tag>`, Logik aus dem
+   früheren `/tmp/nestor_rollout.py` – jetzt ohne hart kodierte Konto-/Anwendungs-ID: beide kommen aus
+   `CLOUDFLARE_ACCOUNT_ID`/`NESTOR_APPLICATION_ID`, mit automatischer Ermittlung über `wrangler whoami --json`
+   bzw. `wrangler containers list --json`, falls nicht gesetzt).
+9. **Smoke-Test** (`deploy/smoke.py`): Pflicht ist `GET <WORKER_URL>/version` – eine Route direkt im Worker
+   (`cloudflare/src/index.ts`), ohne Login und ohne Container, zeigt den gerade deployten `GIT_SHA`. Zusätzlich,
+   **falls erreichbar**: `GET /api/version` auf dem Container selbst (`coach/server.py`) – das geht nur mit
+   einem gültigen, schon eingeloggten `nestor_kunde`-Cookie (Umgebungsvariable `NESTOR_SMOKE_COOKIE`); ohne sie
+   wird dieser Teil übersprungen, nicht als Fehler gewertet (ein Container extra fürs Prüfen zu starten kostet
+   Geld und einen der zehn Plätze).
+10. **Git-Tag** `deploy-JJJJMMTT-HHMM` auf den deployten Commit; `git push` dafür nur mit `--tag-push`.
+
+**Rollback** heißt `deploy/deploy.sh --ref <tag>` (z. B. ein vorheriger `deploy-...`-Tag, oder jeder Commit).
+Das Skript checkt diesen Stand in einen eigenen, temporären Git-Worktree aus (räumt ihn danach wieder weg),
+baut und deployt genau diesen Code – Tests und GATE_B_C werden übersprungen (der Stand war ja schon einmal
+live), und es entsteht kein neuer Tag.
+
+**Vor dem ersten echten Deploy prüfen** (in diesem Ticket nicht möglich, da kein echter Deploy erlaubt war):
+Ob `wrangler whoami --json` wirklich ein `accounts`-Array mit `id` liefert und `wrangler containers list
+--json` einen Eintrag mit `name: "nestor-nestor"` – beide Annahmen stammen aus dem Lesen des `wrangler`-Quelltexts
+(Version 4.86.0), nicht aus einem echten Aufruf. Schlägt eine Ermittlung fehl, einfach `CLOUDFLARE_ACCOUNT_ID`
+bzw. `NESTOR_APPLICATION_ID` von Hand exportieren, bevor `deploy.sh` läuft.
