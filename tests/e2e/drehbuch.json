@@ -1,6 +1,5 @@
 {
   "_zweck": "Drehbuch der Fake-Anbieter (Ticket #61, Stufe B). Jede KI-Anfrage des Coachs muss hier eine Regel finden; eine unbekannte Anfrage beantworten die Fakes mit HTTP 500 und einem Protokolleintrag (Drift-Alarm, wenn sich Prompts ändern). Regeln werden von oben nach unten geprüft, die erste passende gewinnt. 'system_enthaelt' prüft die erste Nachricht (System oder, wenn es keine gibt, die einzige Nutzernachricht), 'nutzer_enthaelt' die letzte Nachricht. Alle Teilzeichenketten müssen vorkommen.",
-
   "audio": {
     "_zweck": "Grundlage für tests/e2e/audio_bauen.py (Piper, Stimme de_DE-thorsten-medium, CC0). Die Fake-Transkription gibt die Sätze in genau dieser Reihenfolge zurück.",
     "stimme": "de_DE-thorsten-medium",
@@ -11,13 +10,13 @@
       "Willkommen zur Vorstandssitzung, wir beginnen mit dem Sommerfest-Budget.",
       "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben und dreitausendfünfhundert Euro Zuschuss.",
       "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres.",
+      "Nestor, wie viel Budget haben wir für das Sommerfest beschlossen?",
       "Beim Vereinsbus prüfen wir noch, ob sich ein Kauf lohnt."
     ],
     "agenda_vorlauf_s": 0.3,
     "agenda_satz": "Bitte bereite eine kurze Vorstandssitzung vor. Ein Agendapunkt heißt Sommerfest-Budget, ein zweiter Vereinsbus-Prüfauftrag.",
     "agenda_nachlauf_s": 30.0
   },
-
   "transkription": {
     "_zweck": "Batch-Transkription (OpenAI /v1/audio/transcriptions, Mistral /v1/audio/transcriptions). Zuordnung über den Dateinamen, den der Coach mitschickt.",
     "beitrag.wav": "Bitte bereite eine kurze Vorstandssitzung vor. Ein Agendapunkt heißt Sommerfest-Budget, ein zweiter Vereinsbus-Prüfauftrag.",
@@ -25,7 +24,6 @@
     "aeusserung.wav": "@meeting_saetze",
     "agenda.wav": "Bitte bereite eine kurze Vorstandssitzung vor. Ein Agendapunkt heißt Sommerfest-Budget, ein zweiter Vereinsbus-Prüfauftrag."
   },
-
   "tts": {
     "_zweck": "Akustischer Fingerabdruck: jeder Anbieter spricht mit eigener Grundfrequenz. Premium muss am Handy nur openai_hz hören, Basis nur mistral_hz.",
     "openai_hz": 440,
@@ -34,111 +32,308 @@
     "min_s": 0.6,
     "max_s": 3.0
   },
-
   "begruessung_premium": "Hallo, ich bin Nestor und begleite heute euer Meeting als Moderationsassistent. Ich höre mit. Nicht einverstanden? Sagt Nein – auch später mit „Nestor, nein“. Dann lösche ich alles. Wir starten mit Punkt eins, Sommerfest-Budget.",
-
   "chat": [
     {
       "id": "agenda_rueckfrage",
-      "system_enthaelt": ["aus einer freien Eingabe eine Meeting-Agenda"],
-      "nutzer_enthaelt": ["etwas besprechen"],
-      "antwort": {"status": "rueckfrage", "titel": "", "ziel": "", "punkte": [], "teilnehmende": [],
-                  "antwort": "Worum soll es gehen, und was möchtet ihr am Ende entschieden haben?"}
+      "system_enthaelt": [
+        "aus einer freien Eingabe eine Meeting-Agenda"
+      ],
+      "nutzer_enthaelt": [
+        "etwas besprechen"
+      ],
+      "antwort": {
+        "status": "rueckfrage",
+        "titel": "",
+        "ziel": "",
+        "punkte": [],
+        "teilnehmende": [],
+        "antwort": "Worum soll es gehen, und was möchtet ihr am Ende entschieden haben?"
+      }
     },
     {
       "id": "agenda_entwurf",
-      "system_enthaelt": ["aus einer freien Eingabe eine Meeting-Agenda"],
-      "nutzer_enthaelt": ["Vorstandssitzung"],
-      "antwort": {"status": "entwurf", "titel": "Vorstandssitzung", "ziel": "Sommerfest-Budget beschließen und Vereinsbus prüfen",
-                  "punkte": [{"titel": "Sommerfest-Budget", "minuten": 15, "ziel": "Obergrenze beschließen"},
-                             {"titel": "Vereinsbus-Prüfauftrag", "minuten": 10, "ziel": "Prüfauftrag vergeben"}],
-                  "teilnehmende": [], "antwort": "Zwei Punkte, zusammen 25 Minuten (geschätzt)."}
+      "system_enthaelt": [
+        "aus einer freien Eingabe eine Meeting-Agenda"
+      ],
+      "nutzer_enthaelt": [
+        "Vorstandssitzung"
+      ],
+      "antwort": {
+        "status": "entwurf",
+        "titel": "Vorstandssitzung",
+        "ziel": "Sommerfest-Budget beschließen und Vereinsbus prüfen",
+        "punkte": [
+          {
+            "titel": "Sommerfest-Budget",
+            "minuten": 15,
+            "ziel": "Obergrenze beschließen"
+          },
+          {
+            "titel": "Vereinsbus-Prüfauftrag",
+            "minuten": 10,
+            "ziel": "Prüfauftrag vergeben"
+          }
+        ],
+        "teilnehmende": [],
+        "antwort": "Zwei Punkte, zusammen 25 Minuten (geschätzt)."
+      }
     },
     {
       "id": "themen_zuordnung",
-      "system_enthaelt": ["Ordne den Abschnitt inhaltlich zu"],
-      "antwort": {"punkt": 1, "art": "aktiv", "konfidenz": 0.9, "begruendung": "Es geht um das Sommerfest-Budget.", "ton": []}
+      "system_enthaelt": [
+        "Ordne den Abschnitt inhaltlich zu"
+      ],
+      "antwort": {
+        "punkt": 1,
+        "art": "aktiv",
+        "konfidenz": 0.9,
+        "begruendung": "Es geht um das Sommerfest-Budget.",
+        "ton": []
+      }
     },
     {
       "id": "artefakte_beschluss_und_aufgabe",
-      "system_enthaelt": ["neutraler Protokollhelfer"],
-      "nutzer_enthaelt": ["neuntausend", "Sabine"],
-      "antwort": {"artefakte": [
-        {"nummer": null, "typ": "entscheidung", "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
-         "wer": "die Runde", "bis": null, "status": "endgueltig", "reaktion": null, "hoch": false, "vage": false,
-         "ausserhalb": false, "erledigt": false, "gemeinsam": false, "korrigiert": false, "konfidenz": 0.9,
-         "zeit": "00:05", "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"},
-        {"nummer": null, "typ": "aufgabe", "was": "Fahrten der Jugend des letzten Jahres liefern", "wer": "Sabine",
-         "bis": "Freitag", "status": null, "reaktion": null, "hoch": false, "vage": false, "ausserhalb": false,
-         "erledigt": false, "gemeinsam": false, "korrigiert": false, "konfidenz": 0.9, "zeit": "00:12",
-         "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."}]}
+      "system_enthaelt": [
+        "neutraler Protokollhelfer"
+      ],
+      "nutzer_enthaelt": [
+        "neuntausend",
+        "Sabine"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "entscheidung",
+            "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
+            "wer": "die Runde",
+            "bis": null,
+            "status": "endgueltig",
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": "00:05",
+            "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"
+          },
+          {
+            "nummer": null,
+            "typ": "aufgabe",
+            "was": "Fahrten der Jugend des letzten Jahres liefern",
+            "wer": "Sabine",
+            "bis": "Freitag",
+            "status": null,
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": "00:12",
+            "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."
+          }
+        ]
+      }
     },
     {
       "id": "artefakte_beschluss",
-      "system_enthaelt": ["neutraler Protokollhelfer"],
-      "nutzer_enthaelt": ["neuntausend"],
-      "antwort": {"artefakte": [
-        {"nummer": null, "typ": "entscheidung", "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
-         "wer": "die Runde", "bis": null, "status": "endgueltig", "reaktion": null, "hoch": false, "vage": false,
-         "ausserhalb": false, "erledigt": false, "gemeinsam": false, "korrigiert": false, "konfidenz": 0.9,
-         "zeit": "00:05", "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"}]}
+      "system_enthaelt": [
+        "neutraler Protokollhelfer"
+      ],
+      "nutzer_enthaelt": [
+        "neuntausend"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "entscheidung",
+            "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
+            "wer": "die Runde",
+            "bis": null,
+            "status": "endgueltig",
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": "00:05",
+            "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"
+          }
+        ]
+      }
     },
     {
       "id": "artefakte_aufgabe",
-      "system_enthaelt": ["neutraler Protokollhelfer"],
-      "nutzer_enthaelt": ["Sabine"],
-      "antwort": {"artefakte": [
-        {"nummer": null, "typ": "aufgabe", "was": "Fahrten der Jugend des letzten Jahres liefern", "wer": "Sabine",
-         "bis": "Freitag", "status": null, "reaktion": null, "hoch": false, "vage": false, "ausserhalb": false,
-         "erledigt": false, "gemeinsam": false, "korrigiert": false, "konfidenz": 0.9, "zeit": "00:12",
-         "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."}]}
+      "system_enthaelt": [
+        "neutraler Protokollhelfer"
+      ],
+      "nutzer_enthaelt": [
+        "Sabine"
+      ],
+      "antwort": {
+        "artefakte": [
+          {
+            "nummer": null,
+            "typ": "aufgabe",
+            "was": "Fahrten der Jugend des letzten Jahres liefern",
+            "wer": "Sabine",
+            "bis": "Freitag",
+            "status": null,
+            "reaktion": null,
+            "hoch": false,
+            "vage": false,
+            "ausserhalb": false,
+            "erledigt": false,
+            "gemeinsam": false,
+            "korrigiert": false,
+            "konfidenz": 0.9,
+            "zeit": "00:12",
+            "zitat": "Sabine liefert bis Freitag die Fahrten der Jugend des letzten Jahres."
+          }
+        ]
+      }
     },
     {
       "id": "artefakte_nichts",
-      "system_enthaelt": ["neutraler Protokollhelfer"],
-      "antwort": {"artefakte": []}
+      "system_enthaelt": [
+        "neutraler Protokollhelfer"
+      ],
+      "antwort": {
+        "artefakte": []
+      }
     },
     {
       "id": "knopf_stand",
-      "system_enthaelt": ["Die Runde hat gefragt „Wo stehen"],
-      "antwort": {"titel": "Stand Sommerfest-Budget", "punkte": ["Punkt 1 Sommerfest-Budget läuft, Zeit reicht.",
-                  "Festgehalten: höchstens 9.000 Euro Ausgaben, 3.500 Euro Zuschuss.",
-                  "Sabine liefert bis Freitag die Fahrten.", "Vorschlag: weiter zum Vereinsbus."],
-                  "naechster_punkt": null, "sagen": "Hier ist sie. Das Budget steht, als Nächstes der Vereinsbus."}
+      "system_enthaelt": [
+        "Die Runde hat gefragt „Wo stehen"
+      ],
+      "antwort": {
+        "titel": "Stand Sommerfest-Budget",
+        "punkte": [
+          "Punkt 1 Sommerfest-Budget läuft, Zeit reicht.",
+          "Festgehalten: höchstens 9.000 Euro Ausgaben, 3.500 Euro Zuschuss.",
+          "Sabine liefert bis Freitag die Fahrten.",
+          "Vorschlag: weiter zum Vereinsbus."
+        ],
+        "naechster_punkt": null,
+        "sagen": "Hier ist sie. Das Budget steht, als Nächstes der Vereinsbus."
+      }
     },
     {
       "id": "moderationssatz",
-      "system_enthaelt": ["Auf dem Bildschirm erscheint gerade diese Karte"],
+      "system_enthaelt": [
+        "Auf dem Bildschirm erscheint gerade diese Karte"
+      ],
       "antwort_text": "Hier ist sie. Beim Budget seid ihr euch einig, Sabine hat ihre Aufgabe."
     },
     {
       "id": "einordnung",
-      "system_enthaelt": ["hat einer Besprechungsrunde gerade geantwortet"],
-      "antwort": {"einordnung": "nicht_an_nestor"}
+      "system_enthaelt": [
+        "hat einer Besprechungsrunde gerade geantwortet"
+      ],
+      "antwort": {
+        "einordnung": "nicht_an_nestor"
+      }
     },
     {
       "id": "ueberblick",
-      "system_enthaelt": ["den Überblick über ihr laufendes Meeting vor"],
-      "antwort": {"kernaussage": "Budget beschlossen, Vereinsbus noch offen.",
-                  "entschieden": [{"punkt": 1, "was": "höchstens 9.000 Euro Ausgaben, 3.500 Euro Zuschuss"}],
-                  "offen": [{"punkt": 2, "was": "Lohnt sich ein Kauf des Vereinsbusses?"}],
-                  "aufgaben": [{"was": "Fahrten der Jugend liefern", "wer": "Sabine", "bis": "Freitag"}],
-                  "ausserhalb": [], "neu": ["Budget beschlossen"]}
+      "system_enthaelt": [
+        "den Überblick über ihr laufendes Meeting vor"
+      ],
+      "antwort": {
+        "kernaussage": "Budget beschlossen, Vereinsbus noch offen.",
+        "entschieden": [
+          {
+            "punkt": 1,
+            "was": "höchstens 9.000 Euro Ausgaben, 3.500 Euro Zuschuss"
+          }
+        ],
+        "offen": [
+          {
+            "punkt": 2,
+            "was": "Lohnt sich ein Kauf des Vereinsbusses?"
+          }
+        ],
+        "aufgaben": [
+          {
+            "was": "Fahrten der Jugend liefern",
+            "wer": "Sabine",
+            "bis": "Freitag"
+          }
+        ],
+        "ausserhalb": [],
+        "neu": [
+          "Budget beschlossen"
+        ]
+      }
     },
     {
       "id": "assistent_antwort",
-      "system_enthaelt": ["antwortest nur, wenn man dich anspricht"],
+      "system_enthaelt": [
+        "antwortest nur, wenn man dich anspricht"
+      ],
       "antwort_text": "AKTION: keine\nSabine liefert die Fahrten bis Freitag."
     },
     {
+      "id": "karte_budget",
+      "system_enthaelt": [
+        "hast der Besprechungsrunde gerade kurz gesprochen geantwortet",
+        "Frage der Runde: wie viel Budget"
+      ],
+      "antwort": {
+        "zeigen": true,
+        "titel": "Sommerfest-Budget beschlossen",
+        "punkte": [
+          "Höchstens 9.000 Euro Ausgaben.",
+          "Höchstens 3.500 Euro Zuschuss."
+        ]
+      }
+    },
+    {
       "id": "karte_zur_antwort",
-      "system_enthaelt": ["hast der Besprechungsrunde gerade kurz gesprochen geantwortet"],
-      "antwort": {"zeigen": true, "titel": "Fahrten der Jugend", "punkte": ["Sabine liefert bis Freitag."]}
+      "system_enthaelt": [
+        "hast der Besprechungsrunde gerade kurz gesprochen geantwortet"
+      ],
+      "antwort": {
+        "zeigen": true,
+        "titel": "Antwort: Wer liefert die Fahrten",
+        "punkte": [
+          "Sabine liefert bis Freitag."
+        ]
+      }
     },
     {
       "id": "knopf_frage",
-      "system_enthaelt": ["Die Runde hat dir eine Frage getippt"],
-      "antwort": {"titel": "Fahrten der Jugend", "punkte": ["Sabine liefert sie bis Freitag."]}
+      "system_enthaelt": [
+        "Die Runde hat dir eine Frage getippt"
+      ],
+      "antwort": {
+        "titel": "Fahrten der Jugend",
+        "punkte": [
+          "Sabine liefert sie bis Freitag."
+        ]
+      }
     }
-  ]
+  ],
+  "realtime": [
+    {
+      "id": "ansprache_budget",
+      "frage_enthaelt": [
+        "Budget"
+      ],
+      "antwort_text": "Beschlossen sind höchstens neuntausend Euro Ausgaben und dreitausendfünfhundert Euro Zuschuss."
+    }
+  ],
+  "_ansprache": "Satz 4 spricht Nestor mit Namen an. Premium beantwortet ihn per Realtime (440 Hz, Karte „Sommerfest-Budget beschlossen“); Basis ignoriert die Ansprache (Funkgerät: nur Sprechtaste)."
 }

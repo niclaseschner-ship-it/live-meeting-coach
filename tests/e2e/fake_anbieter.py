@@ -223,7 +223,7 @@ def openai_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
         art = "live_text" if intent == "transcription" else "gespraech"
         a.protokoll(art="ws", pfad="/v1/realtime", ws_art=art, modell=modell, auth=bool(ws.headers.get("authorization")),
                     status=101)
-        puffer_bytes, n_item = 0, 0
+        puffer_bytes, n_item, letzte_frage = 0, 0, ""
         try:
             while True:
                 e = json.loads(await ws.receive_text())
@@ -247,8 +247,11 @@ def openai_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
                     await ws.send_text(json.dumps({"type": "conversation.item.input_audio_transcription.completed",
                                                    "item_id": item, "transcript": satz}))
                 elif typ == "response.create":
-                    await _realtime_antwort(ws, a, drehbuch, tts)
-                elif typ in ("conversation.item.create", "conversation.item.truncate", "response.cancel",
+                    await _realtime_antwort(ws, a, drehbuch, tts, letzte_frage)
+                elif typ == "conversation.item.create":
+                    inhalt = (e.get("item") or {}).get("content") or []
+                    letzte_frage = " ".join(str(t.get("text", "")) for t in inhalt if isinstance(t, dict))
+                elif typ in ("conversation.item.truncate", "response.cancel",
                              "input_audio_buffer.clear"):
                     pass
         except WebSocketDisconnect:
@@ -264,11 +267,22 @@ def openai_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
     ])
 
 
-async def _realtime_antwort(ws: WebSocket, a: Anbieter, drehbuch: Drehbuch, tts: dict) -> None:
+def realtime_text(drehbuch: Drehbuch, frage: str) -> tuple[str, str]:
+    """(Regel, Antworttext) für eine Realtime-Antwort: Begrüßung, eine Drehbuch-Antwort oder der Kartensatz."""
+    if "Begrüße" in frage:
+        return "begruessung", drehbuch.d["begruessung_premium"]
+    for regel in drehbuch.d.get("realtime", []):
+        if all(t in frage for t in regel["frage_enthaelt"]):
+            return regel["id"], regel["antwort_text"]
+    return "realtime_standard", "Hier ist sie. Das Wichtige steht auf der Karte."
+
+
+async def _realtime_antwort(ws: WebSocket, a: Anbieter, drehbuch: Drehbuch, tts: dict, frage: str = "") -> None:
     """Eine gesprochene Antwort des Realtime-Modells: Transkript-Deltas und 440-Hz-PCM in Stücken."""
-    text = drehbuch.d["begruessung_premium"]
+    regel, text = realtime_text(drehbuch, frage)
     dauer = ton_dauer(text, {**tts, "max_s": 6.0})
-    a.protokoll(art="ws_ereignis", pfad="/v1/realtime", ereignis="response", ton_hz=a.hz, ton_s=round(dauer, 2))
+    a.protokoll(art="ws_ereignis", pfad="/v1/realtime", ereignis="response", regel=regel, ton_hz=a.hz,
+                ton_s=round(dauer, 2))
     rid, item = f"resp_fake_{time.time_ns()}", f"item_out_{time.time_ns()}"
     await ws.send_text(json.dumps({"type": "response.created", "response": {"id": rid, "status": "in_progress"}}))
     pcm = (ton(a.hz, dauer) * 32767).astype("<i2").tobytes()
@@ -388,12 +402,11 @@ async def starten(log: Path, drehbuch_pfad: Path = DREHBUCH) -> None:
 
 
 def umgebung() -> dict[str, str]:
-    """Umlenkung des Coachs auf die Fakes (Vertrag aus #60 plus heutige SDK-Konvention für OpenAI-REST)."""
+    """Umlenkung des Coachs auf die Fakes – ausschließlich über die Endpunkt-Variablen aus coach/anbieter.py (#60)."""
     oa = f"http://{OPENAI_HOST}:{OPENAI_PORT}"
     mi = f"http://{MISTRAL_HOST}:{MISTRAL_PORT}"
     return {
         "LMC_OPENAI_URL": f"{oa}/v1",
-        "OPENAI_BASE_URL": f"{oa}/v1",  # bis #60: AsyncOpenAI ohne base_url liest diese SDK-Variable
         "LMC_OPENAI_WS_URL": f"ws://{OPENAI_HOST}:{OPENAI_PORT}/v1/realtime",
         "LMC_MISTRAL_URL": f"{mi}/v1",
         "LMC_MISTRAL_WS_URL": f"ws://{MISTRAL_HOST}:{MISTRAL_PORT}/v1/audio/transcriptions/realtime",

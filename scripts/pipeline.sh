@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test-Pipeline (Ticket #61). Ein Einstieg für alle Stufen, Ergebnisse unter logs/pipeline/<zeitstempel>/.
+# Test-Pipeline (Ticket #61). Ein Einstieg für alle Stufen, Ergebnisse unter <Hauptrepo>/logs/pipeline/<zeitstempel>/.
 #
 #   scripts/pipeline.sh a                                   Stufe A: pytest + Worker-Tests + TypeScript (~1,5 min)
 #   scripts/pipeline.sh b [--stufe basis|premium|beide] [--rauch]
@@ -13,7 +13,9 @@ WURZEL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="${LMC_PYTHON:-$WURZEL/.venv/bin/python}"
 [ -x "$PY" ] || PY="$(cd "$WURZEL" && git rev-parse --path-format=absolute --git-common-dir)/../.venv/bin/python"
 TS="$(date +%Y%m%d-%H%M%S)"
-AUSGABE="$WURZEL/logs/pipeline/$TS"
+# Berichte ins Hauptrepo (auch aus einem Worktree heraus), damit sie den Worktree überleben; logs/ ist gitignored
+HAUPT="$(cd "$(git -C "$WURZEL" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
+AUSGABE="${LMC_PIPELINE_AUSGABE:-$HAUPT/logs/pipeline}/$TS"
 export TMPDIR="${HOME}/.cache/lmc-e2e/tmp"
 mkdir -p "$TMPDIR"
 

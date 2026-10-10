@@ -192,7 +192,6 @@ def anbieterbeweis(ordner: Path, stufe: str, lauf: schritte.Lauf) -> None:
         "openai_anfragen": len(oa), "mistral_anfragen": len(mi), "eigene_endpunkte": arten,
         "regeln": sorted({e["regel"] for e in eigen if e.get("regel")}),
         "netzwaechter_verweigert": netz_versuche[:10], "unbekannte_prompts": unbekannt[:5],
-        "umlenkung": json.loads((ordner / "umlenkung.json").read_text()) if (ordner / "umlenkung.json").exists() else {},
     }
     lauf.pruefen(f"Anbieterbeweis: {fremd_name}-Protokoll leer", not fremd, f"{len(fremd)} Anfragen")
     lauf.pruefen("Anbieterbeweis: Anfragen beim Anbieter der Stufe", bool(eigen), f"{len(eigen)} Anfragen, {arten}")
@@ -202,10 +201,6 @@ def anbieterbeweis(ordner: Path, stufe: str, lauf: schritte.Lauf) -> None:
                  "; ".join(e.get("prompt_anfang", "")[:80] for e in unbekannt[:3]))
     live_ws = any(e.get("ws_art") == "live_text" for e in eigen)
     lauf.pruefen("Live-Text-WebSocket beim Anbieter der Stufe geöffnet", live_ws)
-    weg = lauf.belege["anbieterbeweis"]["umlenkung"].get("weg")
-    if weg == "testnaht_bis_60":
-        lauf.ausstehend("Realtime-WS über LMC_*_WS_URL aus coach/anbieter.py",
-                        "heute per Testnaht in tests/e2e/coach_app.py umgelenkt", "#60")
 
 
 # --- Durchlauf ----------------------------------------------------------------------------------------------------
@@ -214,7 +209,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
 
     lauf = schritte.Lauf(ordner, stufe, rauch)
     audio = audio_bauen.bauen()
-    lauf.belege["audio"] = {k: str(v.relative_to(WURZEL)) for k, v in audio.items()}
+    lauf.belege["audio"] = {k: str(v) for k, v in audio.items()}
     video = ordner / "video"
     gemeinsam = ["--no-sandbox", "--disable-gpu", "--renderer-process-limit=2", "--ignore-certificate-errors",
                  "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
@@ -249,15 +244,15 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
                            "Rauchmodus endet nach Meetingstart und einem Kernknopf")
             else:
                 await schritte.transkript_pruefen(seite, lauf)
+                await schritte.ansprache_pruefen(seite, lauf)
                 for art, soll in (("stand", "Stand Sommerfest-Budget"), ("zusammenfassen", "9.000"),
                                   ("fehlt", "fehlt"), ("protokoll", "Festgehalten"), ("ueberblick", "Budget beschlossen, Vereinsbus")):
                     await schritte.kernknopf(seite, art, soll, lauf)
                     await schritte.ton_abwarten(handy, lauf, art, 20)
                 if stufe == "basis":
                     await schritte.sprechknopf_halten(seite, "#btn-taste", 2.5, lauf, "Sprechtaste (Basis)")
+                    await schritte.sprechtaste_wirkung(seite, lauf)
                     await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
-                else:
-                    lauf.offen("Ansprache „Nestor, …“ per Sprache (Premium)", "Satz fehlt noch im Drehbuch-Audio")
                 await schritte.beenden_und_abschluss(seite, lauf, ordner)
         except schritte.Abbruch as e:
             lauf.belege["abbruch"] = str(e)
@@ -317,7 +312,10 @@ def main() -> int:
         print(f"Zu wenig freier Speicher: {frei} MB verfügbar, {MIN_FREI_MB} MB nötig.\n"
               "Hebel: /nebendienste aus (Immich und Paperless pausieren) – keine Prozesse abschießen.", file=sys.stderr)
         return 2
-    basis = Path(args.ordner) if args.ordner else WURZEL / "logs" / "pipeline" / datetime.now().strftime("%Y%m%d-%H%M%S") / "b"
+    gemeinsam = subprocess.run(["git", "-C", str(WURZEL), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                               capture_output=True, text=True).stdout.strip()
+    haupt = Path(gemeinsam).parent if gemeinsam else WURZEL  # Hauptrepo, auch aus einem Worktree heraus
+    basis = Path(args.ordner) if args.ordner else haupt / "logs" / "pipeline" / datetime.now().strftime("%Y%m%d-%H%M%S") / "b"
     stufen = ("basis", "premium") if args.stufe == "beide" else (args.stufe,)
     ergebnisse = {}
     for stufe in stufen:

@@ -337,8 +337,10 @@ async def qr_lesen(page: Page, lauf: Lauf) -> str:
     await qr.wait_for(state="visible", timeout=20_000)
     box = await qr.bounding_box()
     breite = float(await qr.get_attribute("width") or 0)
-    lauf.pruefen("QR-Code vollständig dargestellt (nicht beschnitten)", not breite or (box and box["width"] >= breite - 1),
-                 f"SVG {breite:.0f} px breit, angezeigt {box['width'] if box else 0:.0f} px")
+    viewbox = await qr.get_attribute("viewBox")
+    lauf.pruefen("QR-Code vollständig dargestellt (skalierbar, nicht beschnitten)",
+                 bool(box) and (bool(viewbox) or box["width"] >= breite - 1),
+                 f"viewBox={viewbox!r}, SVG-Breite {breite:.0f}, angezeigt {box['width'] if box else 0:.0f} px")
     png = await qr.screenshot()
     (lauf.ordner / "qr.png").write_bytes(png)
     bild = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
@@ -356,14 +358,7 @@ async def qr_lesen(page: Page, lauf: Lauf) -> str:
     lauf.pruefen("QR-Bild dekodiert: /handy mit Kopplungscode und Meeting", bool(url) and teile.path == "/handy"
                  and "k" in q and "meeting" in q, f"Parameter {sorted(q)}")
     if not url:
-        # Der Fehler bleibt rot; damit der Rest des Durchlaufs trotzdem Befunde liefert, geht es mit dem Link
-        # neben dem QR-Code weiter (deutlich als Ersatzweg markiert).
-        link = page.locator("#hf-text a[href]")
-        url = await link.get_attribute("href") if await link.count() else ""
-        lauf.belege["qr_ersatzweg"] = "Link neben dem QR-Code statt dekodiertem Bild"
-        lauf.pruefen("Ersatzweg: Link neben dem QR-Code vorhanden", bool(url))
-        if not url:
-            raise Abbruch("QR-Code nicht lesbar, kein Link")
+        raise Abbruch("QR-Code nicht lesbar – ohne dekodiertes Bild kein Handy-Weg")
     return url
 
 
@@ -558,3 +553,39 @@ async def ton_auswerten(handy: Page, stufe: str, lauf: Lauf) -> None:
     lauf.belege["ton_fingerabdruck"] = {"messungen": len(log), f"{soll}Hz": n_soll, f"{fremd}Hz": n_fremd}
     lauf.pruefen(f"Handy hört die Tonhöhe der Stufe ({soll} Hz)", n_soll > 0, f"{n_soll} von {len(log)} Messungen")
     lauf.pruefen(f"Handy hört nie die fremde Tonhöhe ({fremd} Hz)", n_fremd == 0, f"{n_fremd} Messungen")
+
+
+def fake_regeln(lauf: Lauf) -> list[str]:
+    """Welche Drehbuch-Regeln die Fakes bisher beantwortet haben (beide Anbieter, in Reihenfolge)."""
+    aus = []
+    for name in ("openai", "mistral"):
+        p = lauf.ordner / "fakes" / f"anfragen_{name}.jsonl"
+        if p.exists():
+            aus += [json.loads(z) for z in p.read_text(encoding="utf-8").splitlines()]
+    return [e["regel"] for e in sorted(aus, key=lambda e: e["t"]) if e.get("regel")]
+
+
+async def ansprache_pruefen(page: Page, lauf: Lauf) -> None:
+    """„Nestor, …“ im Mikrofon-Ton: Premium antwortet hörbar (Realtime) mit Karte, Basis ignoriert es (Funkgerät)."""
+    karte = "Sommerfest-Budget beschlossen"
+    if lauf.stufe == "premium":
+        da = await warte(page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(karte)})", 60)
+        regeln = fake_regeln(lauf)
+        lauf.pruefen("Premium: Ansprache „Nestor, …“ per Sprache beantwortet (Realtime) mit Karte",
+                     da and "ansprache_budget" in regeln, f"Karte={da}, Realtime-Antwort={'ansprache_budget' in regeln}")
+        await lauf.bild(page, "ansprache_premium")
+    else:
+        await asyncio.sleep(8)  # Zeit, in der eine (falsche) Antwort käme
+        regeln = fake_regeln(lauf)
+        geantwortet = [r for r in regeln if r in ("assistent_antwort", "karte_budget", "karte_zur_antwort", "ansprache_budget")]
+        sichtbar_ = karte in await text(page, "#vl-buehne")
+        lauf.pruefen("Basis: Ansprache „Nestor, …“ ohne Sprechtaste bleibt unbeantwortet", not geantwortet and not sichtbar_,
+                     f"Antwort-Regeln {geantwortet}, Karte={sichtbar_}")
+
+
+async def sprechtaste_wirkung(page: Page, lauf: Lauf) -> None:
+    da = await warte(page, "() => (document.getElementById('vl-buehne')?.innerText || '').includes('Antwort: Wer liefert die Fahrten')", 60)
+    regeln = fake_regeln(lauf)
+    lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar",
+                 da and "assistent_antwort" in regeln, f"Karte={da}, Antwort-Regel={'assistent_antwort' in regeln}")
+    await lauf.bild(page, "sprechtaste")

@@ -7,7 +7,17 @@ const aufrufe: { meetingId: string; url: string; kopf: Record<string, string> }[
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 vi.mock("@cloudflare/containers", () => ({
-  Container: class {},
+  // Basisklasse des Nestor-DO: „der Container“ – spiegelt Kopfzeilen und bestätigt /api/stufe wie der Coach
+  Container: class {
+    constructor(_ctx: unknown, _env: unknown) {}
+    async fetch(r: Request): Promise<Response> {
+      const kopf: Record<string, string> = {};
+      r.headers.forEach((v, k) => { kopf[k] = v; });
+      aufrufe.push({ meetingId: "DO", url: r.url, kopf });
+      if (new URL(r.url).pathname === "/api/stufe") return Response.json({ ok: true, stufe: "premium", modus: "live" });
+      return Response.json({ kopf });
+    }
+  },
   getContainer: (_ns: unknown, meetingId: string) => ({
     fetch: async (r: Request) => {
       const kopf: Record<string, string> = {};
@@ -18,7 +28,7 @@ vi.mock("@cloudflare/containers", () => ({
   }),
 }));
 
-const { default: worker, lokalerCoach } = await import("./index");
+const { default: worker, lokalerCoach, Nestor } = await import("./index");
 const { signiereMitAblauf } = await import("./anmeldung");
 const { kopplungstokenSigniere, meetingCookieSigniere } = await import("./meeting");
 
@@ -123,5 +133,36 @@ describe("Testnaht LOKAL_COACH_URL (nur wrangler dev der Pipeline)", () => {
     expect(gesehen[0].headers.get("X-Forwarded-Host")).toBe("nestor.test");
     expect(gesehen[0].headers.get("X-Nestor-Meeting")).toBe("M1");
     expect(antwort.headers.get("Set-Cookie") ?? "").toMatch(/nestor_meeting=/);
+  });
+});
+
+describe("Variantenwahl im Meeting-DO (Nestor.fetch vor dem Container)", () => {
+  const speicher = () => {
+    const daten = new Map<string, unknown>();
+    return { get: async (k: string) => daten.get(k), put: async (k: string, v: unknown) => { daten.set(k, v); } };
+  };
+  const doFuer = (storage: ReturnType<typeof speicher>) =>
+    new Nestor({ storage } as unknown as ConstructorParameters<typeof Nestor>[0], env as never);
+
+  it("ohne bestätigte Wahl geht keine Stufe mit, auch nicht die vom Browser behauptete", async () => {
+    await doFuer(speicher()).fetch(anfrage("/meeting", { "X-Nestor-Stufe": "basis" }));
+    expect(aufrufe[0].kopf["x-nestor-stufe"]).toBeUndefined();
+  });
+
+  it("vom Coach bestätigte Wahl gilt für alle Folgeanfragen dieses Meetings (auch nach Container-Neustart)", async () => {
+    const s = speicher();
+    await doFuer(s).fetch(new Request("https://nestor.test/api/stufe", { method: "POST", body: "{}" }));
+    await doFuer(s).fetch(anfrage("/meeting", { "X-Nestor-Stufe": "basis" })); // neue Instanz, gleicher Speicher
+    expect(aufrufe[1].kopf["x-nestor-stufe"]).toBe("premium");
+    expect(aufrufe[1].kopf["x-nestor-modus"]).toBe("live");
+  });
+
+  it("nach dem Meeting-Ende kommt 410, der Container wird nicht mehr erreicht", async () => {
+    const s = speicher();
+    const meeting = doFuer(s);
+    await meeting.meetingBeenden();
+    const antwort = await meeting.fetch(anfrage("/handy"));
+    expect(antwort.status).toBe(410);
+    expect(aufrufe).toHaveLength(0);
   });
 });

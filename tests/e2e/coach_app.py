@@ -1,13 +1,10 @@
-"""Coach für die lokale Klick-E2E (Ticket #61): `coach.server:app` mit drei Testnähten – alle hier, nichts in coach/.
+"""Coach für die lokale Klick-E2E (Ticket #61): `coach.server:app` mit zwei Testnähten – alle hier, nichts in coach/.
 
 1. **Netzwächter.** Jede Namensauflösung außerhalb von Loopback wird verweigert und protokolliert
    (`LMC_E2E_NETZLOG`, JSONL). Damit kann die Pipeline nie einen echten Anbieter erreichen, auch nicht bei einem
    vergessenen Endpunkt – ein solcher Versuch steht im Bericht als Fehler.
-2. **Übergangs-Umlenkung der Realtime-WebSockets** (bis #60 `coach/anbieter.py` liefert): heute stehen
-   `wss://api.openai.com/…` und `wss://api.mistral.ai/…` fest in `coach/livetext.py` und `coach/gespraech.py`. Hier
-   werden genau diese Modulkonstanten auf `LMC_OPENAI_WS_URL`/`LMC_MISTRAL_WS_URL` gesetzt – aber nur, solange sie
-   noch die echten Hosts tragen. Nach #60 greift die Umgebung direkt, und diese Naht tut nichts mehr
-   (`umlenkung.json` im Laufordner sagt, welcher Weg aktiv war).
+2. **Umlenkung auf die Fakes** geschieht allein über die Umgebung (`LMC_OPENAI_URL`, `LMC_OPENAI_WS_URL`,
+   `LMC_MISTRAL_URL`, `LMC_MISTRAL_WS_URL`, coach/anbieter.py aus #60) – hier gibt es dafür keine Naht.
 3. **Host wie hinter dem Worker.** Der lokale Worker (`LOKAL_COACH_URL`, cloudflare/src/index.ts) erreicht den Coach
    per `fetch`, der den Host aus der Ziel-URL nimmt; die ursprüngliche Adresse kommt als `X-Forwarded-Host`. In der
    Cloud sieht der Container den echten Host – das stellt diese Middleware nach, aber nur für Anfragen mit dem
@@ -55,25 +52,6 @@ def _waechter(host, *args, **kwargs):
 socket.getaddrinfo = _waechter
 
 
-def _umlenken() -> dict:
-    from coach import gespraech, livetext
-
-    stand: dict = {"weg": "umgebung"}
-    oa_ws, mi_ws = os.getenv("LMC_OPENAI_WS_URL"), os.getenv("LMC_MISTRAL_WS_URL")
-    if oa_ws and "api.openai.com" in getattr(livetext, "URL", ""):
-        livetext.URL = f"{oa_ws}?intent=transcription"
-        stand["livetext.URL"] = "übergangsweise umgelenkt"
-    if oa_ws and "api.openai.com" in getattr(gespraech, "URL", ""):
-        gespraech.URL = oa_ws + "?model={modell}"  # begruessung.py importiert URL zur Laufzeit aus gespraech
-        stand["gespraech.URL"] = "übergangsweise umgelenkt"
-    if mi_ws and "api.mistral.ai" in getattr(livetext, "MISTRAL_URL", ""):
-        livetext.MISTRAL_URL = mi_ws + "?model={modell}"
-        stand["livetext.MISTRAL_URL"] = "übergangsweise umgelenkt"
-    if len(stand) > 1:
-        stand["weg"] = "testnaht_bis_60"
-    return stand
-
-
 def _worker_tls() -> None:
     """wrangler dev --local-protocol https hat ein selbstsigniertes Zertifikat. Ohne Prüfung ist das hier vertretbar,
     weil der Netzwächter ohnehin nur Loopback-Ziele zulässt."""
@@ -99,11 +77,7 @@ class HostWieHinterWorker:
         await self.app(scope, receive, send)
 
 
-UMLENKUNG = _umlenken()
 _worker_tls()
-if os.getenv("LMC_E2E_LAUFORDNER"):
-    Path(os.environ["LMC_E2E_LAUFORDNER"], "umlenkung.json").write_text(
-        json.dumps(UMLENKUNG, ensure_ascii=False, indent=2), encoding="utf-8")
 
 from coach.server import app as _coach_app  # noqa: E402 – erst nach Wächter und Umlenkung
 
