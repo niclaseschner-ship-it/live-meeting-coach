@@ -733,9 +733,16 @@ function verbinden() {
   const rk = await fetch("/api/regeln").then((r) => r.json());
   regelkatalog = rk.katalog; regelwahl(rk.standard);
   personZeile(); personZeile();
-  const [szenarien, aufnahmen] = await Promise.all([fetch("/api/szenarien").then((r) => r.json()), fetch("/api/aufnahmen").then((r) => r.json())]);
+  // Szenarien und Aufnahmen: im Cloud-Betrieb liefern die Routen 404 (kein demo/ und szenarien/ im Image).
+  // Antwortet der Server nicht 200 (oder scheitert die Anfrage), laufen die Auswahlen einfach leer – die
+  // Seite läuft weiter. Leere Liste blendet die zugehörige Gruppe aus (siehe zeile-aufnahme unten).
+  const [szenarien, aufnahmen] = await Promise.all([
+    fetch("/api/szenarien").then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetch("/api/aufnahmen").then((r) => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
   $("f-szenario").replaceChildren(...szenarien.map((n) => el("option", { value: n }, n)));
   $("f-aufnahme").replaceChildren(...aufnahmen.map((n) => el("option", { value: n }, n)));
+  $("f-szenario").closest(".gruppe").hidden = !szenarien.length;
   $("zeile-aufnahme").hidden = !aufnahmen.length;
   verbinden();
 })();

@@ -63,25 +63,16 @@ def test_gesund_meldet_lokale_modelle(client):
     assert r.json()["modelle"] == erwartet
 
 
-@pytest.mark.parametrize("pfad,daten", [
-    ("/api/simulation", {"name": "x"}),
-    ("/api/abspielen", {"name": "x"}),
-    ("/api/onepager", None),
+@pytest.mark.parametrize("pfad,methode,daten", [
+    ("/api/simulation", "post", {"name": "x"}),
+    ("/api/abspielen", "post", {"name": "x"}),
+    ("/api/onepager", "post", None),
+    ("/api/szenarien", "get", None),
+    ("/api/aufnahmen", "get", None),
 ])
-def test_demo_endpunkte_in_der_cloud_404(cloud, pfad, daten):
-    antwort = cloud.post(pfad, json=daten, headers=GEHEIMNIS_KOPF)
+def test_demo_endpunkte_in_der_cloud_404(cloud, pfad, methode, daten):
+    antwort = cloud.request(methode, pfad, json=daten, headers=GEHEIMNIS_KOPF)
     assert antwort.status_code == 404
-
-
-@pytest.mark.parametrize("pfad", ["/api/szenarien", "/api/aufnahmen"])
-def test_listen_fuer_das_demo_formular_bleiben_in_der_cloud_erreichbar(cloud, pfad):
-    """static/app.js ruft beide bei jedem Seitenaufbau unbedingt ab (`.then(r => r.json())`, dann `.map(...)`)
-    – ein 404 dort würde das Vorbereitungs-Formular in der Cloud zuverlässig zerschießen. Im echten Cloud-Image
-    sind die Listen leer (demo/ und szenarien/ kommen nicht mit, siehe Dockerfile); hier im Testcheckout liegen
-    beide Ordner mit echtem Inhalt, es geht nur darum, dass die Route selbst nicht 404 wird."""
-    antwort = cloud.get(pfad, headers=GEHEIMNIS_KOPF)
-    assert antwort.status_code == 200
-    assert isinstance(antwort.json(), list)
 
 
 def test_demo_endpunkte_lokal_weiter_erreichbar(client):

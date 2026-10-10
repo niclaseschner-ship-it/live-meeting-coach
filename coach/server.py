@@ -567,14 +567,18 @@ def _aufnahmen() -> dict[str, Path]:
 
 @app.get("/api/aufnahmen")
 async def aufnahmen():
+    # Ticket #69: im Cloud-Betrieb 404 – demo/ kommt nicht ins Image; static/app.js verträgt das und blendet
+    # die Aufnahme-Auswahl einfach aus.
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     return list(_aufnahmen())
 
 
 @app.post("/api/abspielen")
 async def abspielen(daten: dict):
-    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus (die Liste GET /api/aufnahmen bleibt erreichbar –
-    # static/app.js ruft sie bei jedem Seitenaufbau unbedingt ab und braucht ein JSON-Array zurück, in der
-    # Cloud ohnehin leer, weil demo/ nicht ins Image kommt; nur die Start-Aktion selbst wird abgewiesen).
+    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus. GET /api/aufnahmen liefert dort ebenfalls 404
+    # (Ticket #69) – static/app.js verträgt das und blendet die Aufnahme-Auswahl aus; nur die Start-Aktion
+    # selbst wird hier abgewiesen.
     if EINST.betrieb == "cloud":
         raise HTTPException(404, "In der Cloud nicht verfügbar.")
     pfad = _aufnahmen().get(str(daten.get("name", "")))
@@ -660,14 +664,17 @@ async def vorschlag_verwerfen():
 
 @app.get("/api/szenarien")
 async def szenarien():
+    # Ticket #69: im Cloud-Betrieb 404 – szenarien/ kommt nicht ins Image; static/app.js verträgt das und
+    # blendet die Szenario-Auswahl einfach aus.
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     return sorted(p.stem for p in SZENARIEN.glob("*.json"))
 
 
 @app.post("/api/simulation")
 async def simulation(daten: dict):
-    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus (GET /api/szenarien bleibt erreichbar – siehe
-    # Begründung bei /api/abspielen oben; szenarien/ kommt ohnehin nicht ins Cloud-Image, die Liste ist dort
-    # schon heute leer).
+    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus. GET /api/szenarien liefert dort ebenfalls 404
+    # (Ticket #69) – static/app.js verträgt das und blendet die Szenario-Auswahl aus.
     if EINST.betrieb == "cloud":
         raise HTTPException(404, "In der Cloud nicht verfügbar.")
     pfad = SZENARIEN / f"{daten.get('name', '')}.json"
