@@ -173,6 +173,15 @@ def test_get_abschluss_mit_kosten_stufen_und_ablage_stand(beendetes_meeting):
         object.__setattr__(EINST, "paypal_me", alt)
 
 
+def test_get_abschluss_ohne_cache_damit_zurueck_navigation_nicht_den_alten_stand_zeigt(beendetes_meeting):
+    """Ticket #67 Punkt 2: ohne "Cache-Control: no-store" spielt der Browser bei einer Zurück-/Vorwärts-Navigation
+    die zwischengespeicherte GET-Antwort von VOR dem Abschließen erneut aus – "rueckkehr_bis" fehlt dann, obwohl
+    die Rückkehrfrist serverseitig längst läuft, und die Datenspende wirkt auf der Seite wie abgelaufen."""
+    r = _lokal().get("/api/abschluss")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-store"
+
+
 def test_get_abschluss_ohne_paypal_me_zeigt_keine_unterstuetzung(beendetes_meeting):
     alt = EINST.paypal_me
     object.__setattr__(EINST, "paypal_me", "")

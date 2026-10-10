@@ -37,24 +37,24 @@
     </div>
 
     <div id="ab-inhalt" hidden>
-      <section id="ab-protokoll" class="karte ab-dokument-karte">
-        <h2>Meeting-Dokument</h2>
-        <p class="leise-text">Prüft Namen, Termine und rot markierte Lücken. Danach könnt ihr das formatierte Dokument
-          direkt nach Word, Outlook, Teams oder Google Docs kopieren oder als PDF drucken.</p>
-        <label class="schalter"><input type="checkbox" id="dok-regeln"> <span>Regelanalyse aufnehmen</span></label>
-        <div id="ab-dokument" class="ab-dokument"></div>
-        <div class="ab-dokument-aktionen"><button id="btn-kopieren" class="primaer">Formatiert kopieren</button>
-          <button id="btn-drucken">Als PDF drucken</button></div>
-        <p id="dok-meldung" class="leise-text" hidden></p>
-      </section>
-      <!-- Euer Paket -->
-      <section id="ab-paket" class="karte">
-        <h2>Euer Paket</h2>
-        <p class="leise-text">Protokoll, Abschlussbild, Transkript, Agenda mit Zeitnutzung und Hinweisen – als ZIP
-          zum Herunterladen.</p>
-        <p id="ab-paket-hinweis" class="ab-wird-fertig leise-text" hidden>Die Ablage wird noch fertiggestellt …</p>
-        <label class="schalter"><input type="checkbox" id="pk-aufnahme"> <span>mit Aufnahme</span></label>
-        <button id="btn-paket" class="primaer">Herunterladen</button>
+      <!-- Reihenfolge (Ticket #67 Punkt 1, Begründung des Eigentümers): die Datenspende muss vor dem endgültigen
+           Löschen sichtbar zuerst angeboten werden – dann Unterstützung, Protokoll, zuletzt das Paket. -->
+
+      <!-- Nestor verbessern: allgemeines Feedback jetzt über den Feedback-Knopf unten rechts (feedback.js),
+           auf jeder Seite gleich erreichbar. Hier bleibt nur die Datenspende mit ihrer eigenen Anmerkung. -->
+      <section id="ab-datenspende" class="karte">
+        <h2>Datenspende</h2>
+        <label>Anmerkung zur Spende <small>optional</small>
+          <textarea id="fb-text" rows="3" placeholder="Was soll Nestor über diese Spende wissen?"></textarea>
+        </label>
+        <p id="ab-spende-hinweis" class="ab-wird-fertig leise-text" hidden>Die Ablage wird noch fertiggestellt …</p>
+        <p class="leise-text">Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
+          einzeln an oder wertet Inhalte aus.</p>
+        <label class="schalter"><input type="checkbox" id="sp-einverstanden">
+          <span>Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden</span></label>
+        <label class="schalter"><input type="checkbox" id="sp-aufnahme"> <span>mit Aufnahme</span></label>
+        <button id="btn-spende" class="primaer" disabled>Daten spenden</button>
+        <p id="sp-danke" class="leise-text" role="status" aria-live="polite" hidden>Danke! Die Datenspende wurde erfolgreich gespeichert.</p>
       </section>
 
       <!-- Nestor unterstützen -->
@@ -79,21 +79,25 @@
           <a id="ab-eigener-link" target="_blank" rel="noopener"></a></p>
       </section>
 
-      <!-- Nestor verbessern: allgemeines Feedback jetzt über den Feedback-Knopf unten rechts (feedback.js),
-           auf jeder Seite gleich erreichbar. Hier bleibt nur die Datenspende mit ihrer eigenen Anmerkung. -->
-      <section id="ab-datenspende" class="karte">
-        <h2>Datenspende</h2>
-        <label>Anmerkung zur Spende <small>optional</small>
-          <textarea id="fb-text" rows="3" placeholder="Was soll Nestor über diese Spende wissen?"></textarea>
-        </label>
-        <p id="ab-spende-hinweis" class="ab-wird-fertig leise-text" hidden>Die Ablage wird noch fertiggestellt …</p>
-        <p class="leise-text">Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
-          einzeln an oder wertet Inhalte aus.</p>
-        <label class="schalter"><input type="checkbox" id="sp-einverstanden">
-          <span>Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden</span></label>
-        <label class="schalter"><input type="checkbox" id="sp-aufnahme"> <span>mit Aufnahme</span></label>
-        <button id="btn-spende" class="primaer" disabled>Daten spenden</button>
-        <p id="sp-danke" class="leise-text" role="status" aria-live="polite" hidden>Danke! Die Datenspende wurde erfolgreich gespeichert.</p>
+      <section id="ab-protokoll" class="karte ab-dokument-karte">
+        <h2>Meeting-Dokument</h2>
+        <p class="leise-text">Prüft Namen, Termine und rot markierte Lücken. Danach könnt ihr das formatierte Dokument
+          direkt nach Word, Outlook, Teams oder Google Docs kopieren oder als PDF drucken.</p>
+        <label class="schalter"><input type="checkbox" id="dok-regeln"> <span>Regelanalyse aufnehmen</span></label>
+        <div id="ab-dokument" class="ab-dokument"></div>
+        <div class="ab-dokument-aktionen"><button id="btn-kopieren" class="primaer">Formatiert kopieren</button>
+          <button id="btn-drucken">Als PDF drucken</button></div>
+        <p id="dok-meldung" class="leise-text" hidden></p>
+      </section>
+
+      <!-- Euer Paket -->
+      <section id="ab-paket" class="karte">
+        <h2>Euer Paket</h2>
+        <p class="leise-text">Protokoll, Abschlussbild, Transkript, Agenda mit Zeitnutzung und Hinweisen – als ZIP
+          zum Herunterladen.</p>
+        <p id="ab-paket-hinweis" class="ab-wird-fertig leise-text" hidden>Die Ablage wird noch fertiggestellt …</p>
+        <label class="schalter"><input type="checkbox" id="pk-aufnahme"> <span>mit Aufnahme</span></label>
+        <button id="btn-paket" class="primaer">Herunterladen</button>
       </section>
     </div>
 

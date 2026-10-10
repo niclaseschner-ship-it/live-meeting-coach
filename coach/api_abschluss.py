@@ -15,7 +15,7 @@ import uuid
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from . import zugang
@@ -81,7 +81,12 @@ def _nach_ende():
 
 
 @router.get("/api/abschluss")
-async def abschluss():
+async def abschluss(response: Response):
+    # Ticket #67 Punkt 2: ohne diesen Header darf der Browser die Antwort cachen und spielt sie bei einer
+    # Zurück-/Vorwärts-Navigation unverändert erneut aus – mit der Rückkehrfrist vom Stand VOR dem Abschließen
+    # (rueckkehr_bis fehlt dann, obwohl sie serverseitig längst läuft). GET-Antworten dieses Meetings sind ohnehin
+    # pro Stand einmalig gültig, also nie zwischenspeichern.
+    response.headers["Cache-Control"] = "no-store"
     coach = _nach_ende()
     kosten_usd = coach.kosten_stand()["meeting"]
     liste = stufen(kosten_usd)
