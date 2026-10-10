@@ -260,10 +260,18 @@ Knopfdruck-Modus behebt den anderen.
   (`ki_erholt`).
 - **Ergebnisse zeitnah.** Neben der gebündelten Vollauswertung prüft eine Schnell-Erkennung jeden fertigen Satz mit
   einem lokalen Signalwort-Filter (`artefakte.signal()`: beschlossen/entschieden, Aufgabe mit Person, Termin/Frist,
-  offen ist, Risiko). Nur bei Treffer läuft ein kleiner Aufruf (`artefakte.SCHNELL`, Zuordnungsmodell der Stufe:
-  Premium `gpt-5.4-mini`, Basis `mistral-small-latest`, über die Anbieterfabrik); Neues erscheint als Karte
+  offen ist, Risiko). Nur bei Treffer läuft ein kurzer Aufruf (`artefakte.SCHNELL`, Analysemodell der Stufe:
+  Premium `gpt-5.4-mini`, Basis `mistral-medium-latest`, über die Anbieterfabrik); Neues erscheint als Karte
   „Gerade festgehalten“, in der Klick-E2E binnen 60 s nach dem Satz. Ansprachen an Nestor zählen nicht. Die
   Vollauswertung sieht die schnell erkannten Artefakte mit Nummer; derselbe Typ aus demselben Satz wird zusätzlich
   im Code zusammengeführt. Deckel: 60 Schnell-Aufrufe je Meetingstunde.
+- **Basis gleichwertig (Ticket #74).** Bis dahin lief die Schnell-Erkennung in Basis auf `mistral-small-latest`: Es
+  gab Beschlüsse nur als Thema wieder („Budgetrahmen festlegen“ statt der 9.000 €), erfand Nummern (Agendapunkte)
+  und hängte so eine Aufgabe an die Entscheidung, und ließ den Prüfauftrag weg. Seitdem: Analysemodell; beide
+  Prompts verlangen Beträge im Beschluss, nennen „prüfen wir noch, ob …“ als offenen Punkt und erlauben nur Nummern
+  aus „Schon festgehalten“; der Code ignoriert eine Nummer eines anderen Typs, eine Vollauswertung darf einem
+  erkannten Beschluss fehlende Zahlen nachtragen, und das Meetingdatum nennt den Wochentag. Antworten über den
+  Text-Weg (Sprechtaste) erscheinen immer als Karte – sagt das Kartenmodell „zeigen: false“, stehen die gesprochenen
+  Sätze darauf (`karten.verdichten(pflicht=True)`).
 - **Basis erklärt das Funkgerät.** Beim ersten ignorierten „Nestor, …“ steht einmal „In Basis: Sprechtaste halten,
   dann fragen …“ im Band, danach nicht mehr.

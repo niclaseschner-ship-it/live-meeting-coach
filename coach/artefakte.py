@@ -19,7 +19,8 @@ Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_art
 
 - **Schnell-Erkennung bei klaren Signalen** (Ticket #72): Fällt in einem fertigen Satz ein klares Signal
   („beschlossen“, „machst du bis“, „Termin“, „offen ist“ – Vorfilter `signal()`, lokal und kostenlos), prüft ein
-  kleiner, günstiger Aufruf nur diese Sätze (Zuordnungsmodell der Stufe, über die Anbieterfabrik). Neues kommt als
+  kurzer Aufruf nur diese Sätze (Analysemodell der Stufe, über die Anbieterfabrik – Ticket #74: das kleine
+  Zuordnungsmodell von Basis, mistral-small, ließ Beträge weg und erfand Nummern). Neues kommt als
   Karte „Gerade festgehalten“ in den Verlauf, meist binnen 10–20 s. Die gebündelte Vollauswertung bleibt; sie sieht die
   schnell erkannten Artefakte mit Nummer und ergänzt sie, statt sie doppelt anzulegen (`uebernehmen`).
 - **Kein stiller Ausfall** (Ticket #72): Scheitert ein Aufruf, steht das sichtbar im Band (coach/ki_fehler.py), und
@@ -200,11 +201,13 @@ Erkenne in den NEUEN Sätzen Meeting-Artefakte – unabhängig davon, ob sie zu 
   liefert bis Freitag“, „muss noch erstellt werden“). was = Handlung mit Verb und Gegenstand, kurz; bis = Termin wie
   gesagt; vage = true, wenn nur „prüfen/anschauen/klären“ ohne erkennbares Ergebnis.
 - entscheidung: etwas gilt ab jetzt („beschlossen“, „dann machen wir“, „halten wir fest“, „einverstanden“, „wir legen
-  uns heute nicht fest“). was = was gilt; status = "endgueltig" (beschlossen oder von der Runde bestätigt),
+  uns heute nicht fest“). was = was gilt, mit allen genannten Zahlen, Beträgen und Grenzen („Sommerfest: höchstens
+  9.000 Euro Ausgaben“) – nie nur das Thema („Budget festlegen“); status = "endgueltig" (beschlossen oder von der Runde bestätigt),
   "vorlaeufig" oder "vorschlag" (nur vorgeschlagen, „ich schlage vor“, „sollte“, noch nicht beschlossen); wer = wer
   entschieden hat („die Runde“, „Vorstand“, eine Person); bis = nur bei vorläufig: wann es wieder vorgelegt wird.
 - offen: Frage oder ungeklärter Punkt, der für später liegen bleibt („müssen wir noch klären“, „parken wir“, „die
-  Berechnung fehlt noch“, „darauf kommen wir zurück“). was = die Frage, präzise; wer = wer klärt; bis = bis wann oder
+  Berechnung fehlt noch“, „darauf kommen wir zurück“, „prüfen wir noch, ob …“ ohne Zuständige = Prüfauftrag). was =
+  die Frage, präzise; wer = wer klärt; bis = bis wann oder
   welcher Termin; ausserhalb = true, wenn es nicht zur Agenda gehört (Parkplatz).
 - risiko: mögliches KÜNFTIGES Problem („wenn X, dann“, „Gefahr“, „könnte uns verzögern“, „ist gefährdet“, „müssen
   aufpassen, dass“). was = Ursache → Auswirkung; wer = wer es beobachtet; reaktion = vermeiden/verringern/in Kauf
@@ -213,7 +216,8 @@ Was NICHT dazugehört:
 - Ankündigungen zum Ablauf des Meetings („heute müssen wir zu einer Zahl kommen“, „beim Bus reicht mir ein
   Überblick“), was die Runde gerade jetzt im Meeting tut („ich rekonstruiere die Zeitlinie“), Berichte
   über Vergangenes und Ursachen eines schon eingetretenen Vorfalls, Fragen, die gleich im Gespräch beantwortet werden,
-  und das Thema des Agendapunkts selbst.
+  und das bloße Thema eines Agendapunkts (ein konkreter Beschluss, eine Aufgabe oder ein Prüfauftrag dazu gehört
+  dagegen dazu).
 - Alles, was an den Assistenten „Nestor“ geht, auch Antworten auf seine Angebote („ja, mach eine Folie“).
 - Bruchstücke ohne erkennbaren Inhalt („kannst du das übernehmen?“, „und bis wann?“) – außer sie ergänzen ein
   festgehaltenes Artefakt eindeutig.
@@ -232,7 +236,8 @@ Felder:
   („Sabine liefert die Fahrten, Jörg die Kosten“), je Person eine Aufgabe.
 - Ergänzt ein neuer Satz ein festgehaltenes Artefakt (jemand übernimmt es, ein Termin kommt dazu, ein Vorschlag wird
   beschlossen, eine offene Frage wird beantwortet → erledigt = true), gib dessen nummer und nur die neuen Felder an.
-  Dasselbe Vorhaben mit anderen Worten ist kein neues Artefakt. Sonst nummer null.
+  Dasselbe Vorhaben mit anderen Worten ist kein neues Artefakt. Sonst nummer null – nur Nummern aus „Schon
+  festgehalten“, nie Agendapunkte.
 - konfidenz 0 bis 1: wie sicher es ein solches Artefakt ist. zeit = Zeitstempel des Satzes, aus dem es stammt;
   zitat = dieser Satz, höchstens 15 Wörter.
 Antworte nur mit JSON: {"artefakte": [{"nummer": null, "typ": "aufgabe", "was": "…", "wer": null, "bis": null,
@@ -244,10 +249,14 @@ def _artefakte_text(liste: list[Artefakt], n: int = 30) -> str:
     return "\n".join(a.kurz() for a in liste[-n:]) or "(noch keine)"
 
 
+WOCHENTAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+
+
 def nachricht(meeting, liste: list[Artefakt], neu: list, kontext: list) -> str:
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    datum = datetime.fromtimestamp(meeting.gestartet_um or time.time(), ZoneInfo("Europe/Berlin")).isoformat()
+    d = datetime.fromtimestamp(meeting.gestartet_um or time.time(), ZoneInfo("Europe/Berlin"))
+    datum = f"{WOCHENTAGE[d.weekday()]}, {d.isoformat()}"  # #74: ohne Wochentag lag „bis Freitag“ mal auf Samstag
     agenda = "\n".join(f"{i + 1}. {p.titel}" + (f" – {p.ziel}" if p.ziel else "") for i, p in enumerate(meeting.agenda))
     zeile = lambda s: f"[{mmss(s.start)}] {s.sprecher}: {s.text}"  # noqa: E731
     return (f"Meetingdatum (Europe/Berlin): {datum}\nMeeting: {meeting.titel or '-'} · Ziel: {meeting.ziel or '-'}\nAgenda:\n{agenda or '(keine)'}\n\n"
@@ -291,16 +300,18 @@ def signal(text: str) -> str | None:
 SCHNELL = """\
 Schnellprüfung im laufenden Meeting (Deutsch): Die NEUEN Sätze enthalten ein Signalwort für ein Meeting-Ergebnis.
 Prüfe nur diese neuen Sätze, ob wirklich eines darin steckt:
-- entscheidung: etwas gilt ab jetzt; status "endgueltig" (beschlossen), "vorlaeufig" oder "vorschlag"; wer = wer
-  entschieden hat („die Runde“, eine Person).
+- entscheidung: etwas gilt ab jetzt; was = was gilt, mit allen genannten Zahlen und Beträgen (nie nur das Thema);
+  status "endgueltig" (beschlossen), "vorlaeufig" oder "vorschlag"; wer = wer entschieden hat („die Runde“, eine Person).
 - aufgabe: jemand soll nach dem Meeting etwas Konkretes tun; wer = genannte Person oder bei Ich-Form der Sprecher;
   bis = Termin wie gesagt; vage = true bei bloßem „prüfen/anschauen“ ohne Ergebnis.
-- offen: Frage oder Punkt, der für später liegen bleibt; wer klärt, bis wann.
+- offen: Frage oder Punkt, der für später liegen bleibt, auch ein Prüfauftrag („prüfen wir noch, ob …“); wer klärt,
+  bis wann.
 - risiko: mögliches künftiges Problem (Ursache → Auswirkung).
 Nicht dazu: alles an den Assistenten „Nestor“, der Ablauf des Meetings, Berichte über Vergangenes, Ideen ohne Zusage.
 Nur ausdrücklich Gesagtes, fehlende Felder null. Relative Fristen anhand des Meetingdatums auflösen.
 Ergänzt ein Satz ein schon festgehaltenes Artefakt (Termin, Verantwortliche, Beschluss eines Vorschlags), gib dessen
-nummer und nur die neuen Felder an – nie doppelt anlegen. Im Zweifel eine leere Liste.
+nummer und nur die neuen Felder an – nie doppelt anlegen. Sonst nummer null (nur Nummern aus „Schon festgehalten“,
+nie Agendapunkte). Im Zweifel eine leere Liste.
 Antworte nur mit JSON: {"artefakte": [{"nummer": null, "typ": "aufgabe", "was": "…", "wer": null, "bis": null,
 "status": null, "vage": false, "konfidenz": 0.8, "zeit": "mm:ss", "zitat": "…"}]}."""
 
@@ -349,6 +360,11 @@ def normalisieren(e: dict) -> dict | None:
             "erledigt": e.get("erledigt") if isinstance(e.get("erledigt"), bool) else None,
             "konfidenz": konf, "zeit": sekunden(e.get("zeit")), "zitat": _text(e.get("zitat"), 140),
             "gemeinsam": e.get("gemeinsam") is True, "korrigiert": e.get("korrigiert") is True}
+
+
+def zahlen(t: str) -> set[str]:
+    """Ziffernfolgen eines Texts ohne Tausenderpunkt („9.000 Euro“ → {"9000"}) – Ticket #74."""
+    return {z.replace(".", "") for z in re.findall(r"\d[\d.]*\d|\d", t or "")}
 
 
 def _woerter(t: str) -> set[str]:
@@ -493,6 +509,10 @@ class Artefakte:
         e["korrigiert"] = bool(e.get("korrigiert") and re.search(
             r"korrig|berichti|nicht.{1,80}sondern", quelle_text, re.I))
         a = self.holen(e["nummer"]) if e.get("nummer") else None
+        if a is not None and e.get("typ") and e["typ"] != a.typ:
+            # Ticket #74: Mistral nannte Nummern, die es nicht gab (Agendapunkte) – eine Aufgabe ergänzt keine
+            # Entscheidung. Ein anderer Typ unter derselben Nummer ist ein eigenes Artefakt.
+            a = None
         if a is None and e.get("typ") and e.get("was"):
             a = next((x for x in self.liste if x.typ == e["typ"] and aehnlich(x.was, e["was"])), None)
         if a is None and not schnell and e.get("typ") and e.get("zeit") is not None:
@@ -531,8 +551,9 @@ class Artefakte:
                 continue
             if a.herkunft != "erkannt" and getattr(a, k) and not e.get("korrigiert"):
                 continue
-            if k == "was" and getattr(a, k) and not e.get("korrigiert"):
-                continue  # der Wortlaut bleibt, sonst springt die Anzeige
+            if k == "was" and getattr(a, k) and not e.get("korrigiert") and not (
+                    a.typ == "entscheidung" and a.herkunft == "erkannt" and zahlen(v) - zahlen(a.was)):
+                continue  # der Wortlaut bleibt, sonst springt die Anzeige – außer er bringt die Beträge mit (#74)
             if k == "status" and a.status == "endgueltig" and v == "vorschlag":
                 continue
             setattr(a, k, v)
@@ -868,7 +889,7 @@ class Artefakte:
                     continue
                 self._schnell_zeiten.append(jetzt)
                 t0 = time.monotonic()
-                modell = c.wahl.zuordnung_modell
+                modell = c.wahl.analyse_modell  # #74: nicht das kleine Zuordnungsmodell (Basis: mistral-small)
                 kontext = self._kontext_vor(neu[0].start, SCHNELL_KONTEXT)
                 try:
                     roh, nutzung = await _json_aufruf(c._client, modell, SCHNELL, nachricht(m, self.liste, neu, kontext),

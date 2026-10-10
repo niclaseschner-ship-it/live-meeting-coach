@@ -1208,20 +1208,23 @@ class Coach:
         return k
 
     def antwort_karte(self, frage: str, antwort: str, aktion: dict | None, quellen: list[dict],
-                      still: bool = False) -> None:
+                      still: bool = False, pflicht: bool = False) -> None:
         """Nestors gesprochene Antwort zusätzlich als Karte (Antwort in einem Satz, Einzelheiten auf der Karte).
-        Bei Aktionen (Bild, Wechsel, Pause, Folie, Karte, Eintragen) zeigt der Verlauf das Ergebnis selbst."""
+        Bei Aktionen (Bild, Wechsel, Pause, Folie, Karte, Eintragen) zeigt der Verlauf das Ergebnis selbst.
+        `pflicht` (Text-Weg, Ticket #74): auch eine Rückfrage oder kurze Antwort kommt als Karte."""
         if aktion and aktion.get("typ") in ("bild", "weiter", "pause", "folie", "eintragen", "karte", "recherche"):
             return
-        hintergrund(self._karte_bauen(frage, antwort, quellen, still=still))
+        hintergrund(self._karte_bauen(frage, antwort, quellen, still=still, pflicht=pflicht))
 
-    async def _karte_bauen(self, frage: str, antwort: str, quellen: list[dict], still: bool = False) -> None:
+    async def _karte_bauen(self, frage: str, antwort: str, quellen: list[dict], still: bool = False,
+                           pflicht: bool = False) -> None:
         from . import karten
         from .folie import quelle_kurz
 
         recherche = bool(quellen)
         kontext = None if recherche else self.assistent.kontext(frage).rsplit("\n\nFrage an dich:", 1)[0]
-        karte, nutzung = await karten.verdichten(self._client, frage, antwort, kontext=kontext, wahl=self.wahl)
+        karte, nutzung = await karten.verdichten(self._client, frage, antwort, kontext=kontext, wahl=self.wahl,
+                                                 pflicht=pflicht)
         if nutzung:
             nutzung_loggen({"art": "karte", "modell": self.wahl.assistent_modell, **nutzung})
         if karte is None and recherche:

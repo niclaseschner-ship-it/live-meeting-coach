@@ -1095,7 +1095,8 @@ class Assistent:
         self.letzte = {"frage": frage, "antwort": antwort, "zeit": c.meeting.jetzt(), "aktion": aktion}
         if antwort:
             self.verlauf.append((frage, antwort))
-            c.antwort_karte(frage, antwort, aktion, [], still=b.abgeloest)
+            # Bedienlogik (Ticket #74): jede Antwort auf die Sprechtaste/den Text-Weg erscheint als Karte
+            c.antwort_karte(frage, antwort, aktion, [], still=b.abgeloest, pflicht=True)
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "frage": frage, "antwort": antwort,
                             "aktion": aktion, "sekunden": round(time.monotonic() - t0, 1)})
         await c.melden()
