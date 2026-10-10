@@ -49,6 +49,13 @@ if [ ! -f "$STAGING_ENV" ]; then
       echo "STAGING_PIN_GEHEIMNIS=$(openssl rand -hex 32)"
     } > "$STAGING_ENV" )
 fi
+# Ältere staging.env (vor #75, mit Testpasswort) um den Testzugang ergänzen statt neu anzulegen
+if ! grep -q '^STAGING_TESTZUGANG_MAIL=' "$STAGING_ENV"; then
+  log "Ergänze Testzugang (Ticket #75) in $STAGING_ENV"
+  { echo "STAGING_TESTZUGANG_MAIL=testzugang@nestor-staging.lokal"
+    echo "STAGING_TESTZUGANG_PIN=$(python3 -c 'import secrets; print(f"{secrets.randbelow(1000000):06d}")')"
+  } >> "$STAGING_ENV"
+fi
 chmod 600 "$STAGING_ENV"
 wert() { sed -n "s/^$1=//p" "$STAGING_ENV"; }
 
