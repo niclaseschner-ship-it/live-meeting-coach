@@ -22,7 +22,6 @@ import re
 import time
 
 from .analyse import mmss
-from .config import EINST
 from .onepager import meeting_text
 
 AUFTRAG = """\
@@ -125,7 +124,8 @@ def material(meeting, fokus: str | None = None) -> str:
     return "\n".join(teile)
 
 
-async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | None = None) -> tuple[dict, dict]:
+async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | None = None, *,
+                    wahl) -> tuple[dict, dict]:
     """Liefert (überblick, nutzung). `vorher`: der letzte Überblick (für „neu seit dem letzten Stand“)."""
     t0 = time.monotonic()
     stoff = material(meeting, fokus)
@@ -136,9 +136,9 @@ async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | No
     auftrag = AUFTRAG.format(fokus=FOKUS.format(fokus=fokus) if fokus else "",
                              vorher=VORHER.format(vorher=alt) if alt else "", material=stoff)
     r = await client.chat.completions.create(
-        model=EINST.analyse_modell, response_format={"type": "json_object"},
+        model=wahl.analyse_modell, response_format={"type": "json_object"},
         messages=[{"role": "user", "content": auftrag}],
-        **({"reasoning_effort": EINST.analyse_aufwand} if EINST.analyse_aufwand else {}))
+        **({"reasoning_effort": wahl.analyse_aufwand} if wahl.analyse_aufwand else {}))
     try:
         roh = json.loads(r.choices[0].message.content or "{}")
     except ValueError:

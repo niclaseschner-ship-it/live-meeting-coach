@@ -18,7 +18,7 @@ from coach.zustand import Segment
 @pytest.fixture(autouse=True)
 def bestaetigung_an(tmp_path, monkeypatch):
     """Bestätigung an, Floskeln in einem eigenen Ordner, Text-Weg; Nutzung nicht protokollieren."""
-    alt = {k: getattr(EINST, k) for k in ("bestaetigung", "floskel_ordner", "assistent_modus", "stimme_aus", "bild_anbieter")}
+    alt = {k: getattr(EINST, k) for k in ("bestaetigung", "floskel_ordner", "assistent_modus", "stimme_aus")}
     object.__setattr__(EINST, "bestaetigung", True)
     object.__setattr__(EINST, "floskel_ordner", str(tmp_path / "floskeln"))
     object.__setattr__(EINST, "assistent_modus", "text")
@@ -67,6 +67,7 @@ def _attrappe(antwort_teile, tts_aufrufe):
 
 def _coach(antwort_teile=("AKTION: keine\nIhr seid bei Punkt eins.",)):
     c = Coach()
+    c.stufe_setzen("premium")
     tts = []
     c._client = _attrappe(list(antwort_teile), tts)
     c.meeting.regel_ids = []
@@ -94,7 +95,7 @@ def test_floskel_wird_einmal_erzeugt_und_danach_aus_dem_speicher_gespielt():
         a = c.assistent
         await a.floskeln.vorbereiten(c._client)
         erzeugt = len(tts)
-        frisch = B.Floskeln()  # neuer Prozess: liest von der Platte
+        frisch = B.Floskeln(wahl=lambda: c.wahl)  # neuer Prozess: liest von der Platte
         await frisch.vorbereiten(c._client)
         return erzeugt, len(tts), frisch.da(B.LANG)
 

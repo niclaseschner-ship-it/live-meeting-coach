@@ -17,10 +17,10 @@ import time
 
 import numpy as np
 
-from .config import EINST, openai_schluessel
+from . import anbieter
+from .config import EINST
 
 log = logging.getLogger("coach.livetext")
-URL = "wss://api.openai.com/v1/realtime?intent=transcription"
 RATE = 24000
 
 
@@ -58,7 +58,10 @@ class Zuordnung:
 
 
 class LiveText:
-    def __init__(self, bei_teiltext, bei_satz, prompt: str = "", stichwoerter: list[str] | None = None) -> None:
+    def __init__(self, bei_teiltext, bei_satz, prompt: str = "", stichwoerter: list[str] | None = None, *,
+                 wahl, bei_verstoss=None) -> None:
+        self._wahl = wahl  # Anbieterwahl des Meetings: Endpunkt, Schlüssel, Hostwache (coach/anbieter.py)
+        self._bei_verstoss = bei_verstoss
         self._bei_teiltext = bei_teiltext  # async (text) – laufender Teiltext der aktuellen Äußerung
         self._bei_satz = bei_satz  # async (meta, text) – fertiger Satz zu unserer Äußerung
         self._prompt = prompt
@@ -71,11 +74,9 @@ class LiveText:
         self.fehler: str | None = None
 
     async def verbinden(self) -> None:
-        import websockets
-
-        kopf = {"Authorization": f"Bearer {openai_schluessel()}"}
-        self._ws = await websockets.connect(URL, additional_headers=kopf, max_size=None)
-        transkription = {"model": EINST.live_modell, "languages": [EINST.sprache], "delay": EINST.live_delay}
+        url, kopf = anbieter.live_ws(self._wahl)
+        self._ws = await anbieter.ws_verbinden(self._wahl, url, kopf, self._bei_verstoss)
+        transkription = {"model": self._wahl.live_modell, "languages": [EINST.sprache], "delay": EINST.live_delay}
         if self._prompt:
             transkription["prompt"] = self._prompt[:1000]
         if self._stichwoerter:
@@ -136,7 +137,6 @@ class LiveText:
 
 
 # --- Nestor Basis: Voxtral Realtime (Mistral) ----------------------------------------------------------------------
-MISTRAL_URL = "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model={modell}"
 MISTRAL_RATE = 16000  # Voxtral arbeitet mit 16 kHz; das Mikro liefert 24 kHz → hier umgerechnet
 NACHLAUF_TEXT = 1.0  # s Audiozeit nach Äußerungsende: bis dahin gehört ankommender Text noch zur Äußerung
 STILLE_EMIT = 0.12  # s ohne neuen Text, wenn der Satz mit Satzzeichen endet → sofort ausgeben
@@ -192,7 +192,10 @@ class LiveTextMistral:
     (LMC_ASSISTENT_MUSTER). Bricht die Verbindung ab, wird neu verbunden; dazwischen geht kurz Text verloren.
     """
 
-    def __init__(self, bei_teiltext, bei_satz, prompt: str = "", stichwoerter: list[str] | None = None) -> None:
+    def __init__(self, bei_teiltext, bei_satz, prompt: str = "", stichwoerter: list[str] | None = None, *,
+                 wahl, bei_verstoss=None) -> None:
+        self._wahl = wahl
+        self._bei_verstoss = bei_verstoss
         self._bei_teiltext = bei_teiltext
         self._bei_satz = bei_satz
         self._ws = None
@@ -206,12 +209,8 @@ class LiveTextMistral:
         self._zu = False
 
     async def verbinden(self) -> None:
-        import websockets
-
-        from .mistral import schluessel
-
-        ws = await websockets.connect(MISTRAL_URL.format(modell=EINST.live_modell), max_size=None,
-                                      additional_headers={"Authorization": f"Bearer {schluessel()}"})
+        url, kopf = anbieter.live_ws(self._wahl)
+        ws = await anbieter.ws_verbinden(self._wahl, url, kopf, self._bei_verstoss)
         await ws.send(json.dumps({"type": "session.update", "session": {
             "audio_format": {"encoding": "pcm_s16le", "sample_rate": MISTRAL_RATE},
             "target_streaming_delay_ms": EINST.basis_live_delay_ms}}))

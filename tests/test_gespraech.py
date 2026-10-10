@@ -44,6 +44,7 @@ class Verbindung:
 
 def _gespraech(ereignisse=()) -> tuple[Coach, Gespraech, Verbindung]:
     c = Coach()
+    c.stufe_setzen("premium")
     g = Gespraech(c.assistent)
     g._ws = Verbindung(ereignisse)
     g.offen = True

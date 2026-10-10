@@ -156,8 +156,8 @@ EINORDNEN_FRIST = 2.5
 EINORDNUNGEN = ("frage_an_nestor", "an_nestor_ohne_antwort", "nicht_an_nestor")
 
 
-async def einordnen(client, satz: str, antwort: str, frage: str = "", vorher: list[str] | None = None
-                    ) -> tuple[str, dict]:
+async def einordnen(client, satz: str, antwort: str, frage: str = "", vorher: list[str] | None = None,
+                   *, wahl) -> tuple[str, dict]:
     """Schneller Text-Klassifikator (Premium): (Einordnung, Nutzung). Fehler oder Frist: nicht an Nestor.
 
     Ticket #28: Er sieht auch die Frage, auf die Nestor geantwortet hat, und die letzten Sätze der Runde davor (`vorher`).
@@ -169,11 +169,11 @@ async def einordnen(client, satz: str, antwort: str, frage: str = "", vorher: li
     if client is None:
         return "nicht_an_nestor", {}
     extra = {}
-    if EINST.einordnen_aufwand:
-        extra["reasoning_effort"] = EINST.einordnen_aufwand
+    if wahl.einordnen_aufwand:
+        extra["reasoning_effort"] = wahl.einordnen_aufwand
     try:
         r = await asyncio.wait_for(client.chat.completions.create(
-            model=EINST.assistent_modell, response_format={"type": "json_object"},
+            model=wahl.assistent_modell, response_format={"type": "json_object"},
             messages=[{"role": "user", "content": EINORDNEN.format(name=EINST.assistent_name, frage=(frage or "-")[:300],
                                                                   vorher="\n".join(vorher or []) or "-",
                                                                   antwort=(antwort or "-")[:600], satz=satz)}],
@@ -213,13 +213,13 @@ async def moderationssatz(coach, karte: dict, ersatz: str) -> str:
         return ersatz
     t0 = time.monotonic()
     # Basis bleibt bei mistral-medium: small war schneller (−2,5 s), sprach aber falsches Deutsch („sollten ihr“)
-    modell = EINST.assistent_modell
+    modell = coach.wahl.assistent_modell
     try:
         r = await asyncio.wait_for(coach._client.chat.completions.create(
             model=modell,
             messages=[{"role": "user", "content": SATZ.format(name=EINST.assistent_name, karte=karte_als_text(karte))}],
-            **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {})),
-            SATZ_FRIST if EINST.ki != "codex" else 40)
+            **({"reasoning_effort": coach.wahl.assistent_aufwand} if coach.wahl.assistent_aufwand else {})),
+            SATZ_FRIST)
     except Exception as e:  # noqa: BLE001
         log.info("Moderationssatz nicht formuliert (%s) – Ersatz", type(e).__name__)
         return ersatz

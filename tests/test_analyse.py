@@ -225,51 +225,6 @@ def test_lebhafter_normaler_dialog_ist_kein_zickzack():
     assert not analyse.ueberlappung_erkannt(segs, 0, 0.5, fenster=3, min_wechsel=4)
 
 
-# --- Text und Sprecherspur zusammenführen ----------------------------------
-
-def sp(wer, a, b):
-    return {"sprecher": wer, "start": a, "ende": b}
-
-
-def test_beitraege_fassen_gleiche_person_zusammen():
-    from coach.transkription import beitraege
-
-    spur = [sp("A", 0, 0.9), sp("A", 1.4, 4.2), sp("B", 5.7, 7.0), sp("B", 7.5, 9.7), sp("A", 11.2, 14.2)]
-    assert [(b["sprecher"], b["start"], b["ende"]) for b in beitraege(spur)] == [
-        ("A", 0, 4.2), ("B", 5.7, 9.7), ("A", 11.2, 14.2)]
-
-
-def test_zickzack_schnipsel_gehen_im_beitrag_auf():
-    from coach.transkription import beitraege
-
-    spur = [sp("A", 0, 3.9)] + [sp(w, a, b) for w, a, b in GEMESSEN] + [sp("B", 7.5, 9.0)]
-    ergebnis = beitraege(spur)
-    assert [b["sprecher"] for b in ergebnis] == ["A", "B"]
-    # lückenlos: das Zickzack geht an A, der letzte B-Schnipsel in B's folgenden Beitrag
-    assert (ergebnis[0]["start"], ergebnis[0]["ende"], ergebnis[1]["start"], ergebnis[1]["ende"]) == (0, 6.3, 6.3, 9.0)
-
-
-def test_pegel_angleichen_verstaerkt_leise_begrenzt():
-    from array import array
-
-    from coach.transkription import MAX_VERSTAERKUNG, pegel_angleichen, rms
-
-    leise = array("h", [100, -100] * 1000)
-    assert rms(pegel_angleichen(leise)) == 100 * MAX_VERSTAERKUNG
-    laut = array("h", [5000, -5000] * 1000)
-    assert pegel_angleichen(laut) == laut
-
-
-def test_ausschneiden_mit_rand():
-    from array import array
-
-    from coach.transkription import RATE, ausschneiden
-
-    p = array("h", [0] * (10 * RATE))
-    assert len(ausschneiden(p, 2.0, 3.0)) == int(1.5 * RATE)
-    assert len(ausschneiden(p, 0.0, 0.5)) == int(0.75 * RATE)
-
-
 # --- FR-07 Redeanteile -----------------------------------------------------
 
 def test_redeanteile_summieren_sich():

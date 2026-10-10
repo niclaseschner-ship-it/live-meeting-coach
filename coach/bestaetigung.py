@@ -108,20 +108,31 @@ def bestaetigen(frage: str) -> bool:
 class Floskeln:
     """Vorab erzeugte Sätze je Stimme, auf der Platte zwischengespeichert (PCM 24 kHz, 16 bit, mono)."""
 
-    def __init__(self, ordner: str | Path | None = None) -> None:
+    def __init__(self, ordner: str | Path | None = None, wahl=None) -> None:
+        """`wahl`: liefert die Anbieterwahl des Meetings (coach/anbieter.py) – Stufe und Stimme gehören zum Schlüssel."""
         self.ordner = Path(ordner or EINST.floskel_ordner)
+        self._wahl = wahl or (lambda: None)
         self._mem: dict[Path, bytes] = {}
         self._erzeugen: dict[Path, asyncio.Task] = {}
         self._letzte: dict[int, str] = {}
 
-    def pfad(self, text: str) -> Path:
-        schluessel = f"{EINST.stufe}|{EINST.stimme_modell}|{EINST.stimme}|{STIL if EINST.stufe != 'basis' else ''}|{text}"
-        name = hashlib.sha1(schluessel.encode("utf-8")).hexdigest()[:20]
-        return self.ordner / f"{EINST.stufe}_{re.sub(r'[^A-Za-z0-9]', '', EINST.stimme)[:12]}_{name}.pcm"
+    def wahl(self, wahl=None):
+        w = wahl or self._wahl()
+        if w is None:
+            from .anbieter import AnbieterFehler
 
-    def da(self, text: str) -> bytes | None:
+            raise AnbieterFehler("Floskeln ohne Anbieterwahl")
+        return w
+
+    def pfad(self, text: str, wahl=None) -> Path:
+        w = self.wahl(wahl)
+        schluessel = f"{w.stufe}|{w.stimme_modell}|{w.stimme}|{STIL if not w.basis else ''}|{text}"
+        name = hashlib.sha1(schluessel.encode("utf-8")).hexdigest()[:20]
+        return self.ordner / f"{w.stufe}_{re.sub(r'[^A-Za-z0-9]', '', w.stimme)[:12]}_{name}.pcm"
+
+    def da(self, text: str, wahl=None) -> bytes | None:
         """Aus dem Speicher oder von der Platte – ohne Netz, ohne Warten."""
-        p = self.pfad(text)
+        p = self.pfad(text, wahl)
         if p in self._mem:
             return self._mem[p]
         try:
@@ -145,24 +156,25 @@ class Floskeln:
         self._letzte[id(liste)] = random.choice(wahl)
         return self._letzte[id(liste)]
 
-    async def erzeugen(self, client, text: str) -> bytes | None:
+    async def erzeugen(self, client, text: str, *, wahl=None) -> bytes | None:
         """Einmal per Sprachausgabe erzeugen und ablegen. Mehrere gleichzeitige Wünsche teilen sich einen Aufruf."""
-        p = self.pfad(text)
-        if (pcm := self.da(text)) is not None:
+        w = self.wahl(wahl)
+        p = self.pfad(text, w)
+        if (pcm := self.da(text, w)) is not None:
             return pcm
         if p not in self._erzeugen:
-            self._erzeugen[p] = asyncio.ensure_future(self._synthese(client, text, p))
+            self._erzeugen[p] = asyncio.ensure_future(self._synthese(client, text, p, w))
         try:
             return await asyncio.shield(self._erzeugen[p])
         finally:
             if self._erzeugen.get(p) is not None and self._erzeugen[p].done():
                 self._erzeugen.pop(p, None)
 
-    async def _synthese(self, client, text: str, p: Path) -> bytes | None:
+    async def _synthese(self, client, text: str, p: Path, w) -> bytes | None:
         t0, teile = time.monotonic(), []
         try:
             async with client.audio.speech.with_streaming_response.create(
-                    model=EINST.stimme_modell, voice=EINST.stimme, input=text, response_format="pcm",
+                    model=w.stimme_modell, voice=w.stimme, input=text, response_format="pcm",
                     instructions=STIL) as antwort:
                 async for stueck in antwort.iter_bytes(9600):
                     teile.append(stueck)
@@ -181,16 +193,17 @@ class Floskeln:
             log.warning("Floskel nicht gespeichert (%s)", type(e).__name__)
         self._mem[p] = pcm
         from .pipeline import nutzung_loggen
-        nutzung_loggen({"art": "stimme", "zweck": "floskel", "modell": EINST.stimme_modell, "zeichen": len(text),
+        nutzung_loggen({"art": "stimme", "zweck": "floskel", "modell": w.stimme_modell, "zeichen": len(text),
                         "sekunden_audio": round(len(pcm) / 2 / RATE, 1), "sekunden": round(time.monotonic() - t0, 2)})
         return pcm
 
-    async def vorbereiten(self, client) -> int:
+    async def vorbereiten(self, client, *, wahl=None) -> int:
         """Alle fehlenden Floskeln der aktuellen Stimme erzeugen (beim Meetingstart, im Hintergrund). Liefert die
         Zahl neu erzeugter."""
         neu = 0
         for text in ALLE:
-            if self.da(text) is None and await self.erzeugen(client, text) is not None:
+            w = self.wahl(wahl)
+            if self.da(text, w) is None and await self.erzeugen(client, text, wahl=w) is not None:
                 neu += 1
         return neu
 

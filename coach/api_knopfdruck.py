@@ -61,7 +61,7 @@ def _knopf(art: str):
                 for h in coach.meeting.hinweise:
                     if (h.aktion or {}).get("bogen") == art and jetzt - h.zeit < h.dauer:
                         h.dauer = max(0.0, jetzt - h.zeit)
-            if ziel == "bild" and EINST.bild_anbieter == "text":
+            if ziel == "bild" and coach.bild_als_text:
                 ziel = "ueberblick"  # Basis: kein Bildmodell
             try:
                 coach.assistent.bogen_starten(ziel, BOGEN_NAMEN.get(ziel, ziel), "band" if (daten or {}).get("band")
@@ -155,12 +155,12 @@ async def frage_audio(request: Request) -> dict:
     sekunden = (len(wav) - 44) / 2 / 24000
     try:
         antwort = await coach._client.audio.transcriptions.create(
-            model=EINST.text_modell, file=("frage.wav", wav, "audio/wav"), language=EINST.sprache,
+            model=coach.wahl.text_modell, file=("frage.wav", wav, "audio/wav"), language=EINST.sprache,
             prompt=f"Frage an den Moderationsassistenten {EINST.assistent_name}.")
     except Exception as e:  # noqa: BLE001
         coach.assistent.halten_abbrechen()
         raise HTTPException(502, f"Transkription fehlgeschlagen ({fehlertext(e)}).") from e
-    nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(sekunden, 1), "knopf": "halten"})
+    nutzung_loggen({"art": "text", "modell": coach.wahl.text_modell, "sekunden_audio": round(sekunden, 1), "knopf": "halten"})
     from .assistent import frage_aus
 
     frage = frage_aus((getattr(antwort, "text", "") or "").strip())

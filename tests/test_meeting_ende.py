@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from coach import api_abschluss, server
+from coach.anbieter import wahl_fuer
 from coach.config import EINST
 from coach.pipeline import Coach
 from coach.server import app
@@ -62,6 +63,7 @@ def _abgelegtes_meeting() -> Coach:
     """Ein beendetes, endgültig abgelegtes Meeting – wie in tests/test_abschluss.py."""
     async def lauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = None
         c.archiv_aktiv = True
         c.einrichten({"titel": "Team Runde", "agenda": [{"titel": "Start", "minuten": 5}]})
@@ -79,6 +81,7 @@ def beendetes_meeting(monkeypatch, archiv_pfad):
     c = _abgelegtes_meeting()
     monkeypatch.setattr(server.coach, "archiv", c.archiv)
     monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))  # #60: bestätigte Variante
     monkeypatch.setattr(server.coach, "kosten_stand", lambda: {"meeting": 0.10})
     return c
 
@@ -145,6 +148,7 @@ def test_start_meldet_dem_worker_meeting_id_und_kunde(monkeypatch, cloud_betrieb
         aufgerufen["gestartet"] = True
 
     monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))  # #60: bestätigte Variante
     monkeypatch.setattr(server.coach, "hoeren_starten", _fake_hoeren_starten)
     monkeypatch.setattr(api_abschluss, "worker_melden", _fake_melden)
 
@@ -152,7 +156,7 @@ def test_start_meldet_dem_worker_meeting_id_und_kunde(monkeypatch, cloud_betrieb
     r = _client().post("/api/start", headers=headers)
     assert r.status_code == 200
     assert aufgerufen["pfad"] == "/intern/meeting-start"
-    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme"}
+    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme", "stufe": "basis", "modus": "live"}
     assert aufgerufen.get("gestartet") is True
 
 
@@ -161,6 +165,7 @@ def test_start_429_wenn_worker_hoechstzahl_meldet_und_startet_nicht(monkeypatch,
         raise AssertionError("hoeren_starten hätte bei abgewiesenem Start nicht laufen dürfen")
 
     monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))  # #60: bestätigte Variante
     monkeypatch.setattr(server.coach, "hoeren_starten", _nicht_aufrufen)
     monkeypatch.setattr(api_abschluss, "worker_melden", lambda pfad, daten: {"erlaubt": False, "aktive": 2})
 
@@ -178,6 +183,7 @@ def test_start_ohne_worker_antwort_laesst_im_zweifel_zu(monkeypatch, cloud_betri
         aufgerufen["gestartet"] = True
 
     monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))  # #60: bestätigte Variante
     monkeypatch.setattr(server.coach, "hoeren_starten", _fake_hoeren_starten)
     monkeypatch.setattr(api_abschluss, "worker_melden", lambda pfad, daten: None)
 
@@ -200,6 +206,7 @@ def test_start_lokal_meldet_dem_worker_nichts(monkeypatch):
 
     assert EINST.betrieb == "lokal"
     monkeypatch.setattr(server.coach, "hoerstrom", None)
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))  # #60: bestätigte Variante
     monkeypatch.setattr(server.coach, "hoeren_starten", _fake_hoeren_starten)
     monkeypatch.setattr(api_abschluss, "worker_melden", _fake_melden)
     r = _client().post("/api/start")

@@ -188,18 +188,18 @@ $("btn-still").onclick = () => { stimme.stopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
 $("btn-ton-hier").onclick = () => stimme.bereit();
 $("btn-stumm").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
+// Ticket #60: Maßgeblich ist allein die am Laptop bestätigte Wahl des Servers – ohne sie kein Start.
 function startStufeErmitteln() {
   let ausgewaehlt = null;
   try { ausgewaehlt = sessionStorage.getItem("nestor-gewaehlte-stufe"); } catch { /* privater Browser */ }
   const aktuell = zustand?.stufe ?? null;
-  if (ausgewaehlt && aktuell && ausgewaehlt !== aktuell) {
+  if (!["basis", "premium"].includes(aktuell)) {
+    throw new Error("Bitte Variante wählen: am Laptop auf der Startseite Basis oder Premium wählen, dann hier starten.");
+  }
+  if (ausgewaehlt && ausgewaehlt !== aktuell) {
     throw new Error(`Stufenabweichung: Startseite wählte ${ausgewaehlt}, der Server meldet ${aktuell}. Bitte auf der Startseite erneut wählen.`);
   }
-  const erwartet = ausgewaehlt || aktuell; // anonymes Handy: aktueller WebSocket-Stand ist maßgeblich
-  if (!["basis", "premium"].includes(erwartet)) {
-    throw new Error("Die Nestor-Variante ist noch nicht bestätigt. Bitte die Kopplung erneuern.");
-  }
-  return erwartet;
+  return aktuell;
 }
 async function meetingStartAnfordern(erwartet = startStufeErmitteln()) {
   const r = await fetch("/api/start", {
@@ -274,11 +274,12 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live" : beendet ? "Beendet" : "Mit Laptop verbunden";
   if (!z.stumm && !z.hoeren) pill.className = "pill verbunden";
-  $("modus").hidden = !z.stufe;
-  $("modus").textContent = z.stufe === "basis" ? "Basis · Mistral" : z.stufe === "premium" ? "Premium · OpenAI" : "";
-  $("modus").dataset.tip = z.stufe === "basis"
-    ? "Nestor Basis verwendet Mistral AI."
-    : "Nestor Premium verwendet OpenAI.";
+  $("modus").hidden = false; // Ticket #60: die Variante (aus dem Serverzustand) steht immer sichtbar da
+  $("modus").textContent = z.stufe === "basis" ? "Basis · Mistral" : z.stufe === "premium" ? "Premium · OpenAI"
+    : "Keine Variante gewählt";
+  $("modus").dataset.tip = z.stufe === "basis" ? "Nestor Basis verwendet Mistral AI."
+    : z.stufe === "premium" ? "Nestor Premium verwendet OpenAI."
+      : "Ohne bestätigte Variante startet kein Meeting – am Laptop auf der Startseite wählen.";
   $("zeit").textContent = mmss(z.zeit);
   $("aufnahme").hidden = !(z.archiv?.aufnahme && z.hoeren);
   $("mikro-karte").hidden = beendet;

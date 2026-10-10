@@ -26,7 +26,6 @@ import base64
 import contextlib
 import json
 import logging
-import os
 import random
 import re
 import time
@@ -34,14 +33,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-try:  # openai 3.x bringt httpx2 mit, ältere Versionen httpx – beide haben dieselbe Schnittstelle
-    import httpx2 as httpx
-except ImportError:  # pragma: no cover
-    import httpx  # type: ignore[no-redef]
-
 log = logging.getLogger("coach.mistral")
 
-BASIS_URL = os.getenv("LMC_MISTRAL_URL", "https://api.mistral.ai/v1")
 # Gespeicherte Stimme „nestor-thorsten-de“ im Mistral-Konto (aus 23 s Thorsten-Voice, CC0; Referenz im Repo unter
 # coach/stimmen/thorsten_ref.wav, damit sie sich neu anlegen lässt). Mit voice_id ~0,5 s bis zum ersten Ton,
 # mit mitgeschickter Referenz ~1,1 s (Machbarkeitsprobe 07./08.10.).
@@ -51,12 +44,6 @@ THORSTEN = "01a1188b-54f4-71a8-86df-df69e318948c"
 NOVA_EUPHORISCH = "01a1200c-7cff-7218-b298-8cea4fe89203"
 WIEDERHOLUNGEN = 4  # 429: so oft erneut versuchen (Wartezeit 0,5 → 1 → 2 → 4 s, mit Zufallsanteil)
 TTS_ZWEITER_VERSUCH = 1.6  # s ohne ersten Ton → zweite Anfrage parallel (Ausreißer bis 10 s gemessen)
-
-
-def schluessel() -> str | None:
-    from .config import mistral_schluessel
-
-    return mistral_schluessel()
 
 
 class Ueberlast(RuntimeError):
@@ -136,7 +123,7 @@ class _Transkriptionen:
             felder["context_bias"] = woerter
 
         async def senden():
-            r = await self._c.http.post(f"{BASIS_URL}/audio/transcriptions", headers=self._c.kopf,
+            r = await self._c.http.post(f"{self._c.basis_url}/audio/transcriptions", headers=self._c.kopf,
                                         data=felder, files={"file": (name, daten, mime)}, timeout=60)
             if r.status_code != 200:
                 raise HttpFehler(r.status_code, r.text)
@@ -172,7 +159,7 @@ class _TtsStrom:
     async def _anfrage(self, nr: int) -> None:
         try:
             for versuch in range(WIEDERHOLUNGEN + 1):
-                async with self._c.http.stream("POST", f"{BASIS_URL}/audio/speech", headers=self._c.kopf,
+                async with self._c.http.stream("POST", f"{self._c.basis_url}/audio/speech", headers=self._c.kopf,
                                                json=self._koerper, timeout=30) as r:
                     if r.status_code == 429 and versuch < WIEDERHOLUNGEN and self._gewinner is None:
                         log.info("Sprachausgabe: 429 (Anfrage %d, Versuch %d)", nr, versuch + 1)
@@ -257,17 +244,21 @@ class _Sprache:
 
 # --- Client ---------------------------------------------------------------------------------------------------------
 class MistralClient:
-    """Wie `AsyncOpenAI` für die Teile, die der Coach nutzt – alles geht an api.mistral.ai."""
+    """Wie `AsyncOpenAI` für die Teile, die der Coach nutzt – alles geht an Mistral.
+
+    Gebaut wird er nur von der Fabrik `coach/anbieter.py`: sie gibt Endpunkt (`basis_url`) und `http` mit, eine
+    Fabrik für httpx-Clients mit Hostwache – jede Anfrage dieses Clients läuft darüber."""
 
     anbieter = "mistral"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, *, basis_url: str, http) -> None:
         from openai import AsyncOpenAI
 
+        self.basis_url = basis_url.rstrip("/")
         # max_retries=0: 429 behandelt mit_wiederholung selbst (sonst stapeln sich zwei Wartelogiken)
-        self._oa = AsyncOpenAI(base_url=BASIS_URL, api_key=api_key, max_retries=0, timeout=60)
+        self._oa = AsyncOpenAI(base_url=self.basis_url, api_key=api_key, max_retries=0, timeout=60, http_client=http())
         self.kopf = {"Authorization": f"Bearer {api_key}"}
-        self.http = httpx.AsyncClient(timeout=60)
+        self.http = http(timeout=60)
         self.stichwoerter: list[str] = []  # context_bias der Batch-Transkription (Name, Agenda, Teilnehmende)
         self.chat = SimpleNamespace(completions=_Completions(self._oa))
         self.audio = SimpleNamespace(transcriptions=_Transkriptionen(self), speech=_Sprache(self))
@@ -281,7 +272,7 @@ class MistralClient:
             koerper = {"model": modell, "inputs": auftrag, "tools": [{"type": "web_search"}], "store": False}
             if erzwingen:
                 koerper["completion_args"] = {"tool_choice": "any"}
-            r = await self.http.post(f"{BASIS_URL}/conversations", headers=self.kopf, json=koerper, timeout=60)
+            r = await self.http.post(f"{self.basis_url}/conversations", headers=self.kopf, json=koerper, timeout=60)
             if r.status_code != 200:
                 raise HttpFehler(r.status_code, r.text)
             return r.json()

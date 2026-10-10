@@ -123,7 +123,7 @@ async def ausfuehren(coach, art: str, frage: str = "", senden=None) -> dict | No
     from .pipeline import _zeit_loggen, fehlertext
 
     hs = coach.hoerstrom
-    zeiten = {"ausloeser": "knopf", "art": art, "meeting_s": round(coach.meeting.jetzt(), 1), "ki": EINST.ki}
+    zeiten = {"ausloeser": "knopf", "art": art, "meeting_s": round(coach.meeting.jetzt(), 1)}
     t0 = time.monotonic()
 
     async def melden(schritt: str, anteil: float, **extra) -> None:
@@ -206,15 +206,15 @@ async def _karte_vom_modell(coach, system: str, nutzer: str, knopf: str, nutzung
 
     t0 = time.monotonic()
     r = await coach._client.chat.completions.create(
-        model=EINST.assistent_modell, response_format={"type": "json_object"},
+        model=coach.wahl.assistent_modell, response_format={"type": "json_object"},
         messages=[{"role": "system", "content": system}, {"role": "user", "content": nutzer}],
-        **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {}))
+        **({"reasoning_effort": coach.wahl.assistent_aufwand} if coach.wahl.assistent_aufwand else {}))
     try:
         roh = json.loads(r.choices[0].message.content or "{}")
     except ValueError:
         roh = {}
     u = getattr(r, "usage", None)
-    nutzung_loggen({"art": nutzung_art, "modell": EINST.assistent_modell, "knopf": knopf,
+    nutzung_loggen({"art": nutzung_art, "modell": coach.wahl.assistent_modell, "knopf": knopf,
                     "tokens_rein": getattr(u, "prompt_tokens", None), "tokens_raus": getattr(u, "completion_tokens", None),
                     "sekunden": round(time.monotonic() - t0, 1)})
     return roh if isinstance(roh, dict) else {}

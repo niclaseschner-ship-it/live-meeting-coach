@@ -43,14 +43,19 @@ Zeige nur, was zu diesem Fokus gehört, dafür ausführlicher. Titel oben mit de
 """
 
 
-async def erzeugen(client, meeting: Meeting, vorher: dict | None = None, fokus: str | None = None) -> dict:
+async def erzeugen(client, meeting: Meeting, vorher: dict | None = None, fokus: str | None = None, *,
+                  wahl) -> dict:
     """Liefert {png, analyse (Bildauftrag als Text, für Nestor), messung}."""
     t0 = time.monotonic()
     text = AUFTRAG
     if fokus:
         text += "\n" + FOKUS.format(fokus=fokus)
     inhalt = [{"type": "input_text", "text": text + "\n\nMATERIAL (Agenda und Transkript):\n" + meeting_text(meeting)}]
-    werkzeug = {"type": "image_generation", "model": EINST.bild_modell, "size": "1536x1024",
+    if wahl.anbieter != "openai" or not wahl.bild_modell:
+        from .anbieter import AnbieterFehler
+
+        raise AnbieterFehler("Das Live-Bild gibt es nur in Nestor Premium.")
+    werkzeug = {"type": "image_generation", "model": wahl.bild_modell, "size": "1536x1024",
                 "quality": EINST.bild_qualitaet}
     if vorher and vorher.get("png") and not fokus:
         inhalt[0]["text"] = FORTSCHREIBUNG + "\n" + inhalt[0]["text"]
@@ -58,7 +63,7 @@ async def erzeugen(client, meeting: Meeting, vorher: dict | None = None, fokus: 
                        "image_url": "data:image/png;base64," + base64.b64encode(vorher["png"]).decode()})
         werkzeug["action"] = "edit"
     antwort = await client.responses.create(
-        model=EINST.bild_text_modell, input=[{"role": "user", "content": inhalt}],
+        model=wahl.bild_text_modell, input=[{"role": "user", "content": inhalt}],
         tools=[werkzeug], tool_choice={"type": "image_generation"})
     bild = next((o for o in antwort.output if getattr(o, "type", "") == "image_generation_call"), None)
     if bild is None or not bild.result:
@@ -66,7 +71,7 @@ async def erzeugen(client, meeting: Meeting, vorher: dict | None = None, fokus: 
     nutzung = getattr(antwort, "usage", None)
     return {"png": base64.b64decode(bild.result),
             "analyse": getattr(bild, "revised_prompt", None) or "",
-            "messung": [{"modell": f"{EINST.bild_text_modell}+{EINST.bild_modell}",
+            "messung": [{"modell": f"{wahl.bild_text_modell}+{wahl.bild_modell}",
                          "sekunden": round(time.monotonic() - t0, 1),
                          "tokens_rein": getattr(nutzung, "input_tokens", None),
                          "tokens_raus": getattr(nutzung, "output_tokens", None),

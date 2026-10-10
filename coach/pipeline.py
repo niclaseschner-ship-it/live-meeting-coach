@@ -9,10 +9,10 @@ import re
 import time
 from pathlib import Path
 
-from . import aktionen, analyse, konfidenz, kosten, regeln, themen, transkription
+from . import aktionen, analyse, anbieter, konfidenz, kosten, regeln, themen
 from .artefakte import Artefakte
 from .assistent import Assistent
-from .config import EINST, WURZEL, ki_verfuegbar, mistral_schluessel, openai_schluessel, schluessel_info
+from .config import EINST, WURZEL, schluessel_info
 from .entscheider import Entscheider
 from .knopfdruck import KNOPF_REGELN, Knopfstand, einverstaendnis
 from .zustand import Agendapunkt, Meeting, Segment
@@ -88,6 +88,10 @@ def gleichzeitig_regel(regeln: list[str]) -> str | None:
     return None
 
 
+class WahlGesperrt(RuntimeError):
+    """Stufe/Modus lassen sich nur zwischen zwei Meetings wechseln (Ticket #60)."""
+
+
 class Coach:
     def __init__(self) -> None:
         self.meeting = Meeting()
@@ -98,8 +102,13 @@ class Coach:
         self.simulation_laeuft = False
         self.beobachter: list = []  # async Callbacks, z. B. WebSocket-Broadcast
         self.direkt: list = []  # async Callbacks für Einzelnachrichten (Sprachausgabe)
+        # Ticket #60: die bestätigte Anbieterwahl (coach/anbieter.py) – ohne sie kein Client und kein Start. Es gibt
+        # keine Vorgabe-Stufe. Der Client entsteht nur aus ihr (client_neu); im Meeting ist sie fest.
+        self.wahl: anbieter.Anbieterwahl | None = None
         self._client = None
-        self.client_neu()
+        self.startet = False  # /api/start läuft (Worker-Meldung): Wahl schon gesperrt, Hörstrom noch nicht offen
+        # Premium-Stimme und Gesprächsart (Dashboard), auch über einen Wechsel nach Basis und zurück
+        self._premium_vorlieben = anbieter.premium_vorlieben()
         self._sperre = asyncio.Lock()
         self._sim_task: asyncio.Task | None = None
         # Version 2: Ströme
@@ -114,7 +123,7 @@ class Coach:
         self._fenster_ab = 0.0  # frühere Sätze gehören nicht mehr ins Fenster (Punktwechsel, Rückkehr-Ansage)
         self._rueckkehr_ab: float | None = None  # Beginn der letzten Rückkehr-Ansage („zurück zur Datenbank“)
         self._themen_sperre = asyncio.Lock()
-        # Live-Bild (One-Pager, FR-10): gezeichnet von Claude über das Abo
+        # Live-Bild (One-Pager, FR-10): Premium zeichnet mit OpenAI (coach/bild_gpt.py), Basis schreibt den Überblick
         self.onepager_svg: str | None = None
         self.onepager_png: bytes | None = None  # Live-Bild von OpenAI (Rasterbild)
         # Recherche als Folie: letztes Rechercheergebnis und die daraus gebaute Folie
@@ -210,39 +219,58 @@ class Coach:
         self.artefakte = Artefakte(self)
 
     @property
-    def stufe(self) -> str:
-        return EINST.stufe
+    def stufe(self) -> str | None:
+        """Stufe der bestätigten Wahl – None, solange keine gewählt ist (keine Vorgabe, Ticket #60)."""
+        return self.wahl.stufe if self.wahl else None
+
+    @property
+    def bild_als_text(self) -> bool:
+        """Basis (und ohne Wahl): kein Bildmodell, stattdessen der Überblick als Text."""
+        return self.wahl is None or self.wahl.bild_anbieter == "text"
+
+    @property
+    def wahl_gesperrt(self) -> bool:
+        """Im Meeting – vom Start bis die Ablage fertig ist – bleibt die Wahl fest (Ticket #60)."""
+        return (self.startet or self.hoerstrom is not None
+                or (self.archiv is not None and not self.archiv.fertig))
 
     def stufe_setzen(self, stufe: str, nur_knopfdruck: bool = False) -> None:
         """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting. „Nur auf Knopfdruck“ ist ein
-        Schalter in Basis (Ticket #13: der frühere Modus „Auf Knopfdruck“), in Premium gibt es ihn nicht."""
-        from .config import stufe_setzen
-
-        stufe_setzen(stufe)
-        self.modus = "knopfdruck" if stufe == "basis" and nur_knopfdruck else "live"
+        Schalter in Basis (Ticket #13: der frühere Modus „Auf Knopfdruck“), in Premium gibt es ihn nicht.
+        Baut eine neue, unveränderliche Anbieterwahl und den Client dazu; im Meeting `WahlGesperrt`."""
+        if self.wahl_gesperrt:
+            raise WahlGesperrt("Während des Meetings nicht wechselbar.")
+        modus = "knopfdruck" if stufe == "basis" and nur_knopfdruck else "live"
+        self.wahl = anbieter.wahl_fuer(stufe, modus, **(self._premium_vorlieben if stufe == "premium" else {}))
+        self.modus = modus
         self.client_neu()
 
     def client_neu(self) -> None:
-        """KI-Client der Stufe: Premium → OpenAI (Schlüssel aus dem Dashboard oder der Umgebung), Basis → Mistral
-        (MistralClient, gleiche Schnittstelle). Ohne Schlüssel oder mit LMC_OFFLINE=1: kein Client."""
+        """KI-Client der Wahl, gebaut von der Fabrik (coach/anbieter.py): Premium → OpenAI (Schlüssel aus dem
+        Dashboard oder der Umgebung), Basis → Mistral. Ohne Wahl, ohne Schlüssel oder mit LMC_OFFLINE=1: keiner."""
+        if self.hoerstrom is not None:
+            raise WahlGesperrt("Während des Meetings bleibt der Client fest.")
         alt, self._client = self._client, None
         if alt is not None and hasattr(alt, "schliessen"):
             hintergrund_leise(alt.schliessen())
-        if ki_verfuegbar():
-            if EINST.stufe == "basis":
-                from .mistral import MistralClient
+        self._client = anbieter.client_fuer(self.wahl, self.anbieter_verstoss)
 
-                self._client = MistralClient(mistral_schluessel())
-            else:
-                from openai import AsyncOpenAI
-
-                self._client = AsyncOpenAI(api_key=openai_schluessel())
+    def anbieter_verstoss(self, ziel: str, wahl) -> None:
+        """Hostwache (coach/anbieter.py) hat eine Verbindung außerhalb der Stufe gestoppt: sichtbar machen."""
+        self.fehler = (f"Anbieter-Sperre: Verbindung zu {ziel} ist in Nestor {wahl.stufe.capitalize()} nicht erlaubt "
+                       "– abgebrochen, kein Wechsel des Anbieters.")
+        if self.archiv is not None and not self.archiv.fertig:
+            self.archiv.ereignis("anbieter_verstoss", ziel=ziel, stufe=wahl.stufe)
+        try:
+            asyncio.get_running_loop().create_task(self.melden())
+        except RuntimeError:
+            pass
 
     def kosten_stand(self) -> dict:
         m = self.meeting
         live = self.hoerstrom.live if self.hoerstrom else None
         return KOSTEN.stand(live_sekunden=live.gesendete_sekunden if live and live._ws is not None else 0.0,
-                            live_modell=EINST.live_modell,
+                            live_modell=self.wahl.live_modell if self.wahl else "",
                             meeting_sekunden=m.jetzt() if m.gestartet_um is not None else 0.0,
                             geplant_minuten=sum(p.minuten for p in m.agenda))
 
@@ -265,14 +293,14 @@ class Coach:
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,
                 "modus": self.modus,
-                "stufe": EINST.stufe,
+                "stufe": self.stufe,
                 "einstellungen": self.einstellungen(),
                 "referenzen": list(self.referenzen),
                 "fehler": self.fehler,
                 "schluessel_vorhanden": self._client is not None,
                 "schluessel": schluessel_info(),
                 "kosten": self.kosten_stand(),
-                "aktionshilfe": aktionen.katalog(self, EINST),
+                "aktionshilfe": aktionen.katalog(self, self.wahl),
                 "simulation": self.simulation_laeuft,
                 "block_sekunden": EINST.block_sekunden,
                 "ampeln": ampeln,
@@ -402,38 +430,43 @@ class Coach:
                 "klima": analyse.klima(m, self.aeusserungen, unterbr, ton) if m.laeuft or m.segmente else None}
 
     def einstellungen(self) -> dict:
-        return {"assistent": self.assistent.aktiv, "modus": EINST.assistent_modus, "stimme": EINST.stimme,
-                "stufe": EINST.stufe,
+        w = self.wahl
+        return {"assistent": self.assistent.aktiv,
+                "modus": w.assistent_modus if w else self._premium_vorlieben["assistent_modus"],
+                "stimme": w.stimme if w else self._premium_vorlieben["stimme"],
+                "stufe": self.stufe,
                 "aufnahme": EINST.aufnahme_speichern,
-                "bild_anbieter": EINST.bild_anbieter, "live_art": EINST.live_art,
+                "bild_anbieter": w.bild_anbieter if w else None, "live_art": EINST.live_art,
                 "bild_minuten": EINST.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
 
     def einstellen(self, daten: dict) -> None:
         """Einstellungen zur Laufzeit (Dashboard-Kopfleiste). Nur bekannte Felder, geprüfte Werte."""
         # #58: Paarung prüfen, bevor auch nur eine Einstellung verändert wird. Nova ist TTS, keine Realtime-Stimme.
-        if EINST.stufe == "premium":
-            modus = daten.get("modus", EINST.assistent_modus)
-            stimme = daten.get("stimme", EINST.stimme)
+        # Ohne Wahl gelten die Premium-Vorlieben (sie gehen in die nächste Premium-Wahl ein).
+        basis = self.wahl is not None and self.wahl.basis
+        if not basis:
+            modus = daten.get("modus", self._premium_vorlieben["assistent_modus"])
+            stimme = daten.get("stimme", self._premium_vorlieben["stimme"])
             if modus not in ("gespraech", "text") or stimme not in STIMMEN:
                 raise ValueError("Unbekannte Gesprächsart oder Stimme.")
             if modus == "gespraech" and stimme not in REALTIME_STIMMEN:
                 raise ValueError("Nova ist nur für Kurzantworten verfügbar. Wähle eine Gesprächsstimme oder die Gesprächsart Kurzantwort.")
-            if daten.get("bild_anbieter", EINST.bild_anbieter) != "openai":
+            if daten.get("bild_anbieter", "openai") != "openai":
                 raise ValueError("Premium verwendet ausschließlich OpenAI.")
         if "assistent" in daten:
             self.assistent.aktiv = bool(daten["assistent"])
-        if EINST.stufe == "basis":
+        if basis:
             # Basis: Gesprächsart, Stimme und Bildweg stehen fest (nur Mistral, Custom-Voice, Überblick als Text)
             daten = {k: v for k, v in daten.items() if k not in ("modus", "stimme", "bild_anbieter")}
-        if daten.get("modus") in ("gespraech", "text"):
-            object.__setattr__(EINST, "assistent_modus", daten["modus"])
+        else:
+            # Premium: Stimme und Gesprächsart gelten sofort – eine neue Wahl desselben Anbieters (gleiche Ziele)
+            neu = {k: daten[w] for w, k in (("modus", "assistent_modus"), ("stimme", "stimme")) if w in daten}
+            if neu:
+                self._premium_vorlieben.update(neu)
+                if self.wahl is not None:
+                    self.wahl = self.wahl.mit(**neu)
         if daten.get("live_art") in ("schnell", "sparsam"):
             object.__setattr__(EINST, "live_art", daten["live_art"])  # gilt ab dem nächsten Meetingstart
-        if daten.get("bild_anbieter") == "openai":
-            object.__setattr__(EINST, "bild_anbieter", daten["bild_anbieter"])
-            self._onepager_voll = None  # Fortschreibung nur innerhalb eines Anbieters
-        if daten.get("stimme") in STIMMEN:
-            object.__setattr__(EINST, "stimme", daten["stimme"])
         if "bild_minuten" in daten:
             object.__setattr__(EINST, "onepager_minuten", max(0.0, min(60.0, float(daten["bild_minuten"]))))
         if "aufnahme" in daten:
@@ -516,38 +549,6 @@ class Coach:
         if m.transkript:
             teile.append(m.transkript[-1].text)
         return " ".join(teile)[-800:]
-
-    async def block_verarbeiten(self, wav: bytes, start: float) -> None:
-        if self.knopfdruck or EINST.stufe == "basis":
-            # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription mit OpenAI-Diarisierung – nicht ohne
-            # Knopf, und nicht in Basis (dort geht nichts an OpenAI)
-            return  # Version 1 (Blöcke) schickt jeden Block sofort zur Transkription – nicht ohne Knopf
-        async with self._sperre:
-            if self._client is None:
-                self.fehler = "Kein KI-Schlüssel – in den Einstellungen eintragen."
-                await self.melden()
-                return
-            dauer, pegel = transkription.wav_info(wav)
-            if pegel < transkription.STILLE_RMS:
-                self.meeting.letztes_block_ende = max(self.meeting.letztes_block_ende, start + dauer)
-                return
-            try:
-                spur, saetze, text_sekunden = await transkription.transkribieren(
-                    self._client, EINST.transkriptions_modell, EINST.text_modell, wav,
-                    self.referenzen, EINST.sprache, self.vokabel_prompt(),
-                )
-            except Exception as e:  # noqa: BLE001 – Fehler sichtbar machen, nicht abstürzen
-                log.warning("Transkription fehlgeschlagen: %s", fehlertext(e))
-                self.fehler = f"Transkription fehlgeschlagen: {fehlertext(e)}"
-                await self.melden()
-                return
-            self.fehler = None
-            nutzung_loggen({"art": "sprecherspur", "modell": EINST.transkriptions_modell, "sekunden_audio": round(dauer, 1)})
-            nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(text_sekunden, 1)})
-            self.meeting.letztes_block_ende = max(self.meeting.letztes_block_ende, start + dauer)
-            spur_segmente = [Segment(r["sprecher"], "", start + r["start"], start + r["ende"]) for r in spur]
-            saetze_segmente = [Segment(r["sprecher"], r["text"], start + r["start"], start + r["ende"]) for r in saetze]
-            await self._segmente_verarbeiten(spur_segmente, saetze_segmente)
 
     # --- Denken ------------------------------------------------------------
     async def _segmente_verarbeiten(self, spur: list[Segment], saetze: list[Segment] | None = None) -> None:
@@ -657,9 +658,9 @@ class Coach:
             return None
         punkt_vorher = m.aktiver_punkt
         try:
-            modell = EINST.zuordnung_modell or EINST.analyse_modell
+            modell = self.wahl.zuordnung_modell
             ergebnis, nutzung = await themen.zuordnen(
-                self._client, modell, m, text, EINST.analyse_aufwand, ton="ton" in m.regel_ids, kontext=kontext
+                self._client, modell, m, text, self.wahl.analyse_aufwand, ton="ton" in m.regel_ids, kontext=kontext
             )
         except Exception as e:  # noqa: BLE001
             log.warning("Themen-Zuordnung fehlgeschlagen: %s", fehlertext(e))
@@ -721,12 +722,10 @@ class Coach:
                 log.warning("Meeting-Ablage nicht möglich: %s", e)
                 self.archiv = None
         KOSTEN.neues_meeting()
-        from .mistral import MistralClient
-
-        ziel = vars(self._client).get("_api", self._client) if self._client is not None else None  # AboClient
-        if isinstance(ziel, MistralClient):  # Basis: Kontextwörter der Batch-Transkription (Voxtral)
+        if self.wahl is not None and self.wahl.basis and self._client is not None:
+            # Basis: Kontextwörter der Batch-Transkription (Voxtral)
             m = self.meeting
-            ziel.stichwoerter = ([EINST.assistent_name] if self.assistent.aktiv else []) + [
+            self._client.stichwoerter = ([EINST.assistent_name] if self.assistent.aktiv else []) + [
                 p.titel for p in m.agenda] + m.teilnehmende
         self.hoerstrom = Hoerstrom(self, mit_text=self._client is not None)
         try:
@@ -765,7 +764,7 @@ class Coach:
         if self.assistent.gespraech:
             await self.assistent.gespraech.schliessen()
         # Knopfdruck: auch am Ende nichts ohne Knopf – Ergebnisse und Bild gibt es, wenn vorher gedrückt wurde
-        basis = EINST.bild_anbieter == "text"
+        basis = self.bild_als_text
         if basis and not self.knopfdruck and self._client is not None:
             # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb
             # am Ende das Protokoll wie beim Knopf: die letzten Sätze auf Artefakte prüfen (Ticket #26), daraus
@@ -795,7 +794,7 @@ class Coach:
                     or self.artefakte.laeuft):
                 break
             await asyncio.sleep(1)
-        await asyncio.sleep(25 if EINST.ki == "codex" else 8)  # Ergebnisprüfung des letzten Punkts
+        await asyncio.sleep(8)  # Ergebnisprüfung des letzten Punkts
         try:
             archiv.schreiben(endgueltig=True)
         except OSError as e:
@@ -1131,7 +1130,8 @@ class Coach:
                                       unterbrechung.hinweistext(n, 5) + regeln.vereinbart(m.regel_ids, "ausreden"))
 
     def live_text_kosten(self, sekunden: float) -> None:
-        nutzung_loggen({"art": "live-text", "modell": EINST.live_modell, "sekunden_audio": round(sekunden, 1)})
+        nutzung_loggen({"art": "live-text", "modell": self.wahl.live_modell if self.wahl else None,
+                        "sekunden_audio": round(sekunden, 1)})
 
     def _karte_ablegen(self, karte: dict) -> dict:
         """Neue Karte in den Verlauf. `still`: kam ohne Bogen (Bild, Recherche, Abschnitts-Zusammenfassung,
@@ -1154,9 +1154,9 @@ class Coach:
 
         recherche = bool(quellen)
         kontext = None if recherche else self.assistent.kontext(frage).rsplit("\n\nFrage an dich:", 1)[0]
-        karte, nutzung = await karten.verdichten(self._client, frage, antwort, kontext=kontext)
+        karte, nutzung = await karten.verdichten(self._client, frage, antwort, kontext=kontext, wahl=self.wahl)
         if nutzung:
-            nutzung_loggen({"art": "karte", "modell": EINST.assistent_modell, **nutzung})
+            nutzung_loggen({"art": "karte", "modell": self.wahl.assistent_modell, **nutzung})
         if karte is None and recherche:
             karte = {"titel": frage, "punkte": karten.saetze(antwort)}
         if karte is None:
@@ -1185,9 +1185,9 @@ class Coach:
         self._folie_laeuft = True
         await self.melden()
         try:
-            self.folie, nutzung = await folie.erstellen(self._client, self.letzte_recherche)
+            self.folie, nutzung = await folie.erstellen(self._client, self.letzte_recherche, wahl=self.wahl)
             self.folie_version += 1
-            nutzung_loggen({"art": "folie", "modell": EINST.assistent_modell, **nutzung})
+            nutzung_loggen({"art": "folie", "modell": self.wahl.assistent_modell, **nutzung})
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "folie", "titel": self.folie["titel"]})
             if karte:
                 self._karte_ablegen({"art": "folie", "titel": self.folie["titel"], "frage": self.folie["frage"],
@@ -1209,7 +1209,7 @@ class Coach:
         if self._ueberblick_laeuft:
             self._ueberblick_nachholen = self._ueberblick_nachholen or nachholen
             return False
-        if EINST.bild_anbieter == "text":
+        if self.bild_als_text:
             self._onepager_letzter_start = self.meeting.jetzt()  # Takt: der nächste automatische erst N min danach
         self._ueberblick_laeuft = True
         hintergrund(self.ueberblick_bauen(fokus))
@@ -1221,8 +1221,8 @@ class Coach:
         self._ueberblick_laeuft = True
         await self.melden()
         try:
-            u, nutzung = await ueberblick.erstellen(self._client, self.meeting, self.ueberblick, fokus)
-            nutzung_loggen({"art": "ueberblick", "modell": EINST.analyse_modell, **nutzung})
+            u, nutzung = await ueberblick.erstellen(self._client, self.meeting, self.ueberblick, fokus, wahl=self.wahl)
+            nutzung_loggen({"art": "ueberblick", "modell": self.wahl.analyse_modell, **nutzung})
             self.ueberblick = u
             self.ueberblick_version += 1
             self.protokoll.append({"zeit": self.meeting.jetzt(), "art": "ueberblick", "version": self.ueberblick_version,
@@ -1267,7 +1267,7 @@ class Coach:
         """
         if not self.meeting.transkript:
             return False
-        if EINST.bild_anbieter == "text":
+        if self.bild_als_text:
             self._onepager_letzter_start = self.meeting.jetzt()  # Takt: alle N Minuten ab hier (auch wenn gerade einer entsteht)
             return self.ueberblick_starten(fokus)
         if self._onepager_laeuft:
@@ -1289,9 +1289,9 @@ class Coach:
         try:
             # Fortschreibung immer vom letzten Gesamtbild; ein Bild mit Fokus steht für sich
             vorher = None if fokus else self._onepager_voll
-            if EINST.bild_anbieter == "openai" and self._client is not None:
+            if self.wahl is not None and self.wahl.bild_anbieter == "openai" and self._client is not None:
                 from . import bild_gpt
-                erg = await bild_gpt.erzeugen(self._client, m, vorher, fokus)
+                erg = await bild_gpt.erzeugen(self._client, m, vorher, fokus, wahl=self.wahl)
                 self.onepager_png, self.onepager_svg = erg["png"], None
             else:
                 raise RuntimeError("OpenAI-Bildweg nicht verfügbar; kein Anbieter-Fallback.")
@@ -1309,7 +1309,7 @@ class Coach:
                                  "titel": f"Live-Bild · Stand {analyse.mmss(stand)}" + (f" · {fokus}" if fokus else ""),
                                  "version": self.onepager_version, "format": "png" if self.onepager_png else "svg",
                                  "still": True})
-            nutzung_loggen({"art": "onepager", "anbieter": "openai" if self.onepager_png else "claude-abo",
+            nutzung_loggen({"art": "onepager", "anbieter": "openai",
                             "fortschreibung": vorher is not None,
                             "sekunden": round(time.monotonic() - t0), "schritte": erg.get("messung")})
             self.protokoll.append({"zeit": stand, "art": "onepager", "version": self.onepager_version, "fokus": fokus})

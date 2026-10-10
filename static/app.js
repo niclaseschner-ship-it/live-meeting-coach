@@ -88,18 +88,31 @@ async function einrichtenStrikt() {
   return d;
 }
 
+// Ticket #60: Maßgeblich ist allein die bestätigte Wahl des Servers – es gibt keine Vorgabe-Stufe. Ohne sie kein Start.
 function startStufeErmitteln() {
   let ausgewaehlt = null;
   try { ausgewaehlt = sessionStorage.getItem("nestor-gewaehlte-stufe"); } catch { /* privater Browser */ }
   const aktuell = zustand?.stufe ?? null;
-  if (ausgewaehlt && aktuell && ausgewaehlt !== aktuell) {
+  if (!["basis", "premium"].includes(aktuell)) {
+    throw new Error("Bitte Variante wählen: Basis oder Premium auf der Startseite.");
+  }
+  if (ausgewaehlt && ausgewaehlt !== aktuell) {
     throw new Error(`Stufenabweichung: Startseite wählte ${ausgewaehlt}, der Server meldet ${aktuell}. Bitte auf der Startseite erneut wählen.`);
   }
-  const erwartet = ausgewaehlt || aktuell;
-  if (!["basis", "premium"].includes(erwartet)) {
-    throw new Error("Die Nestor-Variante ist noch nicht bestätigt. Bitte die Startseite neu laden und Basis oder Premium wählen.");
+  return aktuell;
+}
+// Fehlermeldung am Start-Knopf; geht es um die Variante, mit dem Weg zurück zur Wahl (Startseite)
+function startFehlerZeigen(err) {
+  const text = err?.message ?? String(err);
+  const ziel = $("start-fehler");
+  ziel.hidden = false;
+  ziel.replaceChildren(text);
+  if (/Variante|Startseite/.test(text)) {
+    const link = document.createElement("a");
+    link.href = "/";
+    link.textContent = "Zur Variantenwahl";
+    ziel.append(" ", link);
   }
-  return erwartet;
 }
 async function meetingStartAnfordern(erwartet = startStufeErmitteln()) {
   const r = await fetch("/api/start", {
@@ -137,8 +150,7 @@ $("btn-start").onclick = async () => {
     await einrichtenStrikt();
     await meetingStartAnfordern(erwartet);
   } catch (err) {
-    $("start-fehler").hidden = false;
-    $("start-fehler").textContent = err.message ?? String(err);
+    startFehlerZeigen(err);
     return;
   }
 };
@@ -579,15 +591,17 @@ function rendern() {
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
     : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
   // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
-  $("modus-pill").hidden = !z.stufe;
+  $("modus-pill").hidden = false; // Ticket #60: die Variante steht immer sichtbar da – auch wenn keine gewählt ist
   document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
   // „eigener Schlüssel“ (Ticket #17, entschlackte Kopfleiste) steht hier statt in einer eigenen Pille
   const eigenerSchluessel = z.schluessel?.quelle === "dashboard";
-  $("modus-pill").textContent = (z.stufe === "basis" ? `Basis · Mistral${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium · OpenAI")
-    + (eigenerSchluessel ? " · eigener Schlüssel" : "");
-  $("modus-pill").dataset.tip = (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
-    : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
-    + (eigenerSchluessel ? " – die KI-Kosten dieses Meetings laufen über deinen eigenen OpenAI-Schlüssel" : "");
+  $("modus-pill").textContent = !z.stufe ? "Keine Variante gewählt"
+    : (z.stufe === "basis" ? `Basis · Mistral${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium · OpenAI")
+      + (eigenerSchluessel ? " · eigener Schlüssel" : "");
+  $("modus-pill").dataset.tip = !z.stufe ? "Ohne bestätigte Variante startet kein Meeting – bitte auf der Startseite Basis oder Premium wählen."
+    : (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
+      : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
+      + (eigenerSchluessel ? " – die KI-Kosten dieses Meetings laufen über deinen eigenen OpenAI-Schlüssel" : "");
   $("modus-wechseln").hidden = z.hoeren; // Wechsel nur außerhalb eines laufenden Meetings
   $("btn-mikro").hidden = !z.hoeren;
   $("btn-mikro").classList.toggle("an", !!z.stumm);

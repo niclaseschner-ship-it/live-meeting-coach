@@ -16,7 +16,12 @@ def cloud(monkeypatch):
     coach.stufe_setzen("basis")
     yield TestClient(app), {"X-Nestor-Geheimnis": "nur-test", "X-Nestor-Kunde": "test",
                            "X-Nestor-Stufe": "premium", "X-Nestor-Modus": "live"}
-    coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+    monkeypatch.undo()  # erst den Testzustand (z. B. ein vorgetäuschter Hörstrom), dann die Wahl zurück
+    if stufe is None:
+        coach.wahl, coach.modus = None, modus
+        coach.client_neu()
+    else:
+        coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
     object.__setattr__(EINST, "betrieb", betrieb)
     object.__setattr__(EINST, "worker_geheimnis", geheimnis)
 
@@ -48,11 +53,11 @@ def test_start_verweigert_falsche_erwartete_variante(cloud):
     assert r.status_code == 409 and "Variante" in r.json()["detail"]
 
 def test_api_stufe_verweigert_fehlenden_schluessel_ohne_fallback(cloud, monkeypatch):
-    from coach import api_start
+    from coach import anbieter
     client, headers = cloud
     headers.pop("X-Nestor-Stufe")
     monkeypatch.delenv("LMC_OFFLINE")
-    monkeypatch.setattr(api_start, "openai_schluessel", lambda: "")
+    monkeypatch.setattr(anbieter, "openai_schluessel", lambda: "")
     r = client.post("/api/stufe", headers=headers, json={"stufe": "premium"})
     assert r.status_code == 503
     assert coach.stufe == "basis"
