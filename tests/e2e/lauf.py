@@ -214,7 +214,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
     gemeinsam = ["--no-sandbox", "--disable-gpu", "--renderer-process-limit=2", "--ignore-certificate-errors",
                  "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
                  "--autoplay-policy=no-user-gesture-required", "--disable-dev-shm-usage"]
-    handy = handy_ctx = desk_ctx = None
+    handy = handy_ctx = desk_ctx = uhr = None
     async with async_playwright() as pw:
         desktop_browser = await pw.chromium.launch(executable_path=CHROMIUM, headless=True, args=gemeinsam + [
             f"--use-file-for-fake-audio-capture={audio['agenda']}"])
@@ -237,6 +237,8 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
             await schritte.handy_mikro(seite, handy, lauf)
             await schritte.zweites_handy(handy_browser, url, lauf)
             await schritte.meeting_starten(seite, handy, lauf)
+            uhr = schritte.Ergebnisuhr(seite)  # #72: liest mit, wann Sätze ankommen und Karten sichtbar werden
+            uhr.starten()
             await schritte.ton_abwarten(handy, lauf, "Begrüßung", 45)
             if rauch:
                 await schritte.kernknopf(seite, "stand", "Stand Sommerfest-Budget", lauf)
@@ -245,6 +247,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
             else:
                 await schritte.transkript_pruefen(seite, lauf)
                 await schritte.ansprache_pruefen(seite, lauf)
+                await schritte.ergebnisse_zeitnah_pruefen(seite, uhr, lauf)
                 for art, soll in (("stand", "Stand Sommerfest-Budget"), ("zusammenfassen", "9.000"),
                                   ("fehlt", "fehlt"), ("protokoll", "Festgehalten"), ("ueberblick", "Budget beschlossen, Vereinsbus")):
                     await schritte.kernknopf(seite, art, soll, lauf)
@@ -266,6 +269,8 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
             lauf.pruefen("Durchlauf ohne Ausnahme", False, f"{type(e).__name__}: {str(e)[:200]}")
             await lauf.bild(seite, "ausnahme")
         finally:
+            if uhr is not None:
+                uhr.stoppen()
             if handy is not None:
                 await schritte.ton_auswerten(handy, stufe, lauf)
             lauf.belege["rss_dienste_mb"] = dienste.rss_mb()
