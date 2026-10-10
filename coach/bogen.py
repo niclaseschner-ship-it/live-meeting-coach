@@ -39,7 +39,7 @@ MUSTER = [
                        r" zusammen|(?:gib|gibst|mach|machst|zeig|zeigst|hätte gern|hätten gern|ich hätte gern"
                        r"|wir hätten gern|wir brauchen|ich brauche)? ?(?:die |eine )?zusammenfassung(?: geben| machen)?"
                        r"|zusammenfassen|ergebnisse bündeln|bündel(?:e)?(?: mir)? die ergebnisse|"
-                       r"bündle(?: mir)? die ergebnisse"),
+                       r"bündle(?: mir)? die ergebnisse|bündeln wir die ergebnisse|lass(?: uns)? die ergebnisse bündeln"),
     ("fehlt", r"was fehlt|welche lücken(?: gibt es| haben wir)?|wo fehlt was|was ist offen|was haben wir offen"
               r"|wo sind lücken|was fehlt uns|lücken klären"),
     ("stand", r"wo stehen wir|wie weit sind wir|wo sind wir|wie ist der stand|was ist der stand"),

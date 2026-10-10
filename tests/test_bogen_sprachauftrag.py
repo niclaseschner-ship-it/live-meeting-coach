@@ -10,6 +10,9 @@ from coach.bogen import karten_art
     "Fasse die Ergebnisse zusammen",
     "fass mir die Ergebnisse zusammen",
     "Ergebnisse bündeln",
+    # Ticket #62, Stufe C: die echte Transkription machte aus „bündel mir mal“ ein „bündeln wir mal“
+    "bündeln wir mal die Ergebnisse",
+    "lass uns mal die Ergebnisse bündeln",
 ])
 def test_ergebnisse_buendeln_imperativ_wird_erkannt(auftrag):
     assert karten_art(auftrag) == "zusammenfassen"
