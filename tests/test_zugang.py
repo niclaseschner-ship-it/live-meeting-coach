@@ -2,12 +2,20 @@
 
 Dazu der Cloud-Fall (Ticket #5): kein „am Laptop“ mehr, stattdessen das Worker-Geheimnis."""
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
-from coach import api_abschluss, server, zugang
-from coach.config import Einstellungen
-from coach.server import app
+# Isolation (vgl. tests/test_start.py, tests/test_server.py, tests/test_meeting_ende.py): ohne das hier ist
+# /api/start seit #60 ohne Schlüssel 503 – diese Datei darf das nicht davon abhängen, dass ein anderes
+# Testmodul LMC_OFFLINE schon vorher gesetzt hat.
+os.environ.setdefault("LMC_OFFLINE", "1")
+
+from coach import api_abschluss, server, zugang  # noqa: E402
+from coach.anbieter import wahl_fuer  # noqa: E402
+from coach.config import Einstellungen  # noqa: E402
+from coach.server import app  # noqa: E402
 
 TS = {"Tailscale-User-Login": "jemand@example.com", "X-Forwarded-For": "100.70.1.127"}
 GEHEIMNIS = "geheim-test-123"
@@ -244,6 +252,10 @@ def test_cloud_handy_ohne_login_koppelt_per_qr(cloud):
 
 
 def test_start_ohne_handy_abgewiesen(monkeypatch):
+    # Isolation (Ticket #60/#64): ohne bestätigte Variante weist /api/start schon vorher ab – erst mit einer
+    # Wahl wie in tests/test_meeting_ende.py, tests/test_variantenwahl_pilot.py prüft dieser Test wirklich den
+    # Handy-Check.
+    monkeypatch.setattr(server.coach, "wahl", wahl_fuer("basis"))
     monkeypatch.setattr(server.coach, "hoerstrom", None)
     monkeypatch.setitem(server.audio, "ws", None)
     c = TestClient(app, client=("127.0.0.1", 5000))

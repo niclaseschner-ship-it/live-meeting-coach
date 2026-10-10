@@ -225,6 +225,9 @@ async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
     global _rueckkehr_bis, _rueckkehr_archiv
     coach = _nach_ende()
     ordner = coach.archiv.ordner
+    # Ticket #64: Kosten des gerade beendeten Meetings für den Tagesdeckel des Worker – vor dem Zurücksetzen
+    # lesen (coach.einrichten() unten räumt nur coach.meeting, nicht den KOSTEN-Zähler selbst).
+    kosten_usd = coach.kosten_stand()["meeting"]
     # Cloud-Betrieb: ein im Dashboard eingetragener eigener Schlüssel galt nur für dieses eine Meeting (Angebot
     # auf der Startseite) und wird jetzt entfernt. Lokal bleibt er wie bisher gespeichert.
     if EINST.betrieb == "cloud" and schluessel_info()["quelle"] == "dashboard":
@@ -247,7 +250,9 @@ async def abschluss_fertig(request: Request, hintergrund: BackgroundTasks):
     meeting_id = zugang.meeting_id(request.scope)
     if meeting_id:
         hintergrund.add_task(
-            worker_melden, "/intern/meeting-ende", {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)},
+            worker_melden, "/intern/meeting-ende",
+            # kostenUsd (Ticket #64): Tagesdeckel je Kunde im KundenZaehler-DO (cloudflare/src/zaehler-logik.ts)
+            {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope), "kostenUsd": round(kosten_usd, 4)},
         )
     antwort = JSONResponse({"ok": True}, background=hintergrund)
     # Mit denselben Attributen wie beim Setzen im Worker (cloudflare/src/index.ts: HttpOnly; Secure; SameSite=Lax) –

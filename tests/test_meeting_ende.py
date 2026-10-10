@@ -11,17 +11,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import urllib.error
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
-from coach import api_abschluss, server
-from coach.anbieter import wahl_fuer
-from coach.config import EINST
-from coach.pipeline import Coach
-from coach.server import app
+# Isolation (vgl. tests/test_start.py, tests/test_server.py, tests/test_basis.py, tests/test_knopfdruck.py):
+# ohne das hier ist /api/start seit #60 ohne Schlüssel 503 – dieser Datei darf das nicht davon abhängen, dass ein
+# anderes Testmodul LMC_OFFLINE schon vorher gesetzt hat.
+os.environ.setdefault("LMC_OFFLINE", "1")
+
+from coach import api_abschluss, server  # noqa: E402
+from coach.anbieter import wahl_fuer  # noqa: E402
+from coach.config import EINST  # noqa: E402
+from coach.pipeline import Coach  # noqa: E402
+from coach.server import app  # noqa: E402
 
 _GEHEIMNIS = "geheim-test-meeting-ende"
 _WORKER_URL = "https://nestor.example.workers.dev"
@@ -234,7 +240,9 @@ def test_fertig_meldet_dem_worker_das_ende_und_loescht_das_meeting_cookie(
     # erst NACH der Antwort aufgerufen (BackgroundTasks) – hier schon sichtbar, weil TestClient sie vor der
     # Rückgabe von .post() abwartet (Starlette führt sie im selben ASGI-Zyklus aus)
     assert aufgerufen["pfad"] == "/intern/meeting-ende"
-    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme"}
+    # kostenUsd (Ticket #64): Tagesdeckel je Kunde im Worker – aus coach.kosten_stand() (hier von der Fixture
+    # beendetes_meeting auf 0,10 $ gesetzt), vor dem Zurücksetzen des Meetings gelesen.
+    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme", "kostenUsd": 0.1}
     gesetztes_cookie = r.headers.get("set-cookie", "")
     assert "nestor_meeting=" in gesetztes_cookie and "Max-Age=0" in gesetztes_cookie
 

@@ -90,3 +90,40 @@ export async function containerAufrufenOderAusweichen(
     return new Response(KAPAZITAET_SEITE, { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
   }
 }
+
+/** Notschalter (Ticket #64): Worker-Variable `NESTOR_PAUSE` = "1" – nur dieser eine Wert schaltet die Pause
+ * ein, alles andere (fehlend, "0", irgendein anderer Text) lässt neue Meetings zu. Reine Var-Lektüre, kein
+ * Geheimnis und kein Durable Object: die einzige Aufrufstelle (index.ts) prüft sie direkt dort, wo sie sonst
+ * eine brandneue Meeting-ID mintet – laufende Meetings fragen das nie erneut ab und bleiben unberührt. */
+export function pausiert(env: { NESTOR_PAUSE?: string }): boolean {
+  return env.NESTOR_PAUSE === "1";
+}
+
+const PAUSE_SEITE = `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Nestor · kurz pausiert</title>
+<style>
+  body { font-family: "Inter", "Segoe UI", system-ui, sans-serif; background: #0B1020; color: #E2E8F0;
+         margin: 0; padding: 48px 16px; display: grid; justify-content: center; text-align: center; }
+  main { max-width: 440px; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  p { color: #94A3B8; line-height: 1.5; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kurz keine neuen Meetings</h1>
+  <p>Nestor nimmt im Moment keine neuen Meetings an. Schon laufende Meetings sind davon nicht betroffen. Bitte
+    in ein paar Minuten noch einmal versuchen.</p>
+</main>
+</body>
+</html>`;
+
+/** Die freundliche Antwort während der Pause – reicht keinen rohen Fehler durch, wie `containerAufrufenOderAusweichen`. */
+export function pauseSeite(): Response {
+  return new Response(PAUSE_SEITE, { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
+}

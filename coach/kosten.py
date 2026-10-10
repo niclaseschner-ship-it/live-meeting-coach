@@ -42,6 +42,17 @@ WEBSUCHE_MISTRAL = 0.03
 BILD = 0.05  # gpt-image-2, 1536×1024, medium, je Bild
 BILD_VORLAGE = 0.01  # Eingabebild bei der Fortschreibung
 
+# --- Kostenbremse (Ticket #64, Entscheidung Niclas 10.10.2026) -----------------------------------------------
+# Dollar-Deckel je Meeting, nach Stufe (coach/anbieter.py). Erreicht: keine weiteren KI-Aufrufe mehr – die
+# zentrale Sperre sitzt in coach/pipeline.py (Coach.takt/_kosten_pruefen, setzt self._client = None), lokale
+# Signale (Zeit, Monolog, Überlappung, Sprechererkennung) laufen unverändert weiter. Der Tagesdeckel je Kunde
+# (15 $, Worker) steht aus denselben Gründen nicht hier, sondern in cloudflare/src/zaehler-logik.ts.
+DECKEL_USD = {"premium": 5.0, "basis": 2.0}
+# Höchstdauer je Meeting: Warnung im Band HOECHSTDAUER_WARNUNG_SEKUNDEN vorher; bei Erreichen beendet
+# Coach.takt das Meeting geordnet (wie ein normales „Fertig“ – Ablage und Datenspende bleiben möglich).
+HOECHSTDAUER_SEKUNDEN = 3 * 60 * 60
+HOECHSTDAUER_WARNUNG_SEKUNDEN = 10 * 60
+
 # Anzeige im Dashboard: Funktion -> Arten im Nutzungsprotokoll
 BEREICHE = {
     "live-text": ("Live-Text", ("live-text", "text", "sprecherspur")),

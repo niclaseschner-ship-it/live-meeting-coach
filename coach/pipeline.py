@@ -161,6 +161,13 @@ class Coach:
         self.aeusserungen: list = []  # Regel 1: Äußerungen mit Sprecherabschnitten und Pegel (unterbrechung.py)
         self._unterbrechungen_gemeldet: set[float] = set()
         self.artefakte = Artefakte(self)  # Ticket #26: Aufgaben, Entscheidungen, offene Punkte, Risiken
+        # Ticket #64: Kostenbremse – je Meeting einmal gesperrt bzw. geordnet beendet, nicht mehrfach ausgelöst.
+        self._kosten_gedeckelt = False
+        self._hoechstdauer_beendet = False
+        # Cloud-Betrieb: Meeting-Kennung und Kunde für die Telegram-Meldung bei Kostendeckel (Ticket #64), vom
+        # Server beim echten /api/start gesetzt (coach/server.py) – der Coach selbst sieht keine Anfrage mehr,
+        # sobald der Takt mitten im Meeting läuft.
+        self._cloud_meeting: dict | None = None
 
     @property
     def knopfdruck(self) -> bool:
@@ -217,6 +224,8 @@ class Coach:
         self.bilder = {}
         self.knopf = Knopfstand()
         self.artefakte = Artefakte(self)
+        self._kosten_gedeckelt = False
+        self._hoechstdauer_beendet = False
 
     @property
     def stufe(self) -> str | None:
@@ -233,6 +242,14 @@ class Coach:
         """Im Meeting – vom Start bis die Ablage fertig ist – bleibt die Wahl fest (Ticket #60)."""
         return (self.startet or self.hoerstrom is not None
                 or (self.archiv is not None and not self.archiv.fertig))
+
+    @property
+    def ki_gesperrt(self) -> bool:
+        """Ticket #64: Meeting-Kostendeckel erreicht – keine neue KI-Verbindung mehr, auch keine, die ohne
+        `self._client` läuft (Realtime-Gespräch/-Begrüßung, coach/gespraech.py, coach/begruessung.py; beide
+        prüfen das vor jedem `anbieter.ws_verbinden`). Laufende Live-Text- und Gesprächsverbindungen schließt
+        `_kosten_pruefen` beim Erreichen selbst – diese Eigenschaft verweigert nur neue."""
+        return self._kosten_gedeckelt
 
     def stufe_setzen(self, stufe: str, nur_knopfdruck: bool = False) -> None:
         """Nestor Basis (nur Mistral) oder Premium (OpenAI) für das nächste Meeting. „Nur auf Knopfdruck“ ist ein
@@ -268,7 +285,9 @@ class Coach:
 
     def kosten_stand(self) -> dict:
         m = self.meeting
-        live = self.hoerstrom.live if self.hoerstrom else None
+        # getattr statt `self.hoerstrom.live`: Ticket #64 ruft das jetzt aus Coach.takt heraus (_kosten_pruefen),
+        # wo einzelne Tests den Hörstrom nur als knappe Attrappe setzen (vgl. tests/test_basis.py).
+        live = getattr(self.hoerstrom, "live", None)
         return KOSTEN.stand(live_sekunden=live.gesendete_sekunden if live and live._ws is not None else 0.0,
                             live_modell=self.wahl.live_modell if self.wahl else "",
                             meeting_sekunden=m.jetzt() if m.gestartet_um is not None else 0.0,
@@ -508,6 +527,8 @@ class Coach:
         m = self.meeting
         if not m.laeuft:
             return
+        self._kosten_pruefen()
+        self._hoechstdauer_pruefen()
         # Monolog live: der Hinweis kommt, sobald die hochgezählte Rede die Schwelle erreicht
         if analyse.monolog_live(m, self.monolog_sekunden)[0]:
             self._monolog_hinweis()
@@ -537,6 +558,68 @@ class Coach:
             self.entscheider.einmalig(
                 m, f"zeit-{i}-rot", "zeit", "warnung", "gruppe",
                 f"„{p.titel}“ ist {analyse.mmss(ueber)} Min. über dem Zeitfenster.", punkt=i,
+            )
+
+    # --- Kostenbremse (Ticket #64) ------------------------------------------
+    def _kosten_pruefen(self) -> None:
+        """Meeting-Kostendeckel (coach/kosten.py) erreicht? Zentrale Sperre über den Client: alle Aufrufstellen
+        prüfen schon `self._client is None` und fallen dort auf ihre „kein Schlüssel“-Behandlung zurück – lokale
+        Signale (Zeit, Monolog, Überlappung, Sprechererkennung) laufen unverändert weiter."""
+        if self._kosten_gedeckelt or self.wahl is None or self._client is None:
+            return
+        deckel = kosten.DECKEL_USD.get(self.wahl.stufe)
+        if deckel is None or self.kosten_stand()["meeting"] < deckel:
+            return
+        self._kosten_gedeckelt = True
+        alt, self._client = self._client, None
+        if hasattr(alt, "schliessen"):
+            hintergrund_leise(alt.schliessen())
+        # Die teuersten Ströme laufen über eigene WebSockets, nicht über self._client (Live-Text:
+        # coach/livetext.py; Realtime-Gespräch/-Begrüßung: coach/gespraech.py, coach/begruessung.py) – sie
+        # bleiben offen, bis sie selbst geschlossen werden. Laufende hier geordnet zu, neue verweigert
+        # `ki_gesperrt` oben zentral in Gespraech.starten (Begruessung erbt davon).
+        if self.hoerstrom is not None and self.hoerstrom.live is not None:
+            hintergrund_leise(self.hoerstrom.live.schliessen())
+        if self.assistent.gespraech is not None:
+            hintergrund_leise(self.assistent.gespraech.schliessen())
+        self.entscheider.einmalig(
+            self.meeting, "kosten-deckel", "kosten", "warnung", "gruppe",
+            f"Kostendeckel für dieses Meeting erreicht ({deckel:.0f} $) – die KI-Auswertung ist für den Rest "
+            "des Meetings aus, Nestor hört weiter zu und zeigt die technischen Hinweise.",
+        )
+        if self.archiv is not None and not self.archiv.fertig:
+            self.archiv.ereignis("kosten_deckel", stufe=self.wahl.stufe, deckel_usd=deckel)
+        hintergrund(self._kosten_deckel_melden(deckel))
+
+    async def _kosten_deckel_melden(self, deckel: float) -> None:
+        """Telegram über den vorhandenen Worker-Rückkanal (api_abschluss.worker_melden), wie schon bei
+        Meeting-Start/-Ende (coach/server.py, coach/api_abschluss.py). Lokal (kein Cloud-Meeting) ein No-Op."""
+        if not self._cloud_meeting or self.wahl is None:
+            return
+        from .api_abschluss import worker_melden
+
+        await asyncio.to_thread(
+            worker_melden, "/intern/kosten-deckel", {**self._cloud_meeting, "stufe": self.wahl.stufe, "usd": deckel},
+        )
+
+    def _hoechstdauer_pruefen(self) -> None:
+        """Höchstdauer je Meeting (coach/kosten.py): Warnung im Band HOECHSTDAUER_WARNUNG_SEKUNDEN vorher, bei
+        Erreichen ein geordnetes Ende wie ein normales „Fertig“ (Ablage und Datenspende bleiben möglich)."""
+        if self._hoechstdauer_beendet:
+            return
+        rest = kosten.HOECHSTDAUER_SEKUNDEN - self.meeting.jetzt()
+        if rest <= 0:
+            self._hoechstdauer_beendet = True
+            self.entscheider.einmalig(
+                self.meeting, "hoechstdauer-ende", "hoechstdauer", "warnung", "gruppe",
+                "Höchstdauer von 3 Std. erreicht – Nestor beendet das Meeting geordnet.",
+            )
+            hintergrund(self.hoeren_beenden())
+            return
+        if rest <= kosten.HOECHSTDAUER_WARNUNG_SEKUNDEN:
+            self.entscheider.einmalig(
+                self.meeting, "hoechstdauer-warnung", "hoechstdauer", "hinweis", "gruppe",
+                "Noch 10 Min. bis zur Höchstdauer von 3 Std. – Nestor beendet das Meeting dann von selbst.",
             )
 
     # --- Zuhören -----------------------------------------------------------
