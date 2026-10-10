@@ -695,7 +695,7 @@ class Artefakte:
 
             self._abschnitt_laeuft = True
             hintergrund(self.abschnitt_abschliessen(m.aktiver_punkt if m.agenda else None, m.jetzt(), "zeit"))
-        if (self._wiederholen_um is not None and m.jetzt() >= self._wiederholen_um and not c.knopfdruck
+        if (self._wiederholen_um is not None and m.jetzt() >= self._wiederholen_um
                 and c._client is not None):
             # Ticket #72: nach einem Fehler beim nächsten fälligen Takt noch einmal
             from .pipeline import hintergrund
@@ -826,7 +826,7 @@ class Artefakte:
         from .assistent import angesprochen
 
         c = self.coach
-        if c is None or c.knopfdruck or c._client is None or not c.meeting.laeuft:
+        if c is None or c._client is None or not c.meeting.laeuft:
             return
         text = " ".join(s.text for s in saetze if s.text)
         if not text or angesprochen(text) or not signal(text):
@@ -855,7 +855,7 @@ class Artefakte:
         try:
             if warten:
                 await asyncio.sleep(warten)
-            while self._schnell_ab is not None and c._client is not None and not c.knopfdruck:
+            while self._schnell_ab is not None and c._client is not None:
                 jetzt = m.jetzt()
                 self._schnell_zeiten = [t for t in self._schnell_zeiten if jetzt - t < 3600]
                 if len(self._schnell_zeiten) >= SCHNELL_MAX_STUNDE:
