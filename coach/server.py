@@ -245,7 +245,9 @@ async def kopplung(request: Request):
         meeting = zugang.meeting_id(request.scope)
         token = None
         if meeting:
-            antwort_token = api_abschluss.worker_melden(
+            # #60: im Thread – die Ereignisschleife (Audio, Takt) wartet nicht auf den Worker
+            antwort_token = await asyncio.to_thread(
+                api_abschluss.worker_melden,
                 "/intern/kopplungstoken", {"meetingId": meeting, "kunde": zugang.kunde(request.scope)},
             )
             token = antwort_token.get("token") if antwort_token else None

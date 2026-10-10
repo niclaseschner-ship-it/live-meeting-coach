@@ -329,7 +329,8 @@ mehrdeutige Kandidaten werden nicht geraten (#35).
 Ausdrückliche Korrekturen können bestehende Artefakte berichtigen, gemeinsame Verantwortlichkeit erfordert
 eine belegte Vereinbarung. Relative Fristen erhalten das Meetingdatum als Bezug; pauschale Fristen ergänzen
 alle betroffenen Aufgaben, spätere Ausnahmen nur die betreffende Aufgabe. Premium verwendet den
-serverseitigen OpenAI-Projektschlüssel; Basis/Mistral bleibt die Vorauswahl.
+serverseitigen OpenAI-Projektschlüssel. Es gibt keine Vorauswahl der Stufe: ohne bestätigte Wahl startet kein
+Meeting, und während eines Meetings ist die Stufe fest (#60).
 
 Abnahme-Nachtrag (#40, #41): Telegram prüft zusätzlich zur HTTP-Antwort die positive Bot-API-Bestätigung
 und protokolliert ausschließlich deren Erfolg, ohne Nachricht, Chat-ID oder Token. Die feste Begrüßung

@@ -96,7 +96,8 @@ der Meeting-Zusammenfassung als Bild.
 
 Zwei Stufen (Ticket #13/#18, [Lastenheft 3](docs/lastenheft.md)): **Nestor Premium** ist der Standard und leitet
 jeden KI-Aufruf über OpenAI, **Nestor Basis** das Downgrade für DSGVO-Nähe und weniger Kosten – über Mistral AI
-(Frankreich, EU; `coach/mistral.py`). Gewählt auf der Startseite bzw. lokal mit `LMC_STUFE=basis|premium`;
+(Frankreich, EU; `coach/mistral.py`). Gewählt auf der Startseite – ohne Wahl startet kein Meeting, eine Vorgabe-Stufe
+gibt es nicht (#60); alle Anbieter-Endpunkte und -Clients entstehen in `coach/anbieter.py`;
 Schlüssel `OPENAI_API_KEY` bzw. `MISTRAL_API_KEY` (oder `LMC_MISTRAL_SCHLUESSEL`). Spalte „Technik“: Premium,
 *Basis kursiv*.
 
