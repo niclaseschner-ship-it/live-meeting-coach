@@ -1,7 +1,7 @@
 // Nestor am Handy: Service Worker nur für Installierbarkeit und eine Offline-Seite.
 // Immer zuerst das Netz – eine alte Fassung im Handy darf nie mit einem neueren Laptop sprechen (Teachbuddy, 14.09.).
-const CACHE = "nestor-handy-2";
-const SCHALE = ["/handy", "/static/basis.js", "/static/handy.js", "/static/style.css", "/static/handy.css"];
+const CACHE = "nestor-handy-3";
+const SCHALE = ["/handy", "/static/basis.js", "/static/phase.js", "/static/verlauf.js", "/static/handy.js", "/static/style.css", "/static/handy.css"];
 
 self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SCHALE)).catch(() => {})); });
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys()

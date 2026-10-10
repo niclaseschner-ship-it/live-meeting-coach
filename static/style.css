@@ -678,6 +678,10 @@ button.luecke:hover { border-color: var(--rot); }
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .taste .i svg { width: 20px; height: 20px; display: block; }
 .taste.haelt { background: var(--rot); color: #fff; }
+/* Ticket #66: ein Bedienmodell für alle Sprechknöpfe (basis.js: sprechknopf) – gleiche Rückmeldung überall */
+.taste, .h-halten, #agenda-mikro { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.taste.verarbeitet, .h-halten.verarbeitet, #agenda-mikro.verarbeitet { opacity: .75; cursor: progress; }
+.taste.sprech-fehler, .h-halten.sprech-fehler, #agenda-mikro.sprech-fehler { border-color: var(--rot); box-shadow: 0 0 0 2px var(--rot-weich); }
 .knopf-bogen { color: var(--marke); font-weight: 700; }
 
 @media (max-width: 1100px) {

@@ -11,8 +11,6 @@
 let agendaPunkte = [];       // [{titel, minuten, ziel}] – die Arbeitskopie, die die Tabelle zeigt
 let agendaLaeuft = false;    // ein Vorschlag (Text oder Sprache) ist unterwegs
 let agendaSchluesselDa = true;
-let agendaHoert = false;     // Mikro-Aufnahme läuft, solange die Taste gehalten wird
-let agendaMikroGedrueckt = false;
 let agendaDialog = [];      // nur im offenen Tab, nicht dauerhaft gespeichert
 
 function agendaInit() {
@@ -36,16 +34,15 @@ function agendaInit() {
   $("agenda-feld").onkeydown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agendaSenden(); }
   };
-  $("agenda-mikro").addEventListener("pointerdown", agendaMikroStart);
-  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("agenda-mikro").addEventListener(ev, agendaMikroEnde);
-  $("agenda-mikro").addEventListener("keydown", (e) => {
-    if (!["Space", "Enter"].includes(e.code)) return;
-    e.preventDefault(); if (!e.repeat) agendaMikroStart(e);
+  // Ticket #66: dasselbe Bedienmodell wie jede Sprechtaste (basis.js: sprechknopf) – halten, sprechen, loslassen
+  sprechknopf($("agenda-mikro"), {
+    anzeige: (text) => { $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = text; },
+    ruhe: () => null, // die Antwort (Rückfrage, Entwurf) bleibt stehen
+    bereit: () => !agendaLaeuft && agendaSchluesselDa,
+    start: () => agendaAufnahme.starten(),
+    ende: () => agendaAufnahme.stoppen(),
+    senden: agendaSpracheSenden,
   });
-  $("agenda-mikro").addEventListener("keyup", (e) => {
-    if (["Space", "Enter"].includes(e.code)) { e.preventDefault(); agendaMikroEnde(); }
-  });
-  $("agenda-mikro").addEventListener("contextmenu", (e) => e.preventDefault());
   agendaTabelleRendern();
 }
 
@@ -201,46 +198,6 @@ function agendaWavBauen(proben, rate) {
   for (let i = 0; i < proben.length; i++) d.setInt16(44 + i * 2, proben[i], true);
   return new Blob([puffer], { type: "audio/wav" });
 }
-async function agendaMikroStart(e) {
-  e.preventDefault();
-  if (agendaMikroGedrueckt || agendaHoert || agendaLaeuft || !agendaSchluesselDa) return;
-  agendaMikroGedrueckt = true;
-  try {
-    await agendaAufnahme.starten();
-    if (!agendaMikroGedrueckt) {
-      await agendaAufnahme.stoppen();
-      return;
-    }
-    agendaHoert = true;
-    iconSetzen("agenda-mikro", "mikroAus");
-    $("agenda-mikro").classList.add("haelt");
-    $("agenda-mikro").setAttribute("aria-label", "Aufnahme läuft – loslassen zum Senden");
-    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Ich höre … loslassen zum Senden";
-  } catch (err) {
-    agendaMikroGedrueckt = false;
-    agendaHoert = false;
-    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Mikrofon nicht verfügbar: ${err.message ?? err}`;
-  }
-}
-async function agendaMikroEnde() {
-  agendaMikroGedrueckt = false;
-  if (!agendaHoert) return;
-  agendaHoert = false;
-  $("agenda-mikro").classList.remove("haelt");
-  $("agenda-mikro").setAttribute("aria-label", "Sprechtaste halten");
-  iconSetzen("agenda-mikro", "mikro");
-  let wav;
-  try { wav = await agendaAufnahme.stoppen(); }
-  catch (err) {
-    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Aufnahme konnte nicht beendet werden: ${err.message ?? err}`;
-    return;
-  }
-  if (wav.size < 44 + RATE * 2 * 0.5) {
-    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Zum Diktieren gedrückt halten, sprechen, dann loslassen.";
-    return;
-  }
-  await agendaSpracheSenden(wav);
-}
 async function agendaSpracheSenden(wav) {
   $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Agenda wird vorbereitet …";
   agendaLaufendSetzen(true);
@@ -251,12 +208,9 @@ async function agendaSpracheSenden(wav) {
     form.append("verlauf", JSON.stringify(agendaDialog));
     const r = await fetch("/api/agenda/sprache", { method: "POST", body: form });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      $("agenda-antwort").textContent = `Fehler: ${d.detail ?? r.status}`;
-      return;
-    }
+    if (!r.ok) return { text: `Fehler: ${d.detail ?? r.status}`, fehler: true };
     agendaUebernehmen(d, d.eingabe);
   } catch (err) {
-    $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = `Fehler: ${err.message ?? err}`;
+    return { text: `Fehler: ${err.message ?? err}`, fehler: true };
   } finally { agendaLaufendSetzen(false); }
 }

@@ -267,6 +267,106 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
   return b;
 }
 
+// ---------- Sprechknopf: ein Bedienmodell für alle Sprechknöpfe (Ticket #66) ----------
+// Agenda-Mikro, Sprechtaste am Laptop (auch Leertaste) und Sprechtaste am Handy verhalten sich gleich
+// (szenarien/ui_vertrag.json → „sprechknoepfe“):
+//   halten     → sofort Klasse „haelt“ und „Ich höre … loslassen zum Senden“ (noch bevor das Mikrofon offen ist)
+//   loslassen  → Klasse „verarbeitet“ und „Wird verarbeitet …“, dann das Ergebnis
+//   zu kurz    → Hinweis, wie es geht; Fehler (Mikrofon, Server) → Klasse „sprech-fehler“ und sichtbarer Text
+//   Zustände: ruhe → haelt → verarbeitet → meldung | fehler → (nach einigen Sekunden) ruhe
+// Danach kehrt die Anzeige nach einigen Sekunden in die Ruhe zurück. Was aufgenommen und wohin es geschickt wird,
+// bringt jeder Knopf selbst mit:
+//   anzeige(text, zustand)  wohin die Rückmeldung geschrieben wird
+//   ruhe()                  Ruhetext (oder null: Anzeige bleibt stehen)
+//   start() / ende()        Aufnahme öffnen / schließen → WAV (ArrayBuffer oder Blob)
+//   senden(wav)             verarbeiten → {text, fehler} oder nichts (dann zeigt der Knopf selbst das Ergebnis)
+//   abbrechen()             bei zu kurzem Halten (z. B. dem Server sagen, dass doch nichts kommt)
+//   bereit()                darf jetzt gehalten werden?
+//   leertaste               zusätzlich die Leertaste überall auf der Seite (außer in Eingabefeldern/anderen Knöpfen)
+const SPRECH_HAELT = "Ich höre … loslassen zum Senden";
+const SPRECH_KURZ = "Zu kurz – gedrückt halten, sprechen, dann loslassen.";
+function sprechknopf(knopf, o) {
+  const s = { zustand: "ruhe", gedrueckt: false, start: null, uhr: null };
+  function zeigen(zustand, text) {
+    s.zustand = zustand;
+    knopf.classList.toggle("haelt", zustand === "haelt");
+    knopf.classList.toggle("verarbeitet", zustand === "verarbeitet");
+    knopf.classList.toggle("sprech-fehler", zustand === "fehler");
+    knopf.setAttribute("aria-pressed", String(zustand === "haelt"));
+    if (text != null) o.anzeige(text, zustand);
+  }
+  function spaeterRuhe(ms = 6000) {
+    clearTimeout(s.uhr);
+    s.uhr = setTimeout(() => { if (!s.gedrueckt && s.zustand !== "verarbeitet") zeigen("ruhe", o.ruhe?.() ?? null); }, ms);
+  }
+  async function an(e) {
+    e?.preventDefault?.();
+    if (s.gedrueckt || s.zustand === "haelt" || s.zustand === "verarbeitet") return;
+    if (knopf.disabled || knopf.hidden || (o.bereit && !o.bereit())) return;
+    s.gedrueckt = true; clearTimeout(s.uhr);
+    zeigen("haelt", SPRECH_HAELT);
+    const start = s.start = (async () => o.start())(); // synchron bis zum ersten await – noch in der Geste
+    try { await start; } catch (err) {
+      s.gedrueckt = false;
+      zeigen("fehler", `Mikrofon nicht verfügbar: ${err?.message ?? err}`); spaeterRuhe();
+    }
+  }
+  async function aus() {
+    if (!s.gedrueckt) return;
+    s.gedrueckt = false;
+    try { await s.start; } catch { return; } // den Fehler zeigt an()
+    let wav;
+    try { wav = await o.ende(); } catch (err) {
+      zeigen("fehler", `Aufnahme konnte nicht beendet werden: ${err?.message ?? err}`); spaeterRuhe(); return;
+    }
+    if ((wav?.byteLength ?? wav?.size ?? 0) < 44 + RATE * 2 * 0.5) { // unter einer halben Sekunde: versehentlich getippt
+      try { await o.abbrechen?.(); } catch { /* nichts zu tun */ }
+      zeigen("fehler", o.kurz ?? SPRECH_KURZ); spaeterRuhe(); return;
+    }
+    zeigen("verarbeitet", "Wird verarbeitet …");
+    let r;
+    try { r = await o.senden(wav); } catch (err) { r = { text: `Fehler: ${err?.message ?? err}`, fehler: true }; }
+    if (r?.text) { zeigen(r.fehler ? "fehler" : "meldung", r.text); spaeterRuhe(); }
+    else zeigen("ruhe", null);
+  }
+  knopf.addEventListener("pointerdown", an);
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) knopf.addEventListener(ev, aus);
+  knopf.addEventListener("contextmenu", (e) => e.preventDefault());
+  knopf.addEventListener("keydown", (e) => {
+    if (!["Space", "Enter"].includes(e.code)) return;
+    e.preventDefault(); e.stopPropagation(); if (!e.repeat) an(e);
+  });
+  knopf.addEventListener("keyup", (e) => { if (["Space", "Enter"].includes(e.code)) { e.preventDefault(); e.stopPropagation(); aus(); } });
+  if (o.leertaste) {
+    document.addEventListener("keydown", (e) => {
+      if (e.code !== "Space" || knopf.hidden) return;
+      if (e.target.closest?.("button, input, textarea, select, summary, a, [role='button'], [contenteditable='true']")) return;
+      e.preventDefault(); if (!e.repeat) an(e);
+    });
+    document.addEventListener("keyup", (e) => { if (e.code === "Space" && s.gedrueckt) { e.preventDefault(); aus(); } });
+  }
+  window.addEventListener("blur", aus);
+  return { get zustand() { return s.zustand; }, get haelt() { return s.gedrueckt; }, ruhe: () => { if (s.zustand === "ruhe") o.anzeige(o.ruhe?.() ?? "", "ruhe"); } };
+}
+// Sprechtaste zu Nestor (Desktop und Handy): Aufnahme über halten, Frage an /api/frage/audio.
+const frageHalten = {
+  async start() {
+    try {
+      await halten.start();
+      await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
+    } catch (err) { await halten.ende().catch(() => {}); throw err; }
+  },
+  ende: () => halten.ende(),
+  abbrechen: () => fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: false }) }),
+  async senden(wav) {
+    try {
+      const r = await fetch("/api/frage/audio", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+      const d = await r.json().catch(() => ({}));
+      return !r.ok ? { text: d.detail ?? `Fehler ${r.status}`, fehler: true } : !d.ok ? { text: d.grund ?? "Nicht verstanden.", fehler: true } : { text: `„${d.frage}“` };
+    } catch { return { text: "Server nicht erreichbar.", fehler: true }; }
+  },
+};
+
 const NESTOR_TEXT = {
   bereit: "hört zu", angesprochen: "hört dir zu …", denkt: "denkt nach …", spricht: "spricht",
   begruessung: "begrüßt die Runde", einwand: "wartet auf ein Nein …", pausiert: "hört nicht mit",

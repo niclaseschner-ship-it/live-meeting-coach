@@ -189,7 +189,8 @@ async def vertrag_pruefen(page: Page, phase: str, geraet: str, stufe: str, lauf:
     pflicht = [s for t in teile for s in t.get("pflicht", [])]
     verboten = [s for t in teile for s in t.get("verboten", [])]
     erlaubt = set(pflicht) | {s for t in teile for s in t.get("erlaubt", [])}
-    kandidaten = VERTRAG["bereiche"]["kandidaten"].get("abschluss" if phase == "abschluss" else geraet, [])
+    seite = "abschluss" if phase == "abschluss" and geraet == "desktop" else geraet  # Handy bleibt auf handy.html
+    kandidaten = VERTRAG["bereiche"]["kandidaten"].get(seite, [])
     fehlend = [s for s in pflicht if not await sichtbar(page, s)]
     zu_viel = [s for s in verboten if await sichtbar(page, s)]
     ueberzaehlig = [s for s in kandidaten if s not in erlaubt and s not in verboten and await sichtbar(page, s)]
@@ -308,6 +309,17 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
     lauf.pruefen(f"{name}: Bedienmodell „{modell['bedienmodell']}“ mit Rückmeldung beim Halten",
                  rueck and bool(hinweis), f"Klasse {modell['rueckmeldung_klasse']}={rueck}, Text={hinweis[:60]!r}",
                  abweichung="bedienmodell_sprechknoepfe")
+    # #66: loslassen → „haelt“ weg, sichtbar „verarbeitet“ oder schon Ergebnis/Fehler (nicht mehr der Haltetext)
+    sel, klasse, haltetext = json.dumps(selektor), json.dumps(modell["rueckmeldung_klasse"]), json.dumps(modell["rueckmeldung_text"])
+    los = await warte(page, f"""() => {{
+        const k = document.querySelector({sel}); if (!k || k.classList.contains({klasse})) return false;
+        if (k.classList.contains('verarbeitet')) return true;
+        return ['#agenda-antwort', '#taste-text', '#fragen-text'].some((s) => {{
+          const e = document.querySelector(s); return e && e.offsetParent && e.textContent.trim()
+            && !e.textContent.includes({haltetext}); }});
+      }}""", 5)
+    lauf.pruefen(f"{name}: nach dem Loslassen sichtbare Verarbeitung oder Rückmeldung", los,
+                 abweichung="bedienmodell_sprechknoepfe")
     return rueck
 
 
@@ -321,7 +333,7 @@ async def agenda_sprache(page: Page, lauf: Lauf) -> None:
     antwort = await text(page, "#agenda-antwort")
     zeilen = await page.locator("#agenda-tabelle .agenda-zeile").count()
     lauf.pruefen("Agenda per Sprache verarbeitet (Antwort sichtbar, Tabelle steht)",
-                 fertig and zeilen >= 2 and not antwort.startswith(("Fehler", "Mikrofon", "Zum Diktieren")),
+                 fertig and zeilen >= 2 and not antwort.startswith(("Fehler", "Mikrofon", "Zum Diktieren", "Zu kurz")),
                  f"Antwort={antwort[:100]!r}, Zeilen {vorher}→{zeilen}")
     await lauf.bild(page, "agenda_sprache")
 
@@ -589,3 +601,37 @@ async def sprechtaste_wirkung(page: Page, lauf: Lauf) -> None:
     lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar",
                  da and "assistent_antwort" in regeln, f"Karte={da}, Antwort-Regel={'assistent_antwort' in regeln}")
     await lauf.bild(page, "sprechtaste")
+
+
+async def sprechtaste_handy(handy: Page, stufe: str, lauf: Lauf) -> None:
+    """#66: Basis – große Sprechtaste als Hauptbedienung, gleiches Bedienmodell; Premium – nachgeordnet (Telefon)."""
+    lauf.schritt("Sprechtaste am Handy je Stufe")
+    knopf = next(k for k in VERTRAG["sprechknoepfe"]["knoepfe"] if k["id"] == "btn-fragen")
+    soll = knopf["darstellung"][stufe]
+    nachgeordnet = await handy.locator("#h-nestor-karte .zusatz-aktionen #btn-fragen").count() == 1
+    if soll == "haupt":
+        box = await handy.locator("#btn-fragen").bounding_box() if await sichtbar(handy, "#btn-fragen") else None
+        lauf.pruefen("Basis: Sprechtaste am Handy ist große Hauptbedienung", bool(box) and not nachgeordnet
+                     and box["height"] >= 48, f"sichtbar={bool(box)}, Höhe={box['height'] if box else 0:.0f}, "
+                     f"nachgeordnet={nachgeordnet}")
+        frei = await warte(handy, "() => !document.getElementById('btn-fragen')?.disabled", 40)
+        if not frei:
+            lauf.pruefen("Sprechtaste (Handy): bedienbar", False, "blieb gesperrt")
+            return
+        await sprechknopf_halten(handy, "#btn-fragen", 0.2, lauf, "Sprechtaste (Handy)")
+    else:
+        lauf.pruefen("Premium: Sprechtaste am Handy nachgeordnet unter „Weitere Aktionen“",
+                     nachgeordnet and not await sichtbar(handy, "#btn-fragen"), f"nachgeordnet={nachgeordnet}")
+    m = await handy.evaluate("() => { const t = document.getElementById('titel'); return t ? [t.clientWidth, "
+                             "t.scrollWidth, t.clientHeight, t.scrollHeight, t.textContent] : [0, 0, 0, 0, '']; }")
+    lauf.pruefen("Handy-Kopfleiste: Meeting-Titel nicht abgeschnitten",
+                 m[0] >= 150 and m[1] <= m[0] + 1 and m[3] <= m[2] + 1,
+                 f"{m[4]!r}: Breite {m[0]}/{m[1]} px, Höhe {m[2]}/{m[3]} px")
+    await lauf.bild(handy, "handy_sprechtaste")
+
+
+async def handy_abschluss(handy: Page, lauf: Lauf) -> None:
+    lauf.schritt("Handy nach dem Ende (Phase Abschluss)")
+    await warte(handy, "() => document.body.dataset.phase === 'abschluss'", 20)
+    await vertrag_pruefen(handy, "abschluss", "handy", lauf.stufe, lauf)
+    await lauf.bild(handy, "handy_abschluss")

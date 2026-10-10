@@ -378,9 +378,7 @@ function knopfOffenText(k) {
 }
 function knopfRendern(z) {
   aktionshilfeRendern(z, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
-  const an = !!(z.laeuft || z.simulation);
-  $("knopf-leiste").hidden = !an;
-  if (!an) return;
+  if (phaseVon(z) !== "live") return; // sichtbar schaltet phaseAnzeigen() in rendern()
   const k = z.knopf ?? {};
   const nurKnopf = knopfdruck(z);
   const basis = basisStufe(z);
@@ -409,71 +407,24 @@ function knopfRendern(z) {
   $("knopf-fehler").hidden = laeuft || !k.fehler;
   $("knopf-fehler").textContent = k.fehler ?? "";
   // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
-  const tasteDa = !!(z.laeuft || z.simulation) && basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
+  const tasteDa = basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
   $("btn-taste").hidden = !tasteDa;
-  if (!taste.aktiv) {
-    if (tasteMeldung) $("taste-text").textContent = tasteMeldung;
-  else {
-    const hilfe = "Halten und sprechen, dann loslassen. Leertaste funktioniert, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
-    $("btn-taste").dataset.tip = hilfe;
-    $("btn-taste").setAttribute("aria-label", `Sprechtaste. ${hilfe}`);
-    $("btn-taste").setAttribute("aria-description", hilfe);
-    $("taste-text").textContent = "Sprechtaste · halten";
-  }
-  }
+  taste.ruhe(); // Ruhetext nur, solange die Taste nichts Eigenes zeigt (halten, verarbeiten, Ergebnis)
 }
 
-// ---------- Sprechtaste (Funkgerät, Ticket #27) ----------
+// ---------- Sprechtaste (Funkgerät, Ticket #27; Bedienmodell seit #66 gemeinsam: basis.js sprechknopf) ----------
 // Halten, sprechen, loslassen: der Ton der Frage geht als WAV an /api/frage/audio; drücken unterbricht Nestor.
-const taste = { aktiv: false };
-let tasteMeldung = null;
-async function tasteAn(e) {
-  e?.preventDefault?.();
-  if (taste.aktiv || $("btn-taste").hidden) return;
-  taste.aktiv = true;
-  stimme.bereit(); stimme.stopp(); nestorStopp();
-  $("btn-taste").classList.add("haelt"); $("taste-text").textContent = "Ich höre … loslassen zum Senden";
-  try {
-    await halten.start();
-    await fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: true }) });
-  } catch (err) {
-    taste.aktiv = false; halten.teile = null; $("btn-taste").classList.remove("haelt");
-    tasteMeldung = `Mikrofon nicht verfügbar: ${err.message ?? err}`; knopfRendern(zustand);
-  }
-}
-async function tasteAus() {
-  if (!taste.aktiv) return;
-  taste.aktiv = false;
-  $("btn-taste").classList.remove("haelt");
-  const wav = await halten.ende();
-  if (wav.byteLength < 44 + RATE * 2 * 0.5) { // unter einer halben Sekunde: versehentlich getippt
-    fetch("/api/frage/halten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ an: false }) });
-    tasteMeldung = "Zum Fragen halten, sprechen, dann loslassen.";
-  } else {
-    tasteMeldung = "Nestor hört die Frage …";
-    knopfRendern(zustand);
-    try {
-      const r = await fetch("/api/frage/audio", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
-      const d = await r.json().catch(() => ({}));
-      tasteMeldung = !r.ok ? (d.detail ?? `Fehler ${r.status}`) : !d.ok ? d.grund : `„${d.frage}“`;
-    } catch { tasteMeldung = "Server nicht erreichbar."; }
-  }
-  knopfRendern(zustand);
-  setTimeout(() => { tasteMeldung = null; if (zustand) knopfRendern(zustand); }, 6000);
-}
-$("btn-taste").addEventListener("pointerdown", tasteAn);
-for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("btn-taste").addEventListener(ev, tasteAus);
-$("btn-taste").addEventListener("contextmenu", (e) => e.preventDefault());
-document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space") return;
-  const sprechtasteFokussiert = !!e.target.closest?.("#btn-taste");
-  if (e.target.closest?.("button, input, textarea, select, summary, a, [role='button'], [contenteditable='true']") && !sprechtasteFokussiert) return;
-  if ($("btn-taste").hidden) return;
-  e.preventDefault();
-  if (!e.repeat) tasteAn();
+const TASTE_HILFE = "Halten und sprechen, dann loslassen. Leertaste funktioniert, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
+$("btn-taste").dataset.tip = TASTE_HILFE;
+$("btn-taste").setAttribute("aria-label", `Sprechtaste. ${TASTE_HILFE}`);
+$("btn-taste").setAttribute("aria-description", TASTE_HILFE);
+const taste = sprechknopf($("btn-taste"), {
+  ...frageHalten,
+  anzeige: (text) => { $("taste-text").textContent = text; },
+  ruhe: () => "Sprechtaste · halten",
+  start: () => { stimme.bereit(); stimme.stopp(); nestorStopp(); return frageHalten.start(); },
+  leertaste: true,
 });
-document.addEventListener("keyup", (e) => { if (e.code === "Space" && taste.aktiv) { e.preventDefault(); tasteAus(); } });
-window.addEventListener("blur", () => { if (taste.aktiv) tasteAus(); });
 
 // ---------- Arbeitsring: lange Aufträge (Ticket #27) ----------
 const AUFTRAG_ZUSTAND = { laeuft: "läuft", wartet: "wartet" };
@@ -535,7 +486,7 @@ function nestorStopp() { // Hineinreden, Sprechtaste oder „Stopp“: was noch 
 const spricht = () => feld.wartend.length > 0 || (!!stimme.ctx && stimme.naechste > stimme.ctx.currentTime + 0.05);
 function nestorZeileRendern(z) {
   const a = z.assistent ?? {};
-  const aktiv = !!(z.laeuft || z.simulation);
+  const aktiv = phaseVon(z) === "live";
   const name = a.name ?? "Nestor";
   const redet = spricht();
   const hoertNoch = a.hoert_bis ? a.hoert_bis - z.zeit : 0;
@@ -566,26 +517,19 @@ function nestorZeileRendern(z) {
 
 function rendern() {
   const z = zustand; if (!z) return;
-  const aktiv = !!(z.laeuft || z.simulation);
-  const beendet = !aktiv && (z.segmente.length > 0 || z.zeit > 0);
-  if (aktiv) einrichtungOffen = false;
-  const vorbereitung = !aktiv && (!beendet || einrichtungOffen);
-  $("einrichtung").hidden = !vorbereitung;
-  $("live").hidden = vorbereitung;
+  // Phase vom Server (Ticket #66); „Neues Meeting“ nach dem Ende öffnet die Einrichtung, bevor der Server sie kennt
+  if (phaseVon(z) !== "abschluss") einrichtungOffen = false;
+  const phase = phaseVon(z) === "abschluss" && einrichtungOffen ? "vorbereitung" : phaseVon(z);
+  const beendet = phase === "abschluss", vorbereitung = phase === "vorbereitung";
 
   // Kopfleiste
   $("titel-anzeige").textContent = z.titel || "Neues Meeting";
   $("ziel-anzeige").textContent = z.ziel || "";
-  $("btn-start").hidden = !vorbereitung;
-  $("btn-neu").hidden = !(beendet && !einrichtungOffen);
-  $("btn-kosten").hidden = !aktiv;
-  $("btn-transkript").hidden = !aktiv;
   // Ablage: läuft die Aufnahme, und wo liegt das Meeting danach?
   const ab = z.archiv;
   $("aufnahme-pill").hidden = !(ab?.aufnahme && z.hoeren);
   $("btn-ablage").hidden = !(ab && !z.hoeren);
   $("btn-ablage").textContent = ab?.fertig ? "Abgelegt – Ordner öffnen" : "Wird abgelegt …";
-  $("btn-stopp").hidden = !aktiv || z.simulation;
   const pill = $("status-pill");
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
@@ -657,8 +601,14 @@ function rendern() {
   }
   // Band (Ticket #27): Regel-Hinweise und stille Angebote, je mit höchstens einem Knopf
   bandRendern(z, $("band"));
-  $("band").hidden = !aktiv || $("band").hidden;
+  const bandHatInhalt = !$("band").hidden;
   arbeitRendern(z);
+
+  // Sichtbarkeit je Phase – eine Stelle für alle Bereiche (static/phase.js, Vertrag szenarien/ui_vertrag.json)
+  const regelnDa = !!(z.regel_status ?? []).length || !!(z.regeln ?? []).length;
+  phaseAnzeigen(phase, "desktop", {
+    "band": bandHatInhalt, "btn-stopp": !z.simulation, "regeln-zone": regelnDa, "leiste": leisteOffen,
+  });
 
   if (!vorbereitung) liveRendern(z);
   leisteRendern(z);
@@ -711,8 +661,7 @@ function liveRendern(z) {
     ...regelStatus.filter((r) => r.stufe !== "experimentell").map(ampel),
     ...(beta.length ? [el("p", { class: "etikett ampel-beta-titel" }, "Beta"), ...beta.map(ampel)] : []));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
-  // Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte
-  $("regeln-zone").hidden = !(z.laeuft || z.simulation) || (!regelStatus.length && !(z.regeln ?? []).length);
+  // Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte (Sichtbarkeit: phaseAnzeigen)
 
   // Redeanteile, ohne Bewertung
   const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);
@@ -728,7 +677,6 @@ function liveRendern(z) {
 }
 
 function leisteRendern(z) {
-  $("leiste").hidden = !leisteOffen;
   $("btn-transkript").classList.toggle("an", leisteOffen);
   if (!leisteOffen) return;
   $("reiter-transkript").classList.toggle("aktiv", reiter === "transkript");
