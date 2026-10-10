@@ -409,11 +409,31 @@ async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
     await lauf.bild(page, "agenda_sprache")
 
 
-async def qr_lesen(page: Page, lauf: Lauf) -> str:
-    """QR-Code als Bild: Element-Screenshot, weißer Rand, OpenCV-Dekoder."""
+def qr_dekodieren(png: bytes) -> str:
+    """PNG-Bytes → dekodierter QR-Inhalt; probiert Original und 2-/3-fache Skalierung, jeweils mit/ohne Otsu."""
     import cv2
     import numpy as np
 
+    bild = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+    if bild is None:
+        return ""
+    bild = cv2.copyMakeBorder(bild, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    detektor = cv2.QRCodeDetector()
+    for faktor in (None, 2, 3):
+        vorbereitet = bild if faktor is None else cv2.resize(bild, None, fx=faktor, fy=faktor,
+                                                             interpolation=cv2.INTER_NEAREST)
+        url, _, _ = detektor.detectAndDecode(vorbereitet)
+        if url:
+            return url
+        _, otsu = cv2.threshold(vorbereitet, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        url, _, _ = detektor.detectAndDecode(otsu)
+        if url:
+            return url
+    return ""
+
+
+async def qr_lesen(page: Page, lauf: Lauf) -> str:
+    """QR-Code als Bild: Element-Screenshot(s), weißer Rand, OpenCV-Dekoder – bis zu 3 Versuche."""
     lauf.schritt("QR-Code am Desktop als Bild dekodieren")
     await page.locator("#btn-handy-vorbereitung").click()
     qr = page.locator("#hf-qr svg")
@@ -424,22 +444,26 @@ async def qr_lesen(page: Page, lauf: Lauf) -> str:
     lauf.pruefen("QR-Code vollständig dargestellt (skalierbar, nicht beschnitten)",
                  bool(box) and (bool(viewbox) or box["width"] >= breite - 1),
                  f"viewBox={viewbox!r}, SVG-Breite {breite:.0f}, angezeigt {box['width'] if box else 0:.0f} px")
-    png = await qr.screenshot()
-    (lauf.ordner / "qr.png").write_bytes(png)
-    bild = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
-    bild = cv2.copyMakeBorder(bild, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
-    url, _, _ = cv2.QRCodeDetector().detectAndDecode(bild)
-    if not url:
-        url, _, _ = cv2.QRCodeDetector().detectAndDecode(cv2.resize(bild, None, fx=2, fy=2,
-                                                                    interpolation=cv2.INTER_NEAREST))
+    url = ""
+    letztes_png = None
+    for versuch in range(1, 4):
+        png = await qr.screenshot()
+        letztes_png = png
+        url = qr_dekodieren(png)
+        if url:
+            break
+        if versuch < 3:
+            await asyncio.sleep(1)
+    if letztes_png is not None:
+        (lauf.ordner / "qr.png").write_bytes(letztes_png)
     from urllib.parse import parse_qs, urlparse
 
     teile = urlparse(url) if url else None
     q = parse_qs(teile.query) if teile else {}
     lauf.belege["qr"] = {"schema": teile.scheme if teile else None, "pfad": teile.path if teile else None,
-                         "parameter": sorted(q)}  # Werte nicht speichern: Kopplungsdaten
+                         "parameter": sorted(q), "versuche": versuch}  # Werte nicht speichern: Kopplungsdaten
     lauf.pruefen("QR-Bild dekodiert: /handy mit Kopplungscode und Meeting", bool(url) and teile.path == "/handy"
-                 and "k" in q and "meeting" in q, f"Parameter {sorted(q)}")
+                 and "k" in q and "meeting" in q, f"Parameter {sorted(q)}, Versuche {versuch}")
     if not url:
         raise Abbruch("QR-Code nicht lesbar – ohne dekodiertes Bild kein Handy-Weg")
     return url
