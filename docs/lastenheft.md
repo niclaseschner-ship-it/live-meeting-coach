@@ -1,10 +1,12 @@
 # Nestor – Lastenheft
 
-**Stand:** 09.10.2026 (Tickets #54–57: Variantenwahl, UI, UI-Prüfung und Sprach-/Monologverhalten) · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
+**Stand:** 10.10.2026 · **Gilt für:** Nestor als Angebot über einen Link (SaaS) ·
 **Vorgänger:** [archiv/spezifikation_v2.md](archiv/spezifikation_v2.md) (Laptop-Fassung, Messungen bis 05.10.)
 
 Diese Datei beschreibt verbindlich, was Nestor tut. Wer etwas Nennenswertes ändert, trägt es hier im selben
 Commit nach. Messberichte und Begründungen stehen in den verlinkten Dokumenten, hier stehen nur Ergebnisse.
+Welches Ticket, welches Pilotfeedback oder welche Entscheidung zu einer Festlegung geführt hat, steht im
+Abschnitt „Änderungsverlauf“ (9) am Ende, nicht im Soll-Text selbst.
 
 ## 1. Produkt
 
@@ -12,12 +14,12 @@ Nestor begleitet Präsenzmeetings (3–8 Personen, Deutsch). Er behält Agenda, 
 antwortet auf Ansprache und hält fest, was besprochen und entschieden wurde. **Die Gruppe entscheidet,
 Nestor zeigt nur an.**
 
-**Grundregel (Ticket #27): Nestor spricht nur in einem Antwortbogen, den die Runde ausgelöst hat.** Ein Bogen
+**Grundregel:** Nestor spricht nur in einem Antwortbogen, den die Runde ausgelöst hat. Ein Bogen
 ist ein Auftrag und eine Antwort: sofort eine kurze Bestätigung, dann eine Karte im Verlauf, dann ein bis zwei Sätze
 zu dem, was auffällt – nie das, was auf der Karte steht (Abschnitt 4.10). Was Nestor von sich aus merkt (Zeit, Thema,
 Lücken, fünf Minuten vor Schluss, ein abgeschlossener Agendapunkt), kommt **still**: als Zeile im Band oben oder als
-Karte im Verlauf – nie mit Stimme, nie als Pop-up. Einzige Ausnahme ist die Begrüßung mit der Einwilligung (Niclas,
-08.10.2026). Neue Funktionen halten sich daran; wer gegen die Regel verstößt, ist ein Fehler.
+Karte im Verlauf – nie mit Stimme, nie als Pop-up. Einzige Ausnahme ist die Begrüßung mit der Einwilligung. Neue
+Funktionen halten sich daran; wer gegen die Regel verstößt, ist ein Fehler.
 
 Es gibt drei Orte und sonst nichts: **oben das Band** (Regel-Hinweise und Nestors stille Angebote, verschwindet von
 selbst, höchstens ein Knopf), **in der Mitte der Verlauf** (alles Inhaltliche als Karte, neueste vorn, zurückblättern
@@ -33,12 +35,15 @@ Nutzer gleichen sie am Ende freiwillig aus.
 ## 2. Ablauf für Nutzer
 
 ```
-Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─► Abschluss
-                   Stufe wählen   Agenda per Prompt              Paket · Unterstützung · Datenspende
+Mail + Code ─► Startseite ─► Meeting einrichten ─► Meeting ─► Abschluss
+                Stufe wählen   Agenda per Prompt              Paket · Unterstützung · Datenspende
 ```
 
-1. **Zugang:** Jeder Kunde bekommt einen Link und ein eigenes Passwort. Ein Kunde kann mehrere Meetings
-   gleichzeitig führen.
+1. **Zugang:** Anmeldung mit Name, Mail-Adresse und Herkunft („wie kennst du Nestor“); ein sechsstelliger Code
+   per Mail schaltet den Zugang frei. Standard ist automatische Freischaltung, umstellbar auf manuelle Prüfung.
+   Kein gemeinsames Passwort mehr als Hauptweg.
+   <!-- prüfen: Höchstzahl gleichzeitiger Meetings je neuem Zugang ist aktuell 1 – bisher stand hier „ein
+   Zugang kann mehrere Meetings gleichzeitig führen“; endgültiger Wert? -->
 2. **Startseite:** Was Nestor kann, die Wahl zwischen den zwei Stufen Basis und Premium (Abschnitt 3) mit je einem
    Satz, wie man mit Nestor spricht (Premium wie ein Telefon, Basis wie ein Funkgerät), zur Verarbeitung und den
    erwarteten Kosten je Stunde, und der Hinweis, dass Niclas die Kosten vorstreckt. Dazu Links auf Impressum und
@@ -46,7 +51,7 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 3. **Meeting einrichten:** Titel, Ziel und Agenda entstehen zusammen aus einer freien Eingabe – meist der
    eingefügten Einladungsmail (Abschnitt 4.1). Dann werden die Gesprächsregeln gewählt: verlässliche und Beta
    getrennt, dazu optional freie „weitere Regeln“ als Erinnerung, die Nestor nur vorliest, nicht prüft.
-   **Handykopplung (Ticket #50):** Genau ein Handy je Meeting, anonym per QR-Code ohne Registrierung.
+   **Handykopplung:** Genau ein Handy je Meeting, anonym per QR-Code ohne Registrierung.
    Ein zweites Handy wird mit verständlicher Meldung abgewiesen und übernimmt weder Mikrofon noch Ton.
    Neuladen desselben Handys übernimmt dessen Verbindung, ohne zwei aktive Tabs zuzulassen. Nach Verbindung
    verschwindet der große erste Schritt und eine kompakte Rückmeldung zeigt, ob Mikrofon und Ton bereit sind.
@@ -55,7 +60,7 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
    Direkt nach dem QR-Einstieg steht am Handy die Vorbereitung mit „Mikrofon und Ton aktivieren“ oben,
    nicht unter den Meetingfunktionen. Eine frühere Berechtigung ersetzt diesen Tipp nicht. Beide Geräte
    unterscheiden „gekoppelt“, „aktivieren“, „warte auf Audio“ und „bereit“; die Vorbereitung wird regelmäßig
-   aktualisiert und der mobile Mikrofon-AudioContext ausdrücklich im Benutzertipp aufgeweckt (#53).
+   aktualisiert und der mobile Mikrofon-AudioContext ausdrücklich im Benutzertipp aufgeweckt.
 4. **Meeting:** Dashboard mit der Regel-Ampelzone oben unter der Kopfleiste und oberhalb der Aktionen; darunter
    fünf kompakte Kernaktionen, Zusatzaktionen separat. Zeit und Agenda stehen links, in der Mitte Nestor und der
    Verlauf, rechts Redeanteile, oben in der Kopfleiste das Band
@@ -68,20 +73,19 @@ Link + Passwort ─► Startseite ─► Meeting einrichten ─► Meeting ─�
 
    Danach wird der Meetingzustand auf dem Server gelöscht.
 
-**Stil (Rückmeldung Niclas 08.10.2026):** Startseite, Rechtstexte, Abschluss, Feedback-Fenster und die
-Anmeldeseite duzen – „du“/„dein“, wenn die eine Person angesprochen wird, die Nestor einrichtet oder die
+**Stil:** Startseite, Rechtstexte, Abschluss, Feedback-Fenster und die Anmeldeseite duzen –
+„du“/„dein“, wenn die eine Person angesprochen wird, die Nestor einrichtet oder die
 Rechtstexte liest, „ihr“/„euer“, wo es ausdrücklich um die ganze Runde im Meeting geht (z. B. der aufgenommene
-Ton). Genau wie Nestors gesprochene Begrüßung, die schon „du“ und „ihr“ je nach Adressat mischt. Vorher stand
-hier Sie-Form.
+Ton). Genau wie Nestors gesprochene Begrüßung, die schon „du“ und „ihr“ je nach Adressat mischt.
 
 ## 3. Die zwei Stufen
 
-Produktentscheidung (Niclas, 08.10.2026): genau zwei Stufen, keine dritte Variante. Die fünf Kernaktionen sind
+Es gibt genau zwei Stufen, keine dritte Variante. Die fünf Kernaktionen sind
 gemeinsam; verfügbare Zusatzfunktionen unterscheiden sich. Die Auswahl gilt für das Meeting und wird während eines
 laufenden Meetings nicht gewechselt. Premium verwendet ausschließlich OpenAI, Basis ausschließlich Mistral.
 Die früheren Codex-/Claude-Abo-Wege sind aus dem Produktlauf entfernt; auch lokal gibt es keinen Anbieter-Fallback.
 
-**Wording (Niclas, 08.10.2026, Ticket #18):** **Nestor Premium** (OpenAI) ist der **Standard** – auf der
+**Wording:** **Nestor Premium** (OpenAI) ist der **Standard** – auf der
 Startseite zuerst, größer, mit dem Zusatz „Standard“. **Nestor Basis** (Mistral) ist das **Downgrade** für alle,
 denen DSGVO-Nähe (alles in der EU, europäischer Anbieter) und weniger Kosten wichtiger sind als Gespräch und
 Live-Bild.
@@ -99,19 +103,18 @@ Live-Bild.
 | Löschen | „Nein“ in der Begrüßung oder später „Nestor, nein“ löscht alles | dasselbe – Einwilligung und Nein bleiben per Stimme |
 | Kosten (Richtwert) | ~2 € je Stunde | ~0,7 € je Stunde |
 
-**Der Modus „Nur auf Knopfdruck“ ist ausgebaut (Ticket #71, Niclas 10.10.2026).** Er lief zuletzt ohnehin nicht
-mehr im Angebot (Ticket #27) und deckte nur einen Sparfall ab, den die Sprechtaste (Basis) heute abdeckt. Es gibt
-nur noch den einen Ablauf: Transkript, Fokus, Ton-Prüfung, Ergebnisse und Überblick laufen laufend; die fünf
-Kernaktionen (Abschnitt 4.2) bleiben unverändert in beiden Stufen verfügbar.
+Es gibt nur einen Ablauf – den Modus „Nur auf Knopfdruck“ gibt es nicht mehr: Transkript, Fokus, Ton-Prüfung,
+Ergebnisse und Überblick laufen laufend; die fünf Kernaktionen (Abschnitt 4.2) bleiben unverändert in beiden
+Stufen verfügbar.
 
-**Variantenwahl (Ticket #54):** Die Startseite wartet auf die Serverbestätigung der gewählten Stufe, bevor sie zum
+**Variantenwahl:** Die Startseite wartet auf die Serverbestätigung der gewählten Stufe, bevor sie zum
 Meeting wechselt. Im Cloudbetrieb bleibt die bestätigte Auswahl im Durable Object gespeichert und wird für
 Folgeanfragen serverseitig wiederhergestellt; Browser-Header können sie nicht überschreiben. Der Start sendet
 zusätzlich die erwartete Stufe, damit ein nicht passender Serverzustand mit einer verständlichen 409-Meldung
 abgewiesen wird.
 
-Die Startseite zeigt je Stufe einen Satz, wie man mit Nestor spricht, und zwei Plus- und zwei Minus-Stichpunkte
-(Ticket #18/#27). **Premium**: „Wie ein Telefon: Ihr sagt „Nestor, …“, fragt direkt danach ohne Namen nach und könnt
+Die Startseite zeigt je Stufe einen Satz, wie man mit Nestor spricht, und zwei Plus- und zwei Minus-Stichpunkte.
+**Premium**: „Wie ein Telefon: Ihr sagt „Nestor, …“, fragt direkt danach ohne Namen nach und könnt
 ihm jederzeit ins Wort fallen.“, „+ Natürliches Gespräch: Nachfrage ohne Namen, ihr könnt reinreden“, „+ Live-Bild
 auf Zuruf“, „− US-Anbieter (OpenAI)“, „− etwa 2 € je Meetingstunde“ (Richtwert). **Basis**: „Wie ein Funkgerät: Ihr
 haltet die Sprechtaste, sprecht und lasst los – Nestor redet dann aus.“, „+ KI nur bei Mistral (Frankreich),
@@ -122,8 +125,8 @@ Darüber, gut sichtbar statt im Kleingedruckten, das Datenversprechen: „Wir se
 nutzen nichts davon – außer du erlaubst es uns am Ende ausdrücklich (Datenspende). Nach dem Meeting wird alles
 gelöscht.“ Unter den Karten ein knapper Satz zum Hosting (Cloudflare, Server in der EU; Einzelheiten in der
 Datenschutzerklärung) und, unaufdringlich und nicht als Hauptbotschaft, der Hinweis: „Nestor ist Open Source
-(AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das (seit 08.10.2026 öffentliche, seit 0da0713 unter
-AGPL-3.0 lizenzierte) GitHub-Repo – solange das Repo privat gewesen wäre, hätte dieser Hinweis entfallen.
+(AGPL-3.0) und lässt sich selbst hosten“, mit Link auf das öffentliche, unter AGPL-3.0 lizenzierte GitHub-Repo –
+solange das Repo privat gewesen wäre, hätte dieser Hinweis entfallen.
 
 Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 ms), Transkription je Äußerung
 `voxtral-mini-latest`, Text `mistral-medium-latest` (Nestor, Karten, Agenda per Prompt, Ergebnisse, Regeln, Protokoll,
@@ -133,7 +136,7 @@ Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts
 Referenzstimme; Modell und Stimme lassen sich über `LMC_BASIS_STIMME_MODELL` und `LMC_BASIS_STIMME` konfigurieren.
 Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
 
-Premium-Stimmenwahl (#58): Nova ist nur für Kurzantworten (Text mit TTS) verfügbar, nicht für das
+**Premium-Stimmenwahl:** Nova ist nur für Kurzantworten (Text mit TTS) verfügbar, nicht für das
 Realtime-Gespräch. Modus und Stimme werden vor jeder Änderung als Paar geprüft; eine unzulässige Kombination
 verändert keine Einstellung. Die Oberfläche zeigt erst die bestätigte Serverauswahl, sperrt Nova im
 Gesprächsmodus und erklärt: Eine neue Stimme verändert ein bereits offenes Gespräch nicht, sie gilt ab dem
@@ -145,8 +148,7 @@ Zurufe der Probe lösen die richtige Aktion aus (24/24). Die Kostenrichtwerte st
 (`coach/kosten.py`); Basis ist aus gemessenen Einzelaufrufen hochgerechnet: Grundlast ~0,5 $/h (Live-Text allein 0,36 $/h), dazu
 ~0,01 $ je Frage an Nestor und ~0,06 $ je Recherche – mit 10 Fragen und 2 Recherchen ~0,7 $/h (≈ 0,65 €). Der
 Cloud-Lauf vom 08.10. kam auf ~1 $/h, weil das Testmaterial sechs Zurufe mit zwei Recherchen in zehn Minuten
-enthält (Ticket #15, [messung_basis.md](messung_basis.md)). Premium wie bisher ~2 $/h. Der frühere Richtwert für „Auf Knopfdruck“ mit OpenAI (0,4 $/h, Ticket #7,
-[messung_knopfdruck.md](messung_knopfdruck.md)) gilt nicht mehr, seit der Schalter zu Basis gehört.
+enthält ([messung_basis.md](messung_basis.md)). Premium wie bisher ~2 $/h.
 
 ## 4. Funktionen
 
@@ -162,7 +164,7 @@ leer sind oder die Eingabe eindeutig ein neues Meeting beschreibt; ein gezielter
 eigentlich …“) ändert nur das gemeinte Feld. Die Tabelle ist direkt bearbeitbar. Über dasselbe Feld lässt sie
 sich im Dialog weiter ändern, etwa mit „Punkt 3 kürzer, dafür Pause einbauen“.
 
-**Pilotfeedback (Ticket #49):** Auch eine freie Beschreibung eines Vorhabens ohne fertige Tagesordnung
+**Freie Eingabe ohne Tagesordnung:** Auch eine freie Beschreibung eines Vorhabens ohne fertige Tagesordnung
 ergibt einen strukturierten Agendaentwurf, nicht bloß ein befülltes Ziel. Fehlende Minuten werden geschätzt
 und als Schätzung kenntlich gemacht. Fehlen Thema oder beabsichtigtes Ergebnis, erscheinen konkrete Rückfragen;
 eine Folgeantwort verwendet den bisherigen Dialog. Während einer Rückfrage bleiben bestehende Felder und
@@ -181,14 +183,14 @@ weitere, die ihr auf dem Bildschirm seht“ – aber nicht prüft. Reine Erinner
 
 ### 4.2 Die Knöpfe – jeder Knopf ein Antwortbogen
 
-**Sichtbare Erklärung (Ticket #51, Nachprüfung des Pilotfeedbacks):** Auf Laptop und Handy stehen Inhalt,
+**Sichtbare Erklärung:** Auf Laptop und Handy stehen Inhalt,
 Umfang und Ausgabeform direkt im Button, nicht nur in Hover-Texten. „Zusammenfassen“ heißt in der Oberfläche
 „Ergebnisse bündeln“ (bisher festgehaltene Entscheidungen, Aufgaben, offene Punkte), „Was fehlt?“ heißt
 „Lücken klären“, „Protokoll“ heißt „Gesamtprotokoll“. Der Überblick heißt entsprechend der Auswahl
 „Punktüberblick“ oder „Meetingüberblick“; die Auswahl gibt es auch am Handy und wird an den Server übergeben.
 Die bisherigen gesprochenen Aufträge bleiben gültig. Kleine Tags zeigen grobe **Textkosten** in US-Cent
 aus den vorhandenen Modelltarifen und der Kontextlänge; kein Gesamtpreis in der Oberfläche, aber ein
-Kostendeckel je Meeting (Ticket #64, Abschnitt 5). Stimme, nachgeholte Auswertung und Recherche sind
+Kostendeckel je Meeting (Abschnitt 5). Stimme, nachgeholte Auswertung und Recherche sind
 ausdrücklich zusätzlich. Für die lokal erzeugte Protokollliste, Bilder und unbekannte Modelle gibt es keine
 erfundenen festen KI-Preise.
 
@@ -213,20 +215,19 @@ Sätze. Während ein Bogen läuft, sind die Knöpfe gesperrt (sichtbar: „Nesto
   halten, fragen, loslassen; der Ton der Frage wird transkribiert und wie „Nestor, …“ beantwortet. Was während des
   Haltens gesagt wird, löst nicht zusätzlich eine Antwort über den Live-Text aus.
 
-Gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)): 1,8–3,9 s je Knopf. Der frühere Modus „Nur auf
-Knopfdruck“ (Basis, mit eigenem „Verwerfen“ für Ton und Transkript) ist ausgebaut (Ticket #71) – Historie in
-[messung_knopfdruck.md](messung_knopfdruck.md).
+Gemessen (3-Minuten-Demo, [messung_basis.md](messung_basis.md)): 1,8–3,9 s je Knopf. Historie zum entfernten
+Modus „Nur auf Knopfdruck“: [messung_knopfdruck.md](messung_knopfdruck.md).
 
 ### 4.3 Signale und ihre Verlässlichkeit
 
-**Nur gewählte Regeln sind sichtbar (Ticket #27).** Eine Regel, die die Runde nicht gewählt hat, hat kein Band,
-keine Ampel und keine Prüfung – das gilt für Fokus, Zeit, Monolog und Überlappung genauso wie für die anderen (bis
-#27 kamen diese vier immer). Was keine Regel ist, bleibt: die Uhr und der Countdown links, die Redeanteile, die
+**Nur gewählte Regeln sind sichtbar.** Eine Regel, die die Runde nicht gewählt hat, hat kein Band,
+keine Ampel und keine Prüfung – das gilt für Fokus, Zeit, Monolog und Überlappung genauso wie für die anderen. Was
+keine Regel ist, bleibt: die Uhr und der Countdown links, die Redeanteile, die
 Agenda-Vorschlag „Weiter zu …?“ (ein Band-Hinweis mit Knopf). Die experimentelle Gesprächsdynamik
-steht nur in der Abschlussauswertung, nicht im Live-Dashboard (Pilotfeedback, Ticket #52).
+steht nur in der Abschlussauswertung, nicht im Live-Dashboard.
 
 Jedes Signal ist im Dashboard als **verlässlich** oder **Beta** gekennzeichnet (Schlüssel im Katalog/Code
-weiterhin „experimentell“, Ticket #10 ändert nur den Anzeige-Text). Bei Beta-Signalen steht in einem Satz
+weiterhin „experimentell“). Bei Beta-Signalen steht in einem Satz
 dabei, wie oft sie danebenliegen. Verlässliche Signale stehen vorn und sind von den Beta-Signalen farblich
 und räumlich getrennt – bei den Gesprächsregeln in der Einrichtung (zwei Gruppen) genauso wie bei den
 Regel-Ampeln im Dashboard.
@@ -255,7 +256,7 @@ Sprechersegmente vorliegen, kann ein erster langer Beitrag anonym gemeldet werde
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
 | Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s | – |
 | Nachfrage ohne Namen (Premium) | verlässlich | `scripts/einordnen_messen.py`, 14 Sätze direkt nach einer Antwort: 14/14 mit Denkaufwand „low“ (Median 1,04 s), 13/14 mit „none“ (Median 0,70 s; der eine Fehler war eine Zeitüberschreitung → still) – eingestellt ist „none“ | – |
-| Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: vorher 0/12 Namen richtig (jede kurze Vorstellung landete als „Person ?“), jetzt 12/12, 0 falsch | – |
+| Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: 12/12 richtig, 0 falsch | – |
 
 ### 4.4 Paket zum Herunterladen
 
@@ -287,12 +288,12 @@ Betrag.
 
 ### 4.6 Feedback, Datenspende
 
-Pilotfeedback 09.10.2026 (#37, #43): Datenspende steht vor Unterstützung und Download. Während eines Uploads
+Datenspende steht vor Unterstützung und Download. Während eines Uploads
 ist Abschließen gesperrt; Fehler bleiben sichtbar und erlauben einen neuen Versuch. Abschließen startet eine
 sichtbare, nicht verlängerbare Rückkehrfrist von fünf Minuten für Paket und Spende. Danach löscht die Cloud
 automatisch und beendet den Container; lokal bleibt die explizite Einstellung `ablage_behalten` maßgeblich.
 
-- **Feedback-Knopf (Ticket #18, Nachtrag):** auf jeder Seite erreichbar – Startseite, Dashboard, Abschluss –, im
+- **Feedback-Knopf:** auf jeder Seite erreichbar – Startseite, Dashboard, Abschluss –, im
   Dashboard gut sichtbar, aber nicht in der Kopfleiste und nicht störend. Öffnet ein kleines Fenster: Art wählen
   (Feedback · Funktionswunsch · Fehler), Textfeld, Senden, kurzer Dank. Jederzeit erlaubt, auch während eines
   laufenden Meetings – anders als die Datenspende unten kein beendetes Meeting nötig. `POST /api/feedback`
@@ -307,43 +308,51 @@ automatisch und beendet den Container; lokal bleibt die explizite Einstellung `a
 
 ### 4.7 Überblick als Text
 
-Pilotfeedback (#34, #44): Der Knopf bietet „Aktueller Punkt“ (Vorauswahl) und „Ganzes Meeting“. Aktueller Punkt
+Der Knopf bietet „Aktueller Punkt“ (Vorauswahl) und „Ganzes Meeting“. Aktueller Punkt
 filtert Transkript und festgestellte Ergebnisse vor dem Modellaufruf. Ergebnisaktionen warten auf die laufende
 Transkription; ein Timeout meldet den fehlenden letzten Beitrag statt unbemerkt alten Stand auszugeben.
 Agenda-Titel und -Ziele stammen ausschließlich aus den gespeicherten Daten; neue Ideen heißen Vorschlag.
 
-Weitere Pilotkorrekturen (#31–36, #45–48): Leertaste unterdrückt auch bei Wiederholung Seitensprünge,
+Leertaste unterdrückt auch bei Wiederholung Seitensprünge,
 Texteingaben bleiben normal bedienbar. Neue Ergebnisse erhalten einen deutlich beschrifteten Merker;
 ein optionaler 0,12-Sekunden-Signalton ist standardmäßig aus und kostet keine KI-Aufrufe. Recherche behält
 die vollständige Antwort und klickbare Quellen statt sie nochmals zu wenigen Stichworten zu verdichten;
 fehlende Quellen werden ausdrücklich markiert. Monolog zeigt laufende Dauer und Schwelle, Dynamik ist
-seit #52 aus dem Live-Dashboard entfernt und nur im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
+aus dem Live-Dashboard entfernt und nur im Abschluss verfügbar. Assistenten-Sprechfenster werden aus Überlappungszahlen
 herausgenommen. Namen werden nur aus einer tatsächlichen Vorstellung gelernt, nicht aus Erwähnungen.
 Eindeutige kleine ASR-Schreibvarianten können einem bereits eingetragenen Namen zugeordnet werden;
-mehrdeutige Kandidaten werden nicht geraten (#35).
+mehrdeutige Kandidaten werden nicht geraten.
 Ausdrückliche Korrekturen können bestehende Artefakte berichtigen, gemeinsame Verantwortlichkeit erfordert
 eine belegte Vereinbarung. Relative Fristen erhalten das Meetingdatum als Bezug; pauschale Fristen ergänzen
 alle betroffenen Aufgaben, spätere Ausnahmen nur die betreffende Aufgabe. Premium verwendet den
 serverseitigen OpenAI-Projektschlüssel. Es gibt keine Vorauswahl der Stufe: ohne bestätigte Wahl startet kein
-Meeting, und während eines Meetings ist die Stufe fest (#60).
+Meeting, und während eines Meetings ist die Stufe fest.
 
-Abnahme-Nachtrag (#40, #41): Telegram prüft zusätzlich zur HTTP-Antwort die positive Bot-API-Bestätigung
+Telegram prüft zusätzlich zur HTTP-Antwort die positive Bot-API-Bestätigung
 und protokolliert ausschließlich deren Erfolg, ohne Nachricht, Chat-ID oder Token. Die feste Begrüßung
 verzichtet auf redundante Agenda-Kommentare und lange Bedienerklärungen; Einwilligung, Nein/Löschen,
 Produktrolle, Agendawechsel, Sprechtaste und Namen bleiben enthalten.
 Ein zwischenzeitlich gestartetes neues Meeting verlängert die alte Löschfrist nicht: ausschließlich dessen
-alter Archivordner und die Fristreferenz werden entfernt, ohne das neue Meeting zurückzusetzen (#37).
+alter Archivordner und die Fristreferenz werden entfernt, ohne das neue Meeting zurückzusetzen.
 
 Der Stand des Meetings als strukturierte Dashboard-Ansicht ohne Bildmodell (`coach/ueberblick.py`), in beiden Stufen:
 Kopf (Titel, Laufzeit, aktueller Punkt, Agenda mit Status), ✅ Entschieden (grün), 🟡 Offen (bernstein),
 📌 Aufgaben (wer, bis wann), ↪ Außerhalb der Agenda (grau) und „Neu seit dem letzten Stand“. Inhalte aus einem
 Textaufruf über Agenda, die festgestellten Ergebnisse je Punkt (Regel 10) und das Transkript. Nichts wird gemalt:
 Jede Zahl muss im Material vorkommen, sonst entfällt der Eintrag; „Person N“ erscheint nicht. In Basis ersetzt der
-Überblick das Live-Bild (auf Zuruf, per Knopf und am Ende – seit Ticket #27 nicht mehr im 10-Minuten-Takt), in Premium
+Überblick das Live-Bild (auf Zuruf, per Knopf und am Ende, nicht mehr im 10-Minuten-Takt), in Premium
 gibt es ihn per Knopf; beides als Karte im Verlauf. Er liegt als `ueberblick.md` in der Meeting-Ablage. Die Bildprobe mit Mistral (FLUX) war unbrauchbar
 (55.000 € statt 25.000 €, Wortsalat, Bilddatei bei Microsoft Azure) – deshalb in Basis kein Bildmodell.
 
-### 4.9 Meeting-Artefakte (Ticket #26, Ablauf seit Ticket #27)
+### 4.8 Qualität aus Nutzersicht
+
+Der Cloud-Testlauf prüft, ob alles funktioniert; die Rubrik in [qualitaet.md](qualitaet.md)
+hält zusätzlich fest, ob es sich auch gut anfühlt – Ansprache-Treffer/Fehlauslöser,
+Antwortzeit, Antwortgüte, Verständlichkeit der Oberfläche auf einen Blick, Live-Bild/Überblick-Treue,
+Abschlusspaket-Brauchbarkeit, Ruhe (Hinweise je 10 min) und ein Gesamteindruck. Bewertet mit
+`scripts/cloudtest_bewerten.py`, Kennzahlen gerechnet, Urteile 1–5 von einem Sprachmodell mit Bild-Eingabe.
+
+### 4.9 Meeting-Artefakte
 
 Nestor erkennt **unabhängig von der Agenda** vier Artefakte und führt sie über das ganze Meeting
 (`coach/artefakte.py`, Grundlage [meeting_artefakte_2026-10-08.md](meeting_artefakte_2026-10-08.md)).
@@ -366,6 +375,8 @@ Agendapunkte müssen keine Entscheidung haben.
   schon festgehaltenen Artefakte mit Nummer und ergänzt, statt doppelt anzulegen. Premium `gpt-5.4-mini`, Basis
   `mistral-medium-latest` (`mistral-small` war deutlich schlechter). Unter Konfidenz 0,4 wird nichts festgehalten,
   unter 0,5 nichts markiert. Gemessen nach 60 Minuten Meeting: Bogen „Zusammenfassen“ Premium 10,2 s, Basis 12,2 s (Abschnitt 4.10).
+  Scheitert die automatische Erkennung, zeigt Nestor dieselbe sichtbare Fehleranzeige wie bei Transkription/Themen
+  und protokolliert den Fehlschlag im Technikbericht.
 - **Zusammenfassung je Abschnitt (still):** eine Karte „Punkt 2 · Budget“ bzw. „Zwischenstand“ im Verlauf –
   entschieden, Aufgaben, offen, Risiken. Keine Stimme, keine Nachfrage.
 - **Regel „Ergebnisse festhalten“** heißt nur noch: Lücken in diesen Karten rot markieren plus ein Band-Hinweis
@@ -390,8 +401,10 @@ Agendapunkte müssen keine Entscheidung haben.
   offene Punkte, Risiken, Parkplatz, Agenda Soll/Ist. Das Dokument selbst (Grafik, Regelanalyse, Anhang) kommt mit #22.
 - **Kosten:** deutlich weniger Aufrufe als die frühere Erkennung je Minute Sprache (Premium etwa +0,2 $/h, Basis
   +0,15 $/h): je Abschnitt ein bis drei Aufrufe, dazu die Aufrufe auf Anfrage – im 60-Minuten-Messlauf zwei Abschnitte mit je zwei bis vier Aufrufen plus ein Zusammenfassen mit sechs parallelen Stücken.
+- **Basis ohne Namensansprache:** Ignoriert Basis ein „Nestor, …“, erscheint einmalig ein verständlicher Hinweis
+  zu Beginn bzw. beim ersten ignorierten Ansprechen (Funkgerät-Logik bleibt).
 
-### 4.10 Bedienlogik: Antwortbogen, Verlauf, Band (Ticket #27)
+### 4.10 Bedienlogik: Antwortbogen, Verlauf, Band
 
 **Der Antwortbogen.** Ein Auftrag, ein Bogen, höchstens ~15 s (`coach/assistent.py`, `coach/bogen.py`):
 1. sofort eine kurze Bestätigung aus dem Floskel-Vorrat – zwei bis drei Varianten je Art, für Zuruf, Sprechtaste und
@@ -449,14 +462,14 @@ nein“ löscht auch in Basis alles).
 Telefon bzw. Funkgerät –, Agenda-Bitte, Start mit Punkt eins) und endet mit „Wenn ihr mögt, sagt kurz eure Namen,
 dann schreibe ich das Protokoll mit Namen.“ Danach spricht er nicht mehr von sich aus; er ordnet die Namen still zu
 (Name mit dem Stimm-Fingerabdruck der Vorstellung, zugeordnet, sobald die Stimme im Register sicher bekannt ist) und
-zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: vorher 0/12 Namen richtig (jede kurze Vorstellung landete als „Person ?“), jetzt 12/12, 0 falsch.
+zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: 12/12 richtig, 0 falsch.
 
 ## 5. Rahmenbedingungen
 
 | | |
 |---|---|
 | Kosten | Premium ≤ 2 $ je Stunde, Basis ≤ 0,7 $ je Stunde, gemessen über das Nutzungsprotokoll. Mit den Meeting-Artefakten (4.9) Premium etwa 2,2 $, Basis etwa 0,85 $ je Stunde (Richtwert mit 10 Fragen und 2 Recherchen) – Basis liegt damit über dem Ziel; ob seltener erkannt oder das Ziel angehoben wird, ist offen (Entscheidung Niclas) |
-| Kostenbremse (Ticket #64, Entscheidung Niclas 10.10.2026) | Höchstdauer 3 Std. je Meeting (Warnung im Band 10 min vorher, danach geordnetes Ende); Kostendeckel je Meeting 5 $ Premium / 2 $ Basis – danach keine weiteren KI-Aufrufe, lokale Signale (Zeit, Monolog, Überlappung, Sprechererkennung) laufen weiter; Tagesdeckel 15 $ je Zugang und Tag (danach kein neues Meeting). Notschalter `NESTOR_PAUSE` im Worker stoppt neue Meetings, laufende bleiben unberührt. Ausgabenlimits im eigenen OpenAI-Projekt und beim Mistral-Workspace sind operativ zu setzen und gegenzuprüfen – aus dem Repo selbst nicht einsehbar |
+| Kostenbremse | Höchstdauer 3 Std. je Meeting (Warnung im Band 10 min vorher, danach geordnetes Ende); Kostendeckel je Meeting 5 $ Premium / 2 $ Basis – danach keine weiteren KI-Aufrufe, lokale Signale (Zeit, Monolog, Überlappung, Sprechererkennung) laufen weiter; Tagesdeckel 15 $ je Zugang und Tag (danach kein neues Meeting). Notschalter `NESTOR_PAUSE` im Worker stoppt neue Meetings, laufende bleiben unberührt. Ausgabenlimits im eigenen OpenAI-Projekt und beim Mistral-Workspace sind operativ zu setzen und gegenzuprüfen – aus dem Repo selbst nicht einsehbar |
 | Datenschutz Basis | In Basis geht kein einziger Aufruf an OpenAI (nachgewiesen über das Nutzungsprotokoll) |
 | Parallele Meetings | gemessen ohne 429: Basis bis 24, Premium bis 8 gleichzeitig ([messung_basis.md](messung_basis.md)); bei Überlast wiederholt Nestor mit Wartezeit und sagt sonst „Ich komme gerade nicht durch, versucht es gleich nochmal.“ |
 | Datenhaltung | Ton und Transkript nur bis zum Abschluss; danach bleibt nur, was heruntergeladen oder gespendet wurde. Nutzungsprotokoll ohne Inhalte. |
@@ -466,9 +479,16 @@ zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen
 
 ## 6. Betrieb
 
-- **Cloudflare Containers** (Workers-Paid-Plan, 5 $/Monat). Ein Worker prüft das Passwort und startet je
+- **Cloudflare Containers** (Workers-Paid-Plan, 5 $/Monat). Ein Worker prüft den Zugang und startet je
   Meeting einen eigenen Container. Der Zustand bleibt im Prozess, wie heute.
 - **Ein Image** mit Code und Modellen. Lokal läuft dasselbe mit `python -m coach` oder `docker run`.
+- **Zugang:** Pilot-Tester melden sich mit Name, Mail-Adresse und Herkunft an; ein per Mail verschickter
+  sechsstelliger Code schaltet frei (Status aktiv/wartet/gesperrt, Standard automatisch aktiv). Daneben besteht
+  eine feste Kundenliste (Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings) weiter.
+  <!-- prüfen: ist die Passwort-Kundenliste weiterhin der reguläre Weg für zahlende/bestehende Kunden, oder nur
+  Übergangsrest neben dem Mail-Code? --> Ein Meeting zählt gegen das Platzlimit erst ab dem echten Start
+  (`/api/start`), nicht schon beim Ansehen der Startseite. „Fertig“ im Abschluss gibt seinen Platz sofort frei
+  und schließt den Container, ohne „Fertig“ erst nach 30 Minuten ohne Anfrage.
 - **Mistral-Schlüssel (Basis):** Niclas' Schlüssel als Secret `MISTRAL_API_KEY`, im Container als
   `LMC_MISTRAL_SCHLUESSEL`. Fehlt er, ist Basis auf der Startseite nicht wählbar. Die aktuelle Basisstimme ist
   als Mistral-Custom-Voice gespeichert; ihre vollständig KI-generierte Referenz und Konfiguration liegen im Repo.
@@ -478,21 +498,9 @@ zeigt oben „Erkannt: Anna, David …“. Gemessen: `scripts/namensrunde_messen
   Kopfleiste im Dashboard zeigt dann unauffällig „eigener Schlüssel“. Im Cloud-Betrieb wird ein so eingetragener
   Schlüssel beim Abschluss des Meetings („Fertig“) wieder gelöscht – er gilt nur für dieses eine Meeting; im
   lokalen Betrieb bleibt er wie bisher gespeichert.
-- **Kunden** stehen in einer Liste: Name, Passwort-Hash, Höchstzahl gleichzeitiger Meetings. Ein Meeting zählt
-  dagegen erst ab dem echten Start (`/api/start`), nicht schon beim Ansehen der Startseite (Ticket #12). „Fertig“
-  im Abschluss gibt seinen Platz sofort frei und schließt den Container, ohne „Fertig“ erst nach 30 Minuten ohne
-  Anfrage.
 - **Abo-Wege** (Codex, Claude über den Pi) sind nur für Tests und in der Cloud aus.
 - **Rechtstexte:** Impressum und Datenschutzerklärung, knapp und pragmatisch. Die Datenschutzerklärung nennt die
   Empfänger je Stufe: in Basis Mistral AI (statt OpenAI), in Premium OpenAI, in beiden Cloudflare.
-
-### 4.8 Qualität aus Nutzersicht
-
-Der Cloud-Testlauf (Ticket #9) prüft, ob alles funktioniert; die Rubrik in [qualitaet.md](qualitaet.md)
-(Ticket #11) hält zusätzlich fest, ob es sich auch gut anfühlt – Ansprache-Treffer/Fehlauslöser,
-Antwortzeit, Antwortgüte, Verständlichkeit der Oberfläche auf einen Blick, Live-Bild/Überblick-Treue,
-Abschlusspaket-Brauchbarkeit, Ruhe (Hinweise je 10 min) und ein Gesamteindruck. Bewertet mit
-`scripts/cloudtest_bewerten.py`, Kennzahlen gerechnet, Urteile 1–5 von einem Sprachmodell mit Bild-Eingabe.
 
 ## 7. Nicht enthalten
 
@@ -505,5 +513,62 @@ Nutzerkonten mit Selbstregistrierung.
   Lastenheft, Dateien, die angefasst werden dürfen, Dateien, die tabu sind, Abnahme und Prüfbefehl.
 - **Branch je Ticket**, Commit-Nachricht mit `#<nr>`. Ein Ticket ist fertig, wenn die Abnahme erfüllt ist,
   die Tests grün sind und das Lastenheft stimmt.
+- **Abnahme über die Pipeline:** `scripts/pipeline.sh a` (pytest, Worker-Tests, TypeScript) und
+  `scripts/pipeline.sh b` (lokale Klick-E2E gegen Fake-Anbieter, 0 €, beide Stufen) müssen grün sein.
+  <!-- prüfen: Pipeline-Stufe c (Staging mit echten Anbietern) und Stufe d (Handy-Checkliste) sind laut
+  Ticket #62/#70 in Arbeit, noch nicht auf `main` – hier nachziehen, sobald gemergt. --> Ausgerollt wird
+  ausschließlich über `deploy/deploy.sh`, das vor dem Deploy einen grünen Stufe-b-Lauf verlangt (GATE_B_C),
+  baut, deployt und danach mit einem Smoke-Test prüft.
 - **Testen ohne unnötige API-Kosten:** `LMC_OFFLINE=1`, lokale Modell-Attrappen, `LMC_TEXT_CACHE`, `LMC_STIMME_AUS=1`.
   Echte API-Aufrufe nur für eine Abnahme, die sie wirklich braucht, und mit Kosten im Ticket vermerkt.
+
+## 9. Änderungsverlauf
+
+Kurzprotokoll, welches Ticket, welches Pilotfeedback oder welche Entscheidung zu welcher Festlegung im
+Soll-Text geführt hat. Ausführliche Begründungen, Zitate und Messungen stehen in den verlinkten Berichten,
+nicht hier.
+
+- **#5–7, #9, #11, #12, #15, #22, #26, #27** (Grundgerüst, bis 08.10.): SaaS-Angebot über einen Link,
+  Antwortbogen/Band/Verlauf als einzige Bedienlogik (§1, §4.10), Meeting-Artefakte (§4.9), Cloud-Testlauf und
+  Qualitätsrubrik [qualitaet.md](qualitaet.md) (§4.8), Export-Grundlage `tasks.json`/`meeting.json` (§4.4),
+  Meetingzählung ab echtem Start statt beim Ansehen der Startseite (§6). Der frühere Kostenrichtwert „Auf
+  Knopfdruck“ (0,4 $/h, #7, [messung_knopfdruck.md](messung_knopfdruck.md)) ist mit #71 gegenstandslos.
+- **#10**: Anzeige-Text „Beta“ statt „experimentell“ im Dashboard; interner Schlüssel bleibt unverändert (§4.3).
+- **#18** (08.10., Niclas): genau zwei Stufen statt einer dritten Variante; Premium/Standard- vs.
+  Basis/Downgrade-Wording mit je zwei Plus-/Minus-Stichpunkten (§3); Nachtrag: Feedback-Knopf auf jeder Seite,
+  jederzeit nutzbar (§4.6).
+- **#31–36, #45–49** (Pilotfeedback 08.–09.10.): Agenda-Dialog aus freier Beschreibung mit Rückfragen (§4.1),
+  Überblick „Aktueller Punkt“/„Ganzes Meeting“, Signalton, Recherche-Quellen, Namenszuordnung nur aus
+  tatsächlicher Vorstellung (§4.7).
+- **#37, #40–44** (09.10.): Datenspende vor Unterstützung/Download, fünf Minuten Rückkehrfrist, Telegram
+  protokolliert nur den Erfolg ohne Inhalte, feste Begrüßung ohne Doppelungen, alte Löschfrist bleibt beim
+  Start eines neuen Meetings unverändert (§4.6, §4.7).
+- **#50, #51, #52, #53**: Handykopplung per QR, genau ein Handy je Meeting (§2); Button-Beschriftung mit
+  Inhalt/Umfang/Ausgabeform (§4.2); Gesprächsdynamik nur im Abschluss statt im Live-Dashboard (§4.3); mobiler
+  Mikrofon-AudioContext wird im Benutzertipp aufgeweckt (§2).
+- **#54, #58** (09.10.): Variantenwahl wartet auf Serverbestätigung (§3); Premium-Stimmenwahl – Nova nur für
+  Kurzantworten, nicht im Realtime-Gespräch (§3).
+- **Rückmeldung Niclas, 08.10.:** durchgängig „du“/„ihr“ statt „Sie“ (§2); Namenszuordnung in Tests von 0/12
+  auf 12/12 verbessert (`scripts/namensrunde_messen.py`, §4.10).
+- **#60** (10.10., Vorfall 09.10. abends – ein Meeting lief ungewollt durchgehend in Basis): keine Default-Stufe
+  mehr, `coach/anbieter.py` als einzige Anbieterfabrik mit Host-Guard, Stufenwechsel während des Meetings
+  gesperrt (§3, §5, §7).
+- **#63** (10.10., Sicherheitsreview): signierte Meeting-Cookies und QR-Kopplungstoken, Mail-Code-Anmeldung statt
+  Container ohne Login, IP-Ratenbegrenzung, Sicherheitsheader, Löschfrist für nie aktivierte Interessenten
+  (§2, §6).
+- **#64** (10.10., Entscheidung Niclas): Höchstdauer und Kostendeckel je Meeting/Zugang/Tag, Notschalter
+  `NESTOR_PAUSE` (§5).
+- **#66** (10.10.): ein serverseitiger Phasenautomat (`phase.js`) für Desktop und Handy, einheitliches
+  Bedienmodell für alle Sprechknöpfe (§4.2, §4.10).
+- **#68 Teil 1** (10.10.): [docs/promptlenkung.md](promptlenkung.md) dokumentiert Prompt-Lenkung je Funktion.
+  **Teil 2** (10.10.) bringt dieses Lastenheft und die README auf diesen Stand.
+- **#71** (10.10., Entscheidung Niclas): Modus „Nur auf Knopfdruck“ ausgebaut – deckte nur einen Sparfall ab,
+  den die Sprechtaste (Basis) ohnehin abdeckt; die fünf Kernaktionen bleiben (§3, §4.2).
+- **#72** (10.10., aus der #68-Prüfung): sichtbare Fehleranzeige bei gescheiterter Artefakt-Erkennung,
+  Schnell-Erkennung bei klaren Signalen, einmaliger Funkgerät-Hinweis bei ignoriertem „Nestor, …“ in Basis
+  (§4.9).
+- **#65** (in Arbeit): reproduzierbarer Deploy über `deploy/deploy.sh`; bleibt offen bis zum ersten echten
+  Produktions-Deploy darüber.
+- **#62** (laut Ticket #70 am 10.10. in Arbeit, noch nicht auf `main`): Staging-Abnahme mit echten Anbietern
+  (Pipeline-Stufe c) und Handy-Checkliste (Stufe d).
+  <!-- prüfen: §8 nach Merge von #62 um den tatsächlichen Stand der Stufen c/d ergänzen -->
