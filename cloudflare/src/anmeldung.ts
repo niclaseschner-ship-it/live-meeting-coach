@@ -25,8 +25,10 @@ export async function sha256Hex(text: string): Promise<string> {
   return hexKodieren(digest);
 }
 
-/** Zeitkonstanter Vergleich zweier Hex-Strings gleicher erwarteter Länge. */
-function gleichZeitkonstant(a: string, b: string): boolean {
+/** Zeitkonstanter Vergleich zweier Strings gleicher erwarteter Länge – auch für `/intern/*` (sicherheit.ts)
+ * und die Cookie-Prüfung hier genutzt, damit nirgends ein normaler `!==`/`===`-Vergleich über ein Geheimnis
+ * läuft (Ticket #63). */
+export function gleichZeitkonstant(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let unterschied = 0;
   for (let i = 0; i < a.length; i++) unterschied |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -83,4 +85,39 @@ export function cookieLesen(kopfzeile: string | null, name: string): string | nu
     if (k === name) return decodeURIComponent(rest.join("="));
   }
   return null;
+}
+
+/**
+ * Signierter Wert MIT Ablaufzeit (Ticket #63, Befund 3: das bisherige Kunden-Cookie lief serverseitig nie
+ * ab). `zweck` trennt die Verwendungszwecke voneinander (Domänentrennung trotz gleichem Geheimnis) – ein
+ * Kunden-Cookie lässt sich so nicht als Meeting-Ticket zweitverwenden. Genutzt für `nestor_kunde` (index.ts)
+ * und, über `meeting.ts`, für `nestor_meeting` und das Kopplungstoken im QR-Code.
+ */
+export async function signiereMitAblauf<T>(
+  zweck: string,
+  daten: T,
+  geheimnis: string,
+  jetzt: number,
+  gueltigkeitMs: number,
+): Promise<string> {
+  const nutzlast = JSON.stringify({ zweck, daten, ablaufAt: jetzt + gueltigkeitMs });
+  return cookieSigniere(nutzlast, geheimnis);
+}
+
+/** Prüft Signatur, Zweck und Ablaufzeit; liefert die ursprünglichen Daten oder null. */
+export async function pruefeMitAblauf<T>(
+  zweck: string,
+  wert: string | null | undefined,
+  geheimnis: string,
+  jetzt: number,
+): Promise<T | null> {
+  const geprueft = await cookiePruefen(wert, geheimnis);
+  if (!geprueft) return null;
+  try {
+    const nutzlast = JSON.parse(geprueft) as { zweck?: string; daten?: T; ablaufAt?: number };
+    if (nutzlast.zweck !== zweck || typeof nutzlast.ablaufAt !== "number" || nutzlast.ablaufAt < jetzt) return null;
+    return nutzlast.daten ?? null;
+  } catch {
+    return null;
+  }
 }

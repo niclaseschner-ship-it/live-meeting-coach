@@ -89,6 +89,34 @@ export async function pinPruefen(env: PilotEnv, email: string, pin: string, jetz
   return "ok";
 }
 
+/**
+ * Ticket #63 (Befund 3, review/r3_sicherheit.md; U2, review/r2_architektur.md Abschnitt 6.A): „gesperrt“ muss
+ * sofort wirken, nicht erst wenn das (jetzt ablaufende) Kunden-Cookie nach 30 Tagen neu ausgehandelt wird. Statt
+ * bei jeder Anfrage R2 zu lesen, hält ein kurzlebiger Cache (≤5 min) den Status vor – ein Sperren wirkt so
+ * binnen höchstens fünf Minuten, ohne jede Anfrage zu verlangsamen. Der Cache wird vom Aufrufer gehalten (ein
+ * Objekt je Worker-Isolate in index.ts), damit sich die Funktion hier ohne Workers-Laufzeit testen lässt.
+ */
+export interface StatusCache {
+  daten: Map<string, { aktiv: boolean; bis: number }>;
+}
+
+export function statusCacheErzeugen(): StatusCache {
+  return { daten: new Map() };
+}
+
+const STATUS_CACHE_MS = 5 * 60 * 1000;
+
+/** `true`, solange der Kunde kein Interessenten-Datensatz mit Status "gesperrt"/"wartet" hat. Legacy-
+ * Passwortkunden (aus dem Secret KUNDEN, kein Interessenten-Datensatz) bleiben wie bisher vertraut. */
+export async function kundeAktiv(env: PilotEnv, kunde: string, cache: StatusCache, jetzt = Date.now()): Promise<boolean> {
+  const treffer = cache.daten.get(kunde);
+  if (treffer && treffer.bis > jetzt) return treffer.aktiv;
+  const row = await interessentLesen(env, kunde);
+  const aktiv = row ? row.status === "aktiv" : true;
+  cache.daten.set(kunde, { aktiv, bis: jetzt + STATUS_CACHE_MS });
+  return aktiv;
+}
+
 export async function interessentenListe(env: PilotEnv): Promise<Interessent[]> {
   const aus: Interessent[] = [];
   let cursor: string | undefined;
