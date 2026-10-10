@@ -775,8 +775,9 @@ async def sprechtaste_wirkung(page: Page, lauf: Lauf, vorher: int = 0, handy: Pa
         if neu or ton_s >= 1.0:  # Karte kann der Stimme nachlaufen – kurz nachsehen
             await asyncio.sleep(5)
             neu = [k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") != "ergebnis"]
-        lauf.pruefen("Sprechtaste wirkt: Frage transkribiert und beantwortet (Karte oder hörbar am Handy)",
-                     bool(neu) or ton_s >= 1.0,
+        # Bedienlogik (Entscheidung Niclas 08.10.): jede Antwort zeigt eine Karte – nur Ton ist ein Produktfehler (#74)
+        lauf.pruefen("Sprechtaste wirkt: Frage transkribiert, beantwortet und als Karte sichtbar",
+                     bool(neu),
                      f"Karte={(neu[0].get('art'), (neu[0].get('titel') or '')[:60]) if neu else None}, "
                      f"Ton am Handy nach dem Loslassen {ton_s:.1f} s")
         await lauf.bild(page, "sprechtaste")
