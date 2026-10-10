@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sha256Hex } from "./anmeldung";
 import {
   type Interessent, kundeAktiv, normalisiereAnmeldung, type PilotEnv, pinHash, pinSeite, registrierungsSeite,
-  statusCacheErzeugen, testzugangMailPasst, testzugangPinPruefen,
+  statusCacheErzeugen, testzugangErlaubt, testzugangMailPasst, testzugangPinPruefen,
 } from "./pilotzugang";
 
 describe("Pilot-Registrierung", () => {
@@ -55,6 +55,11 @@ describe("Testzugang (Ticket #75): Mail + fester PIN, nur Dev/Staging", () => {
   it("ist für jede andere Mail nicht zuständig (null, normaler Fluss prüft weiter)", async () => {
     const e = { ...(await env()), WORKER_NAME: "nestor-staging" };
     expect(await testzugangPinPruefen(e, "jemand@anderes.de", "123456")).toBeNull();
+  });
+
+  it("ist ohne WORKER_NAME gesperrt (im Zweifel geschlossen)", () => {
+    expect(testzugangErlaubt(undefined)).toBe(false);
+    expect(testzugangErlaubt("")).toBe(false);
   });
 
   it("wird in prod (WORKER_NAME 'nestor') hart ignoriert, selbst wenn das Secret gesetzt ist", async () => {

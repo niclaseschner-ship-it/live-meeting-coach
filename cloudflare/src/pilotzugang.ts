@@ -143,7 +143,8 @@ export function testzugangLesen(env: Pick<PilotEnv, "TESTZUGANG">): Testzugang |
 }
 
 export function testzugangErlaubt(workerName: string | undefined): boolean {
-  return workerName !== "nestor";
+  // Geschlossen im Zweifel: ohne ausdrücklichen Nicht-prod-Namen kein Testzugang
+  return !!workerName && workerName !== "nestor";
 }
 
 /** `true`, wenn `email` der konfigurierte Testzugang ist und er in dieser Umgebung wirken darf. */
