@@ -84,6 +84,13 @@ describe("Status-Cache (gesperrt/wartet wirkt sofort, Ticket #63)", () => {
     expect(await kundeAktiv(envMit({ ...INTERESSENT_BASIS, status: "wartet" }), "ada@example.de", statusCacheErzeugen())).toBe(false);
   });
 
+  it("hält den Testzugang trotz Altdatensatz 'wartet' aktiv, in prod nicht", async () => {
+    const test = { TESTZUGANG: JSON.stringify({ mail: "ada@example.de", pinHash: "x" }) };
+    const wartet = envMit({ ...INTERESSENT_BASIS, status: "wartet" });
+    expect(await kundeAktiv({ ...wartet, ...test, WORKER_NAME: "nestor-staging" }, "ada@example.de", statusCacheErzeugen())).toBe(true);
+    expect(await kundeAktiv({ ...wartet, ...test, WORKER_NAME: "nestor" }, "ada@example.de", statusCacheErzeugen())).toBe(false);
+  });
+
   it("liest innerhalb von 5 Minuten aus dem Cache, nicht erneut aus R2", async () => {
     const cache = statusCacheErzeugen();
     const gelesen = { anzahl: 0 };

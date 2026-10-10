@@ -111,6 +111,8 @@ const STATUS_CACHE_MS = 5 * 60 * 1000;
  * jeden Datensatz (z. B. der Testzugang unten, Ticket #75 – er legt bewusst nie einen R2-Eintrag an) bleibt
  * damit vertraut, genau wie früher die Legacy-Passwortkunden. */
 export async function kundeAktiv(env: PilotEnv, kunde: string, cache: StatusCache, jetzt = Date.now()): Promise<boolean> {
+  // Testzugang (nur Dev/Staging) ist immer aktiv – ein Altdatensatz aus einem Lauf ohne TESTZUGANG sperrt ihn nicht
+  if (testzugangMailPasst(env, kunde)) return true;
   const treffer = cache.daten.get(kunde);
   if (treffer && treffer.bis > jetzt) return treffer.aktiv;
   const row = await interessentLesen(env, kunde);
