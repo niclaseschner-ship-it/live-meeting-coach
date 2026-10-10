@@ -96,6 +96,7 @@ def test_ohne_knopf_kein_ki_aufruf_lokale_signale_laufen(monkeypatch):
 
     async def lauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c.modus = "knopfdruck"
         c._client = client = Explodiert()
         einrichtung = json.loads(DEMO.with_suffix(".json").read_text(encoding="utf-8"))
@@ -174,6 +175,7 @@ def _proben(nr: int, sekunden: float = 1.0) -> np.ndarray:
 
 async def _knopf_meeting(texte: dict[bytes, str], archiv: bool = False) -> Coach:
     c = Coach()
+    c.stufe_setzen("premium")
     c.modus = "knopfdruck"
     c._client = Attrappe(texte)
     c.archiv_aktiv = archiv

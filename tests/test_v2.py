@@ -109,19 +109,17 @@ def test_bildwunsch_waehrend_des_zeichnens_wird_nachgeholt(monkeypatch):
 
     aufrufe = []
 
-    async def attrappe(client, meeting, vorher=None, fokus=None):
+    async def attrappe(client, meeting, vorher=None, fokus=None, *, wahl):
         aufrufe.append(vorher)
         await asyncio.sleep(0.05)
         return {"analyse": "a", "png": b"test-png"}
 
     monkeypatch.setattr(bild_gpt, "erzeugen", attrappe)
-    from coach.config import EINST
-    vorher_anbieter = EINST.bild_anbieter
-    object.__setattr__(EINST, "bild_anbieter", "openai")
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda eintrag: None)  # Kostenprotokoll sauber halten
 
     async def ablauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = object()  # kein Netzwerk: Bild-KI ist vollständig durch die Attrappe ersetzt
         c.meeting.starten(virtuell=True)
         c.meeting.transkript = [Segment("Person 1", "Hallo", 0, 1)]
@@ -133,10 +131,7 @@ def test_bildwunsch_waehrend_des_zeichnens_wird_nachgeholt(monkeypatch):
             await asyncio.sleep(0.01)
         return c
 
-    try:
-        c = asyncio.run(ablauf())
-    finally:
-        object.__setattr__(EINST, "bild_anbieter", vorher_anbieter)
+    c = asyncio.run(ablauf())
     assert len(aufrufe) == 2 and c.onepager_version == 2 and c.onepager_png == b"test-png"
     # das zweite Bild schreibt das erste fort
     assert aufrufe[0] is None and aufrufe[1]["analyse"] == "a" and aufrufe[1]["png"] == b"test-png"

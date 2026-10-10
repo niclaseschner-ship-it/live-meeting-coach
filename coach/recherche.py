@@ -1,4 +1,5 @@
-"""Recherche auf Zuruf („Nestor, gib uns einen Überblick zu …“): Websuche über die OpenAI-Responses-API.
+"""Recherche auf Zuruf („Nestor, gib uns einen Überblick zu …“): Websuche – Premium über die OpenAI-Responses-API,
+Basis über die Mistral-Conversations-API. Welcher Weg, entscheidet die Anbieterwahl (coach/anbieter.py).
 
 In die Suche geht nur das Thema (vom Sprachmodell formuliert) und der Meetingtitel als Einordnung –
 kein Transkript, keine Namen. Ergebnis: eine vorlesbare Zusammenfassung plus Quellen fürs Dashboard.
@@ -10,7 +11,6 @@ from __future__ import annotations
 import re
 import time
 
-from .config import EINST
 
 AUFTRAG = """\
 Recherchiere im Web und gib einer Besprechungsrunde einen kurzen Überblick zum Thema unten.
@@ -34,11 +34,11 @@ def vorlesbar(text: str) -> str:
 MISTRAL_ZUSATZ = "\nNutze dafür die Websuche, auch wenn du die Antwort zu kennen glaubst.\n"
 
 
-async def recherchieren(client, frage: str, titel: str = "") -> dict:
+async def recherchieren(client, frage: str, titel: str = "", *, wahl) -> dict:
     t0 = time.monotonic()
-    if hasattr(client, "websuche"):
+    if wahl.anbieter == "mistral":
         # Nestor Basis: Mistral Conversations-API mit web_search (coach/mistral.py) – gleiche Rückgabe wie unten
-        erg = await client.websuche(EINST.recherche_modell,
+        erg = await client.websuche(wahl.recherche_modell,
                                     AUFTRAG.format(frage=frage, titel=titel or "-") + MISTRAL_ZUSATZ)
         text = erg["text"]
         if not erg["quellen"]:
@@ -46,10 +46,10 @@ async def recherchieren(client, frage: str, titel: str = "") -> dict:
         return {"text": text, "quellen": erg["quellen"], "sekunden": round(time.monotonic() - t0, 1),
                 "tokens_rein": erg["tokens_rein"], "tokens_raus": erg["tokens_raus"], "suchen": erg["suchen"]}
     antwort = await client.responses.create(
-        model=EINST.recherche_modell,
+        model=wahl.recherche_modell,
         tools=[{"type": "web_search"}],
         input=AUFTRAG.format(frage=frage, titel=titel or "-"),
-        **({"reasoning": {"effort": EINST.recherche_aufwand}} if EINST.recherche_aufwand else {}),
+        **({"reasoning": {"effort": wahl.recherche_aufwand}} if wahl.recherche_aufwand else {}),
     )
     quellen, gesehen = [], set()
     for teil in antwort.output or []:

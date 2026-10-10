@@ -117,10 +117,10 @@ mehr.
 """
 
 
-def system_text() -> str:
+def system_text(wahl=None) -> str:
     """Systemanweisung für die gewählte Stufe: in Basis entsteht auf „AKTION: bild“ der Überblick als Text."""
     s = SYSTEM.format(name=EINST.assistent_name)
-    if EINST.bild_anbieter == "text":
+    if wahl is not None and wahl.bild_anbieter == "text":
         s = s.replace("visuelle Übersicht zeichnen lassen", BILD_TEXT).replace(BILD_ZEILE, BILD_ZEILE_TEXT)
     s = s.replace(FOLIE_ZEILE, FOLIE_ZEILE_KLAR)
     return s + (BESTAETIGUNG_HINWEIS if EINST.bestaetigung else "") + STILLE_HINWEIS
@@ -255,7 +255,7 @@ def wie_text(basis: bool) -> str:
             "nachfragen, und wenn ich zu viel rede, redet einfach rein.")
 
 
-def begruessungstext(meeting, basis: bool | None = None, namen: bool | None = None) -> tuple[str, str]:
+def begruessungstext(meeting, basis: bool = False, namen: bool | None = None) -> tuple[str, str]:
     """(Begrüßung mit Einwilligung, Rest der Begrüßung).
 
     Feste Fassung: Rückfall der freien Begrüßung (coach/begruessung.py, Ticket #23) und Standard in Basis. Nestor sagt
@@ -273,8 +273,6 @@ def begruessungstext(meeting, basis: bool | None = None, namen: bool | None = No
              f"Nicht einverstanden? Sagt Nein – auch später mit "
              f"„{name}, nein“. Dann lösche ich alles.")
     erster = f" Los geht's mit Punkt eins: {meeting.agenda[0].titel}." if meeting.agenda else " Los geht's."
-    if basis is None:
-        basis = EINST.stufe == "basis"
     if namen is None:
         namen = EINST.vorstellung_sekunden > 0
     start = f"{wie_text(basis)}{agenda_bitte(meeting)}{erster}"
@@ -384,7 +382,7 @@ class Assistent:
         self._taste_gehalten = False
         self.letzte_quellen: list[dict] = []
         # Ticket #21/#27: Floskeln, lange Aufträge (Stau 2/3), Text läuft mit
-        self.floskeln = B.Floskeln()
+        self.floskeln = B.Floskeln(wahl=lambda: self.coach.wahl)
         self.auftraege = B.Auftraege()
         self.auftraege.melden = coach.melden
         self.lang_sperre = asyncio.Lock()  # ein langer Auftrag zur Zeit, der zweite wartet
@@ -403,7 +401,8 @@ class Assistent:
                 "bogen": {"art": b.art, "name": BG.NAMEN.get(b.art, b.art), "quelle": b.quelle} if b else None,
                 "hoert_bis": round(hoert, 1) if hoert else None,
                 # Länge des Fensters für den Ring (Ticket #28: 6 s nach einem Bogen, 12 s nach „Ja?“)
-                "hoert_dauer": (JA_FENSTER_SEKUNDEN if self._angesprochen_bis > jetzt else EINST.nachfrage_sekunden)
+                "hoert_dauer": (JA_FENSTER_SEKUNDEN if self._angesprochen_bis > jetzt
+                                else self.coach.wahl.nachfrage_sekunden if self.coach.wahl else 0.0)
                 if hoert else None,
                 "funkgeraet": self.funkgeraet, "taste": self._taste_gehalten}
 
@@ -420,11 +419,11 @@ class Assistent:
     @property
     def funkgeraet(self) -> bool:
         """Nestor Basis (Ticket #27): Sprechtaste statt Name, kein Rückfrage-Fenster."""
-        return EINST.stufe == "basis"
+        return self.coach.wahl is not None and self.coach.wahl.basis
 
     @property
     def nachfrage_moeglich(self) -> bool:
-        return not self.funkgeraet and EINST.nachfrage_sekunden > 0
+        return not self.funkgeraet and self.coach.wahl is not None and self.coach.wahl.nachfrage_sekunden > 0
 
     def spricht_um(self, t: float) -> bool:
         return any(a - 0.2 <= t <= b for a, b in self.sprechzeiten)
@@ -462,12 +461,13 @@ class Assistent:
             return  # Nein schon während des Versuchs – nichts mehr sagen außer der Bestätigung
         self.zustand = "begruessung"
         vorstellung = EINST.vorstellung_sekunden > 0
-        gruss, start = begruessungstext(self.coach.meeting)
+        gruss, start = begruessungstext(self.coach.meeting, basis=self.coach.wahl.basis)
         frei = None
-        if EINST.stufe == "basis" and EINST.basis_begruessung_frei:  # Ticket #23: Mistral formuliert, sonst fest
+        if self.coach.wahl.basis and EINST.basis_begruessung_frei:  # Ticket #23: Mistral formuliert, sonst fest
             from .begruessung import basis_formulieren, in_stuecke
 
-            text = await basis_formulieren(self.coach._client, self.coach.meeting, vorstellung)
+            text = await basis_formulieren(self.coach._client, self.coach.meeting, vorstellung,
+                                           wahl=self.coach.wahl)
             frei = in_stuecke(text) if text else None
         await self._sprechen_texte(frei or [gruss], danach="begruessung")
         # Kein Warten auf das Nein: es geht gleich weiter, ein einfaches „Nein“ zählt aber noch eine Weile
@@ -486,7 +486,8 @@ class Assistent:
     async def _begruessen_frei(self) -> bool:
         """Premium (Ticket #23): Begrüßung frei im Realtime-Gespräch. False = nicht zustande gekommen, dann spricht
         der Aufrufer die feste Fassung. Fehlt im hörbar Gesagten ein Teil der Einwilligung, folgt der feste Nachsatz."""
-        if EINST.stufe == "basis" or EINST.begruessung != "frei" or EINST.assistent_modus != "gespraech":
+        if (self.coach.wahl.basis or EINST.begruessung != "frei"
+                or self.coach.wahl.assistent_modus != "gespraech"):
             return False
         from .begruessung import Begruessung, nachsatz, pflicht_fehlt
 
@@ -565,7 +566,8 @@ class Assistent:
     def messen(self, ausloeser: str, verzug_text: float = 0.0) -> None:
         """Zeitmessung bis zum ersten Ton (logs/nestor_zeiten.jsonl, Raumtest 06.10.: „Nestor stark verzögert“).
         verzug_text: wie lange der Satz nach seinem Ende brauchte, bis er als Text ankam."""
-        self.messung = {"ausloeser": ausloeser, "modus": EINST.assistent_modus, "t0": time.monotonic(),
+        self.messung = {"ausloeser": ausloeser,
+                        "modus": self.coach.wahl.assistent_modus if self.coach.wahl else None, "t0": time.monotonic(),
                         "verzug_text": round(max(0.0, verzug_text), 2)}
 
     def knopf(self) -> None:
@@ -688,12 +690,12 @@ class Assistent:
             ergebnis, weg = "nicht_an_nestor", "regel runde"
         else:
             t0 = time.monotonic()
-            ergebnis, nutzung = await BG.einordnen(c._client, text, antwort, frage, vorher)
+            ergebnis, nutzung = await BG.einordnen(c._client, text, antwort, frage, vorher, wahl=c.wahl)
             weg = f"modell {time.monotonic() - t0:.2f}s"
             if nutzung:
                 from .pipeline import nutzung_loggen
 
-                nutzung_loggen({"art": "assistent", "zweck": "einordnen", "modell": EINST.assistent_modell, **nutzung})
+                nutzung_loggen({"art": "assistent", "zweck": "einordnen", "modell": self.coach.wahl.assistent_modell, **nutzung})
         gleich = bool(sprecher and self._fragende and sprecher == self._fragende)
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "nachfrage_einordnung", "ergebnis": ergebnis,
                             "weg": weg, "gleiche_person": gleich})
@@ -785,10 +787,10 @@ class Assistent:
                     l = self.letzte or {}
                     antwort = l.get("antwort") if b.art == "frage" and l.get("frage") == b.frage else b.gesagt
                     self._bezug = (b.frage or BG.NAMEN.get(b.art, b.art), antwort or "")
-                    self._nachfrage_bis = ende + EINST.nachfrage_sekunden
+                    self._nachfrage_bis = ende + self.coach.wahl.nachfrage_sekunden
             from .pipeline import _zeit_loggen
 
-            _zeit_loggen({"ausloeser": "bogen", "art": b.art, "quelle": b.quelle, "stufe": EINST.stufe,
+            _zeit_loggen({"ausloeser": "bogen", "art": b.art, "quelle": b.quelle, "stufe": c.stufe,
                           "abgeloest": b.abgeloest, **b.zeiten})
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "bogen", "bogen": b.art, "quelle": b.quelle,
                                 "zeiten": dict(b.zeiten), "abgeloest": b.abgeloest})
@@ -814,7 +816,7 @@ class Assistent:
 
     async def _frage_lauf(self, b: Bogen) -> None:
         """Frage an Nestor: Premium im Realtime-Gespräch (offen oder neu), sonst Text + Sprachausgabe."""
-        if EINST.assistent_modus == "gespraech" and not self.funkgeraet:
+        if self.coach.wahl.assistent_modus == "gespraech" and not self.funkgeraet:
             if self.gespraech is not None and self.gespraech.offen and hasattr(self.gespraech, "frage"):
                 await self.gespraech.frage(b)
                 return
@@ -882,7 +884,7 @@ class Assistent:
 
         c = self.coach
         try:
-            erg = await recherchieren(c._client, frage, c.meeting.titel)
+            erg = await recherchieren(c._client, frage, c.meeting.titel, wahl=c.wahl)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -893,7 +895,7 @@ class Assistent:
                               "punkte": [UEBERLAST if ist_ueberlast(e) else "Die Recherche hat leider nicht geklappt."]})
             await c.melden()
             return
-        nutzung_loggen({"art": "recherche", "modell": EINST.recherche_modell, "tokens_rein": erg["tokens_rein"],
+        nutzung_loggen({"art": "recherche", "modell": self.coach.wahl.recherche_modell, "tokens_rein": erg["tokens_rein"],
                         "tokens_raus": erg["tokens_raus"], "sekunden": erg["sekunden"], "suchen": erg.get("suchen")})
         c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "recherche", "frage": frage, "quellen": erg["quellen"],
                             "sekunden": erg["sekunden"]})
@@ -1039,10 +1041,10 @@ class Assistent:
         still = False  # nach bild/recherche/folie/karte/eintragen spricht das System, nicht das Modell
         try:
             strom = await c._client.chat.completions.create(
-                model=EINST.assistent_modell, stream=True, stream_options={"include_usage": True},
-                messages=[{"role": "system", "content": system_text()},
+                model=self.coach.wahl.assistent_modell, stream=True, stream_options={"include_usage": True},
+                messages=[{"role": "system", "content": system_text(c.wahl)},
                           {"role": "user", "content": self.kontext(frage)}],
-                **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {}))
+                **({"reasoning_effort": self.coach.wahl.assistent_aufwand} if self.coach.wahl.assistent_aufwand else {}))
             nutzung = None
             async for teil in strom:
                 if teil.usage:
@@ -1073,7 +1075,7 @@ class Assistent:
                 await saetze.put(puffer.strip())
             if nutzung:
                 from .pipeline import nutzung_loggen
-                nutzung_loggen({"art": "assistent", "modell": EINST.assistent_modell,
+                nutzung_loggen({"art": "assistent", "modell": self.coach.wahl.assistent_modell,
                                 "tokens_rein": nutzung.prompt_tokens, "tokens_raus": nutzung.completion_tokens,
                                 "sekunden": round(time.monotonic() - t0, 1)})
         except asyncio.CancelledError:
@@ -1110,7 +1112,7 @@ class Assistent:
             await self.lang_annehmen("recherche", aktion["frage"], bogen=b)
         elif typ == "bild":
             fokus = "" if aktion["fokus"].lower() in ("gesamt", "alles") else aktion["fokus"]
-            if EINST.bild_anbieter == "text":  # Basis: kein Bildmodell – der Überblick als Text ist ein kurzer Bogen
+            if self.coach.bild_als_text:  # Basis: kein Bildmodell – der Überblick als Text ist ein kurzer Bogen
                 b.fokus = fokus
                 await self._karten_lauf(Bogen(b.id, "ueberblick", b.frage, b.quelle, b.t0, b.sprecher, fokus,
                                               abgeloest=b.abgeloest), floskel=False)
@@ -1159,7 +1161,7 @@ class Assistent:
             return len(text) / 14
         pcm = self.floskeln.da(text)
         if pcm is None:
-            asyncio.ensure_future(self.floskeln.erzeugen(c._client, text))
+            asyncio.ensure_future(self.floskeln.erzeugen(c._client, text, wahl=c.wahl))
             return await self._sprechen(text, B.STIL, zustand_setzen=False, bogen=bogen)
         self._ton_id += 1
         beginn = c.meeting.jetzt() + VORLAUF_SEKUNDEN
@@ -1183,7 +1185,7 @@ class Assistent:
 
     def floskeln_vorbereiten(self) -> None:
         if EINST.bestaetigung and self.coach._client is not None and not EINST.stimme_aus:
-            asyncio.ensure_future(self.floskeln.vorbereiten(self.coach._client))
+            asyncio.ensure_future(self.floskeln.vorbereiten(self.coach._client, wahl=self.coach.wahl))
 
     def auftrag_abbrechen(self, nr: int) -> bool:
         """✕ im Arbeitsring oder „Nestor, lass die Recherche“."""
@@ -1252,7 +1254,7 @@ class Assistent:
         self.sprechtexte.append((beginn, beginn + 30, text))
         try:
             async with c._client.audio.speech.with_streaming_response.create(
-                    model=EINST.stimme_modell, voice=EINST.stimme, input=text, response_format="pcm",
+                    model=self.coach.wahl.stimme_modell, voice=self.coach.wahl.stimme, input=text, response_format="pcm",
                     instructions=stil or "Sprich ruhig, freundlich und klar auf Deutsch, wie eine erfahrene Moderation. "
                                          "Natürliches Tempo, nicht zu langsam.") as antwort:
                 async for stueck in antwort.iter_bytes(9600):
@@ -1276,6 +1278,6 @@ class Assistent:
         if bogen is not None and bogen.abgeloest:
             self._sprechzeit_kappen()
         from .pipeline import nutzung_loggen
-        nutzung_loggen({"art": "stimme", "modell": EINST.stimme_modell, "zeichen": len(text),
+        nutzung_loggen({"art": "stimme", "modell": self.coach.wahl.stimme_modell, "zeichen": len(text),
                         "sekunden_audio": round(dauer, 1)})
         return dauer

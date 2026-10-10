@@ -61,7 +61,7 @@ def prompt_echo(text: str, prompt: str) -> bool:
     return len(worte) >= 4 and " ".join(worte[:4]) in p and sum(w in p.split() for w in worte) >= 0.8 * len(worte)
 
 
-def text_cache_datei(wav: bytes):
+def text_cache_datei(wav: bytes, modell: str):
     """Zwischenspeicher für Tests (LMC_TEXT_CACHE): Schlüssel ist der Inhalt der Äußerung, Abspielen ist
     deterministisch – derselbe Lauf ergibt dieselben Äußerungen und kostet beim zweiten Mal nichts."""
     if not EINST.text_cache:
@@ -69,7 +69,7 @@ def text_cache_datei(wav: bytes):
     import hashlib
     from pathlib import Path
 
-    h = hashlib.sha1(wav + f"{EINST.text_modell}|{EINST.sprache}|v2".encode()).hexdigest()  # Sprache gehört zum Prompt
+    h = hashlib.sha1(wav + f"{modell}|{EINST.sprache}|v2".encode()).hexdigest()  # Sprache gehört zum Prompt
     return Path(EINST.text_cache) / h[:2] / f"{h}.txt"
 
 
@@ -185,9 +185,11 @@ class Hoerstrom:
             stichwoerter = [p.titel for p in m.agenda] + m.teilnehmende
             if coach.assistent.aktiv:
                 stichwoerter.append(EINST.assistent_name)  # Ansprache: „Mestor“ statt „Nestor“ vermeiden
-            # Basis: Voxtral Realtime (Mistral), Premium: OpenAI – gleiche Schnittstelle (Ticket #13)
-            klasse = LiveTextMistral if EINST.stufe == "basis" else LiveText
-            self.live = klasse(self._teiltext, self._satz, coach.vokabel_prompt(), stichwoerter)
+            # Basis: Voxtral Realtime (Mistral), Premium: OpenAI – gleiche Schnittstelle (Ticket #13); Endpunkt,
+            # Schlüssel und Hostwache kommen aus der Anbieterwahl des Meetings (coach/anbieter.py, Ticket #60)
+            klasse = LiveTextMistral if coach.wahl.basis else LiveText
+            self.live = klasse(self._teiltext, self._satz, coach.vokabel_prompt(), stichwoerter,
+                               wahl=coach.wahl, bei_verstoss=coach.anbieter_verstoss)
 
     async def starten(self) -> None:
         if self.live:
@@ -325,7 +327,7 @@ class Hoerstrom:
         c = self.coach
         t0 = time.monotonic()
         prompt = c.vokabel_prompt()[-800:]
-        cache = text_cache_datei(wav)
+        cache = text_cache_datei(wav, c.wahl.text_modell)
         if cache is not None and not cache.exists() and self._vorlage is not None:
             # Transkript eines früheren Laufs: gleiche Äußerungsgrenzen -> gleicher Text
             o = self._offen.get(uid) or {}
@@ -342,7 +344,7 @@ class Hoerstrom:
         try:
             async with sperre or contextlib.nullcontext():
                 antwort = await c._client.audio.transcriptions.create(
-                    model=EINST.text_modell, file=("aeusserung.wav", wav, "audio/wav"),
+                    model=c.wahl.text_modell, file=("aeusserung.wav", wav, "audio/wav"),
                     language=EINST.sprache, prompt=prompt or None)
             text = (getattr(antwort, "text", "") or "").strip()
             if prompt_echo(text, prompt):
@@ -354,7 +356,7 @@ class Hoerstrom:
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_text(text, encoding="utf-8")
         self.text_sekunden += dauer
-        nutzung_loggen({"art": "text", "modell": EINST.text_modell, "sekunden_audio": round(dauer, 1),
+        nutzung_loggen({"art": "text", "modell": c.wahl.text_modell, "sekunden_audio": round(dauer, 1),
                         "sekunden": round(time.monotonic() - t0, 2)})
         return text
 

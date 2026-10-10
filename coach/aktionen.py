@@ -17,10 +17,10 @@ KOSTENHINWEIS = ("Text ~US-ct sind grobe Richtwerte für die Textauswertung, kei
                  "Der tatsächliche geschätzte Verbrauch steht im Kostenzähler. Mehr Kontext kann mehr kosten.")
 
 
-def katalog(coach, einst):
+def katalog(coach, wahl):
     """Keine KI-Aufrufe; Tarife aus dem vorhandenen Kostenzähler, Kontext grob mit 3 Zeichen/Token."""
     meeting = coach.meeting
-    preise = TOKENPREISE.get(einst.assistent_modell)
+    preise = TOKENPREISE.get(getattr(wahl, "assistent_modell", None))
     gesamt = sum(len(s.text) for s in meeting.transkript)
     aktuell = sum(len(s.text) for s in meeting.punkt_transkript(meeting.aktiver_punkt)) if meeting.agenda else gesamt
     aus = {}

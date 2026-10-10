@@ -36,7 +36,7 @@ async def agenda_vorschlag(daten: dict):
     if not eingabe:
         raise HTTPException(400, "Eingabe fehlt.")
     try:
-        return await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe,
+        return await agenda_vorschlagen(coach._client, coach.wahl.analyse_modell, eingabe,
                                        daten.get("bisher"), daten.get("verlauf"))
     except HTTPException:
         raise
@@ -57,13 +57,13 @@ async def agenda_sprache(bisher: str = Form("null"), verlauf: str = Form("[]"), 
         dialog = []
     wav = await datei.read()
     try:
-        eingabe = await transkription.text(coach._client, EINST.text_modell, wav, EINST.sprache, "")
+        eingabe = await transkription.text(coach._client, coach.wahl.text_modell, wav, EINST.sprache, "")
     except Exception as e:  # noqa: BLE001
         raise _fehler(e) from e
     if not eingabe.strip():
         raise HTTPException(400, "Darin war nichts zu verstehen.")
     try:
-        ergebnis = await agenda_vorschlagen(coach._client, EINST.analyse_modell, eingabe, bisher_dict, dialog)
+        ergebnis = await agenda_vorschlagen(coach._client, coach.wahl.analyse_modell, eingabe, bisher_dict, dialog)
     except Exception as e:  # noqa: BLE001
         raise _fehler(e) from e
     return {**ergebnis, "eingabe": eingabe}

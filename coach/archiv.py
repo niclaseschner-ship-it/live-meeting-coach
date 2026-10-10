@@ -64,15 +64,17 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
         "ueberlappungen": m.ueberlappungen,
         "einstellungen": coach.einstellungen(),
         "technik": {
+            # Ticket #60: alles aus der Anbieterwahl dieses Meetings – so ist im Nachhinein belegbar, was lief
             "stufe": coach.stufe,
-            "anbieter": "Mistral" if coach.stufe == "basis" else "OpenAI",
+            "anbieter": ({"mistral": "Mistral", "openai": "OpenAI"}[w.anbieter] if (w := coach.wahl) else None),
+            "ziele": sorted(w.hosts) if w else [],
             "modus": coach.modus,
-            "live_text": EINST.text_modell,
-            "live_modell": EINST.live_modell,
+            "live_text": w.text_modell if w else None,
+            "live_modell": w.live_modell if w else None,
             "live_art": EINST.live_art,
-            "analyse": EINST.analyse_modell,
-            "stimme": EINST.basis_stimme_modell if coach.stufe == "basis" else EINST.stimme_modell,
-            "gespraech": EINST.realtime_modell if coach.stufe == "premium" and EINST.assistent_modus == "gespraech" else None,
+            "analyse": w.analyse_modell if w else None,
+            "stimme": w.stimme_modell if w else None,
+            "gespraech": w.realtime_modell if w and w.premium and w.assistent_modus == "gespraech" else None,
         },
         "fehler": coach.fehler,
     }

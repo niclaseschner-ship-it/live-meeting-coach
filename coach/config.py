@@ -86,7 +86,6 @@ class Einstellungen:
     text_cache: str = os.getenv("LMC_TEXT_CACHE", "")  # Ordner; leer = aus
     stimme_aus: bool = os.getenv("LMC_STIMME_AUS") == "1"
     # Live-Bild (Premium): GPT-5.4 + Bildgenerator, wie ChatGPT; Fortschreibung des letzten Bildes; ~8 ct/Bild
-    bild_anbieter: str = "openai"
     bild_modell: str = os.getenv("LMC_BILD_MODELL", "gpt-image-2")
     bild_text_modell: str = os.getenv("LMC_BILD_TEXT_MODELL", "gpt-5.4")
     bild_qualitaet: str = os.getenv("LMC_BILD_QUALITAET", "medium")
@@ -174,9 +173,9 @@ class Einstellungen:
     # Basisadresse des Worker (für den Rückruf aus dem Container, z. B. https://nestor.<konto>.workers.dev)
     worker_url: str = os.getenv("LMC_WORKER_URL", "")
 
-    # --- Stufen (Ticket #13, Lastenheft 3): „basis“ = nur Mistral (EU), „premium“ = OpenAI wie bisher ---
-    # Die Startseite wählt die Stufe je Meeting (POST /api/stufe); lokal gilt LMC_STUFE als Vorgabe.
-    stufe: str = os.getenv("LMC_STUFE", "premium")
+    # --- Stufen (Ticket #13, Lastenheft 3): „basis“ = nur Mistral (EU), „premium“ = OpenAI ---
+    # Die Modelle oben sind die von Premium, die basis_* unten ihre Mistral-Gegenstücke. Welche gelten, entscheidet
+    # allein die Anbieterwahl des Meetings (coach/anbieter.py) – es gibt keine Vorgabe-Stufe (Ticket #60).
     basis_text_modell: str = os.getenv("LMC_BASIS_TEXT_MODELL", "mistral-medium-latest")  # Probe 08.10.: 12/12 Aktionen
     # Zuordnung alle ~15 s (größter Posten der Textaufrufe, mit Medium ~0,37 $/h): Small war im Vergleich gleich gut
     # (21/21 Zuordnung, 21/21 Ton, Demo-Wiederholung identisch; docs/messung_basis.md) und kostet ein Zehntel
@@ -192,50 +191,6 @@ class Einstellungen:
 
 
 EINST = Einstellungen()
-
-
-# --- Stufen: Nestor Basis (Mistral) und Nestor Premium (OpenAI) -------------------------------------------------------
-# Eine Stufe ist ein Satz Einstellungen. Premium = was beim Start aus Umgebung/.env kam (wie bisher); Basis tauscht
-# jedes Modell gegen sein Mistral-Gegenstück. Der Coach baut danach seinen Client neu (pipeline.Coach.stufe_setzen).
-STUFEN = ("basis", "premium")
-_STUFEN_FELDER = ("live_modell", "text_modell", "analyse_modell", "analyse_aufwand",
-                  "zuordnung_modell",
-                  "assistent_modell", "assistent_aufwand", "recherche_modell", "recherche_aufwand", "stimme_modell",
-                  "stimme", "assistent_modus", "bild_anbieter", "nachfrage_sekunden", "einordnen_aufwand")
-_PREMIUM = {f: getattr(EINST, f) for f in _STUFEN_FELDER}
-
-
-def basis_werte() -> dict:
-    e = EINST
-    return {
-        "live_modell": e.basis_live_modell, "text_modell": e.basis_transkription,
-        "analyse_modell": e.basis_text_modell, "assistent_modell": e.basis_text_modell,
-        "recherche_modell": e.basis_text_modell, "zuordnung_modell": e.basis_zuordnung_modell,
-        "analyse_aufwand": "", "assistent_aufwand": "", "recherche_aufwand": "",  # Mistral kennt „low“ nicht
-        "stimme_modell": e.basis_stimme_modell, "stimme": e.basis_stimme,
-        # Nestor antwortet über Text + Sprachausgabe (kein Realtime-Gespräch); Funkgerät (Ticket #27): Sprechtaste
-        # statt Name, kein Rückfrage-Fenster; statt des Live-Bilds der Überblick als Text (kein Bildmodell)
-        "assistent_modus": "text", "bild_anbieter": "text", "nachfrage_sekunden": 0.0, "einordnen_aufwand": "",
-    }
-
-
-def stufe_setzen(stufe: str) -> None:
-    """Einstellungen der Stufe übernehmen. Was in Premium zur Laufzeit geändert wurde (Stimme, Gesprächsart …),
-    bleibt für die Rückkehr nach Premium gemerkt."""
-    if stufe not in STUFEN:
-        raise ValueError(f"Unbekannte Stufe: {stufe}")
-    if EINST.stufe == "premium":
-        _PREMIUM.update({f: getattr(EINST, f) for f in _STUFEN_FELDER})
-    for k, v in (basis_werte() if stufe == "basis" else _PREMIUM).items():
-        object.__setattr__(EINST, k, v)
-    object.__setattr__(EINST, "stufe", stufe)
-
-
-if EINST.stufe == "basis":
-    object.__setattr__(EINST, "stufe", "premium")  # Ausgangswerte oben sind die von Premium
-    stufe_setzen("basis")
-elif EINST.stufe not in STUFEN:
-    object.__setattr__(EINST, "stufe", "premium")
 
 
 # --- OpenAI-Schlüssel ----------------------------------------------------------
@@ -294,13 +249,6 @@ def mistral_schluessel() -> str | None:
     """Nestor Basis: Niclas' Mistral-Schlüssel aus der Umgebung (Secret im Cloud-Betrieb). Kein Eintrag im Dashboard –
     der eigene Schlüssel auf der Startseite ist ein OpenAI-Schlüssel und gilt nur für Premium."""
     return os.getenv("LMC_MISTRAL_SCHLUESSEL") or os.getenv("MISTRAL_API_KEY") or None
-
-
-def ki_verfuegbar() -> bool:
-    """Gibt es für die gewählte Stufe einen Schlüssel (und ist der Offline-Modus aus)?"""
-    if os.getenv("LMC_OFFLINE") == "1":
-        return False
-    return bool(mistral_schluessel() if EINST.stufe == "basis" else openai_schluessel())
 
 
 # Anfragen des Containers an den eigenen Worker: Cloudflare weist die Standardkennung von urllib

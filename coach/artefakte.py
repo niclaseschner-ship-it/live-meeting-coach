@@ -651,8 +651,8 @@ class Artefakte:
     async def _aufruf(self, stueck: list, kontext: list, liste: list) -> tuple[dict, dict]:
         from .config import EINST
 
-        return await _json_aufruf(self.coach._client, EINST.analyse_modell, SYSTEM,
-                                  nachricht(self.coach.meeting, liste, stueck, kontext), EINST.analyse_aufwand)
+        return await _json_aufruf(self.coach._client, self.coach.wahl.analyse_modell, SYSTEM,
+                                  nachricht(self.coach.meeting, liste, stueck, kontext), self.coach.wahl.analyse_aufwand)
 
     async def erkennen(self, bis: float | None = None, parallel: bool = False) -> int:
         """Alle noch nicht ausgewerteten Sätze (bis `bis`) auswerten, in Stücken. `parallel`: auf Anfrage alle Stücke
@@ -706,7 +706,7 @@ class Artefakte:
         from .pipeline import nutzung_loggen
 
         roh, nutzung = erg
-        nutzung_loggen({"art": "artefakte", "modell": EINST.analyse_modell, **nutzung})
+        nutzung_loggen({"art": "artefakte", "modell": self.coach.wahl.analyse_modell, **nutzung})
         n = 0
         for e in roh.get("artefakte") or []:
             e = normalisieren(e)

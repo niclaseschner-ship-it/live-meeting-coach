@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("LMC_OFFLINE", "1")
 
 from coach import assistent as A  # noqa: E402
-from coach import config, kosten, mistral, ueberblick  # noqa: E402
+from coach import kosten, mistral, ueberblick  # noqa: E402
+from coach.anbieter import wahl_fuer  # noqa: E402
 from coach.config import EINST  # noqa: E402
 from coach.livetext import NACHLAUF_TEXT, TextZuordnung  # noqa: E402
 from coach.zustand import Agendapunkt, Meeting, Segment  # noqa: E402
@@ -29,24 +30,27 @@ def premium_danach(monkeypatch):
     yield
     from coach.server import coach
 
+    monkeypatch.undo()  # erst den Testzustand (z. B. ein vorgetäuschter Hörstrom) zurück, dann die Wahl
     coach.stufe_setzen("premium")
 
 
 # --- Stufe -----------------------------------------------------------------------------------------------------
-def test_stufe_basis_tauscht_jedes_modell_gegen_mistral_und_zurueck():
-    config.stufe_setzen("premium")
-    premium = {f: getattr(EINST, f) for f in config._STUFEN_FELDER}
-    config.stufe_setzen("basis")
-    assert EINST.stufe == "basis"
+def test_stufe_basis_hat_fuer_jedes_modell_das_mistral_gegenstueck():
+    import dataclasses
+
+    premium, basis = wahl_fuer("premium"), wahl_fuer("basis")
+    assert basis.stufe == "basis" and basis.anbieter == "mistral" and premium.anbieter == "openai"
     for f in ("analyse_modell", "assistent_modell", "recherche_modell"):
-        assert getattr(EINST, f) == "mistral-medium-latest"
-    assert EINST.live_modell.startswith("voxtral") and EINST.text_modell.startswith("voxtral")
-    assert EINST.stimme_modell.startswith("voxtral") and EINST.stimme == mistral.NOVA_EUPHORISCH
-    assert EINST.assistent_modus == "text" and EINST.bild_anbieter == "text" and EINST.nachfrage_sekunden == 0
-    # kein einziges OpenAI-Modell übrig
-    assert not any(str(getattr(EINST, f)).startswith(("gpt", "o4")) for f in config._STUFEN_FELDER)
-    config.stufe_setzen("premium")
-    assert {f: getattr(EINST, f) for f in config._STUFEN_FELDER} == premium
+        assert getattr(basis, f) == "mistral-medium-latest"
+    assert basis.live_modell.startswith("voxtral") and basis.text_modell.startswith("voxtral")
+    assert basis.stimme_modell.startswith("voxtral") and basis.stimme == mistral.NOVA_EUPHORISCH
+    assert basis.assistent_modus == "text" and basis.bild_anbieter == "text" and basis.nachfrage_sekunden == 0
+    assert basis.realtime_modell is None and basis.bild_modell is None  # gibt es in Basis nicht
+    # kein einziges OpenAI-Modell in Basis, kein Mistral-Modell in Premium
+    werte = lambda w: [str(getattr(w, f.name)) for f in dataclasses.fields(w)]  # noqa: E731
+    assert not any(v.startswith(("gpt", "o4")) for v in werte(basis))
+    assert not any(v.startswith(("mistral", "voxtral")) for v in werte(premium))
+    assert premium.live_modell == EINST.live_modell  # Premium: Werte aus der Umgebung, unverändert
 
 
 def test_basis_client_ist_mistral(monkeypatch):
@@ -104,11 +108,9 @@ def test_begruessung_basis_ohne_rueckfragen_ohne_namen():
 
 
 def test_systemanweisung_basis_bild_ist_uebersicht():
-    config.stufe_setzen("basis")
-    s = A.system_text()
+    s = A.system_text(wahl_fuer("basis"))
     assert "AKTION: bild" in s and "Übersicht" in s and "nach wenigen Sekunden im Verlauf" in s
-    config.stufe_setzen("premium")
-    assert "nach wenigen Sekunden im Verlauf" not in A.system_text()
+    assert "nach wenigen Sekunden im Verlauf" not in A.system_text(wahl_fuer("premium"))
 
 
 # --- Live-Text Voxtral: Text den Äußerungen zuordnen --------------------------------------------------------------
@@ -170,7 +172,7 @@ def test_429_wird_wiederholt_dann_ueberlast(monkeypatch):
 
 
 def test_chat_ohne_openai_eigenheiten():
-    c = mistral.MistralClient("x")
+    c = mistral.MistralClient("x", basis_url="http://127.0.0.1:9/v1", http=lambda **optionen: None)
     gesehen = {}
 
     async def create(**kw):
@@ -245,7 +247,8 @@ def test_ueberblick_zahlen_aus_dem_material_und_keine_personen():
                "offen": [{"punkt": 2, "was": "Wer bucht die Hotels?"}],
                "aufgaben": [{"was": "Drei Angebote einholen", "wer": "Person 2", "bis": "Ende Oktober"}],
                "ausserhalb": [], "neu": ["Person 2 holt Angebote"]}
-    u, nutzung = asyncio.run(ueberblick.erstellen(FakeClient(antwort), _meeting(), vorher={"entschieden": []}))
+    u, nutzung = asyncio.run(ueberblick.erstellen(FakeClient(antwort), _meeting(), vorher={"entschieden": []},
+                                                  wahl=wahl_fuer("basis")))
     assert [e["was"] for e in u["entschieden"]] == ["Obergrenze 25.000 Euro"]
     assert u["aufgaben"] == [{"was": "Drei Angebote einholen", "wer": None, "bis": "Ende Oktober"}]
     assert u["neu"] == ["jemand holt Angebote"]
@@ -257,15 +260,15 @@ def test_ueberblick_zahlen_aus_dem_material_und_keine_personen():
 
 def test_ueberblick_bekommt_festgestellte_ergebnisse():
     c = FakeClient({"entschieden": [], "offen": [], "aufgaben": [], "ausserhalb": [], "neu": []})
-    asyncio.run(ueberblick.erstellen(c, _meeting()))
+    asyncio.run(ueberblick.erstellen(c, _meeting(), wahl=wahl_fuer("basis")))
     assert "Festgestellte Ergebnisse" in c.auftrag and "höchstens 25.000 Euro" in c.auftrag
 
 
 def test_basis_bild_aktion_macht_ueberblick(monkeypatch):
     from coach.pipeline import Coach
 
-    config.stufe_setzen("basis")
     c = Coach()
+    c.stufe_setzen("basis")
     c._client = FakeClient({"kernaussage": "x", "entschieden": [], "offen": [], "aufgaben": [], "ausserhalb": [],
                             "neu": []})
     c.meeting = _meeting()
@@ -362,16 +365,15 @@ def test_visuelle_uebersicht_ist_keine_folie():
     assert A.aktion_pruefen({"typ": "folie"}, "ja gerne") == {"typ": "folie"}  # Antwort auf „Soll ich eine Folie …?“
     assert A.aktion_pruefen({"typ": "recherche", "frage": "x"}, "gib uns einen Überblick zu Messeständen") == {
         "typ": "recherche", "frage": "x"}
-    config.stufe_setzen("basis")
-    s = A.system_text()
+    s = A.system_text(wahl_fuer("basis"))
     assert "visuelle Übersicht" in s and "Eine Übersicht über das Meeting ist keine Folie" in s
 
 
 def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
     from coach.pipeline import Coach
 
-    config.stufe_setzen("basis")
     c = Coach()
+    c.stufe_setzen("basis")
     fake = FakeClient(_LEER)
 
     class Strom:
@@ -410,8 +412,8 @@ def test_kein_ueberblick_und_kein_bild_mehr_im_takt():
     from coach.pipeline import Coach
 
     for stufe in ("basis", "premium"):
-        config.stufe_setzen(stufe)
         c = Coach()
+        c.stufe_setzen(stufe)
         c._client = FakeClient(_LEER)
         c.meeting = _meeting()
         c.hoerstrom = object()  # nur „Meeting läuft mit Ton“ für den Takt
@@ -422,14 +424,13 @@ def test_kein_ueberblick_und_kein_bild_mehr_im_takt():
             c.meeting.virtuelle_zeit = t
             c.takt()
         assert gestartet == []
-    config.stufe_setzen("premium")
 
 
 def test_basis_ueberblick_am_ende_wird_nachgeholt():
     from coach.pipeline import Coach
 
-    config.stufe_setzen("basis")
     c = Coach()
+    c.stufe_setzen("basis")
     c._client = FakeClient(_LEER)
     c.meeting = _meeting()
 
@@ -453,7 +454,6 @@ def test_basis_paket_mit_protokoll_und_ueberblick(tmp_path, monkeypatch):
     from coach.abschluss import paket
     from coach.pipeline import Coach
 
-    config.stufe_setzen("basis")
     alt_archiv = EINST.archiv
     object.__setattr__(EINST, "archiv", str(tmp_path))
     schlafen = asyncio.sleep
@@ -465,6 +465,7 @@ def test_basis_paket_mit_protokoll_und_ueberblick(tmp_path, monkeypatch):
 
     async def lauf():
         c = Coach()
+        c.stufe_setzen("basis")
         c._client = None  # ohne Live-Text starten (kein Netz)
         c.archiv_aktiv = True
         c._einrichten({"titel": "Messeplanung 2027", "agenda": [{"titel": "Budget", "minuten": 10}],

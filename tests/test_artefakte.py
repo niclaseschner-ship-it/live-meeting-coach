@@ -31,6 +31,7 @@ class Modell:
 
 def _coach(*antworten: dict, regel_ids=("zeit", "ergebnisse"), minuten=(5, 5)) -> tuple[Coach, list[str]]:
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "Incident-Review", "agenda": [{"titel": "Ursache", "minuten": minuten[0]},
                                                           {"titel": "Maßnahmen", "minuten": minuten[1]}],
                    "regel_ids": list(regel_ids)})

@@ -14,15 +14,22 @@ import pytest
 from coach import bestaetigung as B
 from coach import bogen as BG
 from coach.assistent import BogenBelegt
-from coach.config import EINST, stufe_setzen
+from coach.config import EINST
 from coach.pipeline import Coach
 from coach.zustand import Segment
+
+
+_STUFE = ["premium"]  # Stufe der nächsten Coach-Attrappe (_coach)
+
+
+def stufe_setzen(stufe: str) -> None:
+    _STUFE[0] = stufe
 
 
 @pytest.fixture(autouse=True)
 def umgebung(tmp_path, monkeypatch):
     """Bestätigung an (Floskeln im eigenen Ordner), Text-Weg, Premium; Nutzung nicht protokollieren."""
-    felder = ("bestaetigung", "floskel_ordner", "assistent_modus", "stimme_aus", "bild_anbieter", "nachfrage_sekunden",
+    felder = ("bestaetigung", "floskel_ordner", "assistent_modus", "stimme_aus", "nachfrage_sekunden",
               "vorstellung_sekunden")
     alt = {k: getattr(EINST, k) for k in felder}
     object.__setattr__(EINST, "bestaetigung", True)
@@ -33,8 +40,7 @@ def umgebung(tmp_path, monkeypatch):
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda e: None)
     monkeypatch.setattr("coach.pipeline._zeit_loggen", lambda e: None)
     yield
-    if EINST.stufe != "premium":
-        stufe_setzen("premium")
+    stufe_setzen("premium")
     for k, v in alt.items():
         object.__setattr__(EINST, k, v)
 
@@ -110,6 +116,7 @@ class Attrappe:
 
 def _coach(client=None, regel_ids=(), agenda=("Ursache", "Maßnahmen")) -> tuple[Coach, list[dict]]:
     c = Coach()
+    c.stufe_setzen(_STUFE[0])
     c._einrichten({"titel": "Incident-Review", "agenda": [{"titel": t, "minuten": 10} for t in agenda],
                    "regel_ids": list(regel_ids)})
     c._client = client or Attrappe()
@@ -248,7 +255,7 @@ def test_kurze_frage_laeuft_neben_einem_langen_auftrag(monkeypatch):
 
 
 def test_recherche_kommt_still_als_karte_ohne_ansage(monkeypatch):
-    async def recherche(client, frage, titel):
+    async def recherche(client, frage, titel, *, wahl):
         return {"text": "Der Mindestlohn steigt 2027 auf 14,60 Euro je Stunde, beschlossen von der Kommission.",
                 "quellen": [{"titel": "BMAS", "url": "https://bmas.de", "seite": "bmas.de"}], "tokens_rein": 1,
                 "tokens_raus": 1, "sekunden": 0.1}
@@ -335,11 +342,10 @@ def test_fuenf_minuten_vor_schluss_still_ins_band_mit_knopf():
 
 
 def test_bild_kommt_still_als_karte(monkeypatch):
-    async def erzeugen(client, m, vorher, fokus):
+    async def erzeugen(client, m, vorher, fokus, *, wahl):
         return {"png": b"PNG", "analyse": "a", "messung": {}}
 
     monkeypatch.setattr("coach.bild_gpt.erzeugen", erzeugen)
-    object.__setattr__(EINST, "bild_anbieter", "openai")
 
     async def ablauf():
         c, gesendet = _coach()
@@ -588,6 +594,9 @@ def test_28_regeln_mit_genau_diesen_saetzen():
 def _zeitantwort_fertig(c, sekunden: float = 6.0):
     """Leitlinie zu #28: das Fenster ohne Namen ist kurz (Satzbeginn bis 6 s nach Nestors Wiedergabe)."""
     object.__setattr__(EINST, "nachfrage_sekunden", sekunden)
+    klient = c._client
+    c.stufe_setzen(c.stufe)  # #60: die Wahl liest die Umgebung nur beim Wählen
+    c._client = klient
     a = c.assistent
     c.meeting.virtuelle_zeit = 247.9
     return a, a.bogen_starten("frage", "Und reicht das noch für alle Punkte?", "nachfrage", "Person 2")

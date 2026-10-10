@@ -20,11 +20,11 @@ import json
 import logging
 import time
 
-from .config import EINST, openai_schluessel
+from . import anbieter
+from .config import EINST
 
 log = logging.getLogger("coach.gespraech")
 
-URL = "wss://api.openai.com/v1/realtime?model={modell}"
 RATE = 24000
 
 WERKZEUGE = [
@@ -110,6 +110,7 @@ class Gespraech:
     def __init__(self, assistent) -> None:
         self.a = assistent
         self.coach = assistent.coach
+        self.wahl = assistent.coach.wahl  # Anbieterwahl des Meetings (coach/anbieter.py) – fest für diese Sitzung
         self.offen = False
         self._ws = None
         self._empfang: asyncio.Task | None = None
@@ -129,13 +130,9 @@ class Gespraech:
         self._wiedergabe: dict | None = None
 
     async def starten(self, frage: str | None, bogen=None) -> None:
-        import websockets
-
-        if EINST.stufe == "basis":  # Realtime-Gespräch ist OpenAI – in Basis nie (Ticket #13), Rückfall Text-Weg
-            raise RuntimeError("Realtime-Gespräch gibt es nur in Nestor Premium")
-        kopf = {"Authorization": f"Bearer {openai_schluessel()}"}
-        self._ws = await websockets.connect(URL.format(modell=EINST.realtime_modell), additional_headers=kopf,
-                                            max_size=None)
+        # Realtime-Gespräch ist OpenAI – in Basis wirft die Fabrik AnbieterFehler (Ticket #13/#60)
+        url, kopf = anbieter.realtime_ws(self.wahl)
+        self._ws = await anbieter.ws_verbinden(self.wahl, url, kopf, self.coach.anbieter_verstoss)
         await self._senden({"type": "session.update", "session": self.sitzung()})
         self.offen = True
         self._empfang = asyncio.create_task(self._empfangen())
@@ -191,7 +188,7 @@ class Gespraech:
                 "input": {"format": {"type": "audio/pcm", "rate": RATE},
                           "turn_detection": {"type": "semantic_vad", "create_response": False,
                                              "interrupt_response": False}},
-                "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": EINST.stimme},
+                "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": self.wahl.stimme},
             },
             "tools": WERKZEUGE, "tool_choice": "auto",
         }
@@ -419,7 +416,7 @@ class Gespraech:
         nutzung = antwort.get("usage") or {}
         if nutzung:
             from .pipeline import nutzung_loggen
-            nutzung_loggen({"art": "gespraech", "modell": EINST.realtime_modell,
+            nutzung_loggen({"art": "gespraech", "modell": self.wahl.realtime_modell,
                             "tokens_rein": nutzung.get("input_tokens"), "tokens_raus": nutzung.get("output_tokens"),
                             "details_rein": nutzung.get("input_token_details"),
                             "details_raus": nutzung.get("output_token_details")})

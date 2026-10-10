@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import api_abschluss, api_agenda, api_artefakte, api_knopfdruck, api_start, regeln, zugang
+from . import anbieter, api_abschluss, api_agenda, api_artefakte, api_knopfdruck, api_start, regeln, zugang
 from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
@@ -158,15 +158,19 @@ _variantenwahl_wiederhergestellt = False
 async def immer_nachfragen(request: Request, call_next):
     """Seiten und Skripte: der Browser fragt jedes Mal nach (meist 304). Sonst mischt ein Handy alte und neue
     Fassungen – Teachbuddy 14.09., und im eigenen Test 06.10. kam das alte CSS."""
-    # #54: Der Worker hält die bestätigte Auswahl außerhalb des flüchtigen Containers.
-    # Fremde Header sind keine Autorität; laufende Meetings bleiben unverändert.
+    # #54: Der Worker hält die bestätigte Auswahl außerhalb des flüchtigen Containers (cloudflare/src/variantenwahl.ts).
+    # Fremde Header sind keine Autorität; laufende Meetings bleiben unverändert. #60: Ein frisch gestarteter Container
+    # hat keine Vorgabe-Stufe – ohne gespeicherte Wahl bleibt er unbestimmt, und /api/start weist ab.
     global _variantenwahl_wiederhergestellt
     if not _variantenwahl_wiederhergestellt and EINST.betrieb == "cloud" and zugang.worker_geheimnis_passt(request.scope):
         stufe = request.headers.get("X-Nestor-Stufe")
         modus = request.headers.get("X-Nestor-Modus")
-        if coach.hoerstrom is None and stufe in ("basis", "premium") and modus in ("live", "knopfdruck"):
+        if not coach.wahl_gesperrt and stufe in anbieter.STUFEN and modus in anbieter.MODI:
             if coach.stufe != stufe or coach.modus != modus:
-                coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+                try:
+                    coach.stufe_setzen(stufe, nur_knopfdruck=modus == "knopfdruck")
+                except (ValueError, anbieter.AnbieterFehler) as e:
+                    logging.getLogger("coach").error("Gespeicherte Variante nicht übernommen: %s", type(e).__name__)
             _variantenwahl_wiederhergestellt = True
     antwort = await call_next(request)
     if request.url.path.startswith("/static/") or request.url.path in ("/", "/meeting", "/handy"):
@@ -348,10 +352,10 @@ async def schluessel(daten: dict, request: Request):
     if neu:
         if not neu.startswith("sk-") or len(neu) < 20 or any(z.isspace() for z in neu):
             raise HTTPException(400, "Das sieht nicht wie ein OpenAI-API-Schlüssel aus (beginnt mit „sk-“).")
-        from openai import AsyncOpenAI, AuthenticationError, PermissionDeniedError
+        from openai import AuthenticationError, PermissionDeniedError
 
         try:
-            await AsyncOpenAI(api_key=neu, max_retries=0, timeout=15).models.list()
+            await anbieter.openai_schluessel_pruefen(neu)
         except (AuthenticationError, PermissionDeniedError) as e:
             raise HTTPException(400, "OpenAI hat den Schlüssel abgelehnt.") from e
         except Exception as e:  # noqa: BLE001 – nur den Typ nennen, die Meldung kann Kennungen enthalten
@@ -401,33 +405,48 @@ def _herkunft(request: Request) -> str:
 async def start(request: Request):
     """Version 2: Hörstrom öffnen; das Audio kommt anschließend über /ws/audio. Ein Meeting zur Zeit – ein zweiter
     Start (zweiter Tab, Handy) würde den laufenden Hörstrom samt Live-Text-Verbindung verwaisen lassen."""
-    if coach.hoerstrom is not None:
+    if coach.hoerstrom is not None or coach.startet:
         ereignis("start_abgewiesen", von=_herkunft(request))
         raise HTTPException(409, "Das Meeting läuft schon – auf allen Seiten derselbe Stand.")
+    # Ticket #60: ohne bestätigte Variante kein Start – es gibt keine Vorgabe-Stufe, auf die still ausgewichen würde
+    wahl = coach.wahl
+    if wahl is None:
+        raise HTTPException(409, "Bitte Variante wählen: Basis oder Premium auf der Startseite.")
     erwartet = request.headers.get("X-Nestor-Erwartete-Stufe")
-    if erwartet and erwartet != coach.stufe:
+    if erwartet and erwartet != wahl.stufe:
         raise HTTPException(409, "Die gewählte Variante stimmt nicht mit dem Server überein. Bitte auf der Startseite erneut wählen.")
     if (audio["ws"] is None or audio["quelle"] != "handy"
             or time.monotonic() - audio["letzt"] > LUECKE
             or lautsprecher not in verbindungen or geraet.get(lautsprecher) != "handy"):
         raise HTTPException(409, "Erst den QR-Code scannen und am Handy Mikrofon und Ton einschalten. Dann Meeting starten.")
-    if EINST.betrieb == "cloud":
-        # Ticket #12: Ein Meeting zählt beim Worker (KundenZaehler) erst ab hier, nicht schon beim Ansehen der
-        # Startseite. Kein Netzkontakt zum Worker möglich (None) lässt den Start im Zweifel zu, statt an einer
-        # Netzstörung zu scheitern – wie bei der Datenspende (coach/ablage_r2.py) ist das keine harte Grenze.
-        meeting_id = zugang.meeting_id(request.scope)
-        if meeting_id:
-            rueckmeldung = api_abschluss.worker_melden(
-                "/intern/meeting-start", {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)},
-            )
-            if rueckmeldung is not None and not rueckmeldung.get("erlaubt", True):
-                raise HTTPException(
-                    429,
-                    "Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht – bitte ein laufendes "
-                    "Meeting beenden oder kurz warten.",
+    # Ab hier ist die Wahl gesperrt (/api/stufe, /api/modus → 409), auch während der Worker-Meldung im Thread.
+    coach.startet = True
+    try:
+        if EINST.betrieb == "cloud":
+            # Ticket #12: Ein Meeting zählt beim Worker (KundenZaehler) erst ab hier, nicht schon beim Ansehen der
+            # Startseite. Kein Netzkontakt zum Worker möglich (None) lässt den Start im Zweifel zu, statt an einer
+            # Netzstörung zu scheitern – wie bei der Datenspende (coach/ablage_r2.py) ist das keine harte Grenze.
+            # #60: im Thread, damit die Ereignisschleife (Audio, Takt) nicht bis zu 10 s steht; mit Stufe für die
+            # Startmeldung.
+            meeting_id = zugang.meeting_id(request.scope)
+            if meeting_id:
+                rueckmeldung = await asyncio.to_thread(
+                    api_abschluss.worker_melden, "/intern/meeting-start",
+                    {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope), "stufe": wahl.stufe,
+                     "modus": wahl.modus},
                 )
-    await coach.hoeren_starten()
-    ereignis("start_von", von=_herkunft(request), mikro=audio["quelle"])
+                if rueckmeldung is not None and not rueckmeldung.get("erlaubt", True):
+                    raise HTTPException(
+                        429,
+                        "Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht – bitte ein laufendes "
+                        "Meeting beenden oder kurz warten.",
+                    )
+        if coach.wahl is not wahl:  # kann wegen der Sperre nicht passieren – wenn doch, lieber nicht starten
+            raise HTTPException(409, "Die Variante hat sich während des Starts geändert. Bitte erneut starten.")
+        await coach.hoeren_starten()
+    finally:
+        coach.startet = False
+    ereignis("start_von", von=_herkunft(request), mikro=audio["quelle"], stufe=wahl.stufe)
     return {"ok": True}
 
 

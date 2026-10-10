@@ -46,7 +46,8 @@ def saetze(text: str, n: int = 4) -> list[str]:
     return teile[:n]
 
 
-async def verdichten(client, frage: str, antwort: str, kontext: str | None = None) -> tuple[dict | None, dict]:
+async def verdichten(client, frage: str, antwort: str, kontext: str | None = None, *,
+                     wahl) -> tuple[dict | None, dict]:
     """Liefert (karte oder None, nutzung). Ohne Modell oder nach Fristablauf: die ersten Sätze. Mit `kontext` (Stand
     des Meetings) auch für kurze Antworten – dann ergänzt die Karte Einzelheiten."""
     if len(antwort.split()) < (3 if kontext else MIN_WOERTER):
@@ -56,13 +57,13 @@ async def verdichten(client, frage: str, antwort: str, kontext: str | None = Non
         return ersatz, {}
     try:
         r = await asyncio.wait_for(client.chat.completions.create(
-            model=EINST.assistent_modell,
+            model=wahl.assistent_modell,
             messages=[{"role": "user", "content": (
                 AUFTRAG_KONTEXT.format(name=EINST.assistent_name, frage=frage or "-", antwort=antwort,
                                        kontext=kontext[-7000:]) if kontext else
                 AUFTRAG.format(name=EINST.assistent_name, frage=frage or "-", antwort=antwort))}],
             response_format={"type": "json_object"},
-            **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {})),
+            **({"reasoning_effort": wahl.assistent_aufwand} if wahl.assistent_aufwand else {})),
             FRIST)
     except (asyncio.TimeoutError, Exception):  # noqa: BLE001 – lieber die Sätze zeigen als nichts
         return ersatz, {}

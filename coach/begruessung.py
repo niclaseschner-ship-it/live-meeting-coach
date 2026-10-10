@@ -26,6 +26,7 @@ import re
 import time
 
 from .assistent import NAMEN_BITTE
+from . import anbieter
 from .config import EINST
 from .gespraech import RATE, Gespraech
 
@@ -254,30 +255,23 @@ class Begruessung(Gespraech):
 
     # --- Auf- und Abbau ---
     async def starten(self, frage: str | None = None) -> None:
-        import websockets
-
-        from .config import openai_schluessel
-        from .gespraech import URL
-
-        if EINST.stufe == "basis":
-            raise RuntimeError("Realtime-Begrüßung gibt es nur in Nestor Premium")
-        self._ws = await websockets.connect(URL.format(modell=EINST.realtime_modell),
-                                            additional_headers={"Authorization": f"Bearer {openai_schluessel()}"},
-                                            max_size=None)
+        # Realtime-Begrüßung gibt es nur in Premium – in Basis wirft die Fabrik AnbieterFehler (Ticket #60)
+        url, kopf = anbieter.realtime_ws(self.wahl)
+        self._ws = await anbieter.ws_verbinden(self.wahl, url, kopf, self.coach.anbieter_verstoss)
         await self._senden({"type": "session.update", "session": {
             "type": "realtime",
             "instructions": anweisung(self.coach.meeting, self.vorstellung),
             "output_modalities": ["audio"],
             "audio": {
                 "input": {"format": {"type": "audio/pcm", "rate": RATE},
-                          "transcription": {"model": EINST.begruessung_transkription, "language": "de",
+                          "transcription": {"model": self.wahl.begruessung_transkription, "language": "de",
                                             "prompt": f"{EINST.assistent_name}. Nein. {EINST.assistent_name}, nein. "
                                                       "Passt, leg los."},
                           # eagerness high: ein kurzes „Nein“ oder „Passt“ beendet den Turn sofort (Probe 08.10.: mit
                           # „auto“ kam das Nein erst ~5 s später an)
                           "turn_detection": {"type": "semantic_vad", "eagerness": "high", "create_response": True,
                                              "interrupt_response": True}},
-                "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": EINST.stimme},
+                "output": {"format": {"type": "audio/pcm", "rate": RATE}, "voice": self.wahl.stimme},
             },
             "tools": [EINWAND_WERKZEUG], "tool_choice": "auto",
         }})
@@ -456,13 +450,13 @@ class Begruessung(Gespraech):
         nutzung = antwort.get("usage") or {}
         if nutzung:
             from .pipeline import nutzung_loggen
-            nutzung_loggen({"art": "gespraech", "zweck": "begruessung", "modell": EINST.realtime_modell,
+            nutzung_loggen({"art": "gespraech", "zweck": "begruessung", "modell": self.wahl.realtime_modell,
                             "tokens_rein": nutzung.get("input_tokens"), "tokens_raus": nutzung.get("output_tokens"),
                             "details_rein": nutzung.get("input_token_details"),
                             "details_raus": nutzung.get("output_token_details")})
 
 # --- Basis: Text von Mistral, gesprochen per TTS ------------------------------------------------------------
-async def basis_formulieren(client, meeting, vorstellung: bool) -> str | None:
+async def basis_formulieren(client, meeting, vorstellung: bool, *, wahl) -> str | None:
     """Freier Begrüßungstext von Mistral; None bei Fehler, Zeitüberschreitung oder fehlendem Pflichtpunkt."""
     ziel = f" (Ziel: {meeting.ziel})" if meeting.ziel else ""
     system = BASIS_ANWEISUNG.format(name=EINST.assistent_name, pflicht=pflichtinhalte(meeting, True, vorstellung),
@@ -470,7 +464,7 @@ async def basis_formulieren(client, meeting, vorstellung: bool) -> str | None:
     t0 = time.monotonic()
     try:
         antwort = await asyncio.wait_for(client.chat.completions.create(
-            model=EINST.basis_begruessung_modell, temperature=0.9,
+            model=wahl.begruessung_modell, temperature=0.9,
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": "Schreib die Begrüßung."}]), EINST.basis_begruessung_frist)
     except Exception as e:  # noqa: BLE001 – auch TimeoutError: dann die feste Fassung
@@ -479,7 +473,7 @@ async def basis_formulieren(client, meeting, vorstellung: bool) -> str | None:
     nutzung = getattr(antwort, "usage", None)
     if nutzung:
         from .pipeline import nutzung_loggen
-        nutzung_loggen({"art": "assistent", "zweck": "begruessung", "modell": EINST.basis_begruessung_modell,
+        nutzung_loggen({"art": "assistent", "zweck": "begruessung", "modell": wahl.begruessung_modell,
                         "tokens_rein": nutzung.prompt_tokens, "tokens_raus": nutzung.completion_tokens,
                         "sekunden": round(time.monotonic() - t0, 1)})
     text = re.sub(r"\s+", " ", (antwort.choices[0].message.content or "").replace("*", "")).strip()

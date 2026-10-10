@@ -44,11 +44,16 @@ def test_api_start_liefert_richtwerte_und_leere_pflichtangaben(lokal):
 def test_modus_setzen_erscheint_im_schnappschuss(lokal):
     ursprung = coach.modus
     try:
+        coach.stufe_setzen("premium")
+        # #60: /api/modus setzt nie eine Stufe – „Nur auf Knopfdruck“ gibt es nur in Basis (Ticket #13)
+        assert lokal.post("/api/modus", json={"modus": "knopfdruck"}).status_code == 409
+        assert coach.stufe == "premium" and coach.modus == "live"
+        coach.stufe_setzen("basis")
         r = lokal.post("/api/modus", json={"modus": "knopfdruck"})
         assert r.status_code == 200 and r.json() == {"ok": True, "modus": "knopfdruck"}
-        assert coach.modus == "knopfdruck"
+        assert coach.modus == "knopfdruck" and coach.wahl.modus == "knopfdruck"
         assert lokal.get("/api/zustand").json()["modus"] == "knopfdruck"
-        assert coach.stufe == "basis"  # „Nur auf Knopfdruck“ gibt es nur in Basis (Ticket #13)
+        assert coach.stufe == "basis"
     finally:
         coach.stufe_setzen("premium")
         coach.modus = ursprung

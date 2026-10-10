@@ -10,6 +10,7 @@ import pytest
 
 from coach import assistent as A
 from coach import begruessung as B
+from coach.anbieter import wahl_fuer
 from coach.config import EINST
 from coach.gespraech import RATE
 from coach.pipeline import Coach
@@ -20,11 +21,15 @@ VOLL = ("Hallo ihr, ich bin Nestor und begleite heute euer Meeting. Ihr wollt di
 OHNE_EINWILLIGUNG = "Hallo ihr, ich bin Nestor. Ihr wollt die Zeit einhalten. Los geht's mit Punkt eins: Standkonzept."
 
 
+_STUFE = ["premium"]  # Stufe der nächsten Coach-Attrappe (_coach)
+
+
 @pytest.fixture(autouse=True)
 def premium():
-    alt = {k: getattr(EINST, k) for k in ("stufe", "assistent_modus", "begruessung", "vorstellung_sekunden",
+    _STUFE[0] = "premium"
+    alt = {k: getattr(EINST, k) for k in ("assistent_modus", "begruessung", "vorstellung_sekunden",
                                           "begruessung_frist_ton", "basis_begruessung_frei", "stimme_aus")}
-    for k, v in {"stufe": "premium", "assistent_modus": "gespraech", "begruessung": "frei",
+    for k, v in {"assistent_modus": "gespraech", "begruessung": "frei",
                  "vorstellung_sekunden": 0.0, "begruessung_frist_ton": 1.0, "stimme_aus": True}.items():
         object.__setattr__(EINST, k, v)
     yield
@@ -120,6 +125,7 @@ class Verbindung:
 
 def _coach():
     c = Coach()
+    c.stufe_setzen(_STUFE[0])
     c._einrichten({"titel": "Messeplanung", "agenda": [{"titel": "Standkonzept", "minuten": 15},
                                                         {"titel": "Budget", "minuten": 20}],
                    "regel_ids": ["zeit"]})
@@ -253,12 +259,15 @@ def test_rueckfall_wenn_kein_ton_kommt(monkeypatch):
 def test_fest_eingestellt_oder_basis_spricht_die_feste_fassung(monkeypatch):
     for einstellung in ({"begruessung": "fest"}, {"stufe": "basis"}):
         for k, v in einstellung.items():
-            object.__setattr__(EINST, k, v)
+            if k == "stufe":
+                _STUFE[0] = v
+            else:
+                object.__setattr__(EINST, k, v)
         c, _, gesprochen, _ = _ablauf(monkeypatch, _antwort(VOLL, 0.25))
-        gruss, start = A.begruessungstext(c.meeting)
+        gruss, start = A.begruessungstext(c.meeting, basis=c.wahl.basis)
         assert gesprochen == [gruss, start]
         object.__setattr__(EINST, "begruessung", "frei")
-        object.__setattr__(EINST, "stufe", "premium")
+        _STUFE[0] = "premium"
 
 
 # --- Basis: Mistral formuliert, sonst fest ----------------------------------------------------------------
@@ -275,19 +284,19 @@ class _Mistral:
 def test_basis_freier_text_nur_wenn_vollstaendig_und_schnell():
     c = _coach()
     m = c.meeting
-    assert asyncio.run(B.basis_formulieren(_Mistral(VOLL), m, False)) == VOLL
-    assert asyncio.run(B.basis_formulieren(_Mistral(OHNE_EINWILLIGUNG), m, False)) is None
+    assert asyncio.run(B.basis_formulieren(_Mistral(VOLL), m, False, wahl=wahl_fuer("basis"))) == VOLL
+    assert asyncio.run(B.basis_formulieren(_Mistral(OHNE_EINWILLIGUNG), m, False, wahl=wahl_fuer("basis"))) is None
     object.__setattr__(EINST, "basis_begruessung_frist", 0.05)
     try:
-        assert asyncio.run(B.basis_formulieren(_Mistral(VOLL, warten=0.5), m, False)) is None
+        assert asyncio.run(B.basis_formulieren(_Mistral(VOLL, warten=0.5), m, False, wahl=wahl_fuer("basis"))) is None
     finally:
         object.__setattr__(EINST, "basis_begruessung_frist", 2.0)
     # mit Vorstellungsrunde muss statt des Starts die Bitte um die Namen drin sein
-    assert asyncio.run(B.basis_formulieren(_Mistral(VOLL), m, True)) is None
+    assert asyncio.run(B.basis_formulieren(_Mistral(VOLL), m, True, wahl=wahl_fuer("basis"))) is None
 
 
 def test_basis_spricht_den_freien_text(monkeypatch):
-    object.__setattr__(EINST, "stufe", "basis")
+    _STUFE[0] = "basis"
     object.__setattr__(EINST, "basis_begruessung_frei", True)
     c = _coach()
     c._client = _Mistral(VOLL)

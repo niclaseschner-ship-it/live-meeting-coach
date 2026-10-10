@@ -65,6 +65,7 @@ class Zuordnung:
 def coach(monkeypatch):
     monkeypatch.setattr(pipeline, "nutzung_loggen", lambda eintrag: None)
     c = Coach()
+    c.stufe_setzen("premium")
     c._client = Zuordnung()
     c.meeting.agenda = [Agendapunkt(t) for t in ("Ablauf des Ausfalls", "Ursache", "Maßnahmen")]
     c.meeting.aktiver_punkt = 1

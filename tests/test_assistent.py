@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from coach import assistent as a
 from coach.pipeline import Coach
+from coach.anbieter import wahl_fuer
 from coach.config import EINST
 from coach.zustand import Agendapunkt, Segment
 
@@ -51,6 +52,7 @@ def test_einwand_erkennen():
 
 def test_begruessung_nennt_regeln_und_ersten_punkt():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["ausreden", "zeit"]})
     gruss, start = a.begruessungstext(c.meeting)
     assert "Ausreden lassen und Zeit einhalten" in gruss and "Nein" in gruss
@@ -60,6 +62,7 @@ def test_begruessung_nennt_regeln_und_ersten_punkt():
 
 def test_begruessung_bittet_um_agendawechsel():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}, {"titel": "Urlaub"}], "regel_ids": []})
     _, start = a.begruessungstext(c.meeting)
     assert "zum nächsten Punkt geht" in start and "zusammen" in start
@@ -67,6 +70,7 @@ def test_begruessung_bittet_um_agendawechsel():
 
 def test_begruessung_liest_weitere_regeln_nach_den_gewaehlten_vor():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["zeit"],
                    "regeln": ["Handys bleiben in der Tasche", "Pünktlich beginnen"]})
     gruss, _ = a.begruessungstext(c.meeting)
@@ -76,6 +80,7 @@ def test_begruessung_liest_weitere_regeln_nach_den_gewaehlten_vor():
 
 def test_begruessung_fasst_mehr_als_drei_weitere_regeln_zusammen():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": [],
                    "regeln": ["Eins", "Zwei", "Drei", "Vier"]})
     gruss, _ = a.begruessungstext(c.meeting)
@@ -85,6 +90,7 @@ def test_begruessung_fasst_mehr_als_drei_weitere_regeln_zusammen():
 
 def test_begruessung_ohne_weitere_regeln_unveraendert():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "Budget"}], "regel_ids": ["zeit"]})
     gruss, _ = a.begruessungstext(c.meeting)
     assert "Außerdem" not in gruss
@@ -92,6 +98,7 @@ def test_begruessung_ohne_weitere_regeln_unveraendert():
 
 def test_eigene_sprache_wird_nur_live_herausgefiltert():
     c = Coach()
+    c.stufe_setzen("premium")
     c.assistent.sprechzeiten = [(10.0, 15.0)]
     assert c.assistent.eigene_sprache(10.5, 14.0)
     assert not c.assistent.eigene_sprache(20, 25)
@@ -102,6 +109,7 @@ def test_eigene_sprache_wird_nur_live_herausgefiltert():
 def test_wer_waehrend_nestor_spricht_redet_ist_kein_echo():
     """Ticket #15: Thorsten las noch vor, als die Ansage kam – sie fiel als „eigene Sprache“ aus dem Transkript."""
     c = Coach()
+    c.stufe_setzen("premium")
     c.assistent.sprechzeiten = [(456.0, 484.0)]
     c.assistent.sprechtexte = [(456.0, 484.0, "Zu Punkt zwei, Budget für das Sommerfest: Beschlossen ist ein "
                                               "Ausgabenrahmen von höchstens 9000 Euro. Offen ist noch die Frage "
@@ -121,6 +129,7 @@ def test_wer_waehrend_nestor_spricht_redet_ist_kein_echo():
 def test_ansage_waehrend_nestor_spricht_wechselt_den_punkt():
     async def ablauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = None
         c.meeting.agenda = [Agendapunkt("Kassenbericht"), Agendapunkt("Budget"), Agendapunkt("Vereinsbus")]
         c.meeting.aktiver_punkt = 1
@@ -174,6 +183,7 @@ def test_frage_antwort_mit_aktion_und_sprachausgabe(monkeypatch):
 
     async def ablauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = _attrappe(["AKTION: weiter 2\nGut, dann geht es weiter mit Punkt zwei. ", "Punkt eins ist abgeschlossen."])
         c.meeting.agenda = [Agendapunkt("Start"), Agendapunkt("Budget")]
         c.meeting.regel_ids = []
@@ -197,6 +207,7 @@ def test_frage_antwort_mit_aktion_und_sprachausgabe(monkeypatch):
 def test_ohne_namen_keine_antwort():
     async def ablauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = _attrappe(["AKTION: keine\nHallo."])
         c.meeting.starten(virtuell=True)
         await c.satz(Segment("Person 1", "Wir sollten das Budget prüfen.", 1, 3))
@@ -211,6 +222,7 @@ def test_aktion_keine_wird_nicht_vorgelesen(monkeypatch):
 
     async def ablauf():
         c = Coach()
+        c.stufe_setzen("premium")
         c._client = _attrappe(["AKTION: keine\nIhr seid bei Punkt eins."])
         c.meeting.starten(virtuell=True)
         await c.satz(Segment("Person 1", "Nestor, wie viel Zeit haben wir noch?", 1, 3))
@@ -248,7 +260,8 @@ def test_folie_nach_recherche():
                                    usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5))
 
     f, n = asyncio.run(folie.erstellen(Attrappe(), {"frage": "Mindestlohn?", "text": "…", "zeit": 5,
-                                                    "quellen": [{"titel": "", "url": "https://www.bmas.de/x"}]}))
+                                                    "quellen": [{"titel": "", "url": "https://www.bmas.de/x"}]},
+                                    wahl=wahl_fuer("premium")))
     assert f["titel"] == "Mindestlohn 2026" and f["punkte"] == ["a", "b"]
     assert f["quellen"] == [{"titel": "bmas.de", "url": "https://www.bmas.de/x", "seite": "bmas.de"}]
     assert n["tokens_rein"] == 10
@@ -259,9 +272,9 @@ def test_karte_ohne_modell_und_kurze_antworten():
 
     from coach import karten
 
-    assert asyncio.run(karten.verdichten(None, "danke", "Gern, bis gleich.")) == (None, {})
+    assert asyncio.run(karten.verdichten(None, "danke", "Gern, bis gleich.", wahl=wahl_fuer("premium"))) == (None, {})
     lang = "Ihr seid bei Punkt zwei. Das Budget liegt bei 25.000 Euro. Offen ist der Puffer für Getränke. Mehr nicht."
-    karte, _ = asyncio.run(karten.verdichten(None, "wo stehen wir?", lang))
+    karte, _ = asyncio.run(karten.verdichten(None, "wo stehen wir?", lang, wahl=wahl_fuer("premium")))
     assert karte == {"titel": "wo stehen wir?", "punkte": ["Ihr seid bei Punkt zwei.", "Das Budget liegt bei 25.000 Euro.",
                                                            "Offen ist der Puffer für Getränke.", "Mehr nicht."]}
 
@@ -293,6 +306,7 @@ def test_spaetes_nein_nur_name_und_nein():
 
 def test_begruessung_erklaert_ansprache_ohne_redundanten_agendakommentar():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "A", "minuten": 5}, {"titel": "B", "minuten": 5}],
                    "regel_ids": []})
     gruss, start = a.begruessungstext(c.meeting)
@@ -308,6 +322,7 @@ async def _sprich_nicht(texte, danach="bereit", stil=None):
 
 def test_einfaches_nein_nur_kurz_nach_der_begruessung():
     c = Coach()
+    c.stufe_setzen("premium")
     c._einrichten({"titel": "T", "agenda": [{"titel": "A"}], "regel_ids": []})
     gerufen = []
 

@@ -11,7 +11,6 @@ import json
 import time
 from urllib.parse import urlparse
 
-from .config import EINST
 
 AUFTRAG = """\
 Mach aus diesem Rechercheergebnis eine Folie für eine Besprechungsrunde. Antworte nur mit JSON:
@@ -31,14 +30,14 @@ def quelle_kurz(q: dict) -> dict:
     return {"titel": q.get("titel") or host, "url": q.get("url", ""), "seite": host}
 
 
-async def erstellen(client, recherche: dict) -> tuple[dict, dict]:
+async def erstellen(client, recherche: dict, *, wahl) -> tuple[dict, dict]:
     """Liefert (folie, nutzung). recherche: {frage, text, quellen, zeit}."""
     t0 = time.monotonic()
     antwort = await client.chat.completions.create(
-        model=EINST.assistent_modell,
+        model=wahl.assistent_modell,
         messages=[{"role": "user", "content": AUFTRAG.format(frage=recherche["frage"], text=recherche["text"])}],
         response_format={"type": "json_object"},
-        **({"reasoning_effort": EINST.assistent_aufwand} if EINST.assistent_aufwand else {}),
+        **({"reasoning_effort": wahl.assistent_aufwand} if wahl.assistent_aufwand else {}),
     )
     roh = json.loads(antwort.choices[0].message.content or "{}")
     folie = {
