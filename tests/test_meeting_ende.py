@@ -11,17 +11,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import urllib.error
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
-from coach import api_abschluss, server
-from coach.anbieter import wahl_fuer
-from coach.config import EINST
-from coach.pipeline import Coach
-from coach.server import app
+# Isolation (vgl. tests/test_start.py, tests/test_server.py, tests/test_basis.py, tests/test_knopfdruck.py):
+# ohne das hier ist /api/start seit #60 ohne Schlüssel 503 – dieser Datei darf das nicht davon abhängen, dass ein
+# anderes Testmodul LMC_OFFLINE schon vorher gesetzt hat.
+os.environ.setdefault("LMC_OFFLINE", "1")
+
+from coach import api_abschluss, server  # noqa: E402
+from coach.anbieter import wahl_fuer  # noqa: E402
+from coach.config import EINST  # noqa: E402
+from coach.pipeline import Coach  # noqa: E402
+from coach.server import app  # noqa: E402
 
 _GEHEIMNIS = "geheim-test-meeting-ende"
 _WORKER_URL = "https://nestor.example.workers.dev"
