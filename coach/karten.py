@@ -1,7 +1,8 @@
 """Nestor-Karten: was Nestor auf eine Frage sagt, erscheint zusätzlich als Karte im Verlauf (Ticket #27). Die
 gesprochene Antwort ist kurz (ein Satz, höchstens zwei); die Karte nennt Titel und Stichpunkte und darf Einzelheiten
 aus dem Meeting-Stand ergänzen, die die Antwort stützen. Dauert das zu lange, stehen die Sätze selbst auf der Karte;
-ist nichts zu zeigen (Bestätigung, Smalltalk), gibt es keine Karte.
+ist nichts zu zeigen (Bestätigung, Smalltalk), gibt es keine Karte – außer bei einer Pflichtkarte (Ticket #74: auf
+die Sprechtaste bzw. den Text-Weg erscheint jede Antwort als Karte, Bedienlogik „bestätigen, Karte, 1–2 Sätze“).
 """
 
 from __future__ import annotations
@@ -47,10 +48,11 @@ def saetze(text: str, n: int = 4) -> list[str]:
 
 
 async def verdichten(client, frage: str, antwort: str, kontext: str | None = None, *,
-                     wahl) -> tuple[dict | None, dict]:
+                     wahl, pflicht: bool = False) -> tuple[dict | None, dict]:
     """Liefert (karte oder None, nutzung). Ohne Modell oder nach Fristablauf: die ersten Sätze. Mit `kontext` (Stand
-    des Meetings) auch für kurze Antworten – dann ergänzt die Karte Einzelheiten."""
-    if len(antwort.split()) < (3 if kontext else MIN_WOERTER):
+    des Meetings) auch für kurze Antworten – dann ergänzt die Karte Einzelheiten. `pflicht`: nie None bei einer
+    Antwort – sagt das Modell „zeigen: false“ (Rückfrage, Bestätigung), stehen die gesprochenen Sätze auf der Karte."""
+    if not antwort.strip() or (not pflicht and len(antwort.split()) < (3 if kontext else MIN_WOERTER)):
         return None, {}
     ersatz = {"titel": frage or "Nestor", "punkte": saetze(antwort)}
     if client is None:
@@ -74,6 +76,6 @@ async def verdichten(client, frage: str, antwort: str, kontext: str | None = Non
     except ValueError:
         return ersatz, nutzung
     if roh.get("zeigen") is False:
-        return None, nutzung
+        return (ersatz if pflicht else None), nutzung
     punkte = [str(p)[:140] for p in (roh.get("punkte") or [])][:4]
     return ({"titel": str(roh.get("titel") or ersatz["titel"])[:80], "punkte": punkte or ersatz["punkte"]}, nutzung)

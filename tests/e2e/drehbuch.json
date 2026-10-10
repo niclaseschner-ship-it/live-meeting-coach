@@ -186,6 +186,7 @@
     },
     {
       "id": "schnell_beschluss_und_aufgabe",
+      "_zweck": "Ticket #74: Antwortform von Mistral (Probe 10.10.) – erfundene Nummer 1 bei der Aufgabe (es gab keine passende; Nummer 1 ist die Entscheidung) und „endgültig“ mit Umlaut. Die Aufgabe muss trotzdem neu angelegt werden (Sabine auf der Karte), statt die Entscheidung zu überschreiben.",
       "system_enthaelt": [
         "Schnellprüfung im laufenden Meeting"
       ],
@@ -201,7 +202,7 @@
             "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
             "wer": "die Runde",
             "bis": null,
-            "status": "endgueltig",
+            "status": "endgültig",
             "reaktion": null,
             "hoch": false,
             "vage": false,
@@ -214,7 +215,7 @@
             "zitat": "Wir beschließen für das Sommerfest maximal neuntausend Euro Ausgaben"
           },
           {
-            "nummer": null,
+            "nummer": 1,
             "typ": "aufgabe",
             "was": "Fahrten der Jugend des letzten Jahres liefern",
             "wer": "Sabine",
@@ -236,6 +237,7 @@
     },
     {
       "id": "schnell_beschluss",
+      "_zweck": "Ticket #74: Antwortform von Mistral (Probe 10.10.) – erfundene Nummer 1 bei der Aufgabe (es gab keine passende; Nummer 1 ist die Entscheidung) und „endgültig“ mit Umlaut. Die Aufgabe muss trotzdem neu angelegt werden (Sabine auf der Karte), statt die Entscheidung zu überschreiben.",
       "system_enthaelt": [
         "Schnellprüfung im laufenden Meeting"
       ],
@@ -250,7 +252,7 @@
             "was": "Sommerfest: maximal 9.000 Euro Ausgaben und 3.500 Euro Zuschuss",
             "wer": "die Runde",
             "bis": null,
-            "status": "endgueltig",
+            "status": "endgültig",
             "reaktion": null,
             "hoch": false,
             "vage": false,
@@ -267,6 +269,7 @@
     },
     {
       "id": "schnell_aufgabe",
+      "_zweck": "Ticket #74: Antwortform von Mistral (Probe 10.10.) – erfundene Nummer 1 bei der Aufgabe (es gab keine passende; Nummer 1 ist die Entscheidung) und „endgültig“ mit Umlaut. Die Aufgabe muss trotzdem neu angelegt werden (Sabine auf der Karte), statt die Entscheidung zu überschreiben.",
       "system_enthaelt": [
         "Schnellprüfung im laufenden Meeting"
       ],
@@ -276,7 +279,7 @@
       "antwort": {
         "artefakte": [
           {
-            "nummer": null,
+            "nummer": 1,
             "typ": "aufgabe",
             "was": "Fahrten der Jugend des letzten Jahres liefern",
             "wer": "Sabine",
