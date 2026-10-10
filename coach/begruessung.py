@@ -126,17 +126,20 @@ def _regeln(meeting) -> str:
 
 
 def pflichtinhalte(meeting, basis: bool = False, vorstellung: bool = False) -> str:
-    """Die Pflichtinhalte als nummerierte Liste (Ticket #23) – für Realtime (Premium) und Mistral (Basis)."""
+    """Die Pflichtinhalte als nummerierte Liste (Ticket #23, Produktvorstellung #67) – für Realtime (Premium) und
+    Mistral (Basis)."""
     name = EINST.assistent_name
     regeln = _regeln(meeting)
     z = [f"1. Wer du bist: {name}, du begleitest heute ihr Meeting als Moderationsassistent.",
-         ("2. Die Regeln, die sich die Runde vorgenommen hat, kurz und ohne sie vorzulesen: " + regeln) if regeln
-         else "2. (Es sind keine Regeln gewählt – lass das weg.)",
-         "3. Dass du mithörst. Sag ausdrücklich „ich höre mit“.",
-         f"4. Bei „Nein“ löschst du alles. Sag vollständig und wörtlich: „Ich höre mit. Nicht einverstanden? "
-         f"Sagt Nein – auch später mit „{name}, nein“. Dann lösche ich alles.“ Mit Punkt 3 verbinden, nicht doppelt "
+         "2. In ein bis zwei Sätzen, was du für die Runde tust – es ist neu für alle: Agenda und Zeit im Blick "
+         "behalten, Ergebnisse festhalten und auf Zuruf zusammenfassen oder etwas recherchieren.",
+         ("3. Die Regeln, die sich die Runde vorgenommen hat, kurz und ohne sie vorzulesen: " + regeln) if regeln
+         else "3. (Es sind keine Regeln gewählt – lass das weg.)",
+         "4. Dass du mithörst. Sag ausdrücklich „ich höre mit“.",
+         f"5. Bei „Nein“ löschst du alles. Sag vollständig und wörtlich: „Ich höre mit. Nicht einverstanden? "
+         f"Sagt Nein – auch später mit „{name}, nein“. Dann lösche ich alles.“ Mit Punkt 4 verbinden, nicht doppelt "
          "erklären. Diesen Punkt nie weglassen oder abschwächen."]
-    z.append(start_inhalte(meeting, basis, ab=5))
+    z.append(start_inhalte(meeting, basis, ab=6))
     if vorstellung:  # Ticket #27: die Begrüßung sagt alles und endet mit der Bitte um die Namen – kein Startsatz danach
         z.append(f"{len(z) + 1 + z[-1].count(chr(10))}. Ganz zum Schluss, als letzter Satz: „{NAMEN_BITTE}“")
     return "\n".join(z)
@@ -179,7 +182,7 @@ Raum und hören dich über einen Lautsprecher.
 So sprichst du: frei, wie ein sympathischer Mensch, nicht vorgelesen. Warm, locker, gern mit einem Schuss Humor, \
 natürliches Tempo, kleine Pausen, ein Lächeln in der Stimme. Deutsch. Die Runde sprichst du mit „ihr“ an, eine \
 einzelne Person mit „du“ – niemals mit „Sie“. Keine Liste aufsagen, sondern erzählen. Länge: etwa 25 \
-Sekunden, höchstens 35 – lieber kürzer. Höchstens 75 Wörter insgesamt: vier bis sechs kurze Sätze, \
+Sekunden, höchstens 30 – lieber kürzer. Höchstens 85 Wörter insgesamt: fünf bis sieben kurze Sätze, \
 zügig und gut verständlich, ohne gehetzt zu klingen. Keine zusätzlichen Beispiele, Agenda-Bewertungen oder \
 Schlusserklärungen; Pflichtinhalte knapp verbinden und nichts doppelt erklären. Fang direkt mit der Begrüßung \
 an, nicht mit „Alles klar“ oder „Okay“.
@@ -188,7 +191,7 @@ Diese Inhalte müssen vorkommen, in eigenen Worten, ungefähr in dieser Reihenfo
 {pflicht}
 
 Wenn jemand dazwischenredet:
-- „Passt“, „leg los“, „alles klar“ oder Ähnliches: Hör auf zu erklären. Hast du Punkt 3 und 4 noch nicht gesagt, \
+- „Passt“, „leg los“, „alles klar“ oder Ähnliches: Hör auf zu erklären. Hast du Punkt 4 und 5 noch nicht gesagt, \
 sag sie jetzt in einem kurzen Satz. Dann geht es direkt los{los}.
 - Eine Frage: kurz beantworten, dann knapp weiter.
 - „Nein“ oder Widerspruch gegen das Mithören: Ruf sofort das Werkzeug nicht_einverstanden auf und sag nichts \
@@ -200,7 +203,8 @@ Das Meeting: {titel}{ziel}. Agenda: {agenda}.
 BASIS_ANWEISUNG = """\
 Du schreibst die Begrüßung, die {name}, ein Moderationsassistent, gleich zu Beginn eines Präsenzmeetings \
 spricht. Der Text wird vorgelesen. Locker, warm, menschlich, gern mit etwas Humor, jedes Mal etwas anders. \
-Ansprache „ihr“, nie „Sie“. Höchstens 90 Wörter. Formuliere knapp und verbinde Inhalte, statt jeden Punkt \
+Ansprache „ihr“, nie „Sie“. Ziel 20 bis 30 Sekunden gesprochen, das sind etwa 70 bis 100 Wörter, höchstens 100. \
+Formuliere knapp und verbinde Inhalte, statt jeden Punkt \
 einzeln zu erklären. Nur der gesprochene Text: keine Überschrift, keine \
 Aufzählungszeichen, kein Markdown, keine Regieanweisungen.
 
