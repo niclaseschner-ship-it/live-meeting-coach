@@ -22,7 +22,8 @@ import urllib.request
 
 
 def _get(url: str, headers: dict | None = None) -> tuple[int, dict | None]:
-    anfrage = urllib.request.Request(url, headers=headers or {})
+    # Cloudflare weist den Standard-User-Agent „Python-urllib/…“ mit 403 ab (gefunden beim ersten Staging-Deploy, #62)
+    anfrage = urllib.request.Request(url, headers={"User-Agent": "nestor-deploy-smoke/1", **(headers or {})})
     try:
         with urllib.request.urlopen(anfrage, timeout=15) as antwort:
             return antwort.status, json.loads(antwort.read() or b"{}")

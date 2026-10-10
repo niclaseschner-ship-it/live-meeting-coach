@@ -115,6 +115,7 @@
 
   "bekannte_abweichungen": {
     "_zweck": "Prüfungen, die gegen den heutigen Code rot sein dürfen, weil der Auftrag schon als Ticket offen ist. Der Lauf meldet sie als 'bekannt_rot' mit Ticket statt als neuen Fehler. Ist das Ticket erledigt, Eintrag löschen – dann zählt die Prüfung wieder voll. Stand 10.10.: leer – alle Vertragsprüfungen sind gegen main grün (die Abschlussreihenfolge stellt static/abschluss.js:25 zur Laufzeit her, auch wenn abschluss.html sie im Quelltext anders listet).",
-    "_beispiel": {"sichtbarkeit_live_handy": "#66"}
+    "_beispiel": {"sichtbarkeit_live_handy": "#66"},
+    "c_offener_punkt_basis": "#74"
   }
 }

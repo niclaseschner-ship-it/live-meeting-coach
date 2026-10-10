@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import urllib.request
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -204,11 +205,26 @@ def anbieterbeweis(ordner: Path, stufe: str, lauf: schritte.Lauf) -> None:
 
 
 # --- Durchlauf ----------------------------------------------------------------------------------------------------
-async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> schritte.Lauf:
+@dataclass
+class Ziel:
+    """Wogegen ein Durchlauf fährt. Stufe B: lokaler wrangler dev mit Fakes. Stufe C (Ticket #62, tests/e2e/lauf_c.py):
+    Staging-Worker mit echten Anbietern – echt=True, Worker-Geheimnis fürs Anbieterprotokoll, Kostendeckel je Lauf."""
+
+    url: str
+    passwort: str
+    audio: dict[str, Path]
+    echt: bool = False
+    intern_geheimnis: str = ""
+    deckel_eur: float | None = None
+    agenda_halten_s: float = 7.5
+    rss: object = field(default=lambda: 0)
+
+
+async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schritte.Lauf:
     from playwright.async_api import async_playwright
 
-    lauf = schritte.Lauf(ordner, stufe, rauch)
-    audio = audio_bauen.bauen()
+    lauf = schritte.Lauf(ordner, stufe, rauch, echt=ziel.echt)
+    audio = ziel.audio
     lauf.belege["audio"] = {k: str(v) for k, v in audio.items()}
     video = ordner / "video"
     gemeinsam = ["--no-sandbox", "--disable-gpu", "--renderer-process-limit=2", "--ignore-certificate-errors",
@@ -225,40 +241,62 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
                                                      record_video_size={"width": 640, "height": 400})
         seite = await desk_ctx.new_page()
         seite.on("pageerror", lambda e: lauf.belege.setdefault("js_fehler_desktop", []).append(str(e)[:200]))
-        seite.on("dialog", lambda d: asyncio.ensure_future(d.dismiss()))
-        try:
-            await schritte.anmelden(seite, WORKER_URL, dienste.passwort, lauf)
+        seite.on("dialog", lambda d: asyncio.ensure_future(d.accept() if lauf.dialoge_annehmen else d.dismiss()))
+        wache = schritte.Kostenwache(seite, ziel.deckel_eur, lauf) if ziel.deckel_eur is not None else None
+
+        async def ablauf() -> None:
+            nonlocal handy_ctx, handy, uhr
+            await schritte.anmelden(seite, ziel.url, ziel.passwort, lauf)
             await schritte.stufe_waehlen(seite, stufe, lauf)
             await schritte.agenda_text(seite, lauf)
-            await schritte.agenda_sprache(seite, lauf)
+            await schritte.agenda_sprache(seite, lauf, ziel.agenda_halten_s)
             await schritte.start_gesperrt(seite, lauf)
             url = await schritte.qr_lesen(seite, lauf)
             handy_ctx, handy = await schritte.handy_koppeln(handy_browser, url, stufe, lauf, video)
             await schritte.handy_mikro(seite, handy, lauf)
             await schritte.zweites_handy(handy_browser, url, lauf)
             await schritte.meeting_starten(seite, handy, lauf)
-            uhr = schritte.Ergebnisuhr(seite)  # #72: liest mit, wann Sätze ankommen und Karten sichtbar werden
+            uhr = schritte.Ergebnisuhr(seite, echt=ziel.echt)  # #72: liest mit, wann Sätze ankommen und Karten sichtbar werden
             uhr.starten()
             await schritte.ton_abwarten(handy, lauf, "Begrüßung", 45)
             if rauch:
                 await schritte.kernknopf(seite, "stand", "Stand Sommerfest-Budget", lauf)
                 lauf.offen("Transkript, übrige Kernknöpfe, Sprechtaste, Abschluss, ZIP, Datenspende",
                            "Rauchmodus endet nach Meetingstart und einem Kernknopf")
+                return
+            await schritte.transkript_pruefen(seite, lauf)
+            if ziel.echt:
+                await schritte.ansprache_pruefen_echt(seite, handy, uhr, lauf)
             else:
-                await schritte.transkript_pruefen(seite, lauf)
                 await schritte.ansprache_pruefen(seite, lauf)
-                await schritte.ergebnisse_zeitnah_pruefen(seite, uhr, lauf)
-                for art, soll in (("stand", "Stand Sommerfest-Budget"), ("zusammenfassen", "9.000"),
-                                  ("fehlt", "fehlt"), ("protokoll", "Festgehalten"), ("ueberblick", "Budget beschlossen, Vereinsbus")):
-                    await schritte.kernknopf(seite, art, soll, lauf)
-                    await schritte.ton_abwarten(handy, lauf, art, 20)
-                if stufe == "basis":
-                    await schritte.sprechknopf_halten(seite, "#btn-taste", 2.5, lauf, "Sprechtaste (Basis)")
-                    await schritte.sprechtaste_wirkung(seite, lauf)
-                    await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
-                await schritte.sprechtaste_handy(handy, stufe, lauf)
-                await schritte.beenden_und_abschluss(seite, lauf, ordner)
-                await schritte.handy_abschluss(handy, lauf)
+            await schritte.ergebnisse_zeitnah_pruefen(seite, uhr, lauf)
+            if ziel.echt:
+                await schritte.monolog_und_imperativ(seite, handy, uhr, lauf)
+            for art, soll in (("stand", "Stand Sommerfest-Budget"), ("zusammenfassen", "9.000"),
+                              ("fehlt", "fehlt"), ("protokoll", "Festgehalten"), ("ueberblick", "Budget beschlossen, Vereinsbus")):
+                await schritte.kernknopf(seite, art, soll, lauf)
+                await schritte.ton_abwarten(handy, lauf, art, 20)
+            if stufe == "basis":
+                vorher = max((k.get("id", 0) for k in await schritte.karten(seite)), default=0)
+                # C: lange genug für den ganzen ersten Satz der Desktop-WAV („Bitte bereite … vor.“)
+                await schritte.sprechknopf_halten(seite, "#btn-taste", 4.0 if ziel.echt else 2.5, lauf, "Sprechtaste (Basis)")
+                los = await handy.evaluate("() => Date.now()")
+                await schritte.sprechtaste_wirkung(seite, lauf, vorher, handy, los)
+                await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
+            await schritte.sprechtaste_handy(handy, stufe, lauf)
+            if ziel.echt:
+                await schritte.ergebnisse_ende_pruefen(uhr, lauf)
+                await schritte.anbieterprotokoll_pruefen(seite, ziel.url, ziel.intern_geheimnis, lauf)
+            await schritte.beenden_und_abschluss(seite, lauf, ordner)
+            await schritte.handy_abschluss(handy, lauf)
+            if ziel.echt:
+                await schritte.abschliessen(seite, lauf)
+
+        try:
+            if wache is not None:
+                await schritte.mit_kostendeckel(ablauf(), wache, lauf)
+            else:
+                await ablauf()
         except schritte.Abbruch as e:
             lauf.belege["abbruch"] = str(e)
             await lauf.bild(seite, "abbruch")
@@ -273,7 +311,9 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, dienste: Dienste) -> 
                 uhr.stoppen()
             if handy is not None:
                 await schritte.ton_auswerten(handy, stufe, lauf)
-            lauf.belege["rss_dienste_mb"] = dienste.rss_mb()
+            if wache is not None:
+                lauf.belege.setdefault("kosten", {}).update(wache.beleg())
+            lauf.belege["rss_dienste_mb"] = ziel.rss()
             for ctx in (handy_ctx, desk_ctx):
                 if ctx is not None:
                     await ctx.close()
@@ -296,7 +336,8 @@ def stufe_fahren(basis: Path, stufe: str, rauch: bool) -> schritte.Lauf:
         dienste.warten("http://127.0.0.11:18011/bereit", 30, "Fake-OpenAI")  # 404, nicht protokolliert
         dienste.warten(f"http://127.0.0.1:{COACH_PORT}/api/start", 90, "Coach")
         dienste.warten(f"{WORKER_URL}/anmelden", 120, "Worker (wrangler dev)")
-        lauf = asyncio.run(durchlauf(ordner, stufe, rauch, dienste))
+        ziel = Ziel(url=WORKER_URL, passwort=dienste.passwort, audio=audio_bauen.bauen(), rss=dienste.rss_mb)
+        lauf = asyncio.run(durchlauf(ordner, stufe, rauch, ziel))
     finally:
         dienste.stoppen()
     anbieterbeweis(ordner, stufe, lauf)

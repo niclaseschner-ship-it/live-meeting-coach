@@ -17,6 +17,61 @@
     "agenda_satz": "Bitte bereite eine kurze Vorstandssitzung vor. Ein Agendapunkt heißt Sommerfest-Budget, ein zweiter Vereinsbus-Prüfauftrag.",
     "agenda_nachlauf_s": 30.0
   },
+  "audio_c": {
+    "_zweck": "Stufe C (Ticket #62, echte Anbieter auf Staging): Handy-Mikro = die Meeting-Sätze aus 'audio' (gleiche Lage), danach ein Monolog-Block einer Stimme ≥ 90 s mit kurzen Pausen < 2 s (Monologanzeige muss live wachsen und die Schwelle erreichen, #57/#67) und ein natürlicher Imperativ an Nestor (löst Zusammenfassen aus). Echte Modelle antworten nicht wörtlich – geprüft wird gegen 'sollfragmente' (Regex, Groß/Klein egal).",
+    "pause_vor_monolog_s": 4.0,
+    "monolog_pausen_s": [
+      0.8,
+      1.2,
+      1.5,
+      1.0
+    ],
+    "monolog_min_s": 95.0,
+    "monolog_saetze": [
+      "Ich erzähle euch jetzt einmal ausführlich, wie das Sommerfest im letzten Jahr gelaufen ist.",
+      "Wir hatten damals rund dreihundert Gäste, und das Wetter war zum Glück den ganzen Tag stabil.",
+      "Der Aufbau hat am Vormittag begonnen, die Zelte standen schon gegen elf Uhr.",
+      "Beim Kuchenbuffet haben wieder viele Eltern mitgeholfen, das war wirklich großartig.",
+      "Die Hüpfburg war wie immer der Renner bei den Kleinen, da gab es eine lange Schlange.",
+      "Am Grill hatten wir anfangs zu wenig Würstchen, die haben wir dann schnell nachgekauft.",
+      "Die Musik kam von der Schulband, die hat fast zwei Stunden durchgespielt.",
+      "Beim Abbau am Abend waren leider nur noch wenige Helfer da, das hat lange gedauert.",
+      "Die Getränke kamen vom Getränkehändler im Ort, mit Rückgaberecht für volle Kisten.",
+      "Die Tombola hat ungefähr vierhundert Euro eingebracht, die Preise waren alle gespendet.",
+      "Für die Kinder gab es außerdem ein Torwandschießen und eine kleine Bastelecke.",
+      "Die Toilettenwagen waren ausreichend, aber die Beschilderung dorthin war schlecht.",
+      "Parkplätze waren knapp, viele Gäste haben in den Nebenstraßen geparkt.",
+      "Die Nachbarn haben sich diesmal nicht über die Lautstärke beschwert.",
+      "Bei der Anmeldung der Stände gab es ein paar Doppelbuchungen, das hat Zeit gekostet.",
+      "Die Kasse lief über zwei Stationen, und am Ende hat die Abrechnung gestimmt.",
+      "Fotos hat der Pressewart gemacht, ein paar davon kamen sogar in die Zeitung.",
+      "Die Reinigung des Platzes am nächsten Morgen haben die Jugendlichen übernommen.",
+      "Insgesamt war die Stimmung sehr gut, und viele haben nach dem nächsten Termin gefragt.",
+      "So viel erst einmal als Rückblick von meiner Seite."
+    ],
+    "pause_vor_imperativ_s": 5.0,
+    "imperativ": "Nestor, bündle mir mal die Ergebnisse.",
+    "nachlauf_s": 360.0,
+    "sollfragmente": {
+      "meeting_saetze": [
+        "Vorstandssitzung|Sommerfest",
+        "9[.\\s]?000|neuntausend",
+        "Sabine",
+        "Budget",
+        "Vereinsbu|Kauf lohnt"
+      ],
+      "monolog": "Tombola|Hüpfburg|Kuchenbuffet|Schulband",
+      "imperativ": "b[üu]nd",
+      "beschluss": "9[.\\s]?000|neuntausend",
+      "aufgabe": "Sabine",
+      "termin": "Freitag|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\.\\s?\\d{1,2}\\.",
+      "offen": "Vereinsbus|Kauf",
+      "agenda_punkte": [
+        "Sommerfest",
+        "Vereinsbus"
+      ]
+    }
+  },
   "transkription": {
     "_zweck": "Batch-Transkription (OpenAI /v1/audio/transcriptions, Mistral /v1/audio/transcriptions). Zuordnung über den Dateinamen, den der Coach mitschickt.",
     "beitrag.wav": "Bitte bereite eine kurze Vorstandssitzung vor. Ein Agendapunkt heißt Sommerfest-Budget, ein zweiter Vereinsbus-Prüfauftrag.",

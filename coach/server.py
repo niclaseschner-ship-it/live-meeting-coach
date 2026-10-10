@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -198,6 +199,20 @@ async def version():
     Container, cloudflare/src/index.ts); diese Route hier ist der Beleg, dass auch der Container selbst den
     erwarteten Stand trägt, „falls erreichbar“ (deploy/deploy.sh)."""
     return versionsinfo()
+
+
+@app.get("/api/intern/anbieter-protokoll")
+async def anbieter_protokoll(request: Request):
+    """Ticket #62 (Stufe C): Anbieterbeweis ohne Fakes – welche Ziele die Hostwache (coach/anbieter.py) in diesem
+    Container gesehen hat. Nur mit dem Worker-Geheimnis in `X-Nestor-Intern` (zusätzlich zum Worker-Beweis, den der
+    Zugangsschutz verlangt): ein angemeldeter Kunde allein liest das nicht. Nur Host:Port und Anzahl, keine Inhalte."""
+    eigenes = EINST.worker_geheimnis
+    fremdes = request.headers.get("X-Nestor-Intern", "")
+    if not eigenes or not fremdes or not secrets.compare_digest(fremdes, eigenes):
+        raise HTTPException(403, "Nicht erlaubt.")
+    w = coach.wahl
+    return {"stufe": coach.stufe, "anbieter": w.anbieter if w else None,
+            "erlaubt": sorted(w.hosts) if w else [], "gesehen": anbieter.gesehen()}
 
 
 @app.get("/api/gesund")

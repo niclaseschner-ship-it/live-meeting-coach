@@ -45,5 +45,42 @@
   // ersten `wrangler deploy` mit der echten *.workers.dev-Adresse (oder einer eigenen Domain) füllen.
   "vars": {
     "WORKER_URL": "https://nestor.niclas-eschner.workers.dev"
+  },
+
+  // Staging (Ticket #62, Stufe C): eigener Worker `nestor-staging` mit eigenen Durable-Object-Namensräumen (eigenes
+  // Skript = eigene Namensräume), eigenem R2-Bucket und höchstens einem Container. Gleiches Image wie prod. Deploy
+  // NUR über `deploy/deploy.sh --staging` (oder `npx wrangler deploy --env staging`). Secrets eigens per
+  // `npx wrangler secret put <NAME> --env staging`; Telegram bleibt aus (keine TELEGRAM_*-Secrets). Siehe README.md.
+  "env": {
+    "staging": {
+      "name": "nestor-staging",
+      "containers": [
+        {
+          "class_name": "Nestor",
+          "image": "../Dockerfile",
+          "instance_type": "standard-1",
+          "max_instances": 1,
+          "constraints": { "jurisdiction": "eu" }
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "NESTOR", "class_name": "Nestor" },
+          { "name": "ZAEHLER", "class_name": "KundenZaehler" },
+          { "name": "RATENBEGRENZUNG", "class_name": "IpZaehler" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["Nestor", "KundenZaehler"] },
+        { "tag": "v2", "new_sqlite_classes": ["IpZaehler"] }
+      ],
+      "r2_buckets": [
+        { "binding": "SPENDEN", "bucket_name": "nestor-spenden-staging", "jurisdiction": "eu" }
+      ],
+      "vars": {
+        "WORKER_URL": "https://nestor-staging.niclas-eschner.workers.dev",
+        "AUTO_FREIGABE": "0"
+      }
+    }
   }
 }

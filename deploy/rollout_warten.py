@@ -12,6 +12,10 @@ Nötige Umgebung:
   NESTOR_APPLICATION_ID    – ID der Container-Anwendung "nestor-nestor"
 
 Aufrufe:
+  rollout_warten.py konto
+      Druckt die Konto-ID aus `GET /accounts` (braucht nur das Token). Rückfall für Konto-Tokens, mit denen
+      `wrangler whoami` an `/memberships` scheitert (Ticket #62); rc=1, wenn nicht genau ein Konto sichtbar ist.
+
   rollout_warten.py instanzen
       Druckt jede nicht-inaktive Instanz; rc=1 wenn mindestens eine läuft, sonst 0. Fürs Deploy-Gate
       ("Abbruch bei laufenden Container-Instanzen außer --erzwingen").
@@ -65,6 +69,21 @@ def aktive_instanzen() -> list[dict]:
     return [i for i in daten.get("instances", []) if i.get("status", {}).get("state") != "inactive"]
 
 
+def cmd_konto(_args: argparse.Namespace) -> int:
+    token = _umgebung("CLOUDFLARE_API_TOKEN")
+    anfrage = urllib.request.Request("https://api.cloudflare.com/client/v4/accounts",
+                                     headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(anfrage, timeout=30) as antwort:
+            konten = json.load(antwort).get("result") or []
+    except urllib.error.HTTPError as e:
+        sys.exit(f"Cloudflare-API /accounts: HTTP {e.code}")
+    if len(konten) != 1:
+        sys.exit(f"Erwartet genau ein Konto, sichtbar: {len(konten)} – CLOUDFLARE_ACCOUNT_ID von Hand setzen.")
+    print(konten[0]["id"])
+    return 0
+
+
 def cmd_instanzen(_args: argparse.Namespace) -> int:
     aktive = aktive_instanzen()
     for i in aktive:
@@ -76,9 +95,12 @@ def cmd_instanzen(_args: argparse.Namespace) -> int:
 
 def cmd_neuester_tag(_args: argparse.Namespace) -> int:
     rollouts = _get("/rollouts?limit=1")
-    if not rollouts:
-        sys.exit("Kein Rollout gefunden.")
-    bild = rollouts[0].get("target_configuration", {}).get("image", "")
+    if rollouts:
+        bild = rollouts[0].get("target_configuration", {}).get("image", "")
+    else:
+        # Erster Deploy einer Umgebung (Ticket #62, Staging): die Anwendung wird mit ihrem Image angelegt, ohne
+        # Rollout-Eintrag – dann gilt das Image der Anwendung selbst.
+        bild = _get("").get("configuration", {}).get("image", "")
     tag = bild.rsplit(":", 1)[-1] if ":" in bild else ""
     if not tag:
         sys.exit(f"Konnte kein Bild-Tag aus {bild!r} lesen.")
@@ -97,6 +119,8 @@ def cmd_warten(args: argparse.Namespace) -> int:
             None,
         )
         status = rollout.get("status") if rollout else "wartet"
+        if rollout is None and not rollouts:
+            status = "completed"  # frisch angelegte Anwendung ohne Rollout-Historie (siehe neuester-tag)
         if status != bisheriger_status:
             print(f"Container-Rollout {args.tag}: {status}", flush=True)
             bisheriger_status = status
@@ -113,12 +137,15 @@ def cmd_warten(args: argparse.Namespace) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="befehl", required=True)
+    sub.add_parser("konto")
     sub.add_parser("instanzen")
     sub.add_parser("neuester-tag")
     pw = sub.add_parser("warten")
     pw.add_argument("--tag", required=True, help="Bild-Tag, z. B. aus 'rollout_warten.py neuester-tag'")
     pw.add_argument("--frist", type=float, default=600)
     args = p.parse_args()
+    if args.befehl == "konto":
+        return cmd_konto(args)
     if args.befehl == "instanzen":
         return cmd_instanzen(args)
     if args.befehl == "neuester-tag":

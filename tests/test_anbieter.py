@@ -398,3 +398,41 @@ def test_agenda_ohne_meeting_bleibt_ohne_verbindung():
     c = Coach()
     c.meeting.agenda = [Agendapunkt("A")]
     assert c.wahl is None and c._client is None and c.stufe is None
+
+
+# --- 5. Anbieterprotokoll (Ticket #62, Stufe C) ------------------------------------------------------------------
+def test_hostwache_merkt_sich_erlaubte_und_abgewiesene_ziele(monkeypatch):
+    monkeypatch.setattr(anbieter, "_GESEHEN", {})
+    for k, v in BASIS.items():
+        monkeypatch.setenv(k, v)
+    wahl = anbieter.wahl_fuer("basis")
+    anbieter.pruefen(wahl, "http://127.0.0.3:9/v1/chat/completions")
+    anbieter.pruefen(wahl, "http://127.0.0.3:9/v1/audio/speech")
+    with pytest.raises(anbieter.AnbieterVerstoss):
+        anbieter.pruefen(wahl, "https://api.openai.com/v1/responses")
+    assert anbieter.gesehen() == [
+        {"ziel": "127.0.0.3:9", "stufe": "basis", "erlaubt": True, "anzahl": 2},
+        {"ziel": "api.openai.com:443", "stufe": "basis", "erlaubt": False, "anzahl": 1},
+    ]
+
+
+def test_anbieterprotokoll_nur_mit_worker_geheimnis(monkeypatch):
+    from coach.server import app
+
+    monkeypatch.setattr(anbieter, "_GESEHEN", {})
+    betrieb, geheimnis = EINST.betrieb, EINST.worker_geheimnis
+    object.__setattr__(EINST, "betrieb", "cloud")
+    object.__setattr__(EINST, "worker_geheimnis", "nur-test")
+    try:
+        c = TestClient(app)
+        worker = {"X-Nestor-Geheimnis": "nur-test", "X-Nestor-Kunde": "test"}
+        assert c.get("/api/intern/anbieter-protokoll").status_code == 403  # nicht über den Worker
+        assert c.get("/api/intern/anbieter-protokoll", headers=worker).status_code == 403  # Kunde allein reicht nicht
+        falsch = {**worker, "X-Nestor-Intern": "falsch"}
+        assert c.get("/api/intern/anbieter-protokoll", headers=falsch).status_code == 403
+        antwort = c.get("/api/intern/anbieter-protokoll", headers={**worker, "X-Nestor-Intern": "nur-test"})
+        assert antwort.status_code == 200
+        assert set(antwort.json()) == {"stufe", "anbieter", "erlaubt", "gesehen"}
+    finally:
+        object.__setattr__(EINST, "betrieb", betrieb)
+        object.__setattr__(EINST, "worker_geheimnis", geheimnis)

@@ -297,9 +297,13 @@ Es gibt nur noch EINEN Weg, Nestor auszurollen: **`deploy/deploy.sh`** im Repo-W
 auf der RAM-Disk des Pi, waren nicht versioniert und trugen Konto-/Anwendungs-IDs als Literal im Quelltext.
 
 ```
-deploy/deploy.sh [--dry-run] [--ohne-b] [--erzwingen] [--tag-push]
+deploy/deploy.sh [--dry-run] [--ohne-b] [--ohne-c] [--ohne-d] [--erzwingen] [--tag-push]
 deploy/deploy.sh --ref <tag-oder-commit> [--erzwingen]      # Rollback / Re-Deploy
+deploy/deploy.sh --staging [--dry-run] [--erzwingen]         # Staging, siehe unten (Ticket #62)
 ```
+
+Seit Ticket #62 kommt nach GATE_B_C noch **GATE_C_D** (Stufe C auf Staging, ggf. Stufe D) – siehe Abschnitt
+„Staging“ unten.
 
 Was das Skript macht, in dieser Reihenfolge:
 
@@ -344,3 +348,55 @@ Ob `wrangler whoami --json` wirklich ein `accounts`-Array mit `id` liefert und `
 --json` einen Eintrag mit `name: "nestor-nestor"` – beide Annahmen stammen aus dem Lesen des `wrangler`-Quelltexts
 (Version 4.86.0), nicht aus einem echten Aufruf. Schlägt eine Ermittlung fehl, einfach `CLOUDFLARE_ACCOUNT_ID`
 bzw. `NESTOR_APPLICATION_ID` von Hand exportieren, bevor `deploy.sh` läuft.
+
+**Geprüft beim ersten Staging-Deploy (Ticket #62, 10.10.2026):** Das Token `cloudflare-nestor` ist ein Konto-Token
+und darf `/memberships` nicht lesen – `wrangler whoami --json` scheitert damit. `deploy.sh` und
+`staging_einrichten.sh` holen die Konto-ID deshalb aus `GET /accounts` (`deploy/rollout_warten.py konto`).
+`wrangler containers list --json` nennt die Anwendungen `<worker>-<worker>` (prod `nestor-nestor`, Staging
+`nestor-staging-nestor-staging`). Beim allerersten Deploy einer Umgebung gibt es noch keinen Rollout-Eintrag;
+dann gilt das Image der Anwendung selbst.
+
+## Staging `nestor-staging` (Ticket #62)
+
+Eine zweite, getrennte Umgebung für **Stufe C** der Test-Pipeline (Klick-E2E mit echten Anbietern) und die
+Handy-Abnahme **Stufe D** (`docs/abnahme_manuell.md`). Adresse: `https://nestor-staging.niclas-eschner.workers.dev`.
+
+| | prod `nestor` | Staging `nestor-staging` |
+|---|---|---|
+| Worker | `nestor` | `nestor-staging` (`env.staging` in `wrangler.jsonc`) |
+| Durable Objects | eigene Namensräume | eigene Namensräume (eigenes Skript) – kein Zähler, keine Variantenwahl wird geteilt |
+| Container | `max_instances: 10` | `max_instances: 1`, gleiches Image, `jurisdiction: eu` |
+| R2 | `nestor-spenden` (eu) | `nestor-spenden-staging` (eu) – Datenspenden und Interessenten getrennt |
+| Login | Kunden + Mail-PIN | ein Testzugang `staging-e2e`, Wegwerfpasswort |
+| Telegram | an Niclas | **aus** (keine `TELEGRAM_*`-Secrets) |
+| KI-Schlüssel | `openai-nestor`, `mistral-api-key` | dieselben (Entscheidung Niclas 10.10.2026) – Schutz über den Kostendeckel je Lauf in Stufe C (Premium 1 €, Basis 0,30 €) |
+
+**Einrichten und Ausrollen** – ein Befehl, idempotent:
+
+```
+deploy/deploy.sh --staging          # sauberer Git-Stand (gepusht muss er nicht sein), kein Gate, kein Tag
+scripts/pipeline.sh c --stufe beide # danach: Stufe C gegen genau diesen Stand
+```
+
+`deploy.sh --staging` ruft `deploy/staging_einrichten.sh` auf: vor dem Deploy legt es den R2-Bucket an (falls er
+fehlt), nach dem ersten Deploy setzt es die Secrets per `wrangler secret put --env staging`, Werte nur per Pipe:
+
+- `WORKER_GEHEIMNIS`, `COOKIE_GEHEIMNIS`, `PIN_GEHEIMNIS` und das Testpasswort (als SHA-256 in `KUNDEN`) sind
+  **frische Zufallswerte nur für Staging**, nicht von prod kopiert und bewusst nicht in der Hausablage. Sie liegen
+  in `~/.cache/lmc-e2e/staging.env` (chmod 600) auf dem Pi; Stufe C und D lesen sie dort. Geht die Datei
+  verloren: löschen, `deploy/staging_einrichten.sh --nur-secrets` – erzeugt und setzt neue Werte.
+- `OPENAI_API_KEY` ← `sudo -n zugang holen openai-nestor`, `MISTRAL_API_KEY` ← `sudo -n zugang holen mistral-api-key`.
+- Kein `GMAIL_SMTP_PASSWORT`/`MAIL_VON`: die Mail-PIN-Registrierung ist in Staging nicht benutzbar (gewollt).
+
+**Anbieterbeweis in der Cloud:** Der Coach führt mit, welche Ziele seine Hostwache (`coach/anbieter.py`) je
+Meeting gesehen hat (Host:Port, Anzahl, erlaubt/abgewiesen – keine Inhalte). Lesbar (a) über
+`GET /api/intern/anbieter-protokoll` – nur mit dem Worker-Geheimnis in der Kopfzeile `X-Nestor-Intern`, zusätzlich
+zum normalen Login (ein angemeldeter Kunde allein bekommt 403), und (b) als `gesehene_ziele` in `technik.json`
+im ZIP. Stufe C verlangt: Premium nur `*.openai.com`, Basis nur `*.mistral.ai`.
+
+**Gate für prod (`GATE_C_D`):** `deploy/deploy.sh` (prod) verlangt zusätzlich zu A und `b.ok` für den SHA ein
+`logs/pipeline/<sha>/c_<stufe>.ok` für jede betroffene Stufe und, wenn Handy/Audio geändert wurden,
+`logs/pipeline/<sha>/d.json` mit `"ok": true`. Welche Stufen betroffen sind, leitet `scripts/betroffene_stufen.py`
+aus dem Diff seit dem letzten `deploy-*`-Tag ab (im Zweifel beide; ohne Tag beide und D). Übersteuern nur
+ausdrücklich: `--ohne-c`, `--ohne-d` (laute Warnung). `c_<stufe>.ok` schreibt Stufe C nur, wenn Staging per
+`/version` genau den geprüften Commit trägt.

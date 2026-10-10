@@ -11,7 +11,8 @@ recordings/
 logs/
 .pytest_cache/
 !.env.example
-modelle/
+# auch als Symlink (Worktrees verlinken modelle/ aus dem Hauptrepo)
+modelle
 aufnahmen/
 testbibliothek/audio/
 

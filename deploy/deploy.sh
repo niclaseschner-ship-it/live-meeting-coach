@@ -2,8 +2,9 @@
 # deploy/deploy.sh (Ticket #65) – der EINE Weg, Nestor auszurollen. Ersetzt die nicht versionierten
 # /tmp/nestor_deploy.py, /tmp/nestor_rollout.py, /tmp/nestor_ui56_rollout.py (RAM-Disk, hart kodierte IDs).
 #
-#   deploy/deploy.sh [--dry-run] [--ohne-b] [--erzwingen] [--tag-push]
+#   deploy/deploy.sh [--dry-run] [--ohne-b] [--ohne-c] [--ohne-d] [--erzwingen] [--tag-push]
 #   deploy/deploy.sh --ref <tag-oder-commit> [--erzwingen]      Rollback/Re-Deploy eines älteren Stands
+#   deploy/deploy.sh --staging [--dry-run] [--erzwingen]         Staging `nestor-staging` (Ticket #62)
 #
 # Siehe cloudflare/README.md, Abschnitt "Ausrollen und Zurückrollen", für die ausführliche Erklärung.
 #
@@ -11,6 +12,12 @@
 #                 (baut das Image wirklich, lokal) – aber KEIN echter Deploy, kein Rollout, kein Smoke-Test,
 #                 kein Git-Tag. Braucht kein Cloudflare-Token.
 #   --ohne-b      Deployt auch ohne grünes logs/pipeline/<sha>/b.ok (lauter Warnhinweis statt Abbruch).
+#   --ohne-c      Deployt auch ohne grünes Stufe C (c_<stufe>.ok) für die betroffenen Stufen (lauter Warnhinweis).
+#   --ohne-d      Deployt auch ohne Stufe-D-Checkliste (d.json), obwohl Handy/Audio geändert wurden (Warnhinweis).
+#   --staging     Deployt den aktuellen (sauberen, nicht zwingend gepushten) Git-Stand nach `nestor-staging`
+#                 (wrangler --env staging): legt vorher den R2-Bucket an, setzt fehlende Secrets
+#                 (deploy/staging_einrichten.sh), wartet auf den Rollout, Smoke-Test gegen die Staging-URL. Keine
+#                 Gates (Staging ist der Ort, an dem Stufe C erst läuft), kein Git-Tag. Danach: scripts/pipeline.sh c.
 #   --erzwingen   Deployt auch wenn laut Cloudflare-API Container-Instanzen laufen.
 #   --tag-push    Schiebt den neuen deploy-JJJJMMTT-HHMM-Tag zusätzlich zu origin (sonst bleibt er nur lokal).
 #   --ref REF     Baut und deployt EXAKT diesen Tag/Commit statt des aktuellen Git-Stands (eigener, temporärer
@@ -28,8 +35,12 @@ PY="${LMC_PYTHON:-$WURZEL/.venv/bin/python}"
 # Hauptrepo auch aus einem Worktree heraus (Konvention wie scripts/pipeline.sh) – GATE_B_C liegt dort.
 HAUPT="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
 WORKER_URL="${NESTOR_WORKER_URL:-https://nestor.niclas-eschner.workers.dev}"
+STAGING_URL="${NESTOR_STAGING_URL:-https://nestor-staging.niclas-eschner.workers.dev}"
 
-DRY_RUN=0 OHNE_B=0 ERZWINGEN=0 TAG_PUSH=0 REF=""
+DRY_RUN=0 OHNE_B=0 OHNE_C=0 OHNE_D=0 ERZWINGEN=0 TAG_PUSH=0 REF="" STAGING=0
+# Name der Container-Anwendung bei Cloudflare: <worker>-<klasse, klein> – prod "nestor-nestor"
+ANWENDUNG_NAME="nestor-nestor"
+WRANGLER_ENV=()
 
 hilfe() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -37,6 +48,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --ohne-b) OHNE_B=1 ;;
+    --ohne-c) OHNE_C=1 ;;
+    --ohne-d) OHNE_D=1 ;;
+    --staging) STAGING=1 ;;
     --erzwingen) ERZWINGEN=1 ;;
     --tag-push) TAG_PUSH=1 ;;
     --ref) REF="${2:-}"; [ -n "$REF" ] || { echo "--ref braucht einen Tag oder Commit" >&2; exit 64; }; shift ;;
@@ -45,6 +59,13 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$STAGING" = 1 ]; then
+  [ -z "$REF" ] || { echo "--staging und --ref zusammen gibt es nicht." >&2; exit 64; }
+  WORKER_URL="$STAGING_URL"
+  ANWENDUNG_NAME="nestor-staging-nestor-staging"
+  WRANGLER_ENV=(--env staging)
+fi
 
 log() { printf '▸ %s\n' "$1"; }
 warnen() { printf '\n⚠️  %s\n\n' "$1" >&2; }
@@ -85,6 +106,41 @@ gate_b_c() {
   abbrechen "GATE_B_C: $marker fehlt. Erst 'scripts/pipeline.sh b' grün bekommen (läuft beide Stufen), oder ausdrücklich mit --ohne-b übersteuern."
 }
 
+# --- GATE_C_D (Ticket #62): Stufe C (Staging, echte Anbieter) für die betroffenen Stufen, ggf. Stufe D ------------
+# Welche Stufen betroffen sind und ob es D braucht, sagt scripts/betroffene_stufen.py aus dem Diff seit dem letzten
+# deploy-*-Tag (im Zweifel beide und D). Die Markierungen schreibt scripts/pipeline.sh c bzw. d, an den SHA gebunden.
+gate_c_d() {
+  local sha="$1" auswahl stufen d stufe fehlt=()
+  auswahl="$(python3 "$WURZEL/scripts/betroffene_stufen.py")"
+  stufen="$(printf '%s' "$auswahl" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["stufen"]))')"
+  d="$(printf '%s' "$auswahl" | python3 -c 'import json,sys; print(int(json.load(sys.stdin)["d"]))')"
+  log "GATE_C_D: betroffen laut Diff: ${stufen:-keine Stufe}; Stufe D nötig: $([ "$d" = 1 ] && echo ja || echo nein)"
+  for stufe in $stufen; do
+    if [ -f "$HAUPT/logs/pipeline/$sha/c_$stufe.ok" ]; then
+      log "GATE_C_D: Stufe C $stufe grün für $sha (Lauf vom $(cat "$HAUPT/logs/pipeline/$sha/c_$stufe.ok"))"
+    else
+      fehlt+=("c_$stufe.ok")
+    fi
+  done
+  if [ "${#fehlt[@]}" -gt 0 ]; then
+    if [ "$OHNE_C" = 1 ]; then
+      warnen "GATE_C_D: KEIN grünes Stufe C für $sha (${fehlt[*]} fehlt) – mit --ohne-c TROTZDEM deployt. Die echten Anbieter hat dieser Stand auf Staging nicht durchlaufen."
+    else
+      abbrechen "GATE_C_D: ${fehlt[*]} fehlt für $sha. Erst 'deploy/deploy.sh --staging' und 'scripts/pipeline.sh c --stufe beide' grün bekommen, oder ausdrücklich mit --ohne-c übersteuern."
+    fi
+  fi
+  if [ "$d" = 1 ]; then
+    if python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("ok") else 1)' \
+         "$HAUPT/logs/pipeline/$sha/d.json" 2>/dev/null; then
+      log "GATE_C_D: Stufe-D-Checkliste für $sha abgehakt"
+    elif [ "$OHNE_D" = 1 ]; then
+      warnen "GATE_C_D: Handy/Audio geändert, aber keine abgehakte Stufe D (d.json) für $sha – mit --ohne-d TROTZDEM deployt."
+    else
+      abbrechen "GATE_C_D: Handy/Audio geändert (oder kein Vergleichsstand) – Stufe D fehlt für $sha. Checkliste docs/abnahme_manuell.md am echten Handy gegen Staging, dann 'scripts/pipeline.sh d'. Oder ausdrücklich mit --ohne-d übersteuern."
+    fi
+  fi
+}
+
 # --- coach/version.json: GIT_SHA + Bauzeit ins Image (gitignored, siehe Dockerfile-Kommentar) ----------------
 version_datei_schreiben() {
   local sha="$1" bauzeit
@@ -107,7 +163,8 @@ konten = d.get("accounts") or []
 if not konten:
     sys.exit(1)
 print(konten[0]["id"])
-' || abbrechen "Konnte CLOUDFLARE_ACCOUNT_ID nicht aus 'wrangler whoami --json' lesen – bitte von Hand exportieren."
+' || "$PY" "$WURZEL/deploy/rollout_warten.py" konto \
+    || abbrechen "Konnte CLOUDFLARE_ACCOUNT_ID weder aus 'wrangler whoami --json' noch aus /accounts lesen – bitte von Hand exportieren."
 }
 
 cloudflare_anwendung_id() {
@@ -115,12 +172,12 @@ cloudflare_anwendung_id() {
   (cd "$1/cloudflare" && npx wrangler containers list --json 2>/dev/null) | python3 -c '
 import json, sys
 for eintrag in json.load(sys.stdin):
-    if eintrag.get("name") == "nestor-nestor":
+    if eintrag.get("name") == sys.argv[1]:
         print(eintrag["id"])
         break
 else:
     sys.exit(1)
-' || abbrechen "Konnte NESTOR_APPLICATION_ID nicht aus 'wrangler containers list --json' lesen (Name 'nestor-nestor' erwartet) – bitte von Hand exportieren."
+' "$ANWENDUNG_NAME" || abbrechen "Konnte NESTOR_APPLICATION_ID nicht aus 'wrangler containers list --json' lesen (Name '$ANWENDUNG_NAME' erwartet) – bitte von Hand exportieren."
 }
 
 # --- Deploy-Gate: keine laufenden Meetings während des Rollouts -----------------------------------------------
@@ -144,13 +201,28 @@ echter_deploy() {
     export CLOUDFLARE_API_TOKEN
     CLOUDFLARE_API_TOKEN="$(sudo -n zugang holen cloudflare-nestor)"
     export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-$(cloudflare_konto_id "$arbeitsordner")}"
-    export NESTOR_APPLICATION_ID="${NESTOR_APPLICATION_ID:-$(cloudflare_anwendung_id "$arbeitsordner")}"
+    # Beim allerersten Deploy einer Umgebung (Staging) gibt es noch keine Container-Anwendung – dann kann auch
+    # nichts laufen; die ID wird nach dem Deploy ermittelt.
+    if [ -n "${NESTOR_APPLICATION_ID:-}" ] || NESTOR_APPLICATION_ID="$(cloudflare_anwendung_id "$arbeitsordner" 2>/dev/null)"; then
+      export NESTOR_APPLICATION_ID
+      keine_laufenden_instanzen
+    else
+      unset NESTOR_APPLICATION_ID
+      log "Noch keine Container-Anwendung $ANWENDUNG_NAME – erster Deploy dieser Umgebung, nichts kann laufen."
+    fi
 
-    keine_laufenden_instanzen
-
-    log "wrangler deploy (GIT_SHA=$sha)"
-    (cd "$arbeitsordner/cloudflare" && npx wrangler deploy \
+    if [ "$STAGING" = 1 ]; then
+      "$WURZEL/deploy/staging_einrichten.sh" --nur-bucket
+    fi
+    log "wrangler deploy ${WRANGLER_ENV[*]} (GIT_SHA=$sha)"
+    (cd "$arbeitsordner/cloudflare" && npx wrangler deploy "${WRANGLER_ENV[@]}" \
       --var "GIT_SHA:$sha" --var "BUILD_ZEIT:$bauzeit" --keep-vars)
+    if [ "$STAGING" = 1 ] && ! (cd "$arbeitsordner/cloudflare" && npx wrangler secret list --env staging 2>/dev/null) \
+         | grep -q '"WORKER_GEHEIMNIS"'; then
+      log "Staging hat noch keine Secrets – setze sie (deploy/staging_einrichten.sh --nur-secrets)"
+      "$WURZEL/deploy/staging_einrichten.sh" --nur-secrets
+    fi
+    export NESTOR_APPLICATION_ID="${NESTOR_APPLICATION_ID:-$(cloudflare_anwendung_id "$arbeitsordner")}"
 
     log "Ermittle das gerade ausgerollte Bild-Tag …"
     local bildtag
@@ -205,6 +277,22 @@ if [ -n "$REF" ]; then
   exit 0
 fi
 
+# --- Staging (Ticket #62): aktueller, sauberer Stand, ohne Gates und ohne Tag ----------------------------------
+if [ "$STAGING" = 1 ]; then
+  log "Staging: prüfe Git-Stand (sauber – gepusht muss er nicht sein) …"
+  [ -z "$(git status --porcelain)" ] || abbrechen "Git-Stand nicht sauber – Staging trägt immer einen Commit (SHA-Bindung von Stufe C)."
+  SHA="$(git rev-parse HEAD)"
+  BAUZEIT="$(version_datei_schreiben "$SHA")"
+  if [ "$DRY_RUN" = 1 ]; then
+    (cd "$WURZEL/cloudflare" && npx wrangler deploy --env staging --dry-run)
+    log "Dry-Lauf Staging fertig – kein echter Deploy."
+    exit 0
+  fi
+  echter_deploy "$WURZEL" "$SHA" "$BAUZEIT"
+  log "Staging-Deploy fertig: $SHA auf $WORKER_URL – weiter mit: scripts/pipeline.sh c --stufe beide"
+  exit 0
+fi
+
 # --- Normaler Deploy des aktuellen Git-Stands ---------------------------------------------------------------
 log "Prüfe Git-Stand (sauber, gepusht) …"
 git_sauber_und_gepusht
@@ -212,6 +300,7 @@ SHA="$(git rev-parse HEAD)"
 
 tests_gruen
 gate_b_c "$SHA"
+gate_c_d "$SHA"
 BAUZEIT="$(version_datei_schreiben "$SHA")"
 log "coach/version.json geschrieben (GIT_SHA=$SHA, gebaut_am=$BAUZEIT)"
 
