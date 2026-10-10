@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { mitVariantenwahl, type Variantenwahl } from "./variantenwahl";
+import { meetingBeenden, mitVariantenwahl, varianteText, type Variantenwahl } from "./variantenwahl";
 
 function speicher(initial?: Variantenwahl) {
-  let value = initial;
-  return { get: async <T>() => value as T | undefined,
-    put: async (_key: string, v: Variantenwahl) => { value = v; }, lesen: () => value };
+  const werte = new Map<string, Variantenwahl | boolean>(initial ? [["variantenwahl", initial]] : []);
+  return { get: async <T>(key: string) => werte.get(key) as T | undefined,
+    put: async (key: string, v: Variantenwahl | boolean) => { werte.set(key, v); },
+    lesen: () => werte.get("variantenwahl") as Variantenwahl | undefined };
 }
 const req = (path = "/meeting", method = "GET") => new Request(`https://pilot.test${path}`, {
   method, headers: { "X-Nestor-Stufe": "premium", "X-Nestor-Modus": "live" },
@@ -39,5 +40,29 @@ describe("Bestätigte Variantenwahl", () => {
       async () => Response.json({ ok: true, stufe: "premium", modus: "knopfdruck" }));
     expect(r.status).toBe(502);
     expect(store.lesen()).toBeUndefined();
+  });
+});
+
+describe("Ticket #60: keine Vorgabe-Stufe, beendete Meetings", () => {
+  it("ohne gespeicherte Wahl geht keine Stufe an den Container (er bleibt unbestimmt)", async () => {
+    await mitVariantenwahl(req(), speicher(), async r => {
+      expect(r.headers.has("X-Nestor-Stufe")).toBe(false);
+      expect(r.headers.has("X-Nestor-Modus")).toBe(false);
+      return new Response("ok");
+    });
+  });
+  it("nach „Fertig“ erreicht kein Aufruf mehr den Container – 410 und Cookie gelöscht", async () => {
+    const store = speicher({ stufe: "premium", modus: "live" });
+    await meetingBeenden(store);
+    let erreicht = false;
+    const r = await mitVariantenwahl(req("/handy"), store, async () => { erreicht = true; return new Response("ok"); });
+    expect(r.status).toBe(410);
+    expect(erreicht).toBe(false);
+    expect(r.headers.get("Set-Cookie")).toContain("nestor_meeting=; Max-Age=0");
+  });
+  it("die Startmeldung nennt die Variante", () => {
+    expect(varianteText("premium", "live")).toBe("Premium (OpenAI)");
+    expect(varianteText("basis", "knopfdruck")).toBe("Basis (Mistral) · Nur auf Knopfdruck");
+    expect(varianteText(undefined)).toBe("unbekannt");
   });
 });

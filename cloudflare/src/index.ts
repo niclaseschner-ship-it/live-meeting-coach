@@ -16,7 +16,7 @@ import {
 import { IpZaehler } from "./ratenbegrenzung";
 import { containerAufrufenOderAusweichen, mitSicherheitsheadern, workerGeheimnisPasst } from "./sicherheit";
 import { meetingKurz, telegramMelden } from "./telegram";
-import { mitVariantenwahl } from "./variantenwahl";
+import { meetingBeenden, mitVariantenwahl, varianteText } from "./variantenwahl";
 import { KundenZaehler } from "./zaehler";
 
 export { IpZaehler, KundenZaehler };
@@ -63,10 +63,10 @@ export class Nestor extends Container<Env> {
       LMC_BETRIEB: "cloud",
       LMC_WORKER_GEHEIMNIS: env.WORKER_GEHEIMNIS,
       LMC_WORKER_URL: env.WORKER_URL,
-      // Basis bleibt die Vorauswahl; Premium nutzt den serverseitigen Projektschlüssel.
+      // Keine Vorgabe-Stufe (Ticket #60): die Variante kommt nur aus der bestätigten Wahl (variantenwahl.ts).
+      // Premium nutzt den serverseitigen Projektschlüssel, Basis den Mistral-Schlüssel.
       OPENAI_API_KEY: env.OPENAI_API_KEY ?? "",
       LMC_MISTRAL_SCHLUESSEL: env.MISTRAL_API_KEY ?? "",
-      LMC_STUFE: "basis",
       // Startseite, Rechtstexte, Unterstützung – als Secrets gesetzt, damit nichts davon im Repo steht
       LMC_PAYPAL_ME: env.PAYPAL_ME ?? "",
       LMC_IMPRESSUM_NAME: env.IMPRESSUM_NAME ?? "",
@@ -77,6 +77,12 @@ export class Nestor extends Container<Env> {
 
   override async fetch(request: Request): Promise<Response> {
     return mitVariantenwahl(request, this.wahlSpeicher, r => super.fetch(r));
+  }
+
+  /** Ticket #60: nach „Fertig“ beendet – das Meeting-Cookie (30 Tage) führt nicht mehr in einen Container. Nur
+   * per RPC aus `handleMeetingEnde` erreichbar, nicht über eine URL. */
+  async meetingBeenden(): Promise<void> {
+    await meetingBeenden(this.wahlSpeicher);
   }
 }
 
@@ -322,7 +328,9 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
-  const { meetingId, kunde } = (await request.json()) as { meetingId?: string; kunde?: string };
+  const { meetingId, kunde, stufe, modus } = (await request.json()) as {
+    meetingId?: string; kunde?: string; stufe?: string; modus?: string;
+  };
   if (!meetingId || !kunde) return new Response("meetingId/kunde fehlen.", { status: 400 });
   const maxMeetings = await maxMeetingsFuer(env, kunde);
   const zaehler = env.ZAEHLER.get(env.ZAEHLER.idFromName(kunde));
@@ -331,7 +339,10 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
     body: JSON.stringify({ meetingId, maxMeetings }),
   });
   const ergebnis = await antwort.json() as { erlaubt?: boolean };
-  if (ergebnis.erlaubt) melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nMeeting: ${meetingKurz(meetingId)}`);
+  if (ergebnis.erlaubt) {
+    melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nVariante: ${varianteText(stufe, modus)}`
+      + `\nMeeting: ${meetingKurz(meetingId)}`);
+  }
   return Response.json(ergebnis);
 }
 
@@ -351,6 +362,12 @@ async function handleMeetingEnde(request: Request, env: Env, ctx: ExecutionConte
     await zaehler.fetch("https://zaehler/beenden", { method: "POST", body: JSON.stringify({ meetingId }) });
   }
   const container = getContainer(env.NESTOR, meetingId);
+  // Ticket #60: erst als beendet markieren – ein altes Handy-Cookie startet danach keinen frischen Container mehr
+  try {
+    await container.meetingBeenden();
+  } catch {
+    melden(ctx, env, `⚠️ Nestor: Meeting ${meetingKurz(meetingId)} konnte nicht als beendet markiert werden`);
+  }
   try {
     await container.stop();
   } catch {

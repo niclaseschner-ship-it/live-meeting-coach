@@ -1,11 +1,45 @@
-/** Bestätigte Auswahl überlebt Container-Ruhe/Neustart, ohne Kundendaten oder Schlüssel abzulegen. */
+/** Bestätigte Auswahl überlebt Container-Ruhe/Neustart, ohne Kundendaten oder Schlüssel abzulegen.
+ *
+ * Ticket #60: Der Container hat keine Vorgabe-Stufe (`LMC_STUFE` entfällt). Gibt es hier keine gespeicherte Wahl,
+ * geht auch keine Kopfzeile mit – der Coach bleibt unbestimmt und weist einen Meetingstart mit 409 ab, statt still in
+ * einer Stufe zu laufen. Nach „Fertig“ ist das Meeting beendet: jede weitere Anfrage mit seinem (30 Tage gültigen)
+ * Cookie bekommt 410 und erreicht den Container nicht mehr – ein altes Handy landet nicht in einem frischen Container. */
 export interface Variantenwahl { stufe: "basis" | "premium"; modus: "live" | "knopfdruck" }
 export interface WahlSpeicher {
   get<T>(key: string): Promise<T | undefined>;
-  put(key: string, value: Variantenwahl): Promise<unknown>;
+  put(key: string, value: Variantenwahl | boolean): Promise<unknown>;
 }
+
+const MEETING_COOKIE = "nestor_meeting";
+
+/** Vom Worker bei `/intern/meeting-ende` gesetzt (Durable Object des Meetings, siehe `Nestor.meetingBeenden`). */
+export async function meetingBeenden(storage: WahlSpeicher): Promise<void> {
+  await storage.put("beendet", true);
+}
+
+export function beendetAntwort(): Response {
+  return new Response(
+    "Dieses Meeting ist beendet. Für ein neues Meeting am Laptop starten und den QR-Code neu scannen.",
+    {
+      status: 410,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Set-Cookie": `${MEETING_COOKIE}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`,
+      },
+    },
+  );
+}
+
+/** Für die Telegram-Startmeldung: welche Variante lief (Ticket #60, Forensik des Pilotabends 09.10.). */
+export function varianteText(stufe: unknown, modus?: unknown): string {
+  if (stufe === "premium") return "Premium (OpenAI)";
+  if (stufe === "basis") return modus === "knopfdruck" ? "Basis (Mistral) · Nur auf Knopfdruck" : "Basis (Mistral)";
+  return "unbekannt";
+}
+
 export async function mitVariantenwahl(request: Request, storage: WahlSpeicher,
   weiter: (request: Request) => Promise<Response>): Promise<Response> {
+  if (await storage.get<boolean>("beendet")) return beendetAntwort();
   const headers = new Headers(request.headers);
   // Ausschließlich gespeicherte, serverseitig bestätigte Werte, niemals Browser-Header übernehmen.
   headers.delete("X-Nestor-Stufe");
