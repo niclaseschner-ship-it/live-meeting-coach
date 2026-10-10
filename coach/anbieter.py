@@ -211,9 +211,26 @@ def ki_verfuegbar(wahl: Anbieterwahl | None) -> bool:
 
 
 # --- Hostwache -----------------------------------------------------------------------------------------------------------
+# Ticket #62 (Stufe C): was die Hostwache in diesem Prozess gesehen hat – je Ziel Stufe, Anzahl und ob erlaubt. Nur
+# Host und Port, nie Pfade, Inhalte oder Schlüssel. Im Cloud-Betrieb ist ein Container genau ein Meeting, das Protokoll
+# gilt also je Meeting. Lesbar über /api/intern/anbieter-protokoll (nur mit Worker-Geheimnis) und in technik.json.
+_GESEHEN: dict[tuple[str, str], dict] = {}
+
+
+def _merken(z: str, wahl: Anbieterwahl, erlaubt: bool) -> None:
+    eintrag = _GESEHEN.setdefault((wahl.stufe, z), {"ziel": z, "stufe": wahl.stufe, "erlaubt": erlaubt, "anzahl": 0})
+    eintrag["anzahl"] += 1
+
+
+def gesehen() -> list[dict]:
+    """Alle Ziele, die die Hostwache bisher geprüft hat (erlaubte wie abgewiesene), sortiert."""
+    return [dict(e) for _, e in sorted(_GESEHEN.items())]
+
+
 def pruefen(wahl: Anbieterwahl, url: str, bei_verstoss=None) -> None:
     """Vor jeder Verbindung: Ziel der URL muss zur Wahl gehören. Sonst Meldung und `AnbieterVerstoss`."""
     z = ziel(url)
+    _merken(z, wahl, z in wahl.hosts)
     if z in wahl.hosts:
         return
     log.error("Anbieter-Sperre: %s ist in Nestor %s nicht erlaubt", z, wahl.stufe)

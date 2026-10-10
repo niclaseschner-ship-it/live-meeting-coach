@@ -31,6 +31,7 @@ import wave
 from datetime import datetime
 from pathlib import Path
 
+from . import anbieter
 from .config import EINST, WURZEL
 
 log = logging.getLogger("coach.archiv")
@@ -68,6 +69,8 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
             "stufe": coach.stufe,
             "anbieter": ({"mistral": "Mistral", "openai": "OpenAI"}[w.anbieter] if (w := coach.wahl) else None),
             "ziele": sorted(w.hosts) if w else [],
+            # Ticket #62: tatsächlich kontaktierte Ziele laut Hostwache (Host:Port, Anzahl) – der Anbieterbeweis
+            "gesehene_ziele": anbieter.gesehen(),
             "live_text": w.text_modell if w else None,
             "live_modell": w.live_modell if w else None,
             "live_art": EINST.live_art,
