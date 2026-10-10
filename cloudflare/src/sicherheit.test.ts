@@ -33,7 +33,9 @@ describe("Sicherheitsheader", () => {
     expect(richtlinien.get("default-src")).toEqual(["'self'"]);
     expect(richtlinien.get("frame-ancestors")).toEqual(["'none'"]);
     // nur style-src bekommt die 'unsafe-inline'-Ausnahme (Worker-eigene <style>-Blöcke), nicht script-src
-    expect(richtlinien.get("script-src")).toEqual(["'self'"]);
+    // blob: nur, weil Chrome audioWorklet.addModule(blob:…) gegen script-src prüft (basis.js, agenda.js) –
+    // ohne diese Ausnahme wären Mikrofon und Agenda-Mikro tot; 'unsafe-inline' bleibt draußen
+    expect(richtlinien.get("script-src")).toEqual(["'self'", "blob:"]);
     expect(richtlinien.get("style-src")).toEqual(["'self'", "'unsafe-inline'"]);
     expect(richtlinien.get("worklet-src")).toEqual(["'self'", "blob:"]);
   });
@@ -56,5 +58,9 @@ describe("Kapazitätsfehler", () => {
     expect(await antwort.text()).toContain("Gerade ausgelastet");
     expect(melden).toHaveBeenCalledTimes(1);
     expect(melden.mock.calls[0][0]).toContain("Kaltstart-Timeout");
+  });
+  it("reicht WebSocket-Upgrades unverändert durch (sonst gehen Audio- und Handy-Kanal verloren)", () => {
+    const upgrade = { status: 101, webSocket: {}, headers: new Headers() } as unknown as Response;
+    expect(mitSicherheitsheadern(upgrade)).toBe(upgrade);
   });
 });

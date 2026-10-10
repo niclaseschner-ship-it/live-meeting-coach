@@ -20,11 +20,12 @@ export function workerGeheimnisPasst(request: Request, geheimnis: string): boole
  * einer eigenen Datei – dafür gibt es im Worker (anders als bei den Dateien unter static/) keine Auslieferung
  * über `/static/`. Inline-`<script>` ist dagegen NICHT ausgenommen: Die beiden Stellen, die das brauchten
  * (static/impressum.html, static/datenschutz.html), wurden nach static/rechtstexte.js verschoben.
- * `worklet-src blob:` ist für die Audio-Worklets nötig (static/basis.js, static/agenda.js: `addModule` lädt von
+ * `blob:` in script-src und worklet-src ist für die Audio-Worklets nötig – Chrome prüft `audioWorklet.addModule` gegen
+ * script-src (static/basis.js, static/agenda.js: `addModule` lädt von
  * einer `blob:`-URL). */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
@@ -39,6 +40,9 @@ const CSP = [
 /** Setzt die gleichen Sicherheitsheader auf jede Antwort, die den Worker verlässt – egal ob vom Worker selbst
  * erzeugt oder vom Container durchgereicht (einzige Aufrufstelle: der Export in index.ts). */
 export function mitSicherheitsheadern(antwort: Response): Response {
+  // WebSocket-Upgrades (101) unverändert durchreichen: ein Neuaufbau der Antwort verliert das webSocket-Feld und
+  // würde Audio- und Handy-Kanal kappen. Sicherheitsheader sind für den Upgrade ohnehin ohne Wirkung.
+  if (antwort.status === 101 || (antwort as Response & { webSocket?: unknown }).webSocket) return antwort;
   const kopie = new Response(antwort.body, antwort);
   kopie.headers.set("Content-Security-Policy", CSP);
   kopie.headers.set("X-Frame-Options", "DENY");
