@@ -5,7 +5,7 @@ Dazu der Cloud-Fall (Ticket #5): kein „am Laptop“ mehr, stattdessen das Work
 import pytest
 from fastapi.testclient import TestClient
 
-from coach import server, zugang
+from coach import api_abschluss, server, zugang
 from coach.config import Einstellungen
 from coach.server import app
 
@@ -205,18 +205,40 @@ def test_cloud_websocket_ohne_geheimnis_wird_abgewiesen(cloud):
     assert e.value.code == 4403
 
 
-def test_kopplung_in_der_cloud_nutzt_host_und_meeting_statt_tailscale(cloud):
+def test_kopplung_in_der_cloud_holt_ein_signiertes_kopplungstoken_vom_worker(cloud, monkeypatch):
+    """Ticket #63: die nackte Meeting-ID steht nicht mehr im QR-Code – der Coach holt sich dafür ein
+    kurzlebiges, vom Worker signiertes Kopplungstoken über `/intern/kopplungstoken` (Muster wie
+    `worker_melden` für `/intern/meeting-start`, hier gemockt, das Netz ist nicht Teil dieses Tests)."""
+    aufgerufen = []
+
+    def _fake_melden(pfad, daten):
+        aufgerufen.append((pfad, daten))
+        return {"token": "signiertes-token-xyz"}
+
+    monkeypatch.setattr(api_abschluss, "worker_melden", _fake_melden)
     c = TestClient(app, client=("10.1.2.3", 5000), base_url="https://nestor.example.workers.dev")
     r = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "test", "X-Nestor-Meeting": "abc123"})
     assert r.status_code == 200
     daten = r.json()
     assert daten["adresse"].startswith("https://nestor.example.workers.dev/handy?k=")
-    assert daten["adresse"].endswith("&meeting=abc123")
+    assert daten["adresse"].endswith("&meeting=signiertes-token-xyz")
     assert daten["qr"] is not None
     assert daten["befehl"] is None                        # kein tailscale-Befehl in der Cloud
+    assert aufgerufen == [("/intern/kopplungstoken", {"meetingId": "abc123", "kunde": "test"})]
 
     ohne_meeting = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "test"})
     assert ohne_meeting.json()["qr"] is None               # ohne Meeting-Kennung vom Worker kein QR-Code
+
+
+def test_kopplung_in_der_cloud_ohne_token_vom_worker_kein_qr(cloud, monkeypatch):
+    """Netzstörung oder abgelehntes Token (worker_melden liefert None) – dann lieber gar kein QR-Code als
+    einer mit einer unsignierten/nackten Meeting-ID."""
+    monkeypatch.setattr(api_abschluss, "worker_melden", lambda pfad, daten: None)
+    c = TestClient(app, client=("10.1.2.3", 5000), base_url="https://nestor.example.workers.dev")
+    r = c.get("/api/kopplung", headers={"X-Nestor-Geheimnis": GEHEIMNIS, "X-Nestor-Kunde": "test", "X-Nestor-Meeting": "abc123"})
+    assert r.status_code == 200
+    assert r.json()["adresse"] is None
+    assert r.json()["qr"] is None
 
 
 def test_cloud_handy_ohne_login_koppelt_per_qr(cloud):

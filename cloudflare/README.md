@@ -58,10 +58,11 @@ separates Nutzerkonto, das Passwort selbst ist die Identität (ein Formular-Feld
 ## Wie es zusammenspielt
 
 ```
-Browser ──Passwort──► /anmelden (Worker, Cookie nestor_kunde, signiert mit COOKIE_GEHEIMNIS)
-Browser ──Anfrage───► Worker prüft Cookie, wählt/erzeugt Meeting-ID (Cookie nestor_meeting)
+Browser ──Passwort──► /anmelden (Worker, Cookie nestor_kunde, signiert MIT Ablaufzeit in COOKIE_GEHEIMNIS)
+Browser ──Anfrage───► Worker prüft Cookie, wählt/erzeugt Meeting-ID (signiertes Cookie nestor_meeting)
 Worker  ──fetch()───► Container (idFromName(meetingId)), Kopfzeilen X-Nestor-Geheimnis/-Kunde/-Meeting
 Coach   ──/intern/spende/<name>──► Worker (X-Nestor-Geheimnis) ──► R2 (nestor-spenden)
+Coach   ──/intern/kopplungstoken──► Worker (X-Nestor-Geheimnis) ──► signiertes, kurzlebiges QR-Token
 ```
 
 Innen (`coach/zugang.py`) gibt es im Cloud-Betrieb kein „am Laptop“ mehr: Eine Anfrage mit dem richtigen
@@ -71,9 +72,11 @@ offen sind (Handy, Rechtstexte) –, denn eine solche Anfrage ist gar nicht übe
 
 Das Handy koppelt weiterhin über den Kopplungscode (`/handy?k=...`, unverändert in `coach/server.py`), nicht
 über das Kundenpasswort – deshalb lässt der Worker `/handy` und seine Bausteine auch ohne `nestor_kunde`-
-Cookie durch. Die Meeting-Zuordnung (welcher Container) läuft aber über den Worker: Der QR-Code, den
-`/api/kopplung` zeigt, trägt `?meeting=<id>` (in der Cloud aus der Worker-Kopfzeile `X-Nestor-Meeting`, lokal
-gibt es das nicht), damit das gescannte Handy im selben Container landet wie das Dashboard.
+Cookie durch (siehe „Worker-Härtung“ unten: nur mit gültiger Signatur, nie mit einer rohen Meeting-ID). Die
+Meeting-Zuordnung (welcher Container) läuft über den Worker: Der QR-Code, den `/api/kopplung` zeigt, trägt
+`?meeting=<kopplungstoken>` – ein vom Worker signiertes, 15 Minuten gültiges Token (`/intern/kopplungstoken`,
+aus der Worker-Kopfzeile `X-Nestor-Meeting` gebaut; lokal gibt es das nicht), damit das gescannte Handy im
+selben Container landet wie das Dashboard, ohne dass die Meeting-ID selbst im Klartext in der URL steht.
 
 ## Instanztyp und Preis je Meetingstunde
 
@@ -237,3 +240,52 @@ Funktionen, ohne Miniflare/Workers-Laufzeit nötig (`src/anmeldung.ts`, `src/zae
 `/intern/meeting-start`/`/intern/meeting-ende`-Routen in `index.ts` selbst (Container `stop()`, Cookie-Pfad)
 brauchen die Workers-Laufzeit und sind darum nicht separat unit-getestet – geprüft über `tsc --noEmit` und,
 für den Rückruf von der Coach-Seite, `tests/test_meeting_ende.py` (Python, Netz gemockt).
+
+## Worker-Härtung (Ticket #63)
+
+Befund eines Sicherheits- und Architekturreviews (10.10.2026): `/handy?meeting=<beliebig>` konnte vorher direkt
+einen Container starten, das Kunden-Cookie lief serverseitig nie ab, Sperren wirkte nicht sofort, `/anmelden`
+und `/pin` hatten keine IP-Begrenzung, `/intern/*` verglich das Geheimnis nicht zeitkonstant, und es fehlten
+Sicherheitsheader. Behoben:
+
+- **Signierte Meeting-Identität** (`src/meeting.ts`): `nestor_meeting` ist ein HMAC-signiertes Cookie
+  (Meeting-ID + Kunde + Ablaufzeit), das QR-Kopplungstoken ein eigener, kurzlebiger (15 min) signierter Wert –
+  beide über das vorhandene `COOKIE_GEHEIMNIS`, mit getrennten Zwecken ("meeting"/"kopplung"), damit sich
+  keiner als der andere ausgeben lässt. `index.ts` ruft `getContainer` nur noch mit einer so geprüften
+  Meeting-ID auf; ein fremder, unsignierter oder abgelaufener Wert in `?meeting=` oder im Cookie startet
+  keinen Container mehr. Der Coach kennt `COOKIE_GEHEIMNIS` nicht und holt sich das Kopplungstoken für den
+  QR-Code über die neue, durch `WORKER_GEHEIMNIS` geschützte Route `POST /intern/kopplungstoken`
+  (`coach/server.py`, `/api/kopplung`). Die QR-Kopplung ohne Login am Handy funktioniert unverändert – das
+  Token trägt den Kunden mit, das Handy braucht kein eigenes Login-Cookie.
+- **Kunden-Cookie mit Ablauf** (`src/anmeldung.ts`, `signiereMitAblauf`/`pruefeMitAblauf`): `nestor_kunde` trägt
+  seine Ablaufzeit jetzt im signierten Wert selbst, nicht mehr nur im (clientseitigen) `Max-Age`.
+- **„Gesperrt“ wirkt sofort** (`src/pilotzugang.ts`, `kundeAktiv`): ein Cache von höchstens 5 Minuten je
+  Worker-Isolate hält den Interessenten-Status vor, statt bei jeder Anfrage R2 zu lesen – ein Sperren wirkt so
+  binnen spätestens 5 Minuten, nicht erst nach 30 Tagen (Cookie-Ablauf). `maxMeetingsFuer` liefert für
+  `gesperrt`/`wartet` jetzt `0` statt `1`. `AUTO_FREIGABE` selbst ist unverändert (Entscheidung steht aus).
+- **IP-Ratenbegrenzung** (`src/ratenbegrenzung.ts`/`-logik.ts`, Durable Object `IpZaehler`, Binding
+  `RATENBEGRENZUNG`): `/anmelden` erlaubt 8, `/pin` 20 Versuche je IP und 10 Minuten, zusätzlich zur
+  bestehenden Pro-Adresse-Sperre. `/anmelden` antwortet jetzt unabhängig davon, ob die Mailadresse schon
+  registriert ist, mit derselben Seite (keine Enumeration mehr über den Status-Code).
+- **Zeitkonstanter Vergleich für `/intern/*`** (`src/sicherheit.ts`, `workerGeheimnisPasst`): ersetzt den
+  bisherigen `!==`-Vergleich des Worker-Geheimnisses an allen vier `/intern/*`-Routen.
+- **Sicherheitsheader auf jeder Antwort** (`src/sicherheit.ts`, `mitSicherheitsheadern`): `Content-Security-
+  Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  strict-origin-when-cross-origin` – auf allen vom Worker erzeugten Seiten UND auf jeder vom Container
+  durchgereichten Antwort (einzige Aufrufstelle im `fetch`-Export). Die CSP ist an die tatsächlich genutzten
+  Quellen angepasst (`script-src 'self'`, `style-src 'self' 'unsafe-inline'` nur als schmale, dokumentierte
+  Ausnahme für die Inline-`<style>`-Blöcke der drei vom Worker selbst erzeugten Seiten – Anmeldung,
+  Registrierung, PIN). Die zwei Inline-`<script>`-Blöcke, die das noch gebraucht hätten
+  (`static/impressum.html`, `static/datenschutz.html`), wurden nach `static/rechtstexte.js` verschoben.
+- **Freundliche Kapazitätsseite + Telegram-Meldung** (`src/sicherheit.ts`,
+  `containerAufrufenOderAusweichen`): schlägt der Container-Aufruf fehl, sieht der Besucher „Gerade
+  ausgelastet“ statt eines rohen Fehlers, und Niclas bekommt eine Telegram-Meldung mit dem Pfad und der
+  Fehlermeldung.
+
+**Löschfrist für nie aktivierte Interessenten:** Ein Interessent, der seinen Mail-Code nie eingibt (Status
+bleibt `wartet`/`aktiv` ohne je einzuloggen), soll **30 Tage** nach `erstellt_at` aus `pilot/interessenten/*`
+in R2 gelöscht werden – Minimierungsgrundsatz, bis der Pilotbetrieb über die Testphase hinausgeht. Das ist
+bislang **nur diese Festlegung, nicht automatisiert**: R2 kennt kein TTL von sich aus, die Durchsetzung bräuchte
+einen Cron Trigger (`wrangler.jsonc` → `triggers.crons`) mit einem eigenen `scheduled`-Handler, der
+`interessentenListe` nach `erstellt_at` filtert und nie aktivierte, abgelaufene Datensätze löscht – das ist in
+diesem Ticket nicht mehr enthalten (offene Folge-Aufgabe).

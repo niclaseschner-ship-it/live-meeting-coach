@@ -23,12 +23,15 @@
   "durable_objects": {
     "bindings": [
       { "name": "NESTOR", "class_name": "Nestor" },
-      { "name": "ZAEHLER", "class_name": "KundenZaehler" }
+      { "name": "ZAEHLER", "class_name": "KundenZaehler" },
+      { "name": "RATENBEGRENZUNG", "class_name": "IpZaehler" }
     ]
   },
-  // sqlite-Speicher für beide Klassen (frischer Namensraum, kein Umzug bestehender Daten nötig)
+  // sqlite-Speicher für beide Klassen (frischer Namensraum, kein Umzug bestehender Daten nötig); v2 (Ticket
+  // #63) fügt IpZaehler hinzu, ohne die bestehenden Klassen anzufassen
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Nestor", "KundenZaehler"] }
+    { "tag": "v1", "new_sqlite_classes": ["Nestor", "KundenZaehler"] },
+    { "tag": "v2", "new_sqlite_classes": ["IpZaehler"] }
   ],
 
   // Nur die Bilder der Anmeldeseite; alles andere entscheidet der Worker (run_worker_first).
