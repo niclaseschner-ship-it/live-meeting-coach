@@ -438,12 +438,20 @@ async def start(request: Request):
             # Startmeldung.
             meeting_id = zugang.meeting_id(request.scope)
             if meeting_id:
+                # Ticket #64: Meetingkennung und Kunde für eine spätere Telegram-Meldung bei Kostendeckel
+                # (coach/pipeline.py, _kosten_deckel_melden) – der Takt mitten im Meeting sieht keine Anfrage mehr.
+                coach._cloud_meeting = {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope)}
                 rueckmeldung = await asyncio.to_thread(
                     api_abschluss.worker_melden, "/intern/meeting-start",
                     {"meetingId": meeting_id, "kunde": zugang.kunde(request.scope), "stufe": wahl.stufe,
                      "modus": wahl.modus},
                 )
                 if rueckmeldung is not None and not rueckmeldung.get("erlaubt", True):
+                    if rueckmeldung.get("tagesdeckel"):
+                        raise HTTPException(
+                            429, "Für diesen Zugang ist das Tageskontingent erreicht – bitte morgen wieder "
+                            "versuchen.",
+                        )
                     raise HTTPException(
                         429,
                         "Höchstzahl gleichzeitiger Meetings für diesen Zugang erreicht – bitte ein laufendes "

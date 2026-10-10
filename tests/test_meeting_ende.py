@@ -234,7 +234,9 @@ def test_fertig_meldet_dem_worker_das_ende_und_loescht_das_meeting_cookie(
     # erst NACH der Antwort aufgerufen (BackgroundTasks) – hier schon sichtbar, weil TestClient sie vor der
     # Rückgabe von .post() abwartet (Starlette führt sie im selben ASGI-Zyklus aus)
     assert aufgerufen["pfad"] == "/intern/meeting-ende"
-    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme"}
+    # kostenUsd (Ticket #64): Tagesdeckel je Kunde im Worker – aus coach.kosten_stand() (hier von der Fixture
+    # beendetes_meeting auf 0,10 $ gesetzt), vor dem Zurücksetzen des Meetings gelesen.
+    assert aufgerufen["daten"] == {"meetingId": "meeting-xyz", "kunde": "acme", "kostenUsd": 0.1}
     gesetztes_cookie = r.headers.get("set-cookie", "")
     assert "nestor_meeting=" in gesetztes_cookie and "Max-Age=0" in gesetztes_cookie
 
