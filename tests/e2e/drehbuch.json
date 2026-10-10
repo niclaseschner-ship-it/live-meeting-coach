@@ -50,7 +50,7 @@
       "So viel erst einmal als Rückblick von meiner Seite."
     ],
     "pause_vor_imperativ_s": 5.0,
-    "imperativ": "Nestor, bündel mir mal die Ergebnisse.",
+    "imperativ": "Nestor, bündle mir mal die Ergebnisse.",
     "nachlauf_s": 240.0,
     "sollfragmente": {
       "meeting_saetze": [
@@ -65,7 +65,7 @@
       "beschluss": "9[.\\s]?000|neuntausend",
       "aufgabe": "Sabine",
       "termin": "Freitag|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\.\\s?\\d{1,2}\\.",
-      "offen": "Vereinsbus",
+      "offen": "Vereinsbus|Kauf",
       "agenda_punkte": [
         "Sommerfest",
         "Vereinsbus"

@@ -541,9 +541,10 @@ async def kernknopf_echt(page: Page, art: str, lauf: Lauf, sekunden: float = 90)
     titel = (neu or {}).get("titel") or ""
     # Still Geliefertes (Bild, Überblick) springt nur nach vorn, wenn die vordere Karte älter als ~60 s ist – sonst
     # zeigt der Verlauf „1 neues Ergebnis – jetzt ansehen ›“ (static/verlauf.js). Beides ist sichtbar.
+    klassen = json.dumps([f"vk-{a}" for a in sorted(arten)])
     sichtbar_ = bool(neu) and await warte(
-        page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(titel[:40])}) || "
-              "(!!document.getElementById('vl-neu')?.offsetParent && !document.getElementById('vl-neu')?.hidden)", 10)
+        page, f"() => {klassen}.some((k) => document.querySelector('#vl-buehne article.' + k)) || "
+              "(!!document.getElementById('vl-neu') && !document.getElementById('vl-neu').hidden)", 10)
     inhalt = json.dumps(neu or {}, ensure_ascii=False) + await text(page, "#vl-buehne")
     lauf.pruefen(f"Kernknopf {beschriftung}: neue Karte ({'/'.join(sorted(arten))}) sichtbar mit Sollfragment",
                  bool(neu) and sichtbar_ and passt(muster, inhalt),
@@ -837,6 +838,7 @@ class Ergebnisuhr:
         self.taste_hinweise = 0
         self.monolog: list[tuple[float, int, str]] = []  # (monotonic, Sekunden laut Anzeige, Farbe) – nur Änderungen
         self.karten: list[dict] = []
+        self.punkte: list[str] = []  # Titel des jeweils aktuellen Agendapunkts („Jetzt“), in Reihenfolge
         self._task: asyncio.Task | None = None
 
     def starten(self) -> None:
@@ -862,7 +864,8 @@ class Ergebnisuhr:
                     kurz: kurz ? { detail: kurz.querySelector('.detail')?.textContent || '',
                                    farbe: ['rot', 'gelb', 'gruen', 'grau'].find((f) => kurz.classList.contains(f)) || '',
                                    sichtbar: !!kurz.offsetParent } : null,
-                    karten: (z.karten || []).map((k) => ({ id: k.id, art: k.art, titel: k.titel || '' })) };
+                    karten: (z.karten || []).map((k) => ({ id: k.id, art: k.art, titel: k.titel || '' })),
+                    punkt: document.getElementById('punkt-titel')?.textContent || '' };
                 }""")
             except Exception:  # noqa: BLE001 – Seite lädt gerade neu
                 await asyncio.sleep(0.5)
@@ -892,6 +895,8 @@ class Ergebnisuhr:
                 sek = int(treffer[1]) * 60 + int(treffer[2]) if treffer else 0
                 if not self.monolog or self.monolog[-1][1:] != (sek, d["kurz"]["farbe"]):
                     self.monolog.append((jetzt, sek, d["kurz"]["farbe"]))
+            if d.get("punkt") and d["punkt"] not in self.punkte:
+                self.punkte.append(d["punkt"])
             for k in d["karten"]:
                 if all(k["id"] != x["id"] for x in self.karten):
                     self.karten.append({**k, "t": jetzt})
@@ -924,8 +929,6 @@ async def ergebnisse_zeitnah_pruefen(page: Page, uhr: Ergebnisuhr, lauf: Lauf) -
     if lauf.echt:
         # Kein simulierter Fehler in C – stattdessen: der offene Punkt Vereinsbus wird erkannt, und jeder echte
         # Anbieterfehler, der im Band stand, wird als Beleg mitgeschrieben (nicht verschwiegen)
-        lauf.pruefen("Offener Punkt/Prüfauftrag Vereinsbus als Ergebnis erkannt",
-                     any(passt(SOLL_C["offen"], a or "") for a in uhr.artefakte), f"Artefakte: {uhr.artefakte}")
         gestoert = [t for t in uhr.band_texte if "gestört" in t or "Fehler" in t]
         lauf.belege["band_fehler"] = gestoert
         lauf.pruefen("Keine Anbieterstörung im Band (echte KI-Aufrufe liefen durch)", not gestoert, "; ".join(gestoert)[:200])
@@ -962,7 +965,7 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     fassen“, mm:ss am Stück) wächst live und erreicht die Schwelle; danach „Nestor, bündel mir mal die Ergebnisse.“
     → Zusammenfassen. Premium hört den Namen; Basis (Funkgerät) braucht die Sprechtaste – das Handy hält sie im Takt
     der WAV genau über dem Imperativ (Startzeit der WAV = Tippen auf „Mikrofon und Ton“)."""
-    lauf.schritt("Monolog-Block live und natürlicher Imperativ „bündel mir mal die Ergebnisse“")
+    lauf.schritt("Monolog-Block live und natürlicher Imperativ „bündle mir mal die Ergebnisse“")
     lage = handy_wav_lage()
     imp = next(x for x in lage if x["art"] == "imperativ")
     mono = [x for x in lage if x["art"] == "monolog"]
@@ -977,6 +980,10 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
         else:
             await asyncio.sleep(bis - time.monotonic())
             frei = await warte(handy, "() => !document.getElementById('btn-fragen')?.disabled", 2)
+            await handy.locator("#btn-fragen").scroll_into_view_if_needed()
+            lauf.belege["imperativ_taste_vorher"] = await handy.evaluate(
+                "() => { const k = document.getElementById('btn-fragen'); return k ? { disabled: k.disabled, "
+                "klassen: k.className, nestor: document.getElementById('nestor-zustand')?.textContent || '' } : null; }")
             await sprechknopf_halten(handy, "#btn-fragen", imp["ende"] - imp["start"] + 1.0, lauf,
                                      "Sprechtaste (Handy) über dem Imperativ")
             if not frei:
@@ -991,7 +998,7 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
         karte = next((k for k in uhr.karten if k["id"] > vorher and k["art"] == "zusammenfassung"), None)
         await asyncio.sleep(1)
     ab_imperativ = (karte["t"] - (t_mikro + imp["ende"])) if karte else None
-    lauf.pruefen("Imperativ „bündel mir mal die Ergebnisse“ löst Zusammenfassen aus (Karte im Verlauf)", bool(karte),
+    lauf.pruefen("Imperativ „bündle mir mal die Ergebnisse“ löst Zusammenfassen aus (Karte im Verlauf)", bool(karte),
                  f"Karte {karte['titel']!r} {ab_imperativ:.0f} s nach Satzende" if karte
                  else f"keine Zusammenfassungs-Karte binnen 60 s; Imperativ im Transkript={'imperativ' in uhr.satz}")
     await lauf.bild(page, "imperativ")
@@ -1008,6 +1015,19 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     farbe_erreicht = any(f in ("gelb", "rot") for _, sek, f in block if sek >= schwelle)
     lauf.pruefen(f"Monologanzeige erreicht die Schwelle ({schwelle:.0f} s) und färbt sich",
                  hoch >= schwelle and farbe_erreicht, f"höchstens {hoch} s, Farbe ab Schwelle={farbe_erreicht}")
+
+
+async def ergebnisse_ende_pruefen(uhr: Ergebnisuhr, lauf: Lauf) -> None:
+    """Stufe C, vor dem Beenden: der offene Prüfauftrag Vereinsbus ist erkannt (bei echten Modellen oft erst mit der
+    gebündelten Auswertung, nicht in den ersten 60 s) und die Themenzuordnung ist plausibel: Sommerfest-Budget wurde
+    aktueller Punkt oder Nestor hat den Wechsel dorthin angeboten (#72)."""
+    lauf.pruefen("Offener Punkt/Prüfauftrag Vereinsbus (Kauf lohnt?) als Ergebnis erkannt",
+                 any(passt(SOLL_C["offen"], a or "") for a in uhr.artefakte), f"Artefakte: {uhr.artefakte}")
+    angeboten = [t for t in uhr.band_texte if passt("Sommerfest", t)]
+    lauf.belege["themen"] = {"punkte": uhr.punkte, "band": angeboten[:3]}
+    lauf.pruefen("Themenzuordnung plausibel: Sommerfest-Budget aktuell oder als nächster Punkt angeboten",
+                 any(passt("Sommerfest", p) for p in uhr.punkte) or bool(angeboten),
+                 f"aktuelle Punkte {uhr.punkte}, Angebote {angeboten[:2]}")
 
 
 async def anbieterprotokoll_pruefen(page: Page, url: str, geheimnis: str, lauf: Lauf) -> None:

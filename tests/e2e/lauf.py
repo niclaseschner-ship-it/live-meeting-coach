@@ -283,6 +283,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
                 await schritte.ton_abwarten(handy, lauf, "Sprechtaste", 30)
             await schritte.sprechtaste_handy(handy, stufe, lauf)
             if ziel.echt:
+                await schritte.ergebnisse_ende_pruefen(uhr, lauf)
                 await schritte.anbieterprotokoll_pruefen(seite, ziel.url, ziel.intern_geheimnis, lauf)
             await schritte.beenden_und_abschluss(seite, lauf, ordner)
             await schritte.handy_abschluss(handy, lauf)
