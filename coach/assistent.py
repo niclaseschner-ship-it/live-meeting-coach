@@ -416,12 +416,6 @@ class Assistent:
         return self.zustand == "pausiert"
 
     @property
-    def ansprache_aus(self) -> bool:
-        """Modus „Auf Knopfdruck“ (Lastenheft 3): Nestor hört nicht auf seinen Namen und spricht nicht – Fragen
-        gehen über die Knopfleiste und kommen als Text-Karte zurück (coach/knopfdruck.py)."""
-        return self.coach.modus == "knopfdruck"
-
-    @property
     def funkgeraet(self) -> bool:
         """Nestor Basis (Ticket #27): Sprechtaste statt Name, kein Rückfrage-Fenster."""
         return self.coach.wahl is not None and self.coach.wahl.basis
@@ -454,7 +448,7 @@ class Assistent:
 
     # --- Begrüßung mit Einwilligung ----------------------------------------
     async def begruessen(self) -> None:
-        if not self.aktiv or self.coach._client is None or self.ansprache_aus:
+        if not self.aktiv or self.coach._client is None:
             return
         self.zustand = "begruessung"
         await self.coach.melden()
@@ -577,8 +571,6 @@ class Assistent:
 
     def knopf(self) -> None:
         """Knopf „Nestor fragen“ (Premium, Laptop): wie Ansprechen mit Namen – die nächste Äußerung gilt als Frage."""
-        if self.ansprache_aus:
-            return
         self.messen("knopf")
         self._angesprochen_bis = self.coach.meeting.jetzt() + 10
         if self.zustand in ("bereit", "spricht", "gespraech"):
@@ -622,7 +614,7 @@ class Assistent:
         self.annehmen(frage, "taste" if ausloeser in ("halten", "taste") else ausloeser)
 
     async def satz(self, text: str, ende: float, sprecher: str | None = None, start: float | None = None) -> None:
-        if not self.aktiv or self.pausiert or self.ansprache_aus:
+        if not self.aktiv or self.pausiert:
             return
         if self.halten and self.halten[0] - 0.5 <= ende <= self.halten[1]:
             return  # gehört zur gehaltenen Frage – die kommt als Aufnahme
@@ -1147,7 +1139,7 @@ class Assistent:
     async def text_senden(self, text: str, delta: bool = False) -> None:
         """Was Nestor gleich sagt, als Text ans Dashboard – vor dem Ton, damit es mitläuft (Basis/Text-Weg: der Satz,
         Realtime: die Transkript-Stücke). Das Dashboard zeigt es im Takt der Wiedergabe."""
-        if not text or self.ansprache_aus:
+        if not text:
             return
         nachricht = {"typ": "nestor_text", "text": text, "delta": delta}
         if self._text_neu is not None:
@@ -1159,7 +1151,7 @@ class Assistent:
         """Eine Floskel aus dem Zwischenspeicher abspielen – ohne Sprachausgabe-Aufruf, ohne Wartezeit. Fehlt sie
         noch (erster Lauf mit dieser Stimme), wird sie dieses eine Mal live gesprochen und danach abgelegt."""
         c = self.coach
-        if c._client is None or not text or self.ansprache_aus or (bogen is not None and bogen.abgeloest):
+        if c._client is None or not text or (bogen is not None and bogen.abgeloest):
             return 0.0
         if bogen is not None:
             bogen.merken("floskel")
@@ -1185,7 +1177,7 @@ class Assistent:
     def bestaetigung_fuer(self, frage: str | None) -> str | None:
         """Welche Floskel bestätigt diesen Auftrag? Eine wechselnde kurze; None, wenn nichts zu bestätigen ist (aus,
         kein Auftrag, „danke“). Lange Aufträge sagen ihre eigene Floskel, sobald das Modell sie wirklich anstößt."""
-        if not EINST.bestaetigung or self.ansprache_aus or not B.bestaetigen(frage or ""):
+        if not EINST.bestaetigung or not B.bestaetigen(frage or ""):
             return None
         return self.floskeln.kurz()
 
@@ -1241,7 +1233,7 @@ class Assistent:
                         bogen: Bogen | None = None) -> float:
         """Einen Satz synthetisieren und gestreamt ans Dashboard schicken. Liefert die Tondauer in Sekunden."""
         c = self.coach
-        if c._client is None or not text.strip() or self.ansprache_aus or (bogen is not None and bogen.abgeloest):
+        if c._client is None or not text.strip() or (bogen is not None and bogen.abgeloest):
             return 0.0
         if bogen is not None:
             bogen.merken("satz")

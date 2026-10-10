@@ -324,12 +324,10 @@ function kostenRendern(z) {
 
 // ---------- Stufe ----------
 const basisStufe = (z) => z?.stufe === "basis";
-const knopfdruck = (z) => z?.modus === "knopfdruck";
 
 // ---------- Knöpfe (Ticket #6; seit #13 in beiden Stufen gleich; seit #27 jeder Knopf ein Antwortbogen) ----------
 // Ein Knopf startet einen Bogen: Bestätigung, Karte im Verlauf, ein bis zwei Sätze. Während ein Bogen läuft, sind die
-// Knöpfe gesperrt. Mit „Nur auf Knopfdruck“ (Basis) transkribiert der Knopf vorher den offenen Ton, die Antwort kommt
-// als Karte ohne Stimme, und es gibt das Verwerfen.
+// Knöpfe gesperrt.
 const KNOPF_PFAD = { stand: "/api/knopf/stand", regeln: "/api/knopf/regeln", ueberblick: "/api/knopf/ueberblick",
   protokoll: "/api/knopf/protokoll", bild: "/api/knopf/bild", frage: "/api/knopf/frage",
   zusammenfassen: "/api/knopf/zusammenfassen", fehlt: "/api/knopf/fehlt" };
@@ -342,8 +340,7 @@ function knopfDruecken(art, daten = {}) {
   if (art === "ueberblick" && !daten.umfang) {
     daten.umfang = $("ueberblick-umfang").value;
   }
-  if (knopfdruck(zustand) && zustand?.knopf) zustand.knopf = { ...zustand.knopf, laeuft: art, schritt: "transkribiere", anteil: 0, fehler: null };
-  if (!knopfdruck(zustand) && zustand?.assistent) zustand.assistent = { ...zustand.assistent, bogen: { art, name: KNOPF_NAME[art] } };
+  if (zustand?.assistent) zustand.assistent = { ...zustand.assistent, bogen: { art, name: KNOPF_NAME[art] } };
   knopfRendern(zustand);
   return api(KNOPF_PFAD[art], daten).then(() => true, () => false).finally(() => {
     knopfWartet = null; if (zustand) knopfRendern(zustand);
@@ -358,56 +355,33 @@ $("knopf-frage-form").onsubmit = (e) => {
   stimme.bereit();
   knopfDruecken("frage", { text }).then((ok) => { if (ok) $("knopf-frage").value = ""; });
 };
-$("knopf-verwerfen-5").onclick = () => api("/api/knopf/verwerfen", { minuten: 5 });
-$("knopf-verwerfen-alles").onclick = () => {
-  if (confirm("Alles bisher Gesagte verwerfen? Ton, Transkript und Auswertungen dieses Meetings werden gelöscht. Redeanteile bleiben.")) {
-    api("/api/knopf/verwerfen", { minuten: null });
-  }
-};
 // Fortschritt zwischen zwei Zustandsmeldungen: in den Stand einarbeiten, der nächste Schnappschuss bestätigt ihn
 function knopfMeldung(d) {
   if (!zustand?.knopf) return;
   zustand.knopf = { ...zustand.knopf, laeuft: d.schritt === "fertig" ? null : d.art, schritt: d.schritt, anteil: d.anteil,
-    fertig: d.fertig, gesamt: d.gesamt, fehler: d.fehler ?? null };
+    fehler: d.fehler ?? null };
   knopfRendern(zustand);
-}
-function knopfOffenText(k) {
-  if (!k.seit_sekunden) return "Alles ausgewertet";
-  return k.seit_sekunden < 60 ? "Unter 1 Minute noch nicht ausgewertet"
-    : `${Math.round(k.seit_sekunden / 60)} Minuten noch nicht ausgewertet`;
 }
 function knopfRendern(z) {
   aktionshilfeRendern(z, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
   if (phaseVon(z) !== "live") return; // sichtbar schaltet phaseAnzeigen() in rendern()
   const k = z.knopf ?? {};
-  const nurKnopf = knopfdruck(z);
   const basis = basisStufe(z);
   const a = z.assistent ?? {};
-  $("knopf-offen").hidden = !nurKnopf; $("knopf-verwerfen").hidden = !nurKnopf;
-  $("knopf-offen").textContent = knopfOffenText(k);
-  $("knopf-offen").dataset.tip = k.aeusserungen ? `${k.aeusserungen} Äußerungen, ${mmss(k.sprache_sekunden)} min Sprache – werden beim nächsten Knopf transkribiert` : "";
   // Basis: kein Bildmodell (der Überblick steht für das Bild); Regeln-Knopf nur, wenn Regeln gewählt sind (Ticket #27)
   document.querySelector('#knopf-leiste [data-knopf="bild"]').hidden = basis;
   document.querySelector('#knopf-leiste [data-knopf="regeln"]').hidden = !(z.regel_ids ?? []).length;
-  const bogen = !nurKnopf && a.bogen;
-  const laeuft = !!knopfWartet || (nurKnopf ? !!k.laeuft : !!bogen);
+  const bogen = a.bogen;
+  const laeuft = !!knopfWartet || !!bogen;
   document.querySelectorAll("#knopf-leiste .knopf-art, #knopf-fragen").forEach((b) => {
-    b.disabled = laeuft; b.classList.toggle("knopf-aktiv", (nurKnopf ? k.laeuft : bogen?.art) === b.dataset.knopf);
+    b.disabled = laeuft; b.classList.toggle("knopf-aktiv", bogen?.art === b.dataset.knopf);
   });
   $("knopf-bogen").hidden = !bogen && !knopfWartet;
   $("knopf-bogen").textContent = knopfWartet ? "Letzten Redebeitrag übernehmen …" : bogen ? `Nestor ist bei „${bogen.name}“ …` : "";
-  $("knopf-fortschritt").hidden = !(nurKnopf && k.laeuft);
-  if (nurKnopf && k.laeuft) {
-    const transkribiert = k.schritt === "transkribiere";
-    $("knopf-balken").style.width = `${Math.round((transkribiert ? (k.anteil ?? 0) : 1) * 100)}%`;
-    $("knopf-balken").parentElement.classList.toggle("denkt", !transkribiert);
-    $("knopf-schritt").textContent = `${KNOPF_NAME[k.laeuft] ?? ""}: ` + (transkribiert
-      ? `transkribiere${k.gesamt ? ` ${k.fertig} von ${k.gesamt}` : ""} …` : "Nestor denkt nach …");
-  }
   $("knopf-fehler").hidden = laeuft || !k.fehler;
   $("knopf-fehler").textContent = k.fehler ?? "";
   // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
-  const tasteDa = basis && !nurKnopf && !!a.aktiv && a.zustand !== "pausiert";
+  const tasteDa = basis && !!a.aktiv && a.zustand !== "pausiert";
   $("btn-taste").hidden = !tasteDa;
   taste.ruhe(); // Ruhetext nur, solange die Taste nichts Eigenes zeigt (halten, verarbeiten, Ergebnis)
 }
@@ -498,7 +472,7 @@ function nestorZeileRendern(z) {
   const basis = basisStufe(z);
   let text;
   if (!aktiv) text = name;
-  else if (!a.aktiv || knopfdruck(z)) text = `${name} · auf Knopfdruck`;
+  else if (!a.aktiv) text = `${name} · auf Knopfdruck`;
   else if (a.zustand === "pausiert") text = `${name} hört nicht mit`;
   else if (a.taste) text = "Ich höre – loslassen zum Senden";
   else if (redet) text = `${name} spricht`;
@@ -534,13 +508,12 @@ function rendern() {
   pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
   pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
     : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
-  // Modus (Ticket #1); im Modus „Auf Knopfdruck“ ersetzt die Knopfleiste die Nestor-Leiste (Ticket #6)
+  // Stufe (Ticket #1)
   $("modus-pill").hidden = false; // Ticket #60: die Variante steht immer sichtbar da – auch wenn keine gewählt ist
-  document.querySelector(".nestor-wahl").hidden = knopfdruck(z); // Nestor spricht dort nicht
   // „eigener Schlüssel“ (Ticket #17, entschlackte Kopfleiste) steht hier statt in einer eigenen Pille
   const eigenerSchluessel = z.schluessel?.quelle === "dashboard";
   $("modus-pill").textContent = !z.stufe ? "Keine Variante gewählt"
-    : (z.stufe === "basis" ? `Basis · Mistral${z.modus === "knopfdruck" ? " · Nur auf Knopfdruck" : ""}` : "Premium · OpenAI")
+    : (z.stufe === "basis" ? "Basis · Mistral" : "Premium · OpenAI")
       + (eigenerSchluessel ? " · eigener Schlüssel" : "");
   $("modus-pill").dataset.tip = !z.stufe ? "Ohne bestätigte Variante startet kein Meeting – bitte auf der Startseite Basis oder Premium wählen."
     : (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
@@ -581,7 +554,7 @@ function rendern() {
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
   $("mq-text").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
   // Nestor ohne Lautsprecher (Tab zu, Handy neu geladen): sichtbar machen und hier übernehmen lassen
-  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher) || knopfdruck(z);
+  $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
   $("mikro-weg").hidden = !m.weg;
   $("mikro-weg").textContent = !m.weg ? "" : m.quelle === null
     ? "Kein Mikrofon verbunden – Nestor hört nichts. Am Handy „Dieses Handy übernimmt Mikro und Ton“ tippen oder hier zurückholen (Handy-Symbol)."
@@ -589,7 +562,7 @@ function rendern() {
 
   // Nestor
   const a = z.assistent;
-  const nestorDa = a?.aktiv && z.hoeren && !knopfdruck(z);
+  const nestorDa = a?.aktiv && z.hoeren;
   knopfRendern(z);
   $("nestor").hidden = !nestorDa;
   $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert" || basisStufe(z); // Basis: Sprechtaste
@@ -688,13 +661,6 @@ function leisteRendern(z) {
   const zeilen = z.segmente.map((s) => el("li", {},
     el("span", { class: "wann" }, mmss(s.start)), el("span", { class: "wer" }, s.sprecher), el("span", {}, s.text)));
   if (z.teiltext) zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }, "live"), el("span"), el("span", {}, z.teiltext)));
-  // Knopfdruck: kein Live-Transkript – sagen, was noch kommt, statt leer zu bleiben
-  if (knopfdruck(z) && z.hoeren && z.knopf?.seit_sekunden) {
-    zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }, "offen"), el("span"),
-      el("span", {}, `auf Knopfdruck – ${knopfOffenText(z.knopf).replace("noch nicht ausgewertet", "werden beim nächsten Knopf transkribiert")}`)));
-  } else if (knopfdruck(z) && !zeilen.length) {
-    zeilen.push(el("li", { class: "teiltext" }, el("span", { class: "wann" }), el("span"), el("span", {}, "auf Knopfdruck")));
-  }
   tr.replaceChildren(...zeilen);
   if (unten) tr.scrollTop = tr.scrollHeight;
   $("hinweise").replaceChildren(...[...z.hinweise].reverse().map((h) => el("li", { class: h.art === "ton" || h.stufe === "warnung" ? "rot" : "" },

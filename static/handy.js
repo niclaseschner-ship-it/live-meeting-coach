@@ -123,8 +123,8 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 // nur das zuhörende Handy übernimmt die Stimme – ein zweites Handy als reine Fernbedienung nimmt sie nicht weg
 // Sprechtaste (Ticket #13/#27): halten, fragen, loslassen → ein Antwortbogen wie bei „Nestor, …“; drücken unterbricht
 // Nestor. In Basis der einzige Weg (Funkgerät), in Premium die Rückfall-Taste zum Namen (#66: klein unter „Weitere
-// Aktionen“). Mit „Nur auf Knopfdruck“ kommt die Antwort als Karte. Was beim Halten gesagt wird, wertet der Server
-// nicht noch einmal als Zuruf. Bedienmodell und Rückmeldung wie jeder Sprechknopf (basis.js: sprechknopf, #66).
+// Aktionen“). Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf. Bedienmodell und
+// Rückmeldung wie jeder Sprechknopf (basis.js: sprechknopf, #66).
 const fragenRuhe = () => (zustand?.stufe === "premium" ? "Sprechtaste (falls der Name nicht ankommt)" : "Sprechtaste – halten und sprechen");
 const fragen = sprechknopf($("btn-fragen"), {
   ...frageHalten,
@@ -279,7 +279,7 @@ function rendern() {
     "btn-stopp": !z.simulation,
   });
   fragenPlatzieren(z.stufe);
-  $("fragen-hinweis").hidden = !(aktiv && z.stufe === "premium" && z.modus !== "knopfdruck");
+  $("fragen-hinweis").hidden = !(aktiv && z.stufe === "premium");
   fragen.ruhe();
 
   // Nestor
@@ -287,10 +287,9 @@ function rendern() {
   const nestorDa = a?.aktiv && z.hoeren;
   $("nestor").className = `nestor ${nestorDa ? a.zustand : "pausiert"}`;
   $("nestor-zustand").textContent = nestorDa ? `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}` : z.hoeren ? "Nestor ist aus" : "Nestor wartet aufs Meeting";
-  // Knöpfe: in beiden Stufen; „Nestor fragen“ auch bei „Nur auf Knopfdruck“ (dann ohne Stimme, als Karte)
-  const nurKnopf = z.modus === "knopfdruck";
-  const fragenDa = aktiv && (nurKnopf || (a?.aktiv && a.zustand !== "pausiert"));
-  const bogen = !nurKnopf && a?.bogen;
+  // Knöpfe: in beiden Stufen gleich
+  const fragenDa = aktiv && a?.aktiv && a.zustand !== "pausiert";
+  const bogen = a?.bogen;
   const frageBeschaeftigt = handyKnopfWartet || !!z.knopf?.laeuft || !!bogen;
   $("btn-fragen").disabled = (!fragenDa || frageBeschaeftigt) && !fragen.haelt;
   document.querySelectorAll(".h-knopf").forEach((b) => {

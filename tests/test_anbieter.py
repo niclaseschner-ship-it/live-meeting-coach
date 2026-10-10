@@ -87,7 +87,7 @@ def test_kein_claude_oder_codex_im_produktpfad():
 def test_niemand_liest_stufe_oder_stufenmodelle_aus_einst():
     import dataclasses
 
-    felder = {f.name for f in dataclasses.fields(anbieter.Anbieterwahl)} - {"anbieter", "hosts", "modus"}
+    felder = {f.name for f in dataclasses.fields(anbieter.Anbieterwahl)} - {"anbieter", "hosts"}
     felder |= {"stufe", "basis_text_modell", "basis_zuordnung_modell", "basis_live_modell", "basis_transkription",
                "basis_stimme_modell", "basis_stimme", "basis_begruessung_modell", "zuordnung_modell"}
     for name, text in QUELLEN.items():
@@ -119,7 +119,7 @@ def test_anbieterwahl_ist_unveraenderlich_und_ohne_vorgabe(monkeypatch):
     with pytest.raises(anbieter.AnbieterFehler):
         anbieter.wahl_fuer("basis").mit(stimme="cedar")
     with pytest.raises(ValueError):
-        anbieter.wahl_fuer("premium", "knopfdruck")
+        anbieter.wahl_fuer("gold")
     with pytest.raises(TypeError):
         anbieter.wahl_fuer()  # type: ignore[call-arg]  – keine Vorgabe-Stufe
     assert w.hosts == {"api.openai.com:443"} and anbieter.wahl_fuer("basis").hosts == {"api.mistral.ai:443"}
@@ -321,11 +321,11 @@ def test_hostwache_bricht_fremdes_ziel_sichtbar_ab(umgelenkt):
 def server_coach(monkeypatch):
     from coach import server
 
-    wahl, modus = server.coach.wahl, server.coach.modus
+    wahl = server.coach.wahl
     monkeypatch.setenv("LMC_OFFLINE", "1")
     yield server
     monkeypatch.undo()
-    server.coach.wahl, server.coach.modus = wahl, modus
+    server.coach.wahl = wahl
     server.coach.client_neu()
 
 
@@ -358,7 +358,6 @@ def test_stufenwechsel_im_meeting_409(server_coach, monkeypatch):
         for k, v in zustand.items():
             monkeypatch.setattr(server.coach, k, v)
         assert web.post("/api/stufe", json={"stufe": "basis"}).status_code == 409
-        assert web.post("/api/modus", json={"modus": "knopfdruck"}).status_code == 409
         assert server.coach.wahl is wahl
         monkeypatch.undo()
         monkeypatch.setenv("LMC_OFFLINE", "1")
@@ -385,7 +384,7 @@ def test_container_neustart_ohne_gespeicherte_wahl_bleibt_unbestimmt(server_coac
         assert web.get("/api/start", headers=kopf).json()["stufe"] is None
         assert web.post("/api/start", headers=kopf).status_code == 409
         monkeypatch.setattr(server, "_variantenwahl_wiederhergestellt", False)
-        gespeichert = {**kopf, "X-Nestor-Stufe": "premium", "X-Nestor-Modus": "live"}
+        gespeichert = {**kopf, "X-Nestor-Stufe": "premium"}
         assert web.get("/api/start", headers=gespeichert).json()["stufe"] == "premium"
     finally:
         object.__setattr__(EINST, "betrieb", alt_betrieb)

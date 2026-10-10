@@ -141,7 +141,7 @@ function verlaufRendern(z) {
   if (verlauf.edit && w.buehne.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
   const k = n ? nachId.get(verlauf.ordnung[verlauf.index]) : beispielKarte(z);
   // Nur neu zeichnen, wenn sich die angezeigte Karte geändert hat (sonst flackert sie, und das Leuchten beginnt neu)
-  const sig = JSON.stringify([k, k?.ids ? z.artefakte?.liste : null, verlauf.edit, z.knopf?.protokoll, z.stufe, z.modus, verlauf.leuchten]);
+  const sig = JSON.stringify([k, k?.ids ? z.artefakte?.liste : null, verlauf.edit, z.knopf?.protokoll, z.stufe, verlauf.leuchten]);
   if (sig === verlauf.sig && w.buehne.firstChild) return;
   verlauf.sig = sig;
   const karte = karteBauen(k, z);
@@ -156,15 +156,12 @@ function verlaufRendern(z) {
 // Erste Karte im leeren Verlauf (Nachtrag): vier Beispiele, je Stufe passend
 function beispielKarte(z) {
   const basis = z?.stufe === "basis";
-  const knopf = z?.modus === "knopfdruck";
-  const zeilen = knopf ? ["Knopf „Wo stehen wir?“ – Stand und nächster Schritt", "Knopf „Protokoll“ – was festgehalten ist",
-    "„Nestor fragen …“ oben eintippen", "Knopf „Überblick“ – Entschiedenes, Offenes, Aufgaben"]
-    : basis ? ["Taste halten: „Wo stehen wir?“ – loslassen", "Taste halten: „Fass mal zusammen.“",
-      "Taste halten: „Recherchier die Mietpreise in Hannover.“", "Taste halten: „Anna macht das bis Freitag.“"]
+  const zeilen = basis ? ["Taste halten: „Wo stehen wir?“ – loslassen", "Taste halten: „Fass mal zusammen.“",
+    "Taste halten: „Recherchier die Mietpreise in Hannover.“", "Taste halten: „Anna macht das bis Freitag.“"]
     : ["„Nestor, wo stehen wir?“", "„Nestor, fass mal zusammen.“", "„Nestor, mach ein Bild davon.“",
       "„Nestor, Anna macht das bis Freitag.“"];
-  return { id: 0, art: "beispiel", zeit: z?.zeit ?? 0, titel: basis ? "Wie ein Funkgerät" : knopf ? "Auf Knopfdruck" : "Wie ein Telefon",
-    frage: basis ? "Taste halten, sprechen, loslassen – Nestor redet dann aus." : knopf ? ""
+  return { id: 0, art: "beispiel", zeit: z?.zeit ?? 0, titel: basis ? "Wie ein Funkgerät" : "Wie ein Telefon",
+    frage: basis ? "Taste halten, sprechen, loslassen – Nestor redet dann aus."
       : "„Nestor“ und eure Frage – direkt danach geht eine Nachfrage ohne Namen.", punkte: zeilen };
 }
 
@@ -345,9 +342,7 @@ function bandEintraege(z) {
 
 async function bandBogen(art, id) {
   bandWeg.add(id);
-  const knopfdruck = zustand?.modus === "knopfdruck";
-  // Nur auf Knopfdruck: Nestor spricht nicht – „Zusammenfassen“ ist dort das Protokoll
-  try { await api(`/api/knopf/${knopfdruck ? "protokoll" : art}`, { band: true }); } catch { /* Meldung zeigt api() */ }
+  try { await api(`/api/knopf/${art}`, { band: true }); } catch { /* Meldung zeigt api() */ }
 }
 
 function bandRendern(z, box) {

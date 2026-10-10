@@ -1,4 +1,4 @@
-"""Startseite, Richtwerte und Moduswahl (Ticket #1, Lastenheft Abschnitt 2/3/6)."""
+"""Startseite, Richtwerte und Stufenwahl (Ticket #1, Lastenheft Abschnitt 2/3/6)."""
 
 import os
 
@@ -35,34 +35,18 @@ def test_api_start_liefert_richtwerte_und_leere_pflichtangaben(lokal):
     r = lokal.get("/api/start")
     assert r.status_code == 200
     d = r.json()
-    assert d["richtwert_live_eur"] == EINST.richtwert_live_eur
-    assert d["richtwert_knopfdruck_eur"] == EINST.richtwert_knopfdruck_eur
+    assert d["richtwert_basis_eur"] == EINST.richtwert_basis_eur
+    assert d["richtwert_premium_eur"] == EINST.richtwert_premium_eur
     assert d["paypal_aktiv"] is False  # kein LMC_PAYPAL_ME gesetzt
     assert d["impressum_name"] is None and d["impressum_anschrift"] is None and d["impressum_mail"] is None
 
 
-def test_modus_setzen_erscheint_im_schnappschuss(lokal):
-    ursprung = coach.modus
+def test_api_start_kennt_keinen_modus_mehr(lokal):
+    """Ticket #71: der Modus „Nur auf Knopfdruck“ ist vollständig ausgebaut – kein Modus-Feld, kein Schalter."""
+    assert "modus" not in lokal.get("/api/start").json()
     try:
-        coach.stufe_setzen("premium")
-        # #60: /api/modus setzt nie eine Stufe – „Nur auf Knopfdruck“ gibt es nur in Basis (Ticket #13)
-        assert lokal.post("/api/modus", json={"modus": "knopfdruck"}).status_code == 409
-        assert coach.stufe == "premium" and coach.modus == "live"
         coach.stufe_setzen("basis")
-        r = lokal.post("/api/modus", json={"modus": "knopfdruck"})
-        assert r.status_code == 200 and r.json() == {"ok": True, "modus": "knopfdruck"}
-        assert coach.modus == "knopfdruck" and coach.wahl.modus == "knopfdruck"
-        assert lokal.get("/api/zustand").json()["modus"] == "knopfdruck"
-        assert coach.stufe == "basis"
+        assert "modus" not in lokal.get("/api/zustand").json()
+        assert lokal.post("/api/modus", json={"modus": "knopfdruck"}).status_code == 404
     finally:
         coach.stufe_setzen("premium")
-        coach.modus = ursprung
-
-
-def test_modus_400_bei_unbekanntem_wert(lokal):
-    assert lokal.post("/api/modus", json={"modus": "irgendwas"}).status_code == 400
-
-
-def test_modus_409_waehrend_laufendem_meeting(lokal, monkeypatch):
-    monkeypatch.setattr(coach, "hoerstrom", object())  # Sentinel: irgendein laufender Hörstrom reicht für die Prüfung
-    assert lokal.post("/api/modus", json={"modus": "live"}).status_code == 409

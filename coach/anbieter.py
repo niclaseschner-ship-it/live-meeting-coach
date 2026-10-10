@@ -3,7 +3,7 @@
 Nestor Premium spricht ausschließlich mit OpenAI, Nestor Basis ausschließlich mit Mistral. Damit das nicht nur
 Konvention ist, gilt hier dreierlei:
 
-1. **Eine Wahl je Meeting.** `Anbieterwahl` ist unveränderlich (frozen) und enthält Stufe, Modus, Anbieter, die
+1. **Eine Wahl je Meeting.** `Anbieterwahl` ist unveränderlich (frozen) und enthält Stufe, Anbieter, die
    erlaubten Ziele und alle Modelle der Stufe. Es gibt keine Vorgabe-Stufe: ohne bestätigte Wahl kein Client und kein
    Meetingstart (coach/server.py). Während eines Meetings lässt sich die Wahl nicht wechseln (coach/pipeline.py).
 2. **Nur die Fabrik baut Verbindungen.** `client_fuer` (REST, OpenAI-SDK bzw. MistralClient) und `ws_verbinden`
@@ -36,7 +36,6 @@ from .config import EINST, mistral_schluessel, openai_schluessel
 log = logging.getLogger("coach.anbieter")
 
 STUFEN = ("basis", "premium")
-MODI = ("live", "knopfdruck")
 ANBIETER = {"premium": "openai", "basis": "mistral"}
 
 
@@ -105,11 +104,10 @@ def ziele_fuer(anbieter: str) -> frozenset[str]:
 # --- Die Wahl ----------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Anbieterwahl:
-    """Stufe, Modus, Anbieter, erlaubte Ziele und alle Modelle eines Meetings – einmal gebaut, nie verändert.
+    """Stufe, Anbieter, erlaubte Ziele und alle Modelle eines Meetings – einmal gebaut, nie verändert.
     Felder, die es in einer Stufe nicht gibt (Realtime, Bild in Basis), sind None."""
 
     stufe: str
-    modus: str
     anbieter: str
     hosts: frozenset[str]
     live_modell: str
@@ -155,14 +153,12 @@ def premium_vorlieben() -> dict:
     return {"stimme": EINST.stimme, "assistent_modus": EINST.assistent_modus}
 
 
-def wahl_fuer(stufe: str, modus: str = "live", *, stimme: str | None = None,
+def wahl_fuer(stufe: str, *, stimme: str | None = None,
               assistent_modus: str | None = None) -> Anbieterwahl:
     """Die einzige Stelle, an der aus einer Stufe Anbieter, Ziele und Modelle werden. Premium: die Werte aus der
     Umgebung (coach/config.py); Basis: die Mistral-Gegenstücke (`basis_*`)."""
     if stufe not in STUFEN:
         raise ValueError(f"Unbekannte Stufe: {stufe}")
-    if modus not in MODI or (modus == "knopfdruck" and stufe != "basis"):
-        raise ValueError(f"Modus {modus!r} gibt es in {stufe} nicht.")
     anbieter = ANBIETER[stufe]
     ziele = ziele_fuer(anbieter)
     andere = ziele_fuer("mistral" if anbieter == "openai" else "openai")
@@ -175,7 +171,7 @@ def wahl_fuer(stufe: str, modus: str = "live", *, stimme: str | None = None,
         # statt Name, kein Rückfrage-Fenster; statt des Live-Bilds der Überblick als Text (kein Bildmodell).
         # Mistral kennt keinen Denkaufwand „low“ – leer.
         return Anbieterwahl(
-            stufe=stufe, modus=modus, anbieter=anbieter, hosts=ziele,
+            stufe=stufe, anbieter=anbieter, hosts=ziele,
             live_modell=e.basis_live_modell, text_modell=e.basis_transkription,
             analyse_modell=e.basis_text_modell, analyse_aufwand="", zuordnung_modell=e.basis_zuordnung_modell,
             assistent_modell=e.basis_text_modell, assistent_aufwand="",
@@ -183,7 +179,7 @@ def wahl_fuer(stufe: str, modus: str = "live", *, stimme: str | None = None,
             stimme_modell=e.basis_stimme_modell, stimme=e.basis_stimme, assistent_modus="text",
             bild_anbieter="text", nachfrage_sekunden=0.0, begruessung_modell=e.basis_begruessung_modell)
     return Anbieterwahl(
-        stufe=stufe, modus=modus, anbieter=anbieter, hosts=ziele,
+        stufe=stufe, anbieter=anbieter, hosts=ziele,
         live_modell=e.live_modell, text_modell=e.text_modell,
         analyse_modell=e.analyse_modell, analyse_aufwand=e.analyse_aufwand,
         zuordnung_modell=e.zuordnung_modell or e.analyse_modell,

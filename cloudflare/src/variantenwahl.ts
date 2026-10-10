@@ -4,7 +4,7 @@
  * geht auch keine Kopfzeile mit – der Coach bleibt unbestimmt und weist einen Meetingstart mit 409 ab, statt still in
  * einer Stufe zu laufen. Nach „Fertig“ ist das Meeting beendet: jede weitere Anfrage mit seinem (30 Tage gültigen)
  * Cookie bekommt 410 und erreicht den Container nicht mehr – ein altes Handy landet nicht in einem frischen Container. */
-export interface Variantenwahl { stufe: "basis" | "premium"; modus: "live" | "knopfdruck" }
+export interface Variantenwahl { stufe: "basis" | "premium" }
 export interface WahlSpeicher {
   get<T>(key: string): Promise<T | undefined>;
   put(key: string, value: Variantenwahl | boolean): Promise<unknown>;
@@ -31,9 +31,9 @@ export function beendetAntwort(): Response {
 }
 
 /** Für die Telegram-Startmeldung: welche Variante lief (Ticket #60, Forensik des Pilotabends 09.10.). */
-export function varianteText(stufe: unknown, modus?: unknown): string {
+export function varianteText(stufe: unknown): string {
   if (stufe === "premium") return "Premium (OpenAI)";
-  if (stufe === "basis") return modus === "knopfdruck" ? "Basis (Mistral) · Nur auf Knopfdruck" : "Basis (Mistral)";
+  if (stufe === "basis") return "Basis (Mistral)";
   return "unbekannt";
 }
 
@@ -43,18 +43,15 @@ export async function mitVariantenwahl(request: Request, storage: WahlSpeicher,
   const headers = new Headers(request.headers);
   // Ausschließlich gespeicherte, serverseitig bestätigte Werte, niemals Browser-Header übernehmen.
   headers.delete("X-Nestor-Stufe");
-  headers.delete("X-Nestor-Modus");
   const wahl = await storage.get<Variantenwahl>("variantenwahl");
   if (wahl) {
     headers.set("X-Nestor-Stufe", wahl.stufe);
-    headers.set("X-Nestor-Modus", wahl.modus);
   }
   const response = await weiter(new Request(request, { headers }));
   if (request.method === "POST" && new URL(request.url).pathname === "/api/stufe" && response.ok) {
     const data = await response.clone().json() as Record<string, unknown>;
-    if (data.ok === true && (data.stufe === "basis" || data.stufe === "premium") &&
-        (data.modus === "live" || (data.modus === "knopfdruck" && data.stufe === "basis"))) {
-      await storage.put("variantenwahl", { stufe: data.stufe, modus: data.modus });
+    if (data.ok === true && (data.stufe === "basis" || data.stufe === "premium")) {
+      await storage.put("variantenwahl", { stufe: data.stufe });
     } else {
       return Response.json({ detail: "Der Server hat keine gültige Variante bestätigt." }, { status: 502 });
     }

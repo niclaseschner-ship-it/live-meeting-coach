@@ -6,17 +6,11 @@
                                                       └──► Stimm-Fingerabdruck je Fenster (lokal) ─► Personen, Überlappung
 
 Die Meetinguhr folgt der Audiozeit – live wie im Abspielmodus.
-
-Modus „Auf Knopfdruck“ (Lastenheft 3, 4.2): kein Live-Text und keine Transkription je Äußerung. Jede Äußerung
-wartet als WAV in `warteschlange`, bis ein Knopf `nachtranskribieren()` aufruft – dann über denselben Weg wie
-„sparsam“ (`_transkribieren`), höchstens vier gleichzeitig, Sätze in der Reihenfolge des Sprechens.
-Pausenerkennung, Stimm-Fingerabdruck, Überlappung und Unterbrechung laufen unverändert.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import io
 import os
 import logging
@@ -85,7 +79,6 @@ def wav_aus(proben: np.ndarray) -> bytes:
 
 
 MIN_TEXT = 0.3  # s – kürzere Äußerungen gehen nicht an die Transkription
-KNOPF_GLEICHZEITIG = 4  # Knopfdruck: so viele Äußerungen werden gleichzeitig transkribiert
 
 
 UNSICHER = "Person ?"
@@ -167,20 +160,16 @@ class Hoerstrom:
         self._analysen: list[asyncio.Future] = []
         self.vektoren: deque = deque(maxlen=300)  # (start, ende, Fingerabdruck) je Äußerung – Namen (Ticket #27)
         self.live = None
-        # Knopfdruck: nichts geht von selbst an einen KI-Dienst; Äußerungen warten auf den Knopf
-        self.knopfdruck = coach.modus == "knopfdruck"
-        self.warteschlange: list[dict] = []  # {uid, start, ende, wav, person}: noch nicht transkribiert
-        self._verworfen_bis = -1.0  # Meetingzeit: Äußerungen, die davor begannen, bekommen keinen Text mehr
-        self.sparsam = mit_text and EINST.live_art == "sparsam" and not self.knopfdruck  # Text je Äußerung statt Streaming
+        self.sparsam = mit_text and EINST.live_art == "sparsam"  # Text je Äußerung statt Streaming
         self._vorlage = None  # Tests: {(start, ende): text} aus einem früheren Bericht (LMC_TEXT_VORLAGE)
-        if (self.sparsam or self.knopfdruck) and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
+        if self.sparsam and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
             import json
 
             bericht = json.loads(open(os.environ["LMC_TEXT_VORLAGE"], encoding="utf-8").read())
             self._vorlage = {(round(s["start"], 1), round(s["ende"], 1)): s["text"] for s in bericht["transkript"]}
         self._letzter_text: asyncio.Future | None = None
         self.text_sekunden = 0.0
-        if mit_text and not self.sparsam and not self.knopfdruck:
+        if mit_text and not self.sparsam:
             m = coach.meeting
             stichwoerter = [p.titel for p in m.agenda] + m.teilnehmende
             if coach.assistent.aktiv:
@@ -237,8 +226,6 @@ class Hoerstrom:
         Kein Stoppen des Audiostroms; neu eintreffende Äußerungen gehören nicht zur Momentaufnahme.
         Bei Ausfall lieber einen wiederholbaren Fehler als eine scheinbar vollständige alte Antwort.
         """
-        if self.knopfdruck:
-            return  # dessen Knopf-Pipeline transkribiert selbst
         for start, ende, proben in self.vad.ende():
             await self._aeusserung(start, ende, proben)
         offen = set(self._offen)
@@ -254,16 +241,8 @@ class Hoerstrom:
         self._naechste_id += 1
         self._offen[uid] = {"start": start, "ende": ende, "person": None, "person_fertig": False, "text": None,
                             "pegel": pegel_db(proben)}  # Regel 1: Pegel-Einbruch = Übergabe, kein Unterbrechen
-        knopf = None
         if self.live:
             await self.live.commit({"id": uid, "ende": ende})  # Ende: Zuordnung bei Voxtral
-        elif self.knopfdruck:
-            if len(proben) >= 16000 * MIN_TEXT and start >= self._verworfen_bis:
-                # als WAV (16 bit) statt float: halber Speicher, und genau die Bytes für Transkription und Zwischenspeicher
-                knopf = {"uid": uid, "start": start, "ende": ende, "dauer": len(proben) / 16000, "wav": wav_aus(proben)}
-                self.warteschlange.append(knopf)
-            else:
-                self._offen[uid]["text"] = ""
         elif self.sparsam:
             vorher, self._letzter_text = self._letzter_text, None
             self._letzter_text = asyncio.ensure_future(self._text_je_aeusserung(uid, proben, vorher))
@@ -274,8 +253,6 @@ class Hoerstrom:
         zukunft = loop.run_in_executor(self._rechner, self.stimmen.analysieren, proben)
         person = asyncio.ensure_future(self._person(uid, zukunft))
         self._analysen.append(person)
-        if knopf is not None:
-            knopf["person"] = person  # der Knopf wartet darauf, bevor er den Satz ausgibt
 
     async def _person(self, uid: int, zukunft) -> None:
         try:
@@ -320,8 +297,8 @@ class Hoerstrom:
             text = await self._transkribieren(uid, wav_aus(proben), len(proben) / 16000)
         await self._text_ausgeben(uid, text, vorher)
 
-    async def _transkribieren(self, uid: int, wav: bytes, dauer: float, sperre: asyncio.Semaphore | None = None) -> str:
-        """Eine Äußerung transkribieren (Sparmodus und Knopfdruck); `sperre` begrenzt gleichzeitige Aufrufe."""
+    async def _transkribieren(self, uid: int, wav: bytes, dauer: float) -> str:
+        """Eine Äußerung transkribieren (Sparmodus)."""
         from .pipeline import fehlertext, nutzung_loggen
 
         c = self.coach
@@ -342,10 +319,9 @@ class Hoerstrom:
             return text
         text = ""
         try:
-            async with sperre or contextlib.nullcontext():
-                antwort = await c._client.audio.transcriptions.create(
-                    model=c.wahl.text_modell, file=("aeusserung.wav", wav, "audio/wav"),
-                    language=EINST.sprache, prompt=prompt or None)
+            antwort = await c._client.audio.transcriptions.create(
+                model=c.wahl.text_modell, file=("aeusserung.wav", wav, "audio/wav"),
+                language=EINST.sprache, prompt=prompt or None)
             text = (getattr(antwort, "text", "") or "").strip()
             if prompt_echo(text, prompt):
                 log.info("Transkription gab den Kontext-Prompt zurück – verworfen")
@@ -359,50 +335,6 @@ class Hoerstrom:
         nutzung_loggen({"art": "text", "modell": c.wahl.text_modell, "sekunden_audio": round(dauer, 1),
                         "sekunden": round(time.monotonic() - t0, 2)})
         return text
-
-    # --- Knopfdruck -------------------------------------------------------------
-    def offen(self) -> dict:
-        """Was noch nicht transkribiert ist: Äußerungen, Sprechzeit und Meetingzeit seit der ersten davon."""
-        w = self.warteschlange
-        return {"aeusserungen": len(w), "sprache_sekunden": round(sum(e["dauer"] for e in w), 1),
-                "seit_sekunden": round(max(0.0, self.sekunden - w[0]["start"]), 1) if w else 0.0}
-
-    async def nachtranskribieren(self, fortschritt=None) -> dict:
-        """Knopf: genau die offenen Äußerungen transkribieren, höchstens vier gleichzeitig. Fertige Sätze gehen in der
-        Reihenfolge des Sprechens über `coach.satz()` ins Transkript; `fortschritt(fertig, gesamt)` nach jeder.
-        Was währenddessen gesprochen wird, bleibt für den nächsten Knopf in der Warteschlange."""
-        offen, self.warteschlange = self.warteschlange, []
-        sperre = asyncio.Semaphore(KNOPF_GLEICHZEITIG)
-        gesamt, fertig = len(offen), 0
-
-        async def eins(e: dict, vorher) -> None:
-            nonlocal fertig
-            text = await self._transkribieren(e["uid"], e["wav"], e["dauer"], sperre)
-            await asyncio.gather(e["person"], return_exceptions=True)  # ohne feste Person kein Satz
-            await self._text_ausgeben(e["uid"], text, vorher)
-            fertig += 1
-            if fortschritt is not None:
-                await fortschritt(fertig, gesamt)
-
-        aufgaben, vorher = [], None
-        for e in offen:
-            vorher = asyncio.ensure_future(eins(e, vorher))  # jede wartet vor der Ausgabe auf die vorige
-            aufgaben.append(vorher)
-        if aufgaben:
-            await asyncio.gather(*aufgaben)
-        return {"aeusserungen": gesamt, "sprache_sekunden": round(sum(e["dauer"] for e in offen), 1)}
-
-    def verwerfen(self, seit: float) -> int:
-        """Alle Äußerungen, die nach `seit` enden, aus der Warteschlange nehmen; auch eine gerade laufende Äußerung
-        bekommt keinen Text mehr. Sprecherabschnitte (Redeanteile) bleiben. Liefert die Zahl der verworfenen."""
-        weg = [e for e in self.warteschlange if e["ende"] > seit]
-        self.warteschlange = [e for e in self.warteschlange if e["ende"] <= seit]
-        for e in weg:
-            o = self._offen.get(e["uid"])
-            if o is not None:
-                o["text"] = ""  # der Satz entfällt; die Person zählt trotzdem (_person -> _ausgeben)
-        self._verworfen_bis = self.sekunden
-        return len(weg)
 
     async def _text_ausgeben(self, uid: int, text: str, vorher) -> None:
         if vorher is not None:

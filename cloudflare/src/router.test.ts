@@ -14,7 +14,7 @@ vi.mock("@cloudflare/containers", () => ({
       const kopf: Record<string, string> = {};
       r.headers.forEach((v, k) => { kopf[k] = v; });
       aufrufe.push({ meetingId: "DO", url: r.url, kopf });
-      if (new URL(r.url).pathname === "/api/stufe") return Response.json({ ok: true, stufe: "premium", modus: "live" });
+      if (new URL(r.url).pathname === "/api/stufe") return Response.json({ ok: true, stufe: "premium" });
       return Response.json({ kopf });
     }
   },
@@ -169,7 +169,6 @@ describe("Variantenwahl im Meeting-DO (Nestor.fetch vor dem Container)", () => {
     await doFuer(s).fetch(new Request("https://nestor.test/api/stufe", { method: "POST", body: "{}" }));
     await doFuer(s).fetch(anfrage("/meeting", { "X-Nestor-Stufe": "basis" })); // neue Instanz, gleicher Speicher
     expect(aufrufe[1].kopf["x-nestor-stufe"]).toBe("premium");
-    expect(aufrufe[1].kopf["x-nestor-modus"]).toBe("live");
   });
 
   it("nach dem Meeting-Ende kommt 410, der Container wird nicht mehr erreicht", async () => {

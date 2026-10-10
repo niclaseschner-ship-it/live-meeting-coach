@@ -7,39 +7,35 @@ nicht wörtlich abgeschrieben, nur ihre Kernaussage zusammengefasst – kurze Zi
 
 Eine Einschränkung vorweg: Dieses Dokument beschreibt, was der Code **vorsieht**. Ob eine Funktion in einem
 konkreten Meeting tatsächlich gelaufen ist, hängt von Einstellungen ab, die beim Start gewählt werden
-(Stufe, „Nur auf Knopfdruck“, gewählte Regeln) – dazu mehr in Abschnitt 4.
+(Stufe, gewählte Regeln) – dazu mehr in Abschnitt 4.
+
+**Nachtrag 10.10.2026 (Ticket #71):** Den früheren zweiten Schalter „Nur auf Knopfdruck“ (Basis, Ton blieb
+ungehört im Puffer bis zum Knopf) gibt es nicht mehr – er deckte nur einen Sparfall ab, den die Sprechtaste
+(Basis) ohnehin abdeckt. Teile dieses Dokuments, die ihn noch beschreiben (u. a. Abschnitt 4), sind historisch.
 
 ## 1. Überblick: vom gesprochenen Satz zur Karte
 
 ```mermaid
 flowchart TD
     A["Gesprochener Satz im Raum"] --> B["Mikrofon-Stream (Browser)<br/>server.py ws_audio/ws_endpunkt"]
-    B --> C{"Betriebsart?"}
-    C -->|"live (Premium oder Basis)"| D["Lokale Signale: VAD, Segmentierung,<br/>Sprecher-Fingerabdruck<br/>vad.py, segmentierung.py, stimmen.py"]
-    C -->|"Nur auf Knopfdruck (nur Basis)"| E["Ton liegt nur im Puffer,<br/>ungehört bis zum Knopf<br/>knopfdruck.py:1-23"]
+    B --> D["Lokale Signale: VAD, Segmentierung,<br/>Sprecher-Fingerabdruck<br/>vad.py, segmentierung.py, stimmen.py"]
     D --> F["Live-Text: Transkription<br/>hoeren.py, transkription.py"]
-    F --> G["Coach.satz() / sprecher_abschnitt()<br/>pipeline.py:617, 823, 928"]
-    G --> H["Themen-Zuordnung je Abschnitt<br/>themen.py, pipeline.py:645"]
-    G --> I["Lokale Regeln ohne KI:<br/>Zeit, Monolog, Alle, Überlappung<br/>pipeline.py:465-643"]
-    G --> J{"Angesprochen?<br/>assistent.py:617"}
-    G --> K["Artefakt-Takt: alle 20 Min./<br/>Punktwechsel/Meetingende<br/>artefakte.py:610, pipeline.py:688"]
+    F --> G["Coach.satz() / sprecher_abschnitt()<br/>pipeline.py"]
+    G --> H["Themen-Zuordnung je Abschnitt<br/>themen.py, pipeline.py"]
+    G --> I["Lokale Regeln ohne KI:<br/>Zeit, Monolog, Alle, Überlappung<br/>pipeline.py"]
+    G --> J{"Angesprochen?<br/>assistent.py"}
+    G --> K["Artefakt-Takt: alle 20 Min./<br/>Punktwechsel/Meetingende<br/>artefakte.py, pipeline.py"]
     J -->|"Premium: Name erkannt"| L["Antwortbogen / Realtime-Gespräch<br/>bogen.py, gespraech.py"]
-    J -->|"Basis: Name wird ignoriert"| M["Stiller Band-Hinweis<br/>„Sprechtaste halten“<br/>assistent.py:627-631"]
-    E -->|"Knopf gedrückt"| N["Nachtranskription + gewählte Analyse<br/>knopfdruck.py:117-163"]
+    J -->|"Basis: Name wird ignoriert"| M["Stiller Band-Hinweis<br/>„Sprechtaste halten“<br/>assistent.py"]
     H --> O["Fokus-Ampel / Band-Hinweis"]
-    K --> P["Karte „Zusammenfassung · Punkt …“<br/>artefakte.py:722-765"]
+    K --> P["Karte „Zusammenfassung · Punkt …“<br/>artefakte.py"]
     L --> Q["Karte im Verlauf + 1-2 gesprochene Sätze<br/>coach._karte_ablegen"]
-    N --> Q
-    K --> R["Meeting.ergebnisse /<br/>Standardgliederung<br/>artefakte.py:527-596"]
-    R --> S["protokoll.md, Abschlussseite<br/>knopfdruck.py:324-394, abschluss.py"]
+    K --> R["Meeting.ergebnisse /<br/>Standardgliederung<br/>artefakte.py"]
+    R --> S["protokoll.md, Abschlussseite<br/>knopfdruck.py, abschluss.py"]
 ```
 
-Zwei Dinge fallen beim Lesen des Codes auf, die für den Rest des Dokuments wichtig sind:
+Ein Ding fällt beim Lesen des Codes auf, das für den Rest des Dokuments wichtig ist:
 
-- **Zwei fast unabhängige Weichen entscheiden, was läuft:** die *Stufe* (Premium = OpenAI, Basis = Mistral,
-  `config.py:191`) und der *Modus* (`live` oder `knopfdruck`, nur in Basis wählbar, `api_start.py:19,62-64`).
-  Beide zusammen bestimmen, welche der unten beschriebenen Funktionen automatisch laufen und welche nur auf
-  Knopfdruck.
 - **„Angesprochen werden“ und „Artefakte erkennen“ sind zwei getrennte Mechanismen.** Dass Nestor in Basis
   nicht auf seinen Namen hört, heißt nicht automatisch, dass auch die Ergebnis-Erkennung ausfällt – das wird
   in Abschnitt 4 genau auseinandergenommen.
@@ -73,7 +69,7 @@ Eintragen von Artefakten stehen acht Funktionswerkzeuge zur Verfügung (`gesprae
 `artefakt_eintragen` für „Sofie übernimmt die Statusseite bis Freitag“.
 
 **Basis** hat keine laufende Sitzung. Der Name wird **grundsätzlich ignoriert** – `funkgeraet` ist in Basis
-immer wahr, unabhängig vom Modus `live`/`knopfdruck` (`assistent.py:421-423`); in `satz()` führt das dazu,
+immer wahr (`assistent.py`); in `satz()` führt das dazu,
 dass bei erkannter Ansprache nur ein stiller Hinweis „Sprechtaste halten, dann fragen“ ins Band geht, höchstens
 einmal pro Minute (`assistent.py:627-631`, `pipeline.py:923-926`). Eine Frage kommt in Basis nur über die
 gehaltene Sprechtaste (`halten_start/-_ende`, `assistent.py:580-608`) oder getippt herein; von dort läuft sie

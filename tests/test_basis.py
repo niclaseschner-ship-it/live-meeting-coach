@@ -60,11 +60,10 @@ def test_basis_client_ist_mistral(monkeypatch):
     monkeypatch.setenv("MISTRAL_API_KEY", "test-schluessel-ohne-wert")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     c = Coach()
-    c.stufe_setzen("basis", nur_knopfdruck=True)
+    c.stufe_setzen("basis")
     assert isinstance(c._client, mistral.MistralClient)
-    assert c.modus == "knopfdruck" and c.knopfdruck
-    c.stufe_setzen("premium", nur_knopfdruck=True)  # „Nur auf Knopfdruck“ gibt es nur in Basis
-    assert c.modus == "live" and c._client is None  # kein OpenAI-Schlüssel in dieser Umgebung
+    c.stufe_setzen("premium")
+    assert c._client is None  # kein OpenAI-Schlüssel in dieser Umgebung
     monkeypatch.setenv("LMC_OFFLINE", "1")
 
 
@@ -72,10 +71,10 @@ def test_api_stufe_und_startdaten():
     from coach.server import app, coach
 
     web = TestClient(app, client=("127.0.0.1", 5000))
-    r = web.post("/api/stufe", json={"stufe": "basis", "nur_knopfdruck": True})
-    assert r.status_code == 200 and r.json() == {"ok": True, "stufe": "basis", "modus": "knopfdruck"}
+    r = web.post("/api/stufe", json={"stufe": "basis"})
+    assert r.status_code == 200 and r.json() == {"ok": True, "stufe": "basis"}
     d = web.get("/api/start").json()
-    assert d["stufe"] == "basis" and d["modus"] == "knopfdruck"
+    assert d["stufe"] == "basis"
     assert d["richtwert_basis_eur"] == EINST.richtwert_basis_eur and "basis_bereit" in d and "premium_bereit" in d
     assert web.get("/api/zustand").json()["stufe"] == "basis"
     assert web.post("/api/stufe", json={"stufe": "gold"}).status_code == 400
@@ -93,8 +92,7 @@ def test_startseite_nennt_mistral_und_openai():
     # Ticket #18: Premium (OpenAI) ist der Standard, Basis (Mistral) das Downgrade für DSGVO-Nähe/weniger Kosten.
     assert "KI nur bei Mistral (Frankreich), Verarbeitung in der EU" in text
     assert "US-Anbieter (OpenAI)" in text
-    assert "Nur auf Knopfdruck" in text  # Code bleibt …
-    assert '<label class="s-schalter" hidden>' in text  # … aber vorerst aus dem Angebot (Ticket #27)
+    assert "Nur auf Knopfdruck" not in text  # Ticket #71: der Modus ist vollständig ausgebaut
     assert "Wie ein Telefon" in text and "Wie ein Funkgerät" in text
 
 

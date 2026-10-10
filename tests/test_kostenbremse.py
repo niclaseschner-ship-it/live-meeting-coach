@@ -126,7 +126,6 @@ def test_hoechstdauer_warnung_zehn_minuten_vorher():
 
 def test_hoechstdauer_beendet_das_meeting_geordnet():
     coach = _coach("premium")
-    coach.modus = "knopfdruck"  # kein Onepager/Protokoll am Ende nötig – reiner Ablauftest
     coach.hoerstrom = _FakeHoerstrom()
     coach.meeting.virtuelle_zeit = kosten.HOECHSTDAUER_SEKUNDEN
 

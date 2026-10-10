@@ -351,8 +351,8 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
-  const { meetingId, kunde, stufe, modus } = (await request.json()) as {
-    meetingId?: string; kunde?: string; stufe?: string; modus?: string;
+  const { meetingId, kunde, stufe } = (await request.json()) as {
+    meetingId?: string; kunde?: string; stufe?: string;
   };
   if (!meetingId || !kunde) return new Response("meetingId/kunde fehlen.", { status: 400 });
   const maxMeetings = await maxMeetingsFuer(env, kunde);
@@ -363,7 +363,7 @@ async function handleMeetingStart(request: Request, env: Env, ctx: ExecutionCont
   });
   const ergebnis = await antwort.json() as { erlaubt?: boolean };
   if (ergebnis.erlaubt) {
-    melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nVariante: ${varianteText(stufe, modus)}`
+    melden(ctx, env, `🎙️ Nestor: Meeting gestartet\nZugang: ${kunde}\nVariante: ${varianteText(stufe)}`
       + `\nMeeting: ${meetingKurz(meetingId)}`);
   }
   return Response.json(ergebnis);

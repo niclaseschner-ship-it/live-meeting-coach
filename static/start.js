@@ -26,16 +26,14 @@ async function stufeWaehlen(stufe) {
   const meldung = $("stufe-fehlt");
   meldung.hidden = false;
   meldung.textContent = `Nestor ${stufe === "premium" ? "Premium" : "Basis"} wird vorbereitet …`;
-  const nurKnopfdruck = stufe === "basis" && $("nur-knopfdruck").checked;
   try {
     const r = await fetch("/api/stufe", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stufe, nur_knopfdruck: nurKnopfdruck }),
+      body: JSON.stringify({ stufe }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.detail || `Auswahl nicht übernommen (Fehler ${r.status}).`);
-    const modus = nurKnopfdruck ? "knopfdruck" : "live";
-    if (d.ok !== true || d.stufe !== stufe || d.modus !== modus) {
+    if (d.ok !== true || d.stufe !== stufe) {
       throw new Error("Der Server hat die gewählte Variante nicht bestätigt. Bitte erneut wählen.");
     }
     try { sessionStorage.setItem("nestor-gewaehlte-stufe", stufe); } catch { /* privater Browser: bestätigte Serverwahl bleibt gültig */ }
@@ -90,6 +88,4 @@ $("sk-eingabe").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault()
     $("stufe-fehlt").hidden = false;
     $("stufe-fehlt").textContent = `Nestor ${fehlt.join(" und ")} ist auf diesem Server gerade nicht eingerichtet (kein Schlüssel).`;
   }
-  // „Nur auf Knopfdruck“ ist vorerst aus dem Angebot (Ticket #27) – der Schalter bleibt ausgeblendet und aus
-  $("nur-knopfdruck").checked = false;
 })();

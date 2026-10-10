@@ -24,8 +24,6 @@ Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_art
   schnell erkannten Artefakte mit Nummer und ergänzt sie, statt sie doppelt anzulegen (`uebernehmen`).
 - **Kein stiller Ausfall** (Ticket #72): Scheitert ein Aufruf, steht das sichtbar im Band (coach/ki_fehler.py), und
   der nächste Takt versucht es wieder (30 s, dann 60, 120 … höchstens 5 min Abstand).
-
-Im Modus „Nur auf Knopfdruck“ erkennt Nestor nichts von selbst – nur der Protokoll-Knopf schickt Text an das Modell.
 """
 
 from __future__ import annotations
@@ -590,12 +588,6 @@ class Artefakte:
         self.ableiten()
         return True
 
-    def verwerfen(self, seit: float) -> None:
-        """Knopfdruck „verwerfen“: was in dem Zeitraum gesagt wurde, fliegt raus; das Transkript wird dort neu gelesen."""
-        self.liste = [a for a in self.liste if a.zeit < seit or a.herkunft == "hand"]
-        self.bis = min(self.bis, seit)
-        self.ableiten()
-
     def luecken_liste(self, n: int = 3, punkt: int | None = None) -> list[Artefakt]:
         """Unvollständige Artefakte in der festgelegten Reihenfolge, ohne abgelehnte und ohne unsichere."""
         kandidaten = [a for a in self.liste if rang(a) is not None and not a.abgelehnt and a.konfidenz >= FRAGE_KONFIDENZ
@@ -697,7 +689,7 @@ class Artefakte:
             return  # Takt ohne Ereignisschleife (Tests): keine Hintergrundaufgaben
         from .config import EINST
 
-        if (not c.knopfdruck and c._client is not None and not self._abschnitt_laeuft
+        if (c._client is not None and not self._abschnitt_laeuft
                 and m.jetzt() - self.abschnitt_ab >= EINST.abschnitt_minuten * 60):
             from .pipeline import hintergrund
 
@@ -941,7 +933,7 @@ class Artefakte:
         m = c.meeting
         von, self.abschnitt_ab = self.abschnitt_ab, max(self.abschnitt_ab, bis)
         try:
-            if c._client is None or c.knopfdruck:
+            if c._client is None:
                 return None
             await self.erkennen(bis=bis)
             sprache = sum(s.dauer for s in m.transkript if s.text and von <= s.start < bis)
