@@ -241,7 +241,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
                                                      record_video_size={"width": 640, "height": 400})
         seite = await desk_ctx.new_page()
         seite.on("pageerror", lambda e: lauf.belege.setdefault("js_fehler_desktop", []).append(str(e)[:200]))
-        seite.on("dialog", lambda d: asyncio.ensure_future(d.dismiss()))
+        seite.on("dialog", lambda d: asyncio.ensure_future(d.accept() if lauf.dialoge_annehmen else d.dismiss()))
         wache = schritte.Kostenwache(seite, ziel.deckel_eur, lauf) if ziel.deckel_eur is not None else None
 
         async def ablauf() -> None:
@@ -286,6 +286,8 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
                 await schritte.anbieterprotokoll_pruefen(seite, ziel.url, ziel.intern_geheimnis, lauf)
             await schritte.beenden_und_abschluss(seite, lauf, ordner)
             await schritte.handy_abschluss(handy, lauf)
+            if ziel.echt:
+                await schritte.abschliessen(seite, lauf)
 
         try:
             if wache is not None:

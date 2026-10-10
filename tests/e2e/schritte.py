@@ -79,6 +79,7 @@ class Lauf:
         self.stufe = stufe
         self.rauch = rauch
         self.echt = echt  # Stufe C: echte Modelle, Sollfragmente statt wörtlicher Fake-Antworten
+        self.dialoge_annehmen = False  # Bestätigungsdialoge (confirm) sonst abbrechen – nur „Abschließen“ nimmt an
         self.t_mikro: float | None = None  # monotonic beim Tippen auf „Mikrofon und Ton“ – Start der Handy-WAV
         self.start = time.monotonic()
         self.gestartet = datetime.now().astimezone()
@@ -294,13 +295,24 @@ async def agenda_text(page: Page, lauf: Lauf) -> None:
     fertig = await warte(page, "() => document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden' && "
                                "!document.getElementById('agenda-antwort')?.hidden", 60)
     rueck = await text(page, "#agenda-antwort")
-    lauf.pruefen("Unklare Agenda-Eingabe → sichtbare Rückfrage", fertig and rueck.startswith("Rückfrage:"), rueck[:120])
+    if lauf.echt:
+        # Echtes Modell: die Startseite bringt schon einen Entwurf mit – „etwas besprechen“ darf eine Rückfrage oder
+        # ein begründetes Beibehalten sein; rot nur bei Fehler oder Stille
+        lauf.pruefen("Unklare Agenda-Eingabe → sichtbare Antwort (Rückfrage oder Begründung, kein Fehler)",
+                     fertig and bool(rueck) and not rueck.startswith(("Fehler", "Agenda wird")), rueck[:120])
+    else:
+        lauf.pruefen("Unklare Agenda-Eingabe → sichtbare Rückfrage", fertig and rueck.startswith("Rückfrage:"), rueck[:120])
     await feld.fill(DREHBUCH["audio"]["agenda_satz"])
     await feld.press("Enter")
     if lauf.echt:
         # echtes Modell: Titel nicht vorhersagbar – Tabelle muss beide Punkte aus dem Satz tragen
-        fertig = await warte(page, "() => (document.getElementById('f-titel')?.value || '').trim().length > 0 && "
-                                   "document.querySelectorAll('#agenda-tabelle .agenda-zeile').length >= 2", 90)
+        muster = json.dumps(SOLL_C["agenda_punkte"])
+        fertig = await warte(page, f"""() => {{
+            const punkte = [...document.querySelectorAll('#agenda-tabelle .agenda-zeile input[placeholder="Punkt"]')]
+              .map((e) => e.value);
+            return document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden'
+              && {muster}.every((m) => punkte.some((p) => new RegExp(m, 'i').test(p)));
+          }}""", 90)
     else:
         soll = next(r["antwort"] for r in DREHBUCH["chat"] if r["id"] == "agenda_entwurf")
         fertig = await warte(page, f"() => document.getElementById('f-titel')?.value === {json.dumps(soll['titel'])}", 60)
@@ -527,8 +539,11 @@ async def kernknopf_echt(page: Page, art: str, lauf: Lauf, sekunden: float = 90)
         if neu is None:
             await asyncio.sleep(1)
     titel = (neu or {}).get("titel") or ""
+    # Still Geliefertes (Bild, Überblick) springt nur nach vorn, wenn die vordere Karte älter als ~60 s ist – sonst
+    # zeigt der Verlauf „1 neues Ergebnis – jetzt ansehen ›“ (static/verlauf.js). Beides ist sichtbar.
     sichtbar_ = bool(neu) and await warte(
-        page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(titel[:40])})", 10)
+        page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(titel[:40])}) || "
+              "(!!document.getElementById('vl-neu')?.offsetParent && !document.getElementById('vl-neu')?.hidden)", 10)
     inhalt = json.dumps(neu or {}, ensure_ascii=False) + await text(page, "#vl-buehne")
     lauf.pruefen(f"Kernknopf {beschriftung}: neue Karte ({'/'.join(sorted(arten))}) sichtbar mit Sollfragment",
                  bool(neu) and sichtbar_ and passt(muster, inhalt),
@@ -771,6 +786,21 @@ async def sprechtaste_handy(handy: Page, stufe: str, lauf: Lauf) -> None:
                  m[0] >= 150 and m[1] <= m[0] + 1 and m[3] <= m[2] + 1,
                  f"{m[4]!r}: Breite {m[0]}/{m[1]} px, Höhe {m[2]}/{m[3]} px")
     await lauf.bild(handy, "handy_sprechtaste")
+
+
+async def abschliessen(page: Page, lauf: Lauf) -> None:
+    """„Abschließen – 5 Minuten Rückkehrfrist“ wie ein Nutzer (Bestätigung annehmen). Erst nach der Frist meldet der
+    Coach dem Worker das Meeting-Ende, und der Container wird gestoppt – Staging (max_instances 1) braucht das vor dem
+    nächsten Lauf."""
+    lauf.schritt("Abschließen (Rückkehrfrist startet, danach stoppt der Container)")
+    lauf.dialoge_annehmen = True
+    try:
+        await page.locator("#btn-fertig").click()
+        ok = await warte(page, "() => (document.getElementById('btn-fertig')?.textContent || '').includes('Rückkehrfrist läuft')", 20)
+    finally:
+        lauf.dialoge_annehmen = False
+    lauf.pruefen("Abschließen startet die Rückkehrfrist", ok, await text(page, "#btn-fertig"))
+    await lauf.bild(page, "abgeschlossen")
 
 
 async def handy_abschluss(handy: Page, lauf: Lauf) -> None:
