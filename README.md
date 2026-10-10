@@ -28,6 +28,10 @@ Die Bilder zeigen die Demo „Messeplanung 2027“ mit Originalansichten der App
 Grundlage: **Lastenheft „KI-gestützter Meeting-Assistent (MVP)“** (02.10.2026) und die
 Version-2-Spezifikation (jetzt [docs/archiv/spezifikation_v2.md](docs/archiv/spezifikation_v2.md)). **Verbindlich ist das [Lastenheft](docs/lastenheft.md).**
 
+**Zugang:** Der übliche Weg ist der gehostete Pilot-Link (Cloudflare, EU) mit Mail-Code statt eines
+gemeinsamen Passworts. Die folgende Schnellstart-Anleitung beschreibt den lokalen, selbstgehosteten Lauf
+(Laptop/Tailscale) – der bleibt für Entwicklung und Eigenbetrieb, ist aber nicht mehr der Hauptweg.
+
 ## Was das Dashboard zeigt
 
 - **Mitte: Live-Bild** – ein One-Pager zum Stand des Meetings (Kernaussage, Themen mit Status,
@@ -117,6 +121,16 @@ Schlüssel `OPENAI_API_KEY` bzw. `MISTRAL_API_KEY` (oder `LMC_MISTRAL_SCHLUESSEL
 
 Version 1 (blockweise Transkription mit OpenAI-Diarisierung, `coach/transkription.py`) ist als
 Rückfallweg noch vorhanden.
+
+## Testen und Ausrollen
+
+Test-Pipeline `scripts/pipeline.sh`: Stufe a (pytest, Worker-Tests, TypeScript, ~1,5 min), Stufe b (lokale
+Klick-E2E gegen Fake-Anbieter, 0 €, Basis und Premium).
+<!-- prüfen: Stufe c (Staging mit echten Anbietern) und Stufe d (Handy-Checkliste) sind laut Ticket #62 in
+Arbeit, noch nicht auf `main`. -->
+Ausgerollt wird ausschließlich über `deploy/deploy.sh`: Es verlangt vorher einen grünen Stufe-b-Lauf
+(GATE_B_C), baut das Image, deployt und prüft danach mit einem Smoke-Test. Einzelheiten und Rollback:
+`cloudflare/README.md`.
 
 ## Mitmachen
 
