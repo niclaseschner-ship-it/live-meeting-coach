@@ -16,7 +16,15 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import anbieter, api_abschluss, api_agenda, api_artefakte, api_knopfdruck, api_start, regeln, zugang
-from .config import EINST, WURZEL, schluessel_info, schluessel_speichern
+from .config import (
+    EINST,
+    WURZEL,
+    hat_openai_schluessel,
+    mistral_schluessel,
+    schluessel_info,
+    schluessel_speichern,
+    versionsinfo,
+)
 from .pipeline import Coach, hintergrund
 from .transkription import als_data_url, wav_info
 
@@ -182,6 +190,26 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 # in app.routes ab, test_dashboard_endpunkte_existieren braucht flache Routen. Neue Module hier in die Liste.
 for _modul in (api_start, api_agenda, api_abschluss, api_knopfdruck, api_artefakte):
     app.router.routes.extend(_modul.router.routes)
+
+
+@app.get("/api/version")
+async def version():
+    """Ticket #65: GIT_SHA und Bauzeit des laufenden Containers – kein Geheimnis, kein Login nötig. Der
+    eigentliche Smoke-Test nach einem Deploy läuft über die gleichnamige Worker-Route `/version` (ohne
+    Container, cloudflare/src/index.ts); diese Route hier ist der Beleg, dass auch der Container selbst den
+    erwarteten Stand trägt, „falls erreichbar“ (deploy/deploy.sh)."""
+    return versionsinfo()
+
+
+@app.get("/api/gesund")
+async def gesund():
+    """Ticket #65: Health-Check für den Smoke-Test. Nur Ja/Nein – nie, welcher Schlüssel es ist oder sein Wert."""
+    modelle = (WURZEL / "modelle" / EINST.vad_modell).exists() and (WURZEL / "modelle" / EINST.stimm_modell).exists()
+    return {
+        "ok": True,
+        "modelle": modelle,
+        "schluessel": {"premium": hat_openai_schluessel(), "basis": mistral_schluessel() is not None},
+    }
 
 
 @app.get("/")
@@ -538,6 +566,11 @@ async def aufnahmen():
 
 @app.post("/api/abspielen")
 async def abspielen(daten: dict):
+    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus (die Liste GET /api/aufnahmen bleibt erreichbar –
+    # static/app.js ruft sie bei jedem Seitenaufbau unbedingt ab und braucht ein JSON-Array zurück, in der
+    # Cloud ohnehin leer, weil demo/ nicht ins Image kommt; nur die Start-Aktion selbst wird abgewiesen).
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     pfad = _aufnahmen().get(str(daten.get("name", "")))
     if pfad is None:
         raise HTTPException(404, "Aufnahme nicht gefunden.")
@@ -550,7 +583,11 @@ async def abspielen(daten: dict):
 @app.post("/api/onepager")
 async def onepager_neu():
     """Live-Bild auf Knopfdruck (ohne laufendes Meeting, z. B. nach dem Abspielen) neu zeichnen lassen (FR-10).
-    Im Meeting ist „Bild“ ein langer Auftrag über /api/knopf/bild (Ticket #27)."""
+    Im Meeting ist „Bild“ ein langer Auftrag über /api/knopf/bild (Ticket #27). Nur für die Demo ohne Runde –
+    im Cloud-Betrieb aus (Ticket #65, U8a); die echten Live-Bild-Routen /api/onepager.svg|png|md bleiben
+    unverändert erreichbar, die braucht ein laufendes Meeting im Cloud-Betrieb genauso."""
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     return {"ok": coach.onepager_starten()}
 
 
@@ -622,6 +659,11 @@ async def szenarien():
 
 @app.post("/api/simulation")
 async def simulation(daten: dict):
+    # Ticket #65 (U8a): Demo-Funktion, im Cloud-Betrieb aus (GET /api/szenarien bleibt erreichbar – siehe
+    # Begründung bei /api/abspielen oben; szenarien/ kommt ohnehin nicht ins Cloud-Image, die Liste ist dort
+    # schon heute leer).
+    if EINST.betrieb == "cloud":
+        raise HTTPException(404, "In der Cloud nicht verfügbar.")
     pfad = SZENARIEN / f"{daten.get('name', '')}.json"
     if not pfad.is_file() or pfad.parent != SZENARIEN:
         raise HTTPException(404, "Szenario nicht gefunden.")

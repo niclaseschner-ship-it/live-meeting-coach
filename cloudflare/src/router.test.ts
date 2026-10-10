@@ -48,6 +48,21 @@ const meetingCookie = async () => encodeURIComponent(await meetingCookieSigniere
 
 afterEach(() => { aufrufe.length = 0; vi.unstubAllGlobals(); });
 
+describe("Smoke-Test nach einem Deploy (Ticket #65)", () => {
+  it("/version antwortet ohne Login und ohne Container mit dem gesetzten GIT_SHA/BUILD_ZEIT", async () => {
+    const antwort = await worker.fetch(anfrage("/version"), { ...env, GIT_SHA: "abc1234", BUILD_ZEIT: "2026-10-10T12:00:00Z" } as typeof env, ctx);
+    expect(antwort.status).toBe(200);
+    expect(await antwort.json()).toEqual({ git_sha: "abc1234", gebaut_am: "2026-10-10T12:00:00Z" });
+    expect(aufrufe).toHaveLength(0); // kein Container
+  });
+
+  it("/version ohne gesetzte Vars (z. B. `wrangler dev` ohne deploy.sh) liefert null statt eines Fehlers", async () => {
+    const antwort = await worker.fetch(anfrage("/version"), env, ctx);
+    expect(antwort.status).toBe(200);
+    expect(await antwort.json()).toEqual({ git_sha: null, gebaut_am: null });
+  });
+});
+
 describe("QR-Kopplung ohne Login", () => {
   it("/handy?k=…&meeting=<Token> geht ohne Login an Container M1 und setzt ein signiertes Meeting-Cookie", async () => {
     const antwort = await worker.fetch(anfrage(`/handy?k=ABCDEFGH&meeting=${encodeURIComponent(await token())}`), env, ctx);

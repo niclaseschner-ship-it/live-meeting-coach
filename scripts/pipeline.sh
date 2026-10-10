@@ -33,7 +33,25 @@ stufe_a() {
 }
 
 stufe_b() {
-  (cd "$WURZEL" && "$PY" -m tests.e2e.lauf --ordner "$AUSGABE/b" "$@")
+  local rc=0
+  (cd "$WURZEL" && "$PY" -m tests.e2e.lauf --ordner "$AUSGABE/b" "$@") || rc=$?
+  # GATE_B_C (Ticket #65): deploy/deploy.sh will nicht erneut die ganze Klick-E2E fahren, sondern nur prüfen,
+  # ob der Git-Stand, der deployt werden soll, hier schon grün war. Die Markierung gilt deshalb nur für einen
+  # Lauf über BEIDE Stufen (Standard, ohne --stufe oder mit --stufe beide) – ein Lauf mit nur einer Stufe
+  # prüft nicht genug für eine Freigabe und schreibt darum nichts.
+  local stufenwahl="beide" vorheriges=""
+  for arg in "$@"; do
+    if [ "$vorheriges" = "--stufe" ]; then stufenwahl="$arg"; fi
+    vorheriges="$arg"
+  done
+  if [ "$rc" = 0 ] && [ "$stufenwahl" = "beide" ]; then
+    local sha
+    sha="$(git -C "$WURZEL" rev-parse HEAD)"
+    mkdir -p "$HAUPT/logs/pipeline/$sha"
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$HAUPT/logs/pipeline/$sha/b.ok"
+    echo "GATE_B_C: Freigabe für $sha geschrieben · $HAUPT/logs/pipeline/$sha/b.ok"
+  fi
+  return "$rc"
 }
 
 case "${1:-}" in

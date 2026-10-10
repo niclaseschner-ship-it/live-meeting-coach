@@ -9,6 +9,8 @@ meetings
 logs
 demo
 szenen
+# Ticket #65: nur fürs lokale Demo-Formular ("Testen ohne Runde"), im Cloud-Image ungenutzt
+szenarien
 node_modules
 __pycache__
 *.pyc
