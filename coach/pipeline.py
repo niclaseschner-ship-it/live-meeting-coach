@@ -415,7 +415,7 @@ class Coach:
         return aus
 
     def status_kurz(self) -> dict:
-        """Aktueller Stand für Nestor im Gespräch (Werkzeug status_abfragen) – damit er nicht rät."""
+        """Bild-, Folien- und Recherche-Stand für Nestors Lage im Gespräch (Assistent.lage) – damit er nicht rät."""
         m = self.meeting
         akt = m.agenda[m.aktiver_punkt] if 0 <= m.aktiver_punkt < len(m.agenda) else None
         if self._onepager_laeuft:
@@ -1023,8 +1023,9 @@ class Coach:
         m.teiltext = ""
         self.artefakte.satz(zeilen or [seg])  # Ticket #72: Schnell-Erkennung bei klaren Signalen
         # Die feste Ansage-Regel wechselt nur bei einer echten Ansage: eine Frage soll Nestor erst bekommen,
-        # bevor die Agenda wechselt, und ein Zuruf an Nestor übergibt die Entscheidung an ihn (Werkzeug/Aktion).
-        fest_gesperrt = analyse.frageform(seg.text) or angesprochen(seg.text)
+        # bevor die Agenda wechselt, und ein Zuruf an Nestor übergibt die Entscheidung an ihn (Werkzeug/Aktion) –
+        # auch für die weiteren Sätze desselben Gesprächszugs, die der Live-Text als eigene Segmente liefert.
+        fest_gesperrt = analyse.frageform(seg.text) or angesprochen(seg.text) or self.assistent.zug_offen()
         ziel = (analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt)
                 if m.laeuft and not fest_gesperrt else None)
         if ziel is not None:

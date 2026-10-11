@@ -297,6 +297,9 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
                 # #79, letzter Schritt vor dem Abschluss (siehe Docstring dort): macht sich mit Rückgängig selbst
                 # wieder gerade, damit beenden_und_abschluss die Budget-Entscheidung unverändert im Protokoll sieht.
                 await schritte.zuruf_ergebnis_entfernen_pruefen(seite, lauf)
+                # Grenzfall-Katalog des Gesprächs (drehbuch.json „_grenzfaelle“): getippt, nach allen
+                # indexabhängigen Prüfungen; die Budget-Entscheidung bleibt unberührt.
+                await schritte.grenzfaelle_gespraech_pruefen(seite, lauf)
             await schritte.beenden_und_abschluss(seite, lauf, ordner)
             await schritte.handy_abschluss(handy, lauf)
             if ziel.echt:

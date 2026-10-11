@@ -454,15 +454,6 @@
       "antwort_text": "Hier ist sie. Beim Budget seid ihr euch einig, Sabine hat ihre Aufgabe."
     },
     {
-      "id": "einordnung",
-      "system_enthaelt": [
-        "hat einer Besprechungsrunde gerade geantwortet"
-      ],
-      "antwort": {
-        "einordnung": "nicht_an_nestor"
-      }
-    },
-    {
       "id": "ueberblick",
       "system_enthaelt": [
         "den Überblick über ihr laufendes Meeting vor"
@@ -540,6 +531,18 @@
           "Sabine liefert sie bis Freitag."
         ]
       }
+    },
+    {
+      "id": "neu_aufbereiten",
+      "system_enthaelt": [
+        "soll auf Zuruf neu aufbereitet werden"
+      ],
+      "antwort": {
+        "titel": "Vereinsbus kurz",
+        "punkte": [
+          "Kaufen oder leasen – Angebot einholen"
+        ]
+      }
     }
   ],
   "realtime": [
@@ -562,9 +565,87 @@
           "nummer": 1
         }
       }
+    },
+    {
+      "id": "grenzfall_zusammenfassen_punkt",
+      "frage_enthaelt": [
+        "fass den aktuellen Punkt zusammen"
+      ],
+      "werkzeug": {
+        "name": "zusammenfassen",
+        "argumente": {
+          "bereich": "punkt"
+        }
+      }
+    },
+    {
+      "id": "grenzfall_karte_frei",
+      "frage_enthaelt": [
+        "Möglichkeiten beim Vereinsbus",
+        "Karte"
+      ],
+      "werkzeug": {
+        "name": "karte",
+        "argumente": {
+          "titel": "Möglichkeiten Vereinsbus",
+          "punkte": [
+            "Gebraucht kaufen",
+            "Leasen",
+            "Bei Bedarf mieten"
+          ]
+        }
+      }
+    },
+    {
+      "id": "grenzfall_karte_neu_aufbereiten",
+      "frage_enthaelt": [
+        "bereite",
+        "kürzer auf"
+      ],
+      "werkzeug": {
+        "name": "karte_neu_aufbereiten",
+        "argumente": {
+          "wie": "kürzer"
+        }
+      }
+    },
+    {
+      "id": "grenzfall_recherche_zwei_saetze",
+      "frage_enthaelt": [
+        "kurze Recherche",
+        "Förderprogrammen"
+      ],
+      "werkzeug": {
+        "name": "recherchieren",
+        "argumente": {
+          "frage": "Förderprogramme für Vereinsbusse"
+        }
+      }
+    },
+    {
+      "id": "grenzfall_hoerfenster_nicht_an_mich",
+      "frage_enthaelt": [
+        "(Ohne deinen Namen",
+        "Vereinsbus"
+      ],
+      "werkzeug": {
+        "name": "nicht_an_mich",
+        "argumente": {}
+      }
+    },
+    {
+      "id": "hoerfenster_still",
+      "frage_enthaelt": [
+        "(Ohne deinen Namen"
+      ],
+      "werkzeug": {
+        "name": "nicht_an_mich",
+        "argumente": {}
+      }
     }
   ],
   "_ansprache": "Satz 4 spricht Nestor mit Namen an. Premium beantwortet ihn per Realtime (440 Hz, Karte „Sommerfest-Budget beschlossen“); Basis ignoriert die Ansprache (Funkgerät: nur Sprechtaste).",
   "_schnell": "Ticket #72: Satz 2 (beschließen) und Satz 3 (liefert bis Freitag) lösen die Schnell-Erkennung aus – Karte ≤ 60 s. Satz 4 spricht Nestor an und zählt nicht. Satz 5 (prüfen wir noch) bekommt zuerst HTTP 500 (Band), beim nächsten Takt-Versuch das Ergebnis.",
-  "_zuruf_entfernen": "Ticket #79: Regel „zuruf_ergebnis_entfernen“ – eine getippte Frage „Nestor, nimm den Testpunkt von der Liste“ liefert statt Sprache einen Werkzeugaufruf (ergebnis_entfernen, Nummer 1 = die Budget-Entscheidung aus Satz 2; Sabines Aufgabe aus Satz 3 bekommt #2, siehe 'schnell_beschluss_und_aufgabe'). Eingehängt als letzter Schritt vor beenden_und_abschluss (tests/e2e/schritte.py: zuruf_ergebnis_entfernen_pruefen, nur Premium), damit die spätere Protokollprüfung die Entscheidung unverändert vorfindet – die Probe macht sich mit Rückgängig selbst wieder gerade. Über den Getippt-Weg (/api/knopf/frage), nicht über die zeitgebundene meeting_saetze-WAV, damit keine bestehende indexabhängige Prüfung verschoben wird."
+  "_zuruf_entfernen": "Ticket #79: Regel „zuruf_ergebnis_entfernen“ – eine getippte Frage „Nestor, nimm den Testpunkt von der Liste“ liefert statt Sprache einen Werkzeugaufruf (ergebnis_entfernen, Nummer 1 = die Budget-Entscheidung aus Satz 2; Sabines Aufgabe aus Satz 3 bekommt #2, siehe 'schnell_beschluss_und_aufgabe'). Eingehängt als letzter Schritt vor beenden_und_abschluss (tests/e2e/schritte.py: zuruf_ergebnis_entfernen_pruefen, nur Premium), damit die spätere Protokollprüfung die Entscheidung unverändert vorfindet – die Probe macht sich mit Rückgängig selbst wieder gerade. Über den Getippt-Weg (/api/knopf/frage), nicht über die zeitgebundene meeting_saetze-WAV, damit keine bestehende indexabhängige Prüfung verschoben wird.",
+  "_grenzfaelle": "Grenzfall-Katalog des Gesprächs (Premium ohne Vorklassifikation): Satz → erwarteter Werkzeugaufruf. Die Fakes prüfen den Ablauf (Werkzeug → Karte/Schweigen, eine Abschlussantwort), nicht das Sprachverständnis – das misst Stufe C mit denselben Sätzen. Getippt (tests/e2e/schritte.py: grenzfaelle_gespraech_pruefen, nur Premium, nach zuruf_ergebnis_entfernen_pruefen): „fass den aktuellen Punkt zusammen“ → zusammenfassen(bereich=punkt) mit Karte „Zusammenfassung · Punkt 1 · …“; „die Möglichkeiten beim Vereinsbus als Karte“ → karte(…); „bereite die Karte kürzer auf“ → karte_neu_aufbereiten(kürzer) auf genau diese Karte; „mach eine kurze Recherche. Zu Förderprogrammen …“ (zwei Sätze, ein Zug) → recherchieren. Aus der Meeting-WAV: landet Satz 5 („Beim Vereinsbus prüfen wir noch …“) im Hörfenster nach Nestors Budget-Antwort, ist er nicht an Nestor gerichtet → nicht_an_mich, keine Antwortkarte. Jeder andere Zug ohne Namen bleibt im Fake still (hoerfenster_still)."
 }

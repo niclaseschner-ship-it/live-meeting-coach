@@ -254,7 +254,7 @@ Sprechersegmente vorliegen, kann ein erster langer Beitrag anonym gemeldet werde
 | Ausreden lassen | experimentell | in geordneten Runden kaum Fehlalarme, in Zwischenruf-Proben unbrauchbar | „Experimentell: In geordneten Runden kaum Fehlalarme, in Proben mit vielen Zwischenrufen unbrauchbar.“ |
 | Klima | experimentell | nicht gegen eine Referenz gemessen | „Experimentell: noch nicht gegen eine Referenz gemessen.“ |
 | Nestor beantwortet Fragen | verlässlich | 20/22 im Testlauf, Antwort nach 1,5–6 s | – |
-| Nachfrage ohne Namen (Premium) | verlässlich | `scripts/einordnen_messen.py`, 14 Sätze direkt nach einer Antwort: 14/14 mit Denkaufwand „low“ (Median 1,04 s), 13/14 mit „none“ (Median 0,70 s; der eine Fehler war eine Zeitüberschreitung → still) – eingestellt ist „none“ | – |
+| Nachfrage ohne Namen (Premium) | offen | Gesprächszug im Hörfenster; ob gemeint, entscheidet das Modell (`nicht_an_mich`). Messung in Stufe C (Grenzfall-Katalog `tests/e2e/drehbuch.json` „_grenzfaelle“) | – |
 | Namen aus der Vorstellungsrunde | verlässlich bei klaren Stimmen | `scripts/namensrunde_messen.py`, vier Azure-Stimmen, drei Reihenfolgen: 12/12 richtig, 0 falsch | – |
 
 ### 4.4 Paket zum Herunterladen

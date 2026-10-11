@@ -713,6 +713,76 @@ async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
     await lauf.bild(page, "zuruf_entfernen")
 
 
+async def _getippt_bis_karte(page: Page, frage: str, art: str, titel: str, sekunden: float = 45) -> dict | None:
+    """Eine getippte Frage an Nestor und die neue Karte dieser Art mit diesem Titelanfang (aus dem Zustand, lesend)."""
+    vorher = max((k.get("id", 0) for k in await karten(page)), default=0)
+    zusatz = page.locator("details.zusatz-aktionen").first  # das Fragefeld liegt unter „Weitere Aktionen“
+    if await zusatz.count() and not await zusatz.evaluate("d => d.open"):
+        await zusatz.locator("summary").click()
+    await page.locator("#knopf-frage").fill(frage)
+    await page.locator("#knopf-fragen").click()
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < sekunden:
+        neu = next((k for k in await karten(page) if k.get("id", 0) > vorher and k.get("art") == art
+                    and str(k.get("titel") or "").startswith(titel)), None)
+        if neu is not None:
+            return neu
+        await asyncio.sleep(0.5)
+    return None
+
+
+async def _bogen_frei(page: Page, sekunden: float = 30) -> None:
+    """Bis Nestor mit der Anfrage fertig ist (Bogen zu Ende, Abschlussantwort gesprochen)."""
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < sekunden:
+        a = (await zustand(page)).get("assistent") or {}
+        if not a.get("bogen") and a.get("zustand") not in ("denkt", "spricht", "angesprochen"):
+            return
+        await asyncio.sleep(0.5)
+
+
+async def grenzfaelle_gespraech_pruefen(page: Page, lauf: Lauf) -> None:
+    """Premium ohne Vorklassifikation (drehbuch.json „_grenzfaelle“): getippte Grenzfälle laufen ungefiltert ins
+    Gespräch, die Fakes liefern den erwarteten Werkzeugaufruf, und der Coach setzt ihn um – Bereichs-Karte, freie
+    Karte, genau diese Karte kürzer, Recherche aus zwei Sätzen. Dazu: Satz 5 der Meeting-WAV bekommt keine
+    Antwortkarte, auch wenn er im Hörfenster nach der Budget-Antwort landete (nicht_an_mich). Getippt statt über die
+    zeitgebundene WAV, damit keine indexabhängige Prüfung verschoben wird; läuft nach zuruf_ergebnis_entfernen_pruefen."""
+    if lauf.stufe != "premium":
+        return
+    lauf.schritt("Grenzfälle im Gespräch: Werkzeug statt Wortmuster")
+    await _bogen_frei(page)
+    karte = await _getippt_bis_karte(page, "Nestor, fass den aktuellen Punkt zusammen.", "zusammenfassung",
+                                     "Zusammenfassung · Punkt")
+    lauf.pruefen("„Fass den aktuellen Punkt zusammen“ → zusammenfassen(bereich=punkt): Karte nur zu diesem Punkt",
+                 karte is not None and "grenzfall_zusammenfassen_punkt" in fake_regeln(lauf),
+                 (karte or {}).get("titel", "keine Karte")[:80])
+    await _bogen_frei(page)
+    karte = await _getippt_bis_karte(page, "Nestor, zeig uns die Möglichkeiten beim Vereinsbus als Karte.", "antwort",
+                                     "Möglichkeiten Vereinsbus")
+    lauf.pruefen("Freie Karte per Werkzeug karte(titel, punkte)", karte is not None and len(karte.get("punkte") or []) == 3,
+                 (karte or {}).get("titel", "keine Karte")[:80])
+    await _bogen_frei(page)
+    karte = await _getippt_bis_karte(page, "Nestor, bereite die Karte kürzer auf.", "antwort", "Vereinsbus kurz")
+    if karte is None:  # neu aufbereitete Karten tragen je nach Vorlage eine eigene Art
+        karte = next((k for k in await karten(page) if k.get("titel") == "Vereinsbus kurz"), None)
+    lauf.pruefen("„Bereite die Karte kürzer auf“ → karte_neu_aufbereiten(kürzer) auf die zuletzt gezeigte Karte",
+                 karte is not None and "grenzfall_karte_neu_aufbereiten" in fake_regeln(lauf),
+                 (karte or {}).get("titel", "keine Karte")[:80])
+    await _bogen_frei(page)
+    karte = await _getippt_bis_karte(page, "Nestor, mach eine kurze Recherche. Zu Förderprogrammen für Vereinsbusse.",
+                                     "recherche", "Förderprogramme für Vereinsbusse", 60)
+    lauf.pruefen("Recherche über zwei Sätze → ein Aufruf recherchieren, Ergebnis still als Karte",
+                 karte is not None and "grenzfall_recherche_zwei_saetze" in fake_regeln(lauf),
+                 (karte or {}).get("titel", "keine Karte")[:80])
+    ungefragt = [k for k in await karten(page) if k.get("art") == "antwort"
+                 and "prüfen wir noch" in str(k.get("frage") or "")]
+    regeln = fake_regeln(lauf)
+    lauf.pruefen("Satz ohne Namen im Hörfenster, nicht an Nestor gerichtet: keine Antwort (nicht_an_mich)",
+                 not ungefragt, f"Antwortkarten {len(ungefragt)}, nicht_an_mich "
+                                f"{sum(r in ('grenzfall_hoerfenster_nicht_an_mich', 'hoerfenster_still') for r in regeln)}×")
+    await lauf.bild(page, "grenzfaelle_gespraech")
+
+
 async def transkript_pruefen(page: Page, lauf: Lauf, sekunden: float = 120) -> None:
     lauf.schritt("Sprache über das Fake-Mikro des Handys, sichtbares Transkript")
     saetze = DREHBUCH["audio"]["meeting_saetze"]

@@ -61,12 +61,12 @@ Läuft technisch identisch in beiden Stufen – nur das Modell darunter wechselt
 Dies ist der Kern dessen, was sich nach „Moderator, der mitdenkt“ anfühlen soll.
 
 **Premium** öffnet bei „Nestor, …“ eine laufende Realtime-Sitzung (`gespraech.py`, `EINST.realtime_modell`).
-Die Persona-Anweisung (`gespraech.py:81-97`) gibt in eigenen Worten vor: kurz antworten (höchstens zwei
-Sätze), Einzelheiten gehören auf die Karte, keine Personenbewertung, nie raten – vor jeder Antwort muss das
-Modell über ein eigenes Werkzeug (`status_abfragen`, `gespraech.py:57-61`) den aktuellen Stand abfragen statt
-ihn aus dem Gesprächsbeginn zu schätzen. Für Bild, Recherche, Karten, Agendawechsel, Pause/Ende und das
-Eintragen von Artefakten stehen acht Funktionswerkzeuge zur Verfügung (`gespraech.py:30-79`), u. a.
-`artefakt_eintragen` für „Sofie übernimmt die Statusseite bis Freitag“.
+Die Anweisung (`gespraech.py: ANWEISUNG`) enthält die Bedienlogik: ein Bogen, ein bis zwei Sätze, Einzelheiten
+auf die Karte, nichts erfinden, „beschlossen“ nur wenn beschlossen, bei Unklarheit kurz nachfragen. Sie trägt bei
+jeder Anfrage den aktuellen Stand (`Assistent.lage`), nicht den vom Gesprächsbeginn. Vorsortiert wird nichts: das
+Modell wählt aus dem Werkzeugkatalog (`coach/werkzeuge.py`) – u. a. `zusammenfassen(bereich)`, `karte`,
+`artefakt_eintragen` für „Sofie übernimmt die Statusseite bis Freitag“ und `nicht_an_mich` für einen Satz im
+Hörfenster, der nicht an Nestor ging (siehe docs/sprachassistent.md, „Gesprächszug und Hörfenster“).
 
 **Basis** hat keine laufende Sitzung. Der Name wird **grundsätzlich ignoriert** – `funkgeraet` ist in Basis
 immer wahr (`assistent.py`); in `satz()` führt das dazu,

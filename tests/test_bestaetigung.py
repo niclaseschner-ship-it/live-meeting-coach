@@ -118,11 +118,7 @@ def test_kurze_floskeln_wechseln():
     assert all("gleich zurück" not in x.lower() for x in B.KURZ)
 
 
-def test_lange_aufgaben_und_kein_auftrag_erkennen():
-    assert B.ist_lang("gib uns einen Überblick zu Messeständen in Hannover")
-    assert B.ist_lang("zeig uns die Übersicht") and B.ist_lang("mach eine Folie daraus")
-    assert B.ist_lang("recherchier mal die Mietpreise")
-    assert not B.ist_lang("wo stehen wir gerade?")
+def test_kein_auftrag_und_recherche_auftrag_erkennen():
     assert not B.bestaetigen("danke, das war's") and not B.bestaetigen("stopp")
     assert B.bestaetigen("was ist beim Budget noch offen?")
     assert B.recherche_auftrag("Recherchier bitte die NIS2-Vorgaben.")
