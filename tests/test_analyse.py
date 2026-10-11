@@ -268,6 +268,76 @@ def test_ausdrueckliche_ueberleitung_wird_erkannt():
     assert not ankuendigung("Das kommt gleich noch, lass uns beim Budget bleiben.")
 
 
+def test_lass_uns_zu_titel_gehen_ist_eine_ankuendigung():
+    """„Lass uns zu … gehen“ ist dieselbe Ankündigungsform wie „gehen wir zu …“, nur mit vorangestelltem Ziel –
+    beide zählen, ohne dass der Titel selbst ins Muster muss."""
+    from coach.analyse import ankuendigung
+
+    assert ankuendigung("Lass uns zu den Finanzen gehen.")
+    assert ankuendigung("Lasst uns zum Budget wechseln.")
+    assert ankuendigung("Gehen wir zum Budget.")
+    # Ziel ohne Zeitwort danach ist kein Wechsel, nur ein Beitrag zum laufenden Punkt
+    assert not ankuendigung("Lass uns zu dem Punkt noch kurz was dazu sagen.")
+
+
+def test_frageform_haelt_die_feste_ansage_regel_nicht_auf():
+    """Entscheidung: Eine Frage ist keine Ansage, auch wenn sie Ankündigungswörter wie „nächster Punkt“ enthält –
+    Nestor soll den ganzen Satz bekommen, bevor irgendetwas die Agenda wechselt."""
+    from coach.analyse import frageform
+
+    assert frageform("Und was ist der nächste Punkt beim Budget?")
+    assert frageform("Nestor, fass zusammen, was wir besprochen haben, und was kommt danach bei Finanzen?")
+    assert not frageform("Dann kommen wir jetzt zum nächsten Punkt.")
+
+
+def test_feste_ansage_regel_wechselt_nicht_bei_frage_oder_zuruf_an_nestor():
+    """Ticketgrundlage (anonymisiert, andere Agenda als im Pilot): eine Frage mit „nächster Punkt“ und ein Zuruf an
+    Nestor dürfen die Agenda nicht über die feste Ansage-Regel wechseln – das Werkzeug/die Aktion entscheidet."""
+    import asyncio
+
+    from coach.pipeline import Coach
+    from coach.zustand import Agendapunkt, Segment
+
+    async def ablauf():
+        c = Coach()
+        c._client = None
+        c.meeting.agenda = [Agendapunkt(t) for t in ("Finanzen", "Projektplan", "Verschiedenes")]
+        c.meeting.aktiver_punkt = 0
+        c.meeting.regel_ids = []
+        c.meeting.starten(virtuell=True)
+        c.meeting.virtuelle_zeit = 120.0
+        await c.satz(Segment("Person 1", "Nestor, fass den Punkt zusammen: was haben wir besprochen, und was ist "
+                                        "der nächste Punkt beim Projektplan?", 118.0, 120.0))
+        return c
+
+    c = asyncio.run(ablauf())
+    assert c.meeting.aktiver_punkt == 0
+    assert not any(e["art"] == "wechsel" and e["durch"] == "ansage" for e in c.protokoll)
+
+
+def test_feste_ansage_regel_wechselt_ohne_namen_weiter():
+    """Dieselbe Formel ohne Frage und ohne Namen wechselt weiterhin direkt – die Regel selbst bleibt bestehen."""
+    import asyncio
+
+    from coach.pipeline import Coach
+    from coach.zustand import Agendapunkt, Segment
+
+    async def ablauf():
+        c = Coach()
+        c._client = None
+        c.meeting.agenda = [Agendapunkt(t) for t in ("Finanzen", "Projektplan", "Verschiedenes")]
+        c.meeting.aktiver_punkt = 0
+        c.meeting.regel_ids = []
+        c.meeting.starten(virtuell=True)
+        c.meeting.virtuelle_zeit = 120.0
+        await c.satz(Segment("Person 1", "Gut, dann kommen wir jetzt zum nächsten Punkt.", 118.0, 120.0))
+        return c
+
+    c = asyncio.run(ablauf())
+    assert c.meeting.aktiver_punkt == 1
+    assert any(e["art"] == "wechsel" and e["durch"] == "ansage" for e in c.protokoll)
+
+
 def test_angekuendigter_punkt_wechselt_direkt():
     from coach.analyse import angekuendigter_punkt
 
