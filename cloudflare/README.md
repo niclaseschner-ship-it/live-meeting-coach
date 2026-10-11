@@ -47,6 +47,7 @@ Browser ──Mail+PIN──► /anmelden, /pin (Worker, Cookie nestor_kunde, si
 Browser ──Anfrage───► Worker prüft Cookie, wählt/erzeugt Meeting-ID (signiertes Cookie nestor_meeting)
 Worker  ──fetch()───► Container (idFromName(meetingId)), Kopfzeilen X-Nestor-Geheimnis/-Kunde/-Meeting
 Coach   ──PUT /intern/spende/<name>/<datei> je Datei──► Worker (X-Nestor-Geheimnis, gestreamt) ──► R2 (nestor-spenden)
+Coach   ──(große Datei: ?teile=start/?teil=N&upload=/?teile=fertig)──► Worker ──► R2-Multipart (nestor-spenden)
 Coach   ──POST .../abschluss──► Worker: EINE Telegram-Meldung (vollständig/teilweise, ohne Inhalte)
 Coach   ──/intern/kopplungstoken──► Worker (X-Nestor-Geheimnis) ──► signiertes, kurzlebiges QR-Token
 ```

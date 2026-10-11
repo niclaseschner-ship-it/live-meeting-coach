@@ -141,10 +141,10 @@ function spendeKnopfAktualisieren() {
 }
 $("sp-einverstanden").onchange = spendeKnopfAktualisieren;
 
-// Ticket #82: eigener fetch statt der gemeinsamen api()-Hilfe – die zeigt bei einem Fehler einen rohen alert()
-// mit dem Antworttext (z. B. ein nacktes 502 der Edge, wenn die Anfrage gar nicht erst bis zum Coach kommt).
-// Hier gibt es dafür genau EINE konkrete, verständliche Meldung in #sp-danke, je Dateien zuerst/Aufnahme-zuletzt
-// kann die Spende jetzt auch "teilweise" ankommen (die Texte sind dann trotzdem da).
+// Eigener fetch statt der gemeinsamen api()-Hilfe – die zeigt bei einem Fehler einen rohen alert() mit dem
+// Antworttext (z. B. ein nacktes 502 der Edge, wenn die Anfrage gar nicht erst bis zum Coach kommt). Hier gibt
+// es dafür genau EINE konkrete, verständliche Meldung in #sp-danke; die Spende kann auch "teilweise" ankommen
+// (Texte zuerst, die Aufnahme zuletzt – fehlt nur sie, sind die Texte trotzdem da).
 $("btn-spende").onclick = async () => {
   spendeLaeuft = true;
   $("btn-fertig").disabled = true;

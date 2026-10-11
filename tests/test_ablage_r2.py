@@ -1,10 +1,8 @@
-"""Ticket #82: Datenspende im Cloud-Betrieb, je Datei einzeln gestreamt statt als ein großer Multipart-Körper.
-
-Befund aus dem Pilot vom 10.10.: der alte Weg baute EINEN Multipart-Körper für alle Dateien und schickte ihn
-per `urllib` mit `timeout=30`; im Worker verdoppelte `formData()`/`arrayBuffer()` eine 45-MB-Aufnahme auf
-90–135 MB, nahe der 128-MB-Isolate-Grenze. Jetzt: `PUT .../intern/spende/<name>/<datei>` je Datei, die Aufnahme
-von der Platte gestreamt statt komplett in den Speicher gelesen, Timeout nach Größe gestaffelt, ein
-abschließendes `POST .../abschluss` mit der Zusammenfassung. Scheitert eine Datei, laufen die übrigen weiter –
+"""Datenspende im Cloud-Betrieb, je Datei einzeln hochgeladen statt als ein großer Multipart-Körper: eine
+kleine Datei geht als ein `PUT .../intern/spende/<name>/<datei>`, eine große in festen Teilen über R2s
+Multipart-API (Start → je Teil ein PUT mit Wiederholungen → Abschluss) – beides streamt die Aufnahme von der
+Platte statt sie komplett in den Speicher zu lesen, mit nach Größe gestaffeltem Timeout. Ein abschließendes
+`POST .../abschluss` fasst das Ergebnis zusammen. Scheitert eine Datei, laufen die übrigen weiter –
 `SpendeErgebnis.vollstaendig` wird dann `False`, es fliegt keine Ausnahme.
 
 Das Netz wird wie in tests/test_meeting_ende.py gemockt (`urllib.request.urlopen`), ohne echten Worker.
@@ -36,6 +34,9 @@ def worker_zugang():
 
 
 class _FakeAntwort:
+    def __init__(self, inhalt: bytes = b"{}"):
+        self._inhalt = inhalt
+
     def __enter__(self):
         return self
 
@@ -43,12 +44,13 @@ class _FakeAntwort:
         return False
 
     def read(self):
-        return b"{}"
+        return self._inhalt
 
 
-def _aufrufe_sammeln(monkeypatch, verhalten=None):
+def _aufrufe_sammeln(monkeypatch, verhalten=None, antwort=None):
     """Ersetzt urllib.request.urlopen; `verhalten(anfrage)` kann eine Ausnahme werfen, um einen einzelnen Ruf
-    scheitern zu lassen. Liefert die Liste der mitgeschnittenen Anfragen."""
+    scheitern zu lassen, `antwort(anfrage)` liefert den simulierten Antwortkörper (Standard: `{}`). Liefert die
+    Liste der mitgeschnittenen Anfragen."""
     aufrufe: list = []
 
     def _fake_urlopen(anfrage, timeout=None):
@@ -57,12 +59,34 @@ def _aufrufe_sammeln(monkeypatch, verhalten=None):
         anfrage._timeout = timeout
         if verhalten is not None:
             verhalten(anfrage)
-        return _FakeAntwort()
+        return _FakeAntwort(antwort(anfrage) if antwort is not None else b"{}")
 
     import coach.ablage_r2 as ablage_r2
 
     monkeypatch.setattr(ablage_r2.urllib.request, "urlopen", _fake_urlopen)
     return aufrufe
+
+
+def _multipart_worker_antworten(anfrage) -> bytes:
+    """Spielt die drei Worker-Unterbefehle nach: Start liefert eine Upload-ID, ein Teil sein Etag, der
+    Abschluss nur `ok`."""
+    url = anfrage.full_url
+    if "teile=start" in url:
+        return json.dumps({"uploadId": "upload-1"}).encode("utf-8")
+    if "teil=" in url:
+        nr = int(url.split("teil=")[1].split("&")[0])
+        return json.dumps({"partNumber": nr, "etag": f"etag-{nr}"}).encode("utf-8")
+    return json.dumps({"ok": True}).encode("utf-8")
+
+
+@pytest.fixture
+def kleine_teile(monkeypatch):
+    """Setzt die Teilgröße/-schwelle für diesen Test herunter, damit eine winzige Testdatei schon mehrteilig
+    hochlädt, ohne echte Megabytes zu schreiben oder zu übertragen."""
+    import coach.ablage_r2 as ablage_r2
+
+    monkeypatch.setattr(ablage_r2, "_TEIL_GROESSE_BYTES", 10)
+    monkeypatch.setattr(ablage_r2, "_TEIL_SCHWELLE_BYTES", 10)
 
 
 def test_timeout_wird_nach_dateigroesse_gestaffelt_und_oben_begrenzt():
@@ -179,3 +203,77 @@ def test_abschluss_meldung_scheitert_am_netz_ohne_die_ablage_selbst_scheitern_zu
     _aufrufe_sammeln(monkeypatch, verhalten=_abschluss_schlaegt_fehl)
     ergebnis = R2Ablage().ablegen("abc12345", [SpendeDatei("feedback.txt", inhalt=b"Danke")])
     assert ergebnis.vollstaendig is True  # die Datei selbst kam an, nur die Meldung hinterher nicht
+
+
+# --- Mehrteiliger Upload großer Dateien ---------------------------------------------------------------------
+
+def test_grosse_datei_laedt_in_teilen_start_je_teil_dann_fertig(monkeypatch, worker_zugang, kleine_teile, tmp_path):
+    aufnahme = tmp_path / "aufnahme.wav"
+    aufnahme.write_bytes(b"0123456789" * 3 + b"AB")  # 32 Byte → bei Teilgröße 10: 10,10,10,2
+
+    aufrufe = _aufrufe_sammeln(monkeypatch, antwort=_multipart_worker_antworten)
+    ergebnis = R2Ablage().ablegen("abc12345", [SpendeDatei("aufnahme.wav", pfad=aufnahme)])
+
+    # Start + vier Teile + Fertig + der eine Abschluss-Ruf danach.
+    assert [a.get_method() for a in aufrufe] == ["POST", "PUT", "PUT", "PUT", "PUT", "POST", "POST"]
+    start, teil1, teil2, teil3, teil4, fertig, abschluss = aufrufe
+    basis = f"{_WORKER_URL}/intern/spende/abc12345/aufnahme.wav"
+    assert start.full_url == f"{basis}?teile=start"
+    assert teil1.full_url == f"{basis}?teil=1&upload=upload-1"
+    assert [t._gelesene_laenge for t in (teil1, teil2, teil3, teil4)] == [10, 10, 10, 2]
+    assert fertig.full_url == f"{basis}?teile=fertig"
+    assert json.loads(fertig.data) == {"uploadId": "upload-1", "teile": [
+        {"partNumber": 1, "etag": "etag-1"}, {"partNumber": 2, "etag": "etag-2"},
+        {"partNumber": 3, "etag": "etag-3"}, {"partNumber": 4, "etag": "etag-4"},
+    ]}
+    assert abschluss.full_url.endswith("/abschluss")
+
+    assert ergebnis.vollstaendig is True
+    assert ergebnis.teile[0].bytes == 32
+
+
+def test_ein_scheiternder_teil_wird_wiederholt_bevor_er_endgueltig_zaehlt(monkeypatch, worker_zugang, kleine_teile, tmp_path):
+    aufnahme = tmp_path / "aufnahme.wav"
+    aufnahme.write_bytes(b"0123456789" * 2)  # 20 Byte → zwei Teile a 10 Byte
+
+    versuche = {"teil2": 0}
+
+    def _teil2_stolpert_einmal(anfrage):
+        if "teil=2" in anfrage.full_url:
+            versuche["teil2"] += 1
+            if versuche["teil2"] == 1:
+                raise urllib.error.URLError("kurzer Hänger")
+
+    aufrufe = _aufrufe_sammeln(monkeypatch, verhalten=_teil2_stolpert_einmal, antwort=_multipart_worker_antworten)
+    ergebnis = R2Ablage().ablegen("abc12345", [SpendeDatei("aufnahme.wav", pfad=aufnahme)])
+
+    teil2_aufrufe = [a for a in aufrufe if "teil=2" in a.full_url]
+    assert len(teil2_aufrufe) == 2  # erster Versuch scheiterte, der zweite zählt
+    assert ergebnis.vollstaendig is True
+    assert any("teile=fertig" in a.full_url for a in aufrufe)
+
+
+def test_scheitert_ein_teil_auch_nach_den_wiederholungen_gilt_die_ganze_datei_als_gescheitert(
+    monkeypatch, worker_zugang, kleine_teile, tmp_path,
+):
+    aufnahme = tmp_path / "aufnahme.wav"
+    aufnahme.write_bytes(b"0123456789" * 3)  # 30 Byte → drei Teile a 10 Byte
+
+    def _teil2_schlaegt_immer_fehl(anfrage):
+        if "teil=2" in anfrage.full_url:
+            raise urllib.error.URLError("dauerhaft kaputt")
+
+    aufrufe = _aufrufe_sammeln(monkeypatch, verhalten=_teil2_schlaegt_immer_fehl, antwort=_multipart_worker_antworten)
+    ergebnis = R2Ablage().ablegen("abc12345", [SpendeDatei("aufnahme.wav", pfad=aufnahme)])
+
+    teil2_aufrufe = [a for a in aufrufe if "teil=2" in a.full_url]
+    assert len(teil2_aufrufe) == 2  # beide Wiederholungen ausgeschöpft, dann abgebrochen
+    assert not any("teil=3" in a.full_url for a in aufrufe)  # kein weiterer Teil nach dem endgültigen Fehlschlag
+    assert not any("teile=fertig" in a.full_url for a in aufrufe)  # kein Abschließen eines unvollständigen Uploads
+
+    [teil] = ergebnis.teile
+    assert teil.ok is False
+    assert ergebnis.vollstaendig is False
+    # Trotzdem genau ein Abschluss-Ruf (anderer Pfad als "teile=fertig"), der den Fehlschlag meldet.
+    [abschluss] = [a for a in aufrufe if a.full_url.endswith("/abschluss")]
+    assert json.loads(abschluss.data)["ergebnisse"] == [{"datei": "aufnahme.wav", "bytes": 30, "ok": False}]

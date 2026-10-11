@@ -127,9 +127,9 @@ def test_abschlussseite_reihenfolge_und_datenspende_nach_zurueck_navigation(lauf
         class _LangsameAblage:
             def ablegen(self, name, dateien):
                 time.sleep(1.2)
-                # Ticket #82: abschluss_spende liest jetzt .vollstaendig vom Ergebnis – dieser Test simuliert
-                # eine LANGSAME, aber am Ende VOLLSTÄNDIGE Ablage (er prüft die Sperre während des Uploads, #43,
-                # nicht das Teilweise-Verhalten).
+                # abschluss_spende liest .vollstaendig vom Ergebnis – dieser Test simuliert eine LANGSAME, aber
+                # am Ende VOLLSTÄNDIGE Ablage (er prüft nur die Sperre während des Uploads, nicht das
+                # Teilweise-Verhalten).
                 return SpendeErgebnis([SpendeTeilergebnis(d.name, d.groesse(), True) for d in dateien], 1.2)
 
         alte_ablage = api_abschluss._ablage

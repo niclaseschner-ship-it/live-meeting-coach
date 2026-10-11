@@ -121,9 +121,8 @@ def test_ordnerablage_legt_dateien_unter_datum_und_kurz_id_ab(tmp_path):
 
 
 def test_spenden_dateien_enthaelt_erwartete_teile_in_upload_reihenfolge(archiv_pfad):
-    """Ticket #82: Texte zuerst, die (optionale, große) Aufnahme zuletzt – scheitert sie, sind die Texte schon
-    angekommen. Eine Liste statt eines Dict, damit sich eine künftige weitere Textdatei (#83: nestor.jsonl)
-    einfach einreiht."""
+    """Texte zuerst, die (optionale, große) Aufnahme zuletzt – scheitert sie, sind die Texte schon angekommen.
+    Eine Liste statt eines Dict, damit sich eine künftige weitere Textdatei einfach einreiht."""
     c = _abgelegtes_meeting()
     dateien = spenden_dateien(c.archiv.ordner, "Gut gemacht", mit_aufnahme=False)
     assert [d.name for d in dateien] == [
@@ -229,7 +228,7 @@ def test_spende_legt_erwartete_dateien_ab(monkeypatch, beendetes_meeting, tmp_pa
                        json={"einverstanden": True, "aufnahme": False, "feedback": "Gut gemacht"})
     assert r.status_code == 200
     z = r.json()
-    assert z["vollstaendig"] is True  # Ticket #82: lokale Ablage schlägt nie teilweise fehl
+    assert z["vollstaendig"] is True  # lokale Ablage schlägt nie teilweise fehl
     [ordner] = list(ziel.iterdir())
     dateien = {p.name for p in ordner.iterdir()}
     assert {"transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt"} <= dateien

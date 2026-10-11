@@ -163,11 +163,10 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
 
 @dataclass(frozen=True)
 class SpendeDatei:
-    """Eine Datei der Spende/des Feedbacks, in Upload-Reihenfolge (Ticket #82: Texte zuerst, die – optionale,
-    große – Aufnahme zuletzt, damit bei einem Abbruch wenigstens die Texte ankommen). `inhalt` für kleine, im
-    Speicher gehaltene Texte; `pfad` für Dateien, die von der Platte gestreamt werden, ohne sie ganz in den
-    Speicher zu lesen (Befund aus dem Pilot vom 10.10.: eine 45-MB-Aufnahme verdoppelte sich im Worker auf
-    90–135 MB, weil `formData()`/`arrayBuffer()` puffern und kopieren)."""
+    """Eine Datei der Spende/des Feedbacks, in Upload-Reihenfolge: Texte zuerst, die – optionale, große –
+    Aufnahme zuletzt, damit bei einem Abbruch wenigstens die Texte ankommen. `inhalt` für kleine, im Speicher
+    gehaltene Texte; `pfad` für Dateien, die von der Platte gestreamt werden, ohne sie ganz in den Speicher zu
+    lesen."""
 
     name: str
     inhalt: bytes | None = None
@@ -188,9 +187,9 @@ class SpendeTeilergebnis:
 
 @dataclass(frozen=True)
 class SpendeErgebnis:
-    """Rückmeldung einer Ablage (Ticket #82): einzelne Dateien können fehlschlagen (typischerweise die große,
-    optionale Aufnahme), ohne dass die ganze Spende als gescheitert gilt – `vollstaendig` ist nur wahr, wenn
-    jede Datei ok war."""
+    """Rückmeldung einer Ablage: einzelne Dateien können fehlschlagen (typischerweise die große, optionale
+    Aufnahme), ohne dass die ganze Spende als gescheitert gilt – `vollstaendig` ist nur wahr, wenn jede Datei
+    ok war."""
 
     teile: list[SpendeTeilergebnis]
     dauer_sekunden: float
@@ -202,8 +201,8 @@ class SpendeErgebnis:
 
 def spenden_dateien(ordner: Path, feedback: str, mit_aufnahme: bool) -> list[SpendeDatei]:
     """Dateien für eine Datenspende, in Upload-Reihenfolge: Transkript, Hinweise, Agenda, Dynamik, Feedback,
-    Technik – optional zuletzt die Aufnahme (Ticket #82: künftige weitere Textdateien, z. B. #83s nestor.jsonl,
-    reihen sich hier einfach vor der Aufnahme ein)."""
+    Technik – optional zuletzt die Aufnahme. Eine künftige weitere Textdatei reiht sich hier einfach vor der
+    Aufnahme ein."""
     ordner = Path(ordner)
     bericht = _bericht(ordner)
     dateien = [

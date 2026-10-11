@@ -35,8 +35,8 @@ _rueckkehr_archiv = None
 
 
 async def _ablegen(dateien: list[SpendeDatei]) -> SpendeErgebnis:
-    """Im Thread: der R2-Weg lädt über das Netz hoch (je Datei einzeln gestreamt, Ticket #82) und soll die
-    Ereignisschleife nicht aufhalten."""
+    """Im Thread: der R2-Weg lädt über das Netz hoch (je Datei einzeln gestreamt) und soll die Ereignisschleife
+    nicht aufhalten."""
     try:
         return await asyncio.to_thread(_ablage.ablegen, _kurz_id(), dateien)
     except AblageFehler as e:
@@ -158,8 +158,8 @@ async def abschluss_spende(daten: dict):
     except OSError as e:
         raise HTTPException(404, "Ablage noch nicht da – bitte kurz warten.") from e
     ergebnis = await _ablegen(dateien)
-    # Ticket #82: scheitert z. B. nur die große, optionale Aufnahme, sind die Texte trotzdem angekommen – die
-    # Seite zeigt das dann als "teilweise" an, statt die ganze Spende als Fehlschlag zu werten.
+    # Scheitert z. B. nur die große, optionale Aufnahme, sind die Texte trotzdem angekommen – die Seite zeigt
+    # das dann als "teilweise" an, statt die ganze Spende als Fehlschlag zu werten.
     return {"ok": True, "vollstaendig": ergebnis.vollstaendig,
             "dateien": [{"datei": t.datei, "bytes": t.bytes, "ok": t.ok} for t in ergebnis.teile]}
 
