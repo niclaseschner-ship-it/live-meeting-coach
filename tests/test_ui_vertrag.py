@@ -62,7 +62,7 @@ def test_vertrag_ist_vollstaendig_aufgebaut():
     assert VERTRAG["phasen"] == ["start", "vorbereitung", "live", "abschluss"]
     assert [k["beschriftung"] for k in VERTRAG["kernknoepfe"]] == ["Stand", "Zusammenfassen", "Lücken", "Protokoll", "Überblick"]
     assert VERTRAG["abschluss_reihenfolge"] == ["#ab-datenspende", "#ab-unterstuetzung", "#ab-protokoll", "#ab-paket"]
-    assert VERTRAG["sprechknoepfe"]["bedienmodell"] in ("halten", "klick")
+    assert VERTRAG["sprechknoepfe"]["bedienmodell"] in ("halten", "klick", "klick_oder_halten")
     for phase in VERTRAG["phasen"]:
         assert phase in VERTRAG["bereiche"], phase
     for ticket in (v for k, v in VERTRAG["bekannte_abweichungen"].items() if not k.startswith("_")):
