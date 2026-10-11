@@ -377,6 +377,10 @@ class Bogen:
     zusatz: list = field(default_factory=list)
     zeiten: dict = field(default_factory=dict)
     gesagt: str = ""     # Karten-Bogen: der Satz zur Karte (Bezug für die Einordnung einer Nachfrage)
+    # Nestors Seite (Ticket #83): erkannte Absicht bzw. Werkzeugaufruf mit Argumenten, Fehlertyp – fließen am Ende
+    # von _bogen_lauf in EINEN Eintrag in logs/nestor.jsonl (coach/pipeline.py: _zeit_loggen)
+    aktion: dict | None = None
+    fehler: str | None = None
 
     def merken(self, schritt: str) -> None:
         self.zeiten.setdefault(schritt, round(time.monotonic() - self.t0, 2))
@@ -808,6 +812,7 @@ class Assistent:
             from .mistral import ist_ueberlast
 
             log.warning("Bogen „%s“ fehlgeschlagen: %s", b.art, type(e).__name__)
+            b.fehler = b.fehler or type(e).__name__
             if not b.abgeloest:
                 await self._sprechen_texte([UEBERLAST if ist_ueberlast(e) else FEHLER], bogen=b)
         finally:
@@ -826,8 +831,20 @@ class Assistent:
                     self._nachfrage_bis = ende + self.coach.wahl.nachfrage_sekunden
             from .pipeline import _zeit_loggen
 
+            # Nestors Seite (Ticket #83, Entscheidung Niclas 11.10.: darf mitgespendet werden): erkannte Absicht
+            # bzw. Werkzeugaufruf mit Argumenten (aktion), Antworttext bzw. Kartentitel (gesagt), Kartenart, Fehler –
+            # je Anfrage EIN Eintrag in logs/nestor.jsonl, zusammengetragen aus dem, was im Bogen ohnehin anfällt.
+            if b.art != "frage":
+                kartenart = b.art
+            elif b.aktion and b.aktion.get("typ") == "karte":
+                kartenart = b.aktion.get("art")
+            elif b.aktion and b.aktion.get("typ") in ("folie", "bild", "recherche"):
+                kartenart = b.aktion["typ"]
+            else:
+                kartenart = None
             _zeit_loggen({"ausloeser": "bogen", "art": b.art, "quelle": b.quelle, "stufe": c.stufe,
-                          "abgeloest": b.abgeloest, **b.zeiten})
+                          "abgeloest": b.abgeloest, "aktion": b.aktion, "antwort": b.gesagt,
+                          "kartenart": kartenart, "fehler": b.fehler, **b.zeiten})
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "bogen", "bogen": b.art, "quelle": b.quelle,
                                 "zeiten": dict(b.zeiten), "abgeloest": b.abgeloest})
             await c.melden()
@@ -961,7 +978,7 @@ class Assistent:
         self._einwand_bis = None
         if self.gespraech is not None:  # offene Realtime-Sitzung (auch die Begrüßung): sofort still und zu,
             await self.coach.direkt_senden({"typ": "stimme_stopp"})  # ab jetzt geht kein Ton mehr an OpenAI
-            await self.gespraech.schliessen()
+            await self.gespraech.schliessen("einwand")
         if self.bogen is not None:
             self._bogen_abloesen()
         await self.coach.einwand_umsetzen()
@@ -984,7 +1001,7 @@ class Assistent:
         if self._aufgabe and not self._aufgabe.done():
             self._aufgabe.cancel()
         if self.gespraech:
-            asyncio.ensure_future(self.gespraech.schliessen())
+            asyncio.ensure_future(self.gespraech.schliessen("gestoppt"))
         self._nachfrage_bis = -1e9
         self.zustand = "pausiert" if self.pausiert else "bereit"
 
@@ -1125,11 +1142,13 @@ class Assistent:
             if not gesprochen:
                 gesprochen.append(satz)
             aktion, still = None, False
+            b.fehler = type(e).__name__
             await saetze.put(satz)
         await saetze.put(None)
         await sprecher  # Bestätigung und gesprochene Sätze zu Ende, bevor das System selbst spricht
         antwort = " ".join(gesprochen)
         self.letzte = {"frage": frage, "antwort": antwort, "zeit": c.meeting.jetzt(), "aktion": aktion}
+        b.gesagt, b.aktion = antwort, aktion  # Nestors Seite (#83): fließt am Bogenende in logs/nestor.jsonl
         if antwort:
             self.verlauf.append((frage, antwort))
             # Bedienlogik (Ticket #74): jede Antwort auf die Sprechtaste/den Text-Weg erscheint als Karte
