@@ -3,4 +3,5 @@
 playwright>=1.48
 # Klick-E2E Stufe B (Ticket #61): QR-Bild dekodieren, Test-Sprache lokal erzeugen (beide mit ARM64-Wheels)
 opencv-python-headless>=4.10
+zxing-cpp>=2.2
 piper-tts>=1.3

@@ -469,7 +469,9 @@ async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
 
 
 def qr_dekodieren(png: bytes) -> str:
-    """PNG-Bytes → dekodierter QR-Inhalt; probiert Original und 2-/3-fache Skalierung, jeweils mit/ohne Otsu."""
+    """PNG-Bytes → dekodierter QR-Inhalt. Zuerst zxing-cpp (liest auch den dichten Code mit signiertem
+    Kopplungstoken zuverlässig, wie eine Handy-Kamera), sonst OpenCV mit Original und 2-/3-facher Skalierung,
+    jeweils mit/ohne Otsu."""
     import cv2
     import numpy as np
 
@@ -477,6 +479,14 @@ def qr_dekodieren(png: bytes) -> str:
     if bild is None:
         return ""
     bild = cv2.copyMakeBorder(bild, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    try:
+        import zxingcpp
+
+        treffer = zxingcpp.read_barcodes(bild)
+        if treffer and treffer[0].text:
+            return treffer[0].text
+    except ImportError:
+        pass
     detektor = cv2.QRCodeDetector()
     for faktor in (None, 2, 3):
         vorbereitet = bild if faktor is None else cv2.resize(bild, None, fx=faktor, fy=faktor,
