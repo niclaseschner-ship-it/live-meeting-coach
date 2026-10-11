@@ -13,7 +13,6 @@ der Assistent (coach/assistent.py).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import time
@@ -30,8 +29,9 @@ NAMEN = {"stand": "Wo stehen wir?", "zusammenfassen": "Ergebnisse bündeln", "fe
          "festgehalten": "Gesamtprotokoll", "regeln": "Regeln prüfen", "ueberblick": "Überblick", "folie": "Folie",
          "frage": "Frage", "bild": "Bild", "recherche": "Recherche", "neu_aufbereiten": "Karte neu aufbereiten"}
 
-# --- Was will die Runde? Eindeutige Moderations-Aufträge direkt erkennen ------------------------------------------
-# Nur kurze, eindeutige Sätze – „fass zusammen, was Anna zum Budget gesagt hat“ ist eine Frage an das Modell.
+# --- Text-Weg (Basis, Premium-Kurzantwort): eindeutige Moderations-Aufträge direkt erkennen ----------------------
+# Nur kurze, eindeutige Sätze – „fass zusammen, was Anna zum Budget gesagt hat“ ist eine Frage an das Modell. Im
+# Gespräch (Premium) entscheidet das Modell selbst über seine Werkzeuge; dort wird nichts vorsortiert.
 FUELL = {"bitte", "mal", "kurz", "doch", "uns", "mir", "nochmal", "jetzt", "gerade", "einmal", "eben", "okay", "ok",
          "hey", "noch", "schnell", "gerne", "gern", "denn", "eigentlich", "kannst", "könntest", "du", "würdest",
          "magst", "vielleicht", "bis", "hier", "dann", "also", "und", "ja"}
@@ -58,135 +58,6 @@ def karten_art(frage: str) -> str | None:
         if re.fullmatch(muster, s):
             return art
     return None
-
-
-# --- Rückfrage-Fenster (Premium): ist der erste Satz nach dem Bogen an Nestor gerichtet? -----------------------
-# Ticket #27, Nachtrag C („Follow-up-Modus“ wie bei Sprachassistenten): Nur der erste Satz nach dem Bogen kann eine
-# Nachfrage sein; ist er es nicht, schließt das Fenster sofort. Regeln, dann ein Klassifikator, im Zweifel schweigen –
-# ein falsches Antworten bricht die Grundregel, ein verpasstes kostet nur ein neues „Nestor, …“.
-NICHT_NAMEN = {"und", "also", "okay", "gut", "ja", "nein", "danke", "super", "prima", "genau", "moment", "hm", "achso",
-               "ach", "klar", "stimmt", "aber", "dann", "so", "nee", "naja", "na", "oder", "jetzt", "hier", "das", "die",
-               "der", "wir", "ihr", "ich", "du", "sie", "es", "was", "wer", "wie", "wo", "wann", "warum", "bitte",
-               "perfekt", "richtig", "eben", "tja", "ok", "sorry", "hallo", "hey", "kurz", "übrigens", "apropos"}
-VOKATIV_RE = re.compile(r"^\W*([A-ZÄÖÜ][a-zäöüß]+)\s*,")
-ODER_NAME_RE = re.compile(r",\s*(?:oder|gell|ne|nicht wahr)?\s*([A-ZÄÖÜ][a-zäöüß]+)\s*\?\s*$")
-ANSCHLUSS_RE = re.compile(r"^\W*und\s+(?:bis\s+wann|wer|wann|wie\s+viel\w*|wie\s+lange|wo|was|warum|wieso|"
-                          r"welche\w*|wofür|womit)\b[^.!]*\?\s*$", re.IGNORECASE)
-AUFTRAG_RE = re.compile(r"^\W*(?:und\s+)?(?:bitte\s+)?(?:zeig|trag|ergänz|ergänze|schreib|fass|erklär|erkläre|such|"
-                        r"recherchier|lies|nenn|wiederhol|notier|halt\s+fest|mach\s+(?:uns|mir|eine?n?|die|den|das\s+bitte)"
-                        r"|gib\s+(?:uns|mir)|kannst\s+du|könntest\s+du|würdest\s+du|magst\s+du)\b", re.IGNORECASE)
-
-
-def jemand_anderes(text: str, namen: list[str] | None = None) -> bool:
-    """„Anna, das machst du doch, oder?“, „… oder Tarek?“ – die Runde spricht eine Person an, nicht Nestor."""
-    bekannte = {n.split()[0].lower() for n in namen or [] if n}
-    for m in (VOKATIV_RE.match(text), ODER_NAME_RE.search(text)):
-        if m and m.group(1).lower() not in NICHT_NAMEN and m.group(1).lower() != EINST.assistent_name.lower():
-            return True
-    woerter = {w.lower() for w in re.findall(r"\w+", text)}
-    return bool(bekannte & woerter) and not AUFTRAG_RE.match(text)
-
-
-# Ticket #28: kurze „Und …?“-Frage ohne Wir-/Uns-Sicht – „Und reicht das noch für alle Punkte?“ (Grenzfall 1r) ordnete
-# der strengere Klassifikator in 2 von 3 Messungen als Gespräch der Runde ein
-UND_FRAGE_RE = re.compile(r"^\W*und\b[^.!]*\?\s*$", re.IGNORECASE)
-WIR_RE = re.compile(r"\b(?:wir|uns|unser\w*)\b", re.IGNORECASE)
-
-
-def klar_an_nestor(text: str, namen: list[str] | None = None) -> bool:
-    """Eindeutige Anschlussfrage („Und bis wann?“, „Und reicht das noch für alle Punkte?“) oder ein Auftrag („Zeig …“,
-    „Kannst du …“) ohne anderen Namen."""
-    und_frage = bool(UND_FRAGE_RE.match(text)) and len(text.split()) <= 8 and not WIR_RE.search(text)
-    return not jemand_anderes(text, namen) and bool(ANSCHLUSS_RE.match(text) or AUFTRAG_RE.match(text) or und_frage)
-
-
-# Ticket #28, Premium-Abendlauf 08.10.: Nach „Und reicht das noch für alle Punkte?“ (Antwort: „noch knapp drei Minuten“)
-# fragte jemand die Kollegen „Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet“ – eine
-# Frage zu dem, was die Runde vorher besprochen hatte (Jonas: „… weshalb kein vollständiger Rollback möglich war“).
-# Der Klassifikator hielt sie in 6 von 6 Messungen für eine Nachfrage an Nestor. Deshalb eine dritte Regel vor dem
-# Modell: Teilt der Satz ein Sachwort mit dem, was die Runde zuletzt gesagt hat, aber keins mit Nestors Frage und
-# Antwort, und spricht er Nestor nicht an, knüpft er an die Runde an – schweigen.
-DU_RE = re.compile(r"\b(?:du|dir|dich|dein\w*|euch)\b", re.IGNORECASE)
-NICHT_SACHWORT = {"haben", "hatte", "hätte", "hätten", "hatten", "würde", "würden", "werden", "wurde", "wurden",
-                  "können", "konnte", "könnte", "müssen", "musste", "müsste", "sollen", "sollte", "sollten", "wollen",
-                  "nicht", "schon", "immer", "eigentlich", "selbst", "heißt", "einen", "einem", "einer", "eines",
-                  "diese", "dieser", "dieses", "diesem", "diesen", "unser", "unsere", "unseren", "unserem", "unserer",
-                  "ihnen", "denen", "deren", "dessen", "damit", "darum", "dafür", "davon", "dazu", "daran", "wieder",
-                  "etwas", "nichts", "alles", "allen", "aller", "jetzt", "gerade", "vorhin", "danach", "dabei",
-                  "nochmal", "ebenfalls", "wirklich", "genau", "vielleicht", "ungefähr", "eben", "sowie", "weil",
-                  "obwohl", "warum", "wieso", "welche", "welcher", "welches", "machen", "macht", "gesagt", "sagen",
-                  "meinst", "meint", "kommen", "kommt", "gehen", "geht", "lassen", "zwischen", "durch", "gegen",
-                  "unter", "über", "ohne", "schnell", "schneller", "bitte", "kurze", "kurzer", "erste", "ersten",
-                  "zweite", "zweiten", "dritte", "dritten", "meine", "meiner", "seine", "ihrer", "ihren", "nestor"}
-
-
-def _sachworte(text: str) -> set[str]:
-    """Sachwörter (ab fünf Buchstaben, ohne Füllwörter), auf die ersten fünf Buchstaben gekürzt – „Rollback“ und
-    „Rollbacks“, „schneller“ und „schnell“ fallen zusammen."""
-    return {w[:5] for w in re.findall(r"[a-zäöüß]+", (text or "").lower()) if len(w) >= 5 and w not in NICHT_SACHWORT}
-
-
-def knuepft_an_runde(text: str, vorher: list[str] | None, frage: str, antwort: str) -> bool:
-    """„Heißt das, selbst ein schneller Application Rollback hätte uns nicht gerettet“ nach einer Antwort zur Restzeit:
-    gleiches Sachwort wie die Runde vorher („Rollback“), keins wie Nestors Frage und Antwort, keine Anrede."""
-    if DU_RE.search(text) or AUFTRAG_RE.match(text):
-        return False
-    eigene = _sachworte(text)
-    runde = set().union(*(_sachworte(v.split(":", 1)[-1]) for v in vorher or [])) if vorher else set()
-    return bool(eigene & runde) and not eigene & _sachworte(f"{frage} {antwort}")
-
-
-EINORDNEN = """\
-Ein Moderationsassistent namens {name} hat einer Besprechungsrunde gerade geantwortet. Direkt danach sagt jemand im
-Raum den Satz unten. Ordne ihn ein:
-- "frage_an_nestor": nur eine eindeutige Anschlussfrage, Bitte oder ein Auftrag an den Assistenten, der eine Antwort
-  braucht. Dafür spricht: „Und …?“ als Anschluss an seine Antwort, die du-Form an ihn, eine Aufforderung an ihn
-  („zeig“, „trag ein“), ein Rückbezug auf seine Worte („was meinst du mit …“, „welche … ist da gemeint“).
-- "an_nestor_ohne_antwort": an den Assistenten, braucht aber keine Antwort („Passt“, „Danke“, „Alles klar“)
-- "nicht_an_nestor": die Leute reden untereinander (über die Karte, mit einer Person, Weiterarbeit, Diskussion).
-  Dafür spricht: die Wir-/Uns-Sicht aufs eigene Thema („Heißt das, … hätte uns …“, „Sollten wir nicht …“), eine Frage
-  an die Runde, eine angesprochene Person.
-Im Zweifel "nicht_an_nestor". Antworte nur mit JSON: {{"einordnung": "…"}}
-
-Zuletzt in der Runde gesagt:
-{vorher}
-Frage an den Assistenten: {frage}
-Seine Antwort: {antwort}
-Satz: {satz}"""
-EINORDNEN_FRIST = 2.5
-EINORDNUNGEN = ("frage_an_nestor", "an_nestor_ohne_antwort", "nicht_an_nestor")
-
-
-async def einordnen(client, satz: str, antwort: str, frage: str = "", vorher: list[str] | None = None,
-                   *, wahl) -> tuple[str, dict]:
-    """Schneller Text-Klassifikator (Premium): (Einordnung, Nutzung). Fehler oder Frist: nicht an Nestor.
-
-    Ticket #28: Er sieht auch die Frage, auf die Nestor geantwortet hat, und die letzten Sätze der Runde davor (`vorher`).
-    Nur mit der Antwort („Ihr habt noch knapp drei Minuten.“) hielt er eine Sachfrage der Runde („Heißt das, selbst ein
-    schneller Application Rollback hätte uns nicht gerettet“ – sie knüpft an „… weshalb kein vollständiger Rollback
-    möglich war“ an) in 6 von 6 Messungen für eine Nachfrage an Nestor; diesen Fall fängt jetzt schon die Regel
-    knuepft_an_runde ab. Prompt-Fassungen mit Prüffragen („gleiches Thema?“) machten ihn zu streng (Messung:
-    scripts/einordnen_messen.py)."""
-    if client is None:
-        return "nicht_an_nestor", {}
-    extra = {}
-    if wahl.einordnen_aufwand:
-        extra["reasoning_effort"] = wahl.einordnen_aufwand
-    try:
-        r = await asyncio.wait_for(client.chat.completions.create(
-            model=wahl.assistent_modell, response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": EINORDNEN.format(name=EINST.assistent_name, frage=(frage or "-")[:300],
-                                                                  vorher="\n".join(vorher or []) or "-",
-                                                                  antwort=(antwort or "-")[:600], satz=satz)}],
-            **extra), EINORDNEN_FRIST)
-        roh = json.loads(r.choices[0].message.content or "{}")
-    except Exception as e:  # noqa: BLE001 – im Zweifel still
-        log.info("Einordnung nicht möglich (%s)", type(e).__name__)
-        return "nicht_an_nestor", {}
-    u = getattr(r, "usage", None)
-    nutzung = {"tokens_rein": getattr(u, "prompt_tokens", None), "tokens_raus": getattr(u, "completion_tokens", None)}
-    e = roh.get("einordnung")
-    return (e if e in EINORDNUNGEN else "nicht_an_nestor"), nutzung
 
 
 # --- Moderationssatz ------------------------------------------------------------------------------------------
@@ -281,24 +152,62 @@ def ersatz_luecken(liste: list) -> str:
     return f"Hier ist sie. Bei {len(luecken)} Einträgen fehlt noch etwas. Schaut kurz drauf."
 
 
-async def zusammenfassen(coach, b) -> tuple[dict, str]:
-    art = coach.artefakte
-    await art.nachholen()
-    m = coach.meeting
+def bereich_waehlen(meeting, artefakte: list, bereich: str, punkt: int | None = None,
+                    seit: float | None = None) -> tuple[str, list, list]:
+    """(Titel, Ergebnisse, Transkript) eines Bereichs: Agendapunkt `punkt` (1-basiert), die Zeit `seit` Sekunden
+    oder das ganze Meeting. Ergebnisse gehören zu dem Punkt, der aktiv war, als ihr Satz fiel."""
+    if bereich == "punkt" and punkt is not None and 1 <= punkt <= len(meeting.agenda):
+        i = punkt - 1
+        return (f"Zusammenfassung · Punkt {punkt} · {meeting.agenda[i].titel}",
+                [a for a in artefakte if a.punkt == i], meeting.punkt_transkript(i))
+    if bereich == "seit" and seit is not None:
+        return (f"Zusammenfassung · seit {mmss(seit)}", [a for a in artefakte if a.zeit >= seit],
+                [s for s in meeting.transkript if s.ende >= seit])
+    return f"Zusammenfassung · Stand {mmss(meeting.jetzt())}", list(artefakte), list(meeting.transkript)
+
+
+def zusammenfassung_auswahl(artefakte: list) -> list:
+    """Was auf die Karte passt: Beschlossenes zuerst, dann Aufgaben, dann Offenes (je die jüngsten)."""
     from .artefakte import beschlossen
 
-    beschl = [a for a in art.liste if beschlossen(a)]
-    aufgaben = [a for a in art.liste if a.typ == "aufgabe"]
-    offen = [a for a in art.liste if a.typ != "aufgabe" and not beschlossen(a)]
-    liste = beschl[-5:] + aufgaben[-8:] + offen[-4:]
-    karte = artefakt_karte(coach, "zusammenfassung", f"Zusammenfassung · Stand {mmss(m.jetzt())}", liste, True)
+    beschl = [a for a in artefakte if beschlossen(a)]
+    aufgaben = [a for a in artefakte if a.typ == "aufgabe"]
+    offen = [a for a in artefakte if a.typ != "aufgabe" and not beschlossen(a)]
+    return beschl[-5:] + aufgaben[-8:] + offen[-4:]
+
+
+NACHHOLEN_FRIST = 4.0  # so lange darf das Nachholen der Ergebnisse eine Zusammenfassung aufhalten
+
+
+async def bereich_karte(coach, bereich: str = "gesamt", punkt: int | None = None,
+                        seit: float | None = None) -> tuple[dict, list, str]:
+    """Zusammenfassungs-Karte eines Bereichs aus den Ergebnissen (live verknüpft), dazu die Liste und ein
+    Transkript-Auszug des Bereichs (für das, was besprochen, aber nicht festgehalten wurde)."""
+    art = coach.artefakte
+    try:
+        await asyncio.wait_for(art.nachholen(), NACHHOLEN_FRIST)
+    except asyncio.TimeoutError:
+        log.info("Zusammenfassen: Nachholen dauert – mit dem bisherigen Stand")
+    m = coach.meeting
+    titel, artefakte, saetze = bereich_waehlen(m, art.liste, bereich, punkt, seit)
+    liste = zusammenfassung_auswahl(artefakte)
+    karte = artefakt_karte(coach, "zusammenfassung", titel, liste, True)
     if not liste:
-        karte["punkte"] = ["Bisher ist keine Entscheidung und keine Aufgabe festgehalten."]
-    luecken = art.luecken_liste(3)
+        karte["punkte"] = ["Hier ist noch keine Entscheidung und keine Aufgabe festgehalten."]
+    luecken = [a for a in art.luecken_liste(12) if a in artefakte][:3]
     for a in luecken:
         a.nachgefragt = True
     art.verlauf.append({"zeit": round(m.jetzt(), 1), "art": "zusammenfassung", "ids": [a.id for a in luecken]})
-    coach.protokoll.append({"zeit": m.jetzt(), "art": "zusammenfassung", "luecken": [a.id for a in luecken]})
+    coach.protokoll.append({"zeit": m.jetzt(), "art": "zusammenfassung", "bereich": bereich,
+                            "luecken": [a.id for a in luecken]})
+    auszug = "\n".join(f"[{mmss(s.start)}] {s.sprecher}: {s.text}" for s in saetze if s.text)[-3000:]
+    return karte, liste, auszug
+
+
+async def zusammenfassen(coach, b) -> tuple[dict, str]:
+    karte, liste, _ = await bereich_karte(coach, "gesamt")
+    if not liste:
+        karte["punkte"] = ["Bisher ist keine Entscheidung und keine Aufgabe festgehalten."]
     ersatz = ersatz_luecken(liste) if liste else "Hier ist sie. Bisher habe ich noch nichts Festes notiert."
     return karte, await moderationssatz(coach, karte, ersatz)
 

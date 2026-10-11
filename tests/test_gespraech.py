@@ -89,12 +89,19 @@ def test_rueckfrage_ohne_namen_zaehlt_ab_ende_der_wiedergabe():
         c.meeting.virtuelle_zeit = 310.9
         vorher = len(ws.gesendet)
         await c.assistent.satz("Und wer kümmert sich darum?", 309.516, "Person 2")
+        for _ in range(30):  # der Gesprächszug geht nach der Pause hinaus
+            await asyncio.sleep(0.05)
+            if c.assistent.bogen is not None:
+                break
         await asyncio.sleep(0.01)
-        return c.assistent.bogen, ws.typen()[vorher:]
+        return c.assistent.bogen, ws.gesendet[vorher:]
 
     bogen, neu = asyncio.run(ablauf())
-    assert neu == ["conversation.item.create", "response.create"]
-    assert bogen is not None and bogen.quelle == "nachfrage"
+    assert [e["type"] for e in neu] == ["session.update", "conversation.item.create", "response.create"]
+    assert "STAND DES MEETINGS" in neu[0]["session"]["instructions"]  # aktueller Stand je Anfrage
+    text = neu[1]["item"]["content"][0]["text"]
+    assert text.startswith("(Ohne deinen Namen") and text.endswith("Und wer kümmert sich darum?")
+    assert bogen is not None and bogen.quelle == "nachfrage" and not bogen.gerichtet
 
 
 def test_spaete_rueckfrage_bleibt_ohne_antwort():

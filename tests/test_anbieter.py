@@ -232,7 +232,6 @@ def _einstiege():
         "zuordnung": lambda c: c._themen_pruefen("Person 1: Wir reden über das Budget."),
         "agenda": lambda c: agenda_prompt.agenda_vorschlagen(c._client, c.wahl.analyse_modell, "Budget 10 min", None),
         "assistent": lambda c: c.assistent._antworten(_bogen(c)),
-        "nachfrage_einordnung": lambda c: bogen.einordnen(c._client, "Und bis wann?", "Bis Freitag.", wahl=c.wahl),
         "moderationssatz": lambda c: bogen.moderationssatz(c, {"titel": "Stand", "punkte": ["a"]}, "Ersatz"),
         "knopf_stand": lambda c: bogen.stand(c, _bogen(c)),
         "karte": lambda c: karten.verdichten(c._client, "Wo stehen wir?", "Bei Punkt eins. Das Budget steht.",

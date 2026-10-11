@@ -59,11 +59,6 @@ ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + NOTIERT + ENTFERNT + GEAE
 STIL = ("Sprich locker, freundlich und zügig auf Deutsch, wie ein Kollege, der kurz Bescheid gibt. "
         "Natürliches Tempo, keine langen Pausen.")
 
-# Woran man vor der Antwort erkennt, dass es länger dauert (Bild, Folie, Recherche, Überblick als Text).
-LANG_RE = re.compile(
-    r"recherch|\bschau\w* (?:mal |kurz )?nach\b|\bsuch\w* (?:mal |kurz )?(?:raus|nach|im netz)|im (?:inter)?netz"
-    r"|\büberblick (?:zu|über)\b|\bueberblick (?:zu|ueber)\b|aktuelle[nr]? (?:stand|fakten|zahlen) (?:zu|bei|von)"
-    r"|\bfolie\b|\bbild\b|zeichn|visuell|\bübersicht\b|\buebersicht\b|aufmal", re.IGNORECASE)
 # Kein Auftrag – nichts zu bestätigen („Nestor, danke“, „Nestor, stopp“, ein spätes Nein)
 KEIN_AUFTRAG_RE = re.compile(r"^\W*(?:danke|dankeschön|vielen dank|passt|gut|okay|ok|super|stopp|stop|still|ruhe|"
                              r"nein|tschüss|das war'?s|das wars)\b", re.IGNORECASE)
@@ -93,10 +88,6 @@ def stille_kuerzen(pcm: bytes, schwelle: int = 500, vorne: float = 0.03, hinten:
     return x[a:b].tobytes()
 
 
-def ist_lang(frage: str) -> bool:
-    return bool(LANG_RE.search(frage or ""))
-
-
 RECHERCHE_AUFTRAG_RE = re.compile(
     r"\b(?:recherchier\w*|such\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?(?:nach\s+)?|"
     r"schau\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?nach\b)",
@@ -105,7 +96,7 @@ RECHERCHE_AUFTRAG_RE = re.compile(
 
 
 def recherche_auftrag(frage: str) -> bool:
-    """Explizite Suchaufträge vor dem Sprachmodell erkennen.
+    """Explizite Suchaufträge vor dem Sprachmodell erkennen (nur Text-Weg; im Gespräch wählt das Modell das Werkzeug).
 
     Reine Wissensfragen bleiben normale Fragen; nur Verben wie „recherchier“, „such … nach“
     oder „schau … nach“ starten sicher die Websuche.
@@ -239,6 +230,7 @@ ABBRUCH_RE = re.compile(
 
 
 def abbruch_wunsch(text: str) -> bool:
+    """Nur Text-Weg; im Gespräch bricht das Modell per Werkzeug auftrag_abbrechen ab."""
     return bool(ABBRUCH_RE.search(text or ""))
 
 
@@ -305,9 +297,12 @@ class Auftraege:
         return next((a for a in self.liste if a.id == nr), None)
 
     def ziel(self, text: str) -> Auftrag | None:
-        """Den Auftrag zu einem Abbruchwunsch: die genannte Art (der jüngste davon), sonst der jüngste überhaupt.
-        „Übersicht“ meint in Premium das Bild, in Basis den Überblick – deshalb beide prüfen."""
-        art = abbruch_art(text)
+        """Den Auftrag zu einem Abbruchwunsch: die genannte Art (der jüngste davon), sonst der jüngste überhaupt."""
+        return self.ziel_art(abbruch_art(text))
+
+    def ziel_art(self, art: str | None) -> Auftrag | None:
+        """Der jüngste Auftrag dieser Art, ohne Art der jüngste überhaupt. „Übersicht“ meint in Premium das Bild, in
+        Basis den Überblick – deshalb beide prüfen."""
         kandidaten = self.offen(art) if art else list(self.liste)
         if not kandidaten and art in ("bild", "ueberblick"):
             kandidaten = self.offen("ueberblick" if art == "bild" else "bild")

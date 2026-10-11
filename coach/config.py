@@ -122,12 +122,16 @@ class Einstellungen:
     # Recherche auf Zuruf (Websuche über die Responses-API)
     recherche_modell: str = os.getenv("LMC_RECHERCHE_MODELL", "gpt-5.4-mini")
     recherche_aufwand: str = os.getenv("LMC_RECHERCHE_AUFWAND", "low")
-    # Rückfrage ohne Namen (Premium): der Satz muss so bald nach dem Ende von Nestors Wiedergabe BEGINNEN (Ticket #28:
-    # echte Anschlussfragen kommen in den ersten Sekunden – Alexa ~5 s; die ungefragt beantwortete Gruppenfrage im
-    # Abendlauf 08.10. begann erst 6,2 s danach, bis #28 galten 15 s)
-    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 6)
-    # Ticket #27, Nachtrag C: Denkaufwand der Einordnung „Nachfrage an Nestor oder nicht?“ (Ziel unter 1 s; scripts/einordnen_messen.py)
-    einordnen_aufwand: str = os.getenv("LMC_EINORDNEN_AUFWAND", "none")  # gemessen: Median 0,70 s (low: 1,04 s)
+    # Hörfenster (Premium im Gespräch): so lange nach dem Ende von Nestors Wiedergabe darf ein Gesprächszug ohne
+    # Namen BEGINNEN. Ob er an Nestor gerichtet ist, entscheidet das Modell (Werkzeug nicht_an_mich) – die Frist ist
+    # nur die Zeitleitplanke.
+    nachfrage_sekunden: float = _zahl("LMC_NACHFRAGE_SEKUNDEN", 8)
+    # Gesprächszug: so lange Ruhe (kein neuer Satz, kein laufender Teiltext) beendet den Zug; alle Sätze bis dahin
+    # gehen als EINE Anfrage hinaus. Der Live-Text zerlegt Äußerungen in Segmente.
+    zug_pause_sekunden: float = _zahl("LMC_ZUG_PAUSE_SEKUNDEN", 1.2)
+    zug_max_warten: float = _zahl("LMC_ZUG_MAX_WARTEN", 6.0)  # spätestens dann raus, auch wenn weiter geredet wird
+    # Frist bis zum ersten Ton einer Anfrage im Gespräch: danach kommt das Ergebnis still als Karte
+    anfrage_frist_sekunden: float = _zahl("LMC_ANFRAGE_FRIST_SEKUNDEN", 15)
     # Ticket #27: Zusammenfassung je Abschnitt – beim Punktwechsel und spätestens nach so vielen Minuten am selben
     # Punkt (ohne Agenda: im selben Takt)
     abschnitt_minuten: float = _zahl("LMC_ABSCHNITT_MINUTEN", 20)

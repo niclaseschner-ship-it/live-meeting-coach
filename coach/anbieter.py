@@ -119,7 +119,6 @@ class Anbieterwahl:
     assistent_aufwand: str
     recherche_modell: str
     recherche_aufwand: str
-    einordnen_aufwand: str
     stimme_modell: str
     stimme: str
     assistent_modus: str  # „gespraech“ (Realtime, nur Premium) oder „text“
@@ -175,7 +174,7 @@ def wahl_fuer(stufe: str, *, stimme: str | None = None,
             live_modell=e.basis_live_modell, text_modell=e.basis_transkription,
             analyse_modell=e.basis_text_modell, analyse_aufwand="", zuordnung_modell=e.basis_zuordnung_modell,
             assistent_modell=e.basis_text_modell, assistent_aufwand="",
-            recherche_modell=e.basis_text_modell, recherche_aufwand="", einordnen_aufwand="",
+            recherche_modell=e.basis_text_modell, recherche_aufwand="",
             stimme_modell=e.basis_stimme_modell, stimme=e.basis_stimme, assistent_modus="text",
             bild_anbieter="text", nachfrage_sekunden=0.0, begruessung_modell=e.basis_begruessung_modell)
     return Anbieterwahl(
@@ -185,7 +184,6 @@ def wahl_fuer(stufe: str, *, stimme: str | None = None,
         zuordnung_modell=e.zuordnung_modell or e.analyse_modell,
         assistent_modell=e.assistent_modell, assistent_aufwand=e.assistent_aufwand,
         recherche_modell=e.recherche_modell, recherche_aufwand=e.recherche_aufwand,
-        einordnen_aufwand=e.einordnen_aufwand,
         stimme_modell=e.stimme_modell, stimme=stimme or e.stimme,
         assistent_modus=assistent_modus or e.assistent_modus,
         bild_anbieter="openai", nachfrage_sekunden=e.nachfrage_sekunden,
