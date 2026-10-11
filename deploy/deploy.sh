@@ -297,6 +297,7 @@ if [ "$STAGING" = 1 ]; then
   fi
   echter_deploy "$WURZEL" "$SHA" "$BAUZEIT"
   log "Staging-Deploy fertig: $SHA auf $WORKER_URL – weiter mit: scripts/pipeline.sh c --stufe beide"
+  "$WURZEL/deploy/aufraeumen.sh" || true  # alte Bilder, Build-Cache, Testläufe
   exit 0
 fi
 
@@ -321,3 +322,4 @@ fi
 echter_deploy "$WURZEL" "$SHA" "$BAUZEIT"
 git_tag_setzen "$SHA"
 log "Deploy fertig: $SHA"
+"$WURZEL/deploy/aufraeumen.sh" || true  # alte Bilder, Build-Cache, Testläufe

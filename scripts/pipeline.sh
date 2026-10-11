@@ -67,7 +67,8 @@ case "${1:-}" in
   # tests/e2e/lauf_c.py selbst, je grüner Stufe, und nur wenn Staging genau HEAD trägt.
   c) shift; exec 8>"${HOME}/.cache/lmc-e2e/pipeline-c.lock"
      if ! flock -n 8; then echo "▸ Ein anderer Stufe-C-Lauf läuft – warte …"; flock 8; fi
-     (cd "$WURZEL" && "$PY" -m tests.e2e.lauf_c --ordner "$AUSGABE/c" "$@") ;;
+     rc=0; (cd "$WURZEL" && "$PY" -m tests.e2e.lauf_c --ordner "$AUSGABE/c" "$@") || rc=$?
+     "$WURZEL/deploy/aufraeumen.sh" --nur-logs || true; exit "$rc" ;;
   d) shift; (cd "$WURZEL" && "$PY" scripts/abnahme_d.py "$@") ;;
   # Ein B-Lauf zur Zeit auf der Maschine: feste Ports (18000/18787, Fakes) und ~1,5 GB RAM – parallele Läufe aus
   # mehreren Worktrees würden sich gegenseitig rot färben. Wartet, statt abzubrechen.
@@ -78,6 +79,7 @@ case "${1:-}" in
        if ps -o args= -p "$PPID" | grep -q 'pipeline-b.lock'; then :
        else echo "▸ Ein anderer Stufe-B-Lauf läuft – warte …"; flock 9; fi
      fi
-     stufe_b "$@" ;;
+     rc=0; stufe_b "$@" || rc=$?
+     "$WURZEL/deploy/aufraeumen.sh" --nur-logs || true; exit "$rc" ;;
   *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
 esac
