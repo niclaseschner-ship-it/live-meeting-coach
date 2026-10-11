@@ -47,6 +47,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 HIER = Path(__file__).resolve().parent
 DREHBUCH = HIER / "drehbuch.json"
+KURZER_KANAL_S = 30.0  # Sprechknopf-Aufnahmen im Drehbuch dauern Sekunden, der Meeting-Strom Minuten
 RATE = 24_000
 OPENAI_HOST, OPENAI_PORT = "127.0.0.11", 18011
 MISTRAL_HOST, MISTRAL_PORT = "127.0.0.12", 18012
@@ -381,6 +382,18 @@ def mistral_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
                     modell=ws.query_params.get("model"), auth=bool(ws.headers.get("authorization")), status=101)
         rate = 16_000
         sprache_s, stille_s, schwelle = 0.0, 0.0, 0.02
+        # Ein Sprechknopf (Agenda-Mikro, Sprechtaste) öffnet einen eigenen, kurzen Live-Text-Kanal. Die Drehbuchsätze
+        # gehören zum Meeting-Strom: Was ein kurzer Kanal davon verbraucht hat, gibt er beim Schließen zurück.
+        beginn, verbraucht = time.monotonic(), 0
+
+        def zurueckgeben() -> None:
+            nonlocal verbraucht
+            if verbraucht and time.monotonic() - beginn < KURZER_KANAL_S:
+                a.satz_nr = max(0, a.satz_nr - verbraucht)
+                a.protokoll(art="ws_ereignis", pfad="/v1/audio/transcriptions/realtime", ereignis="zurueckgegeben",
+                            anzahl=verbraucht)
+            verbraucht = 0
+
         try:
             while True:
                 e = json.loads(await ws.receive_text())
@@ -399,6 +412,7 @@ def mistral_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
                         stille_s += dauer
                         if sprache_s >= 0.4 and stille_s >= 0.35:
                             satz = a.naechster_satz()
+                            verbraucht += 1 if satz else 0
                             a.protokoll(art="ws_ereignis", pfad="/v1/audio/transcriptions/realtime",
                                         ereignis="aeusserung", audio_s=round(sprache_s, 2), text_laenge=len(satz))
                             for i in range(0, len(satz), 20):
@@ -406,9 +420,10 @@ def mistral_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
                                                                "text": satz[i:i + 20]}))
                             sprache_s = 0.0
                 elif typ == "input_audio.flush":
+                    zurueckgeben()
                     await ws.send_text(json.dumps({"type": "transcription.done"}))
         except WebSocketDisconnect:
-            pass
+            zurueckgeben()
 
     return Starlette(routes=[
         Route("/v1/chat/completions", chat_route(a), methods=["POST"]),
