@@ -37,7 +37,7 @@ class _FakeStrom:
     def __init__(self) -> None:
         self.geschlossen = False
 
-    async def schliessen(self) -> None:
+    async def schliessen(self, grund: str = "beendet") -> None:
         self.geschlossen = True
 
 

@@ -32,14 +32,17 @@ REALTIME_STIMMEN = tuple(s for s in STIMMEN if s != "nova")
 
 log = logging.getLogger("coach")
 NUTZUNG = WURZEL / "logs" / "nutzung.jsonl"
-NESTOR_ZEITEN = WURZEL / "logs" / "nestor_zeiten.jsonl"  # ohne Inhalte: nur Auslöser und Sekunden
+# Nestors Seite je Anfrage: Auslöser, erkannte Absicht/Werkzeugaufruf, Hörfenster, Antworttext, Kartenart, Zeiten,
+# Fehler (Ticket #83 – Entscheidung Niclas 11.10.: darf mitgespendet werden, kein Audio). Vorher nestor_zeiten.jsonl
+# (nur Auslöser und Sekunden); diese eine Stelle bleibt der einzige Schreibzugriff.
+NESTOR_ZEITEN = WURZEL / "logs" / "nestor.jsonl"
 
 
 def _zeit_loggen(eintrag: dict) -> None:
     try:
         NESTOR_ZEITEN.parent.mkdir(parents=True, exist_ok=True)
         with NESTOR_ZEITEN.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"zeit": time.strftime("%Y-%m-%dT%H:%M:%S"), **eintrag}) + "\n")
+            f.write(json.dumps({"zeit": time.strftime("%Y-%m-%dT%H:%M:%S"), **eintrag}, ensure_ascii=False) + "\n")
     except OSError:
         pass
 KOSTEN = kosten.Zaehler(NUTZUNG)
@@ -493,7 +496,7 @@ class Coach:
         """Mikro stumm: nichts geht an OpenAI, nichts wird ausgewertet; ein offenes Gespräch mit Nestor endet."""
         self.stumm = an
         if an and self.assistent.gespraech:
-            await self.assistent.gespraech.schliessen()
+            await self.assistent.gespraech.schliessen("stummgeschaltet")
         await self.melden()
 
     async def melden(self) -> None:
@@ -504,8 +507,11 @@ class Coach:
         mess = self.assistent.messung
         if mess and nachricht.get("typ") == "stimme":  # erster Ton nach Knopf oder Ansprache
             self.assistent.messung = None
+            bis_ton = round(time.monotonic() - mess["t0"], 2)
+            if self.assistent.bogen is not None:  # Nestors Seite (#83): landet im Bogen-Eintrag in nestor.jsonl
+                self.assistent.bogen.zeiten.setdefault("bis_ton", bis_ton)
             _zeit_loggen({"ausloeser": mess["ausloeser"], "modus": mess["modus"], "verzug_text": mess["verzug_text"],
-                          "bis_ton": round(time.monotonic() - mess["t0"], 2)})
+                          "bis_ton": bis_ton})
         for b in list(self.direkt):
             await b(nachricht)
 
@@ -568,7 +574,7 @@ class Coach:
         if self.hoerstrom is not None and self.hoerstrom.live is not None:
             hintergrund_leise(self.hoerstrom.live.schliessen())
         if self.assistent.gespraech is not None:
-            hintergrund_leise(self.assistent.gespraech.schliessen())
+            hintergrund_leise(self.assistent.gespraech.schliessen("kosten_deckel"))
         self.entscheider.einmalig(
             self.meeting, "kosten-deckel", "kosten", "warnung", "gruppe",
             f"Kostendeckel für dieses Meeting erreicht ({deckel:.0f} $) – die KI-Auswertung ist für den Rest "
@@ -837,7 +843,7 @@ class Coach:
         self.meeting.teiltext = ""
         self.meeting.beenden()
         if self.assistent.gespraech:
-            await self.assistent.gespraech.schliessen()
+            await self.assistent.gespraech.schliessen("meeting_beendet")
         basis = self.bild_als_text
         if basis and self._client is not None:
             # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb

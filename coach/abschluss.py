@@ -149,7 +149,8 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
         z.writestr("meeting.html", meeting_html(meeting))
         z.writestr("meeting-mit-regelanalyse.html", meeting_html(meeting, analyse))
         # Abschlussbild (Premium) bzw. Überblick als Text (Basis: steht an der Stelle des Bilds, Lastenheft 4.7)
-        for bild in ("zusammenfassung.png", "zusammenfassung.svg", "ueberblick.md", "meeting.json", "tasks.json"):
+        for bild in ("zusammenfassung.png", "zusammenfassung.svg", "ueberblick.md", "meeting.json", "tasks.json",
+                     "nestor.jsonl"):  # Ticket #83: Nestors Seite – Niclas' Entscheidung 11.10.
             if (ordner / bild).exists():
                 z.write(ordner / bild, bild)
         z.writestr("transkript.md", _transkript_md(bericht.get("transkript", [])))
@@ -213,6 +214,8 @@ def spenden_dateien(ordner: Path, feedback: str, mit_aufnahme: bool) -> list[Spe
         SpendeDatei("feedback.txt", inhalt=(feedback or "").encode("utf-8")),
         SpendeDatei("technik.json", inhalt=json.dumps(bericht.get("technik", {}), ensure_ascii=False, indent=2).encode("utf-8")),
     ]
+    if (ordner / "nestor.jsonl").exists():  # Ticket #83: Nestors Seite – Niclas' Entscheidung 11.10., darf mit
+        dateien.append(SpendeDatei("nestor.jsonl", pfad=ordner / "nestor.jsonl"))
     if mit_aufnahme and (ordner / "aufnahme.wav").exists():
         dateien.append(SpendeDatei("aufnahme.wav", pfad=ordner / "aufnahme.wav"))
     return dateien

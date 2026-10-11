@@ -683,8 +683,16 @@ async def beenden_und_abschluss(page: Page, lauf: Lauf, download: Path) -> None:
         protokoll = z.read("meeting.md").decode("utf-8", "replace") if "meeting.md" in namen else ""
         transkript = z.read("transkript.md").decode("utf-8", "replace") if "transkript.md" in namen else ""
         meeting_json = json.loads(z.read("meeting.json")) if "meeting.json" in namen else {}
+        nestor_zeilen = ([json.loads(zeile) for zeile in z.read("nestor.jsonl").decode("utf-8").splitlines() if zeile]
+                          if "nestor.jsonl" in namen else [])
     pflicht = {"meeting.md", "transkript.md", "agenda.md", "technik.json"}
     lauf.pruefen("ZIP enthält Pflichtdateien", pflicht <= namen, f"fehlt: {sorted(pflicht - namen)}")
+    # Ticket #83: Nestors Seite – die Ansprache aus dem Drehbuch („Nestor, wie viel Budget …“) muss als eigene
+    # Zeile mit Auslöser, Antwort und Zeit bis zum ersten Ton auftauchen (ohne den Satz der Runde selbst zu spiegeln).
+    nestor_bogen = [e for e in nestor_zeilen if e.get("ausloeser") == "bogen"]
+    lauf.pruefen("ZIP enthält nestor.jsonl mit Nestors Antwort auf die Drehbuch-Ansprache",
+                 "nestor.jsonl" in namen and any(e.get("quelle") == "stimme" and e.get("antwort") for e in nestor_bogen),
+                 f"ausloeser_bogen={len(nestor_bogen)}, quellen={[e.get('quelle') for e in nestor_bogen]}")
     lauf.belege["technik_json_stufe"] = {k: technik.get(k) for k in ("stufe", "anbieter") if k in technik}
     lauf.pruefen("technik.json nennt die gewählte Stufe", lauf.stufe in json.dumps(technik, ensure_ascii=False).lower(),
                  json.dumps(lauf.belege["technik_json_stufe"], ensure_ascii=False))

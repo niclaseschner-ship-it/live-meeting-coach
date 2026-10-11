@@ -149,6 +149,10 @@ class Gespraech:
         self._ws = await anbieter.ws_verbinden(self.wahl, url, kopf, self.coach.anbieter_verstoss)
         await self._senden({"type": "session.update", "session": self.sitzung()})
         self.offen = True
+        from .pipeline import _zeit_loggen  # Nestors Seite (#83): das Hörfenster öffnet sich
+
+        _zeit_loggen({"ausloeser": "hoerfenster", "ereignis": "geoeffnet",
+                      "grund": bogen.quelle if bogen is not None else "begruessung"})
         self._empfang = asyncio.create_task(self._empfangen())
         await self._fragen(frage or "", bogen)
 
@@ -218,13 +222,16 @@ class Gespraech:
         if self.offen:
             await self._senden({"type": "input_audio_buffer.append", "audio": base64.b64encode(pcm24k).decode()})
             if time.monotonic() > self._ende_bis and not self.a.zustand == "spricht":
-                await self.schliessen()
+                await self.schliessen("zeitueberschreitung")
 
-    async def schliessen(self) -> None:
+    async def schliessen(self, grund: str = "beendet") -> None:
         self._fertig.set()  # ein wartender Bogen hängt nicht
         if not self.offen:
             return
         self.offen = False
+        from .pipeline import _zeit_loggen  # Nestors Seite (#83): das Hörfenster schließt sich, mit Grund
+
+        _zeit_loggen({"ausloeser": "hoerfenster", "ereignis": "geschlossen", "grund": grund})
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -275,12 +282,16 @@ class Gespraech:
                     await self._antwort_fertig(e.get("response", {}))
                 elif typ == "error":
                     log.warning("Gespräch: Fehler vom Modell: %s", str(e.get("error", {}).get("message", ""))[:200])
+                    if self._bogen is not None:  # Nestors Seite (#83)
+                        self._bogen.fehler = str(e.get("error", {}).get("type") or "modell_fehler")
         except Exception as ex:  # noqa: BLE001
             if self.offen:
                 log.warning("Gespräch abgebrochen: %s", type(ex).__name__)
+            if self._bogen is not None:
+                self._bogen.fehler = self._bogen.fehler or type(ex).__name__
         finally:
             if self.offen:
-                await self.schliessen()
+                await self.schliessen("verbindung_beendet")
 
     async def _ereignis(self, typ: str, e: dict) -> bool:
         """Haken für Unterklassen: True heißt, das Ereignis ist erledigt und der Standardweg entfällt."""
@@ -437,6 +448,8 @@ class Gespraech:
         if text:
             self.a.letzte = {"frage": self._frage, "antwort": text, "zeit": c.meeting.jetzt(),
                              "aktion": getattr(self.a, "letzte_aktion", None)}
+            if self._bogen is not None:  # Nestors Seite (#83): fließt am Bogenende in logs/nestor.jsonl
+                self._bogen.gesagt, self._bogen.aktion = text, self.a.letzte["aktion"]
             c.antwort_karte(self._frage, text, self.a.letzte["aktion"], [], still=stumm)
             self.a.verlauf.append((self._frage, text))
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "modus": "gespraech",
@@ -450,4 +463,4 @@ class Gespraech:
         await c.melden()
         if self.beenden_nach_antwort:
             await asyncio.sleep(1.0)
-            await self.schliessen()
+            await self.schliessen("modell_beendet")

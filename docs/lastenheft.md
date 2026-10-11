@@ -299,10 +299,14 @@ automatisch und beendet den Container; lokal bleibt die explizite Einstellung `a
   (`coach/api_abschluss.py`), legt über dieselbe Ablage ab wie die Datenspende (lokal ein Ordner, im Cloud-Betrieb
   R2), ohne Meetinginhalte.
 - **Datenspende:** Transkript, Hinweise, Agenda, Dynamikdaten (`dynamik.json`), technische Metadaten
-  (`technik.json`) und optional die Aufnahme, mit einer eigenen Anmerkung dazu.
-  Absenden geht nur mit dem Häkchen „Alle Teilnehmenden sind einverstanden, dass diese Daten gespendet werden“.
+  (`technik.json`), Nestors eigene Seite (`nestor.jsonl`, Ticket #83: Auslöser, erkannte Absicht bzw.
+  Werkzeugaufruf, Antworttext bzw. Kartentitel, Kartenart, Hörfenster, Zeiten bis zum ersten Ton, Fehler – ohne
+  Ton, seine Stimme ist durch die Echounterdrückung ohnehin nicht in der Aufnahme) und optional die Aufnahme,
+  mit einer eigenen Anmerkung dazu. Absenden geht nur mit dem Häkchen „Alle Teilnehmenden sind einverstanden,
+  dass diese Daten gespendet werden“.
 - Hinweistext: „Die Daten werden maschinell ausgewertet, um Nestor zu verbessern. Niemand hört sie sich
-  einzeln an oder wertet Inhalte aus.“
+  einzeln an oder wertet Inhalte aus. Dazu gehört auch Nestors eigene Seite: seine Antworten und die dabei
+  erkannten Absichten – ohne Ton, seine Stimme wird herausgefiltert.“
 - Die Spende landet in einem Speicher in der EU (R2), lokal unter `spenden/`.
 
 ### 4.7 Überblick als Text

@@ -20,7 +20,7 @@ from coach.pipeline import Coach  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def ohne_protokolldateien(monkeypatch):
-    """Keine Einträge in logs/nutzung.jsonl und logs/nestor_zeiten.jsonl aus Tests."""
+    """Keine Einträge in logs/nutzung.jsonl und logs/nestor.jsonl aus Tests."""
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda e: None)
     monkeypatch.setattr("coach.pipeline._zeit_loggen", lambda e: None)
 

@@ -288,7 +288,7 @@ class Begruessung(Gespraech):
         self._antwort_laeuft = True
         await self._senden({"type": "response.create"})
 
-    async def schliessen(self) -> None:
+    async def schliessen(self, grund: str = "beendet") -> None:
         if self.phase:
             self.phase = False
             if self._akt:  # Verbindung mitten in einer Antwort weg: gesagt ist, was schon ankam
@@ -299,7 +299,7 @@ class Begruessung(Gespraech):
             self.fertig.set()
         if self._ende_aufgabe:
             self._ende_aufgabe.cancel()
-        await super().schliessen()
+        await super().schliessen(grund)
 
     def gesagt(self) -> str:
         """Was hörbar gesagt wurde – Grundlage der Pflichtpunkt-Prüfung."""

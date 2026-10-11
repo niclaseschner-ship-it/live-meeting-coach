@@ -11,9 +11,11 @@
                                   Zeitreihe – dasselbe Format wie die Testläufe (scripts/abspielen.py),
                                   damit die Auswertungsskripte auch auf echten Meetings laufen
         aufnahme.wav              Audio (24 kHz mono), mit scripts/abspielen.py erneut durchspielbar
+        nestor.jsonl              Nestors Seite je Anfrage: Auslöser, erkannte Absicht/Werkzeugaufruf, Hörfenster,
+                                  Antworttext bzw. Kartentitel, Kartenart, Zeiten, Fehler (Ticket #83 – darf laut
+                                  Niclas 11.10. mitgespendet werden, kein Audio; deshalb nicht unter debug/)
         debug/coach.log           Warnungen und Fehler des Coachs während des Meetings
         debug/ereignisse.jsonl    Mikrofon- und Lautsprecherwechsel, Start/Stopp und woher
-        debug/nestor_zeiten.jsonl Knopf/Ansprache bis zum ersten Ton
         debug/nutzung.jsonl       API-Aufrufe mit Kosten (ohne Inhalte)
 
 Gilt nur für den Server (nicht für Testskripte). Sagt die Runde bei der Begrüßung „Nein“, wird die Aufnahme
@@ -211,7 +213,8 @@ class Archiv:
         if protokoll:
             (self.ordner / "protokoll.md").write_text(protokoll, encoding="utf-8")
         logs = WURZEL / "logs"
-        _jsonl_seit(logs / "nestor_zeiten.jsonl", self.ordner / "debug" / "nestor_zeiten.jsonl", self.seit)
+        # nestor.jsonl liegt bewusst nicht unter debug/: Ticket #83, geht ins Paket und in die Spende (coach/abschluss.py)
+        _jsonl_seit(logs / "nestor.jsonl", self.ordner / "nestor.jsonl", self.seit)
         _jsonl_seit(logs / "nutzung.jsonl", self.ordner / "debug" / "nutzung.jsonl", self.seit)
         if endgueltig:
             self.ereignis("abgelegt")

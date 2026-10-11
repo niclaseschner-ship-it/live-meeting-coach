@@ -8,7 +8,8 @@
     "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe – halten, sprechen, loslassen – mit gleicher Rückmeldung.",
     "sprechtaste_handy": "#66 Kommentar (Referenzlauf 20261010-100500, handy_live): Premium funktioniert wie ein Telefon (Ansprache per Name) – die Sprechtaste ist dort nachgeordnet (unter „Weitere Aktionen“); in Basis (Funkgerät) bleibt sie die große Hauptbedienung.",
     "handy_kopf": "#66 Kommentar: Der Meeting-Titel in der Handy-Kopfleiste wird nicht auf wenige Buchstaben abgeschnitten.",
-    "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy."
+    "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy.",
+    "nestor_jsonl": "#83: Nestors Seite darf mitgespendet werden (Niclas' Entscheidung 11.10.) – das Paket (ZIP) muss nestor.jsonl mit Auslöser, Antwort und Zeiten zur Drehbuch-Ansprache enthalten (tests/e2e/schritte.py: beenden_und_abschluss)."
   },
 
   "phasen": ["start", "vorbereitung", "live", "abschluss"],
