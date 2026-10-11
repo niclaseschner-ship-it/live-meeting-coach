@@ -415,7 +415,7 @@ class Coach:
         return aus
 
     def status_kurz(self) -> dict:
-        """Aktueller Stand für Nestor im Gespräch (Werkzeug status_abfragen) – damit er nicht rät."""
+        """Bild-, Folien- und Recherche-Stand für Nestors Lage im Gespräch (Assistent.lage) – damit er nicht rät."""
         m = self.meeting
         akt = m.agenda[m.aktiver_punkt] if 0 <= m.aktiver_punkt < len(m.agenda) else None
         if self._onepager_laeuft:

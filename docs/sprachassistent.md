@@ -105,28 +105,32 @@ stillen Abschnitts-Zusammenfassungen dauerten 18–33 s im Hintergrund. Im lokal
 erste Ton nach einer Frage im Median nach 1,5 s (Premium) bzw. 1,3 s (Basis, Sprechtaste); alle vier Grenzfälle
 beantwortet.
 
-## Nachfrage ohne Namen (Premium, Follow-up-Modus)
+## Gesprächszug und Hörfenster (Premium im Gespräch)
 
-Nach jedem Bogen öffnet sich ab dem Ende der Wiedergabe ein Fenster von 6 s (`LMC_NACHFRAGE_SEKUNDEN`, bis #28 15 s),
-sichtbar als Ring „Ich höre zu“, der abläuft. Der Satz muss in diesem Fenster **beginnen** (er darf später als Text
-ankommen). Nur der **erste Satz** danach kann eine Nachfrage sein; ist er nicht an Nestor gerichtet oder hat seit der
-Antwort schon jemand anderes gesprochen, schließt das Fenster sofort (die Runde hat übernommen). Hintergrund (#28): Im
-Premium-Abendlauf 08.10. beantwortete Nestor „Heißt das, selbst ein schneller Application Rollback hätte uns nicht
-gerettet“ – eine Frage an die Kollegen, 6,2 s nach seiner Antwort zur Restzeit. Entscheidung in Stufen, im Zweifel
-schweigen (`coach/bogen.py`, `coach/assistent.py: nachfrage_einordnen`):
-1. Regel: der Satz spricht eine Person der Runde an („Anna, …“, „…, oder Tarek?“, ein Name aus Einrichtung oder
-   Namensrunde) → nicht an Nestor.
-2. Regel: klare Anschlussfrage oder Auftrag („Und bis wann?“, „Und wer?“, kurze „Und …?“-Frage ohne Wir/Uns,
-   „Zeig/trag/ergänz …“, „Kannst du …“ ohne anderen Namen) → an Nestor, Bogen.
-3. Regel (#28): der Satz teilt ein Sachwort mit dem, was die Runde zuletzt sagte, aber keins mit Nestors Frage und
-   Antwort, und spricht ihn nicht an („Rollback“ nach einer Antwort zur Restzeit) → knüpft an die Runde an, still.
-4. Sonst ein schneller Klassifikator (gpt-5.4-mini; Prompt mit den letzten Sätzen der Runde, Nestors Frage und Antwort;
-   streng: nur eindeutige Anschlussfragen, Wir-/Uns-Sicht und Fragen an die Runde sprechen dagegen): `frage_an_nestor`
-   (Bogen), `an_nestor_ohne_antwort` („Passt“, „Danke“ → still), `nicht_an_nestor` (still). Frist 2,5 s.
-   Messung (`scripts/einordnen_messen.py --wiederholen 3`, 08.10.): 48/50, alle 20 Fälle aus #28 richtig, die 14
-   Sätze aus #27 wie vorher („Warum steht da noch nichts zum SLA?“ schwankt, wie schon vor #28).
-Dieselbe Person wie die Fragende wird mitgeschrieben, ist aber nur ein Plus-Signal. Antwortet Nestor doch falsch,
-stoppt ihn Reinreden. Gemessen (`scripts/einordnen_messen.py`, 14 typische Sätze direkt nach einer Antwort, u. a. „Anna, das machst du doch, oder?“, „Ja, passt.“, „Und bis wann?“, „Was meinst du mit Wartungsfenster?“): Denkaufwand „low“ 14/14 richtig, Median 1,04 s; „none“ 13/14, Median 0,70 s (der eine Fehler: Zeitüberschreitung, also still). Eingestellt ist „none“ (`LMC_EINORDNEN_AUFWAND`).
+Im Gespräch sortiert der Code nichts mehr vor: keine Karten-, Recherche- oder Abbruch-Muster, keine Regeln und kein
+Klassifikator für Nachfragen. Jede Anfrage – Name, Sprechtaste, Knopf mit Freitext, getippt, ein Zug im Hörfenster –
+geht als **ein** Aufruf mit Werkzeugen an das Realtime-Modell (`coach/werkzeuge.py`), mit dem aktuellen Stand des
+Meetings (`Assistent.lage`: Agenda mit aktivem Punkt und Zeiten, Ergebnisse mit Nummern, laufende Aufträge, letzte
+Karten, die letzten fünf Minuten Transkript mit Sprechern).
+
+- **Gesprächszug** (`coach/gespraechszug.py`): Der Live-Text zerlegt Äußerungen in Segmente. Alle Sätze bis zu einer
+  Pause (`LMC_ZUG_PAUSE_SEKUNDEN`, 1,2 s ab dem Satzende, und niemand spricht gerade) werden **eine** Anfrage;
+  spätestens nach `LMC_ZUG_MAX_WARTEN` (6 s) geht sie hinaus. Während ein Zug läuft, wechselt die feste Ansage-Regel
+  die Agenda nicht.
+- **Hörfenster:** Nach jeder Antwort darf ein Zug ohne Namen bis `LMC_NACHFRAGE_SEKUNDEN` (8 s) nach dem Ende der
+  Wiedergabe **beginnen** (Ring „Ich höre zu“). Sagt währenddessen jemand anderes etwas, schließt das das Fenster
+  nicht: der Satz kommt mit Sprecherangabe in denselben Aufruf. Ob der Zug an Nestor ging, entscheidet das Modell –
+  ist er es nicht, ruft es `nicht_an_mich` auf, und Nestor schweigt (begonnener Ton wird verworfen, keine Karte, kein
+  neues Hörfenster). Bei direkter Ansprache lehnt der Code `nicht_an_mich` ab.
+- **Schranken im Code:** höchstens eine Werkzeugrunde und eine Abschlussantwort je Anfrage; Werkzeug-Argumente
+  geprüft (Ergebnis-Nummer und Agendapunkt existieren, Zeitangabe lesbar); kommt bis `LMC_ANFRAGE_FRIST_SEKUNDEN`
+  (15 s) kein Ton, wird die Anfrage still und das Ergebnis kommt als Karte. Die Sofortbestätigung kommt bei
+  gerichteten Anfragen sofort, bei einem Zug ohne Namen erst mit dem Werkzeugaufruf.
+- **Leitplanken bleiben deterministisch:** „Nestor, stopp/warte“ (Halt), das Nein, die Kostenbremse.
+- **Text-Weg** (Basis, Premium-Kurzantwort) unverändert, aber **ohne Hörfenster**: ob ein Satz ohne Namen gemeint war,
+  kann nur das Gespräch entscheiden.
+
+Jede Anfrage steht im Protokoll als `anfrage` (Auslöser, Text, Werkzeuge, Dauer, gerichtet, verworfen).
 
 ## Architektur
 
@@ -141,12 +145,13 @@ Mikrofon ─► Live-Text (läuft ohnehin) ─► Satz mit „Nestor“ ─► B
                                                                erste Frage als Text → Antwort als Sprache
 Mikrofon ──────────────────────────────────────────────────► geht direkt in die offene Sitzung
                                                                (Modell hört Rückfragen, Gesagtes, Tonfall)
-Live-Text: Name oder gerichtete Nachfrage (erster Satz nach dem Bogen) ──► Coach löst den nächsten Bogen aus
+Live-Text: Name oder Zug im Hörfenster (Sätze bis zur Pause) ──► Coach schickt EINE Anfrage mit aktuellem Stand
 Jemand redet hinein ──► Dashboard verstummt sofort; die Antwort wird still fertig (Karte), truncate an das Modell
 20 s Ruhe oder „danke, das war's“ ──► Sitzung zu, Nestor hört wieder nur auf seinen Namen
-Werkzeuge: bild_zeichnen(fokus), recherchieren(frage) – lange Aufträge; folie_erstellen, karte_zeigen(art) – Karten-
-           Bogen; artefakt_eintragen; agendapunkt_wechseln(nummer); status_abfragen; zuhoeren_pausieren;
-           gespraech_beenden
+Werkzeuge: zusammenfassen(bereich punkt|gesamt|seit), karte(titel, punkte), nicht_an_mich, auftrag_abbrechen(art);
+           bild_zeichnen(fokus), recherchieren(frage) – lange Aufträge; folie_erstellen, karte_zeigen(art),
+           karte_neu_aufbereiten(wie) – Karten-Bogen; artefakt_eintragen, ergebnis_entfernen/aendern;
+           agendapunkt_wechseln(nummer); zuhoeren_pausieren; gespraech_beenden
 Ton: PCM-Stücke ─► WebSocket ─► Dashboard (nur Moderationsansicht) spielt nahtlos ab
 ```
 
@@ -155,8 +160,8 @@ Ton: PCM-Stücke ─► WebSocket ─► Dashboard (nur Moderationsansicht) spie
   Karten-Bögen (Zusammenfassen usw.) spricht die Sprachausgabe mit derselben Stimme.
 - **Wer entscheidet, wann er spricht:** der Coach, nicht das Modell (`create_response` aus). Abspieltest:
   Mit eigener Entscheidung kommentierte das Modell ungefragt das laufende Gespräch („Alles klar,
-  Vorschlag: maximal 2000 Euro“). Jetzt antwortet es nur, wenn der Name im Live-Text fällt oder der erste Satz
-  nach seinem Bogen an es gerichtet ist. Es hört aber alles mit und weiß, was gesagt wurde.
+  Vorschlag: maximal 2000 Euro“). Jetzt bekommt es nur Anfragen: den Namen im Live-Text oder einen Zug im
+  Hörfenster nach seiner Antwort – ob der gemeint war, entscheidet es selbst (`nicht_an_mich`). Es hört aber alles mit und weiß, was gesagt wurde.
 - **Kosten** laut Token-Protokoll im Abspieltest: je Antwort ~1–2 Cent, solange die Sitzung offen ist
   dazu das mitgehörte Audio. Die Sitzung schließt nach 20 s Ruhe.
 
