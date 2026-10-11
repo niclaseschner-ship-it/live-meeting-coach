@@ -1110,11 +1110,12 @@ class Ergebnisuhr:
     SAETZE = ("beschließen", "Sabine liefert", "Kauf lohnt")
     VERLAUF = ("9.000", "Sabine", "Freitag", "Vereinsbus")
     BAND = ("Ergebnis-Erkennung gestört", "In Basis: Sprechtaste halten")
-    # Stufe C: dieselben Schlüssel, aber als Regex (echte Transkription/Modelle schreiben nicht wörtlich gleich)
-    SAETZE_C = {"beschließen": r"beschlie(ß|ss)en", "Sabine liefert": r"Sabine", "Kauf lohnt": r"Kauf|lohnt",
+    # Stufe C: dieselben Schlüssel, aber als Regex (echte Transkription/Modelle schreiben nicht wörtlich gleich;
+    # Voxtral hört dieselbe Aufnahme mal „Sabine“, mal „Sabini“)
+    SAETZE_C = {"beschließen": r"beschlie(ß|ss)en", "Sabine liefert": r"Sabin[ei]", "Kauf lohnt": r"Kauf|lohnt",
                 "ansprache": r"wie viel Budget|wieviel Budget", "monolog": r"Tombola|Hüpfburg|Kuchenbuffet|Schulband",
                 "imperativ": r"b[üu]nd"}
-    VERLAUF_C = {"9.000": r"9[.\s]?000|neuntausend", "Sabine": r"Sabine", "Freitag": r"Freitag",
+    VERLAUF_C = {"9.000": r"9[.\s]?000|neuntausend", "Sabine": r"Sabin[ei]", "Freitag": r"Freitag",
                  "Vereinsbus": r"Vereinsbus"}
 
     def __init__(self, page: Page, echt: bool = False) -> None:
@@ -1292,7 +1293,8 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     ab_imperativ = (karte["t"] - (t_mikro + imp["ende"])) if karte else None
     lauf.pruefen("Imperativ „bündle mir mal die Ergebnisse“ löst Zusammenfassen aus (Karte im Verlauf)", bool(karte),
                  f"Karte {karte['titel']!r} {ab_imperativ:.0f} s nach Satzende" if karte
-                 else f"keine Zusammenfassungs-Karte binnen 60 s; Imperativ im Transkript={'imperativ' in uhr.satz}")
+                 else f"keine Zusammenfassungs-Karte binnen 60 s; Imperativ im Transkript={'imperativ' in uhr.satz}",
+                 abweichung="imperativ_basis" if lauf.stufe == "basis" else None)
     await lauf.bild(page, "imperativ")
 
     # Monologanzeige: Werte während des Blocks (Lage relativ zur WAV) – wächst sie live, erreicht sie die Schwelle?
