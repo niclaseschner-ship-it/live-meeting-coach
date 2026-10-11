@@ -221,8 +221,6 @@ def _meeting() -> Meeting:
     m.transkript = [Segment("Person 2", "Ich schlage 25.000 Euro als Obergrenze vor.", 10, 14),
                     Segment("Person 1", "Gut, dann ist beschlossen: höchstens 25.000 Euro.", 15, 19),
                     Segment("Person 2", "Ich hole bis Ende Oktober drei Angebote ein.", 60, 64)]
-    m.ergebnisse[0] = {"ergebnis": "höchstens 25.000 Euro", "entscheidungen": [{"was": "Obergrenze", "ergebnis": "25.000 Euro"}],
-                       "aufgaben": []}
     return m
 
 
@@ -238,28 +236,52 @@ class FakeClient:
                                usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50))
 
 
-def test_ueberblick_zahlen_aus_dem_material_und_keine_personen():
+def _ergebnisse():
+    from coach.artefakte import Artefakt
+
+    return [Artefakt(1, "entscheidung", "Obergrenze höchstens 25.000 Euro", status="endgueltig", punkt=0),
+            Artefakt(2, "aufgabe", "Drei Angebote einholen", wer="Person 2", bis="Ende Oktober", punkt=1),
+            Artefakt(3, "offen", "Wer bucht die Hotels?", punkt=1),
+            Artefakt(4, "entscheidung", "Messestand mieten", status="vorschlag", punkt=0)]
+
+
+def test_ueberblick_zeigt_die_artefakte_und_das_modell_nur_kernsatz_und_ausserhalb():
     antwort = {"kernaussage": "Budget steht, Aufgaben laufen",
-               "entschieden": [{"punkt": 1, "was": "Obergrenze 25.000 Euro"},
-                               {"punkt": 1, "was": "Obergrenze 55.000 Euro"}],  # erfunden → fliegt raus
-               "offen": [{"punkt": 2, "was": "Wer bucht die Hotels?"}],
-               "aufgaben": [{"was": "Drei Angebote einholen", "wer": "Person 2", "bis": "Ende Oktober"}],
-               "ausserhalb": [], "neu": ["Person 2 holt Angebote"]}
-    u, nutzung = asyncio.run(ueberblick.erstellen(FakeClient(antwort), _meeting(), vorher={"entschieden": []},
-                                                  wahl=wahl_fuer("basis")))
-    assert [e["was"] for e in u["entschieden"]] == ["Obergrenze 25.000 Euro"]
-    assert u["aufgaben"] == [{"was": "Drei Angebote einholen", "wer": None, "bis": "Ende Oktober"}]
-    assert u["neu"] == ["jemand holt Angebote"]
+               "entschieden": [{"punkt": 1, "was": "Obergrenze 55.000 Euro"}],  # nicht mehr gefragt → ignoriert
+               "ausserhalb": [{"zeit": "1:00", "was": "Fußball am Wochenende"},
+                              {"zeit": "1:10", "was": "Urlaub für 3000 Euro"}]}  # Zahl nicht im Material → raus
+    u, nutzung = asyncio.run(ueberblick.erstellen(FakeClient(antwort), _meeting(), _ergebnisse(),
+                                                  vorher={"ids": [1], "fokus": None}, wahl=wahl_fuer("basis")))
+    assert [e["was"] for e in u["entschieden"]] == ["Obergrenze höchstens 25.000 Euro"]
+    assert [e["id"] for e in u["offen"]] == [3, 4]
+    assert u["aufgaben"] == [{"id": 2, "was": "Drei Angebote einholen", "wer": None, "bis": "Ende Oktober", "punkt": 2}]
+    assert u["ausserhalb"] == [{"was": "Fußball am Wochenende", "zeit": "1:00"}]
+    assert u["neu"] == ["Aufgabe: Drei Angebote einholen", "Offener Punkt: Wer bucht die Hotels?",
+                        "Entscheidung: Messestand mieten"]
     assert u["titel"] == "Messeplanung 2027" and u["laufzeit"] == "2:05" and u["punkt"] == "1. Budget"
     assert nutzung["tokens_rein"] == 100
     md = ueberblick.als_markdown(u)
-    assert "✅ Entschieden" in md and "📌 Aufgaben" in md and "25.000" in md
+    assert "✅ Entschieden" in md and "📌 Aufgaben" in md and "25.000" in md and "Messestand mieten (nur Vorschlag)" in md
 
 
-def test_ueberblick_bekommt_festgestellte_ergebnisse():
-    c = FakeClient({"entschieden": [], "offen": [], "aufgaben": [], "ausserhalb": [], "neu": []})
-    asyncio.run(ueberblick.erstellen(c, _meeting(), wahl=wahl_fuer("basis")))
-    assert "Festgestellte Ergebnisse" in c.auftrag and "höchstens 25.000 Euro" in c.auftrag
+def test_ueberblick_kernsatz_mit_erfundener_zahl_fliegt_raus():
+    u, _ = asyncio.run(ueberblick.erstellen(FakeClient({"kernaussage": "Budget von 55.000 Euro steht"}), _meeting(),
+                                            _ergebnisse(), wahl=wahl_fuer("basis")))
+    assert u["kernaussage"] is None and u["neu"] == ["erster Stand"]
+
+
+def test_ueberblick_bekommt_festgehaltene_ergebnisse_und_fragt_keine_neu_ab():
+    c = FakeClient({"kernaussage": "x", "ausserhalb": []})
+    asyncio.run(ueberblick.erstellen(c, _meeting(), _ergebnisse(), wahl=wahl_fuer("basis")))
+    assert "Festgehaltene Ergebnisse" in c.auftrag and "1. Entscheidung: Obergrenze höchstens 25.000 Euro" in c.auftrag
+    assert '"entschieden"' not in c.auftrag and '"aufgaben"' not in c.auftrag and '"nummern"' not in c.auftrag
+
+
+def test_ueberblick_mit_fokus_waehlt_nur_nummern_aus():
+    c = FakeClient({"kernaussage": "Zu den Angeboten", "ausserhalb": [], "nummern": [2, 99]})
+    u, _ = asyncio.run(ueberblick.erstellen(c, _meeting(), _ergebnisse(), fokus="Angebote", wahl=wahl_fuer("basis")))
+    assert '"nummern"' in c.auftrag
+    assert u["ids"] == [2] and u["entschieden"] == [] and u["offen"] == [] and u["aufgaben"][0]["id"] == 2
 
 
 def test_basis_bild_aktion_macht_ueberblick(monkeypatch):

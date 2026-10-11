@@ -1295,7 +1295,9 @@ class Coach:
         self._ueberblick_laeuft = True
         await self.melden()
         try:
-            u, nutzung = await ueberblick.erstellen(self._client, self.meeting, self.ueberblick, fokus, wahl=self.wahl)
+            await self.artefakte.nachholen()  # der Überblick zeigt die Artefakte – erst das Neueste auswerten
+            u, nutzung = await ueberblick.erstellen(self._client, self.meeting, self.artefakte.liste, self.ueberblick,
+                                                    fokus, wahl=self.wahl)
             nutzung_loggen({"art": "ueberblick", "modell": self.wahl.analyse_modell, **nutzung})
             self.ueberblick = u
             self.ueberblick_version += 1

@@ -99,6 +99,11 @@ def kollektiv(wer: str | None) -> bool:
     return bool(wer) and wer.strip().lower() in KOLLEKTIV
 
 
+def beschlossen(a: "Artefakt") -> bool:
+    """Entscheidung, die gilt (endgültig oder vorläufig) – alles andere ist für die Ansichten noch offen."""
+    return a.typ == "entscheidung" and a.status in ("endgueltig", "vorlaeufig")
+
+
 def sprechbar_wer(wer: str | None) -> str:
     """Nestor nennt niemanden „Person 2“ (Lastenheft: keine Labels vorlesen)."""
     if not wer or re.match(r"^Person\b", wer):

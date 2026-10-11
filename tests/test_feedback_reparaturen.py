@@ -16,11 +16,12 @@ def test_ueberblick_aktueller_punkt_filtert_quellen():
     m.punkt_beginne = [(0, 0), (1, 20)]
     m.transkript = [Segment("Lea", "Alte vertrauliche Budgetdiskussion", 2, 5),
                     Segment("Jonas", "Der Termin ist Mittwoch", 22, 25)]
-    m.ergebnisse = {0: {"ergebnis": "Altbeschluss"}, 1: {"ergebnis": "Neuer Termin"}}
-    stoff = material(m, "aktueller Agendapunkt")
+    liste = [A.Artefakt(1, "entscheidung", "Altbeschluss", status="endgueltig", punkt=0),
+             A.Artefakt(2, "entscheidung", "Neuer Termin", status="endgueltig", punkt=1)]
+    stoff = material(m, liste, "aktueller Agendapunkt")
     assert "Mittwoch" in stoff and "Neuer Termin" in stoff
     assert "Budgetdiskussion" not in stoff and "Altbeschluss" not in stoff
-    assert "Budgetdiskussion" in material(m, "gesamtes Meeting")
+    assert "Budgetdiskussion" in material(m, liste, "gesamtes Meeting")
 
 
 def test_assistentenaudio_zaehlt_nicht_als_ueberlappung():

@@ -4,15 +4,17 @@ in Premium ist er umschaltbar neben dem Live-Bild.
 
 Aufbau wie die Zonen des Live-Bilds (coach/bild_gpt.py, Strukturanalyse Schritt 1):
     Kopf          Titel, Laufzeit, aktueller Punkt, Agenda mit Status          – aus dem Meeting-Zustand, ohne Modell
-    ✅ Entschieden  nur ausdrücklich Beschlossenes, mit Ergebnis
-    🟡 Offen        ausdrücklich genannte offene Fragen
-    📌 Aufgaben     was, wer, bis wann (nur wenn gesagt)
-    ↪ Außerhalb    Gesprächsteile ohne Bezug zur Agenda
-    Neu seit dem letzten Stand
+    ✅ Entschieden  beschlossene und vorläufige Entscheidungen                    – aus den Artefakten
+    🟡 Offen        offene Punkte, Risiken, bloße Vorschläge                      – aus den Artefakten
+    📌 Aufgaben     was, wer, bis wann                                            – aus den Artefakten
+    ↪ Außerhalb    Gesprächsteile ohne Bezug zur Agenda                          – Modell
+    Neu seit dem letzten Stand                                                   – aus den Artefakt-Nummern
 
-Inhalte kommen aus einem Textaufruf (JSON) über Agenda, festgestellte Ergebnisse je Punkt (Regel 10) und Transkript.
-Damit nichts „gemalt“ wird: jede Zahl im Überblick muss im Material vorkommen, sonst fliegt der Eintrag raus
-(`zahlen_pruefen`) – die Bildprobe mit FLUX hatte aus 25.000 € 55.000 € gemacht.
+Entschieden, Offen und Aufgaben sind eine Ansicht auf die festgehaltenen Ergebnisse (coach/artefakte.py) – dieselben
+Einträge mit demselben Wortlaut wie in protokoll.md, meeting.json und tasks.json. Das Modell schreibt nur den
+Kernsatz und „außerhalb der Agenda“ (bei einem Fokus wählt es dazu die passenden Ergebnis-Nummern aus). Damit nichts
+„gemalt“ wird: eine Zahl, die im Material nicht vorkommt, wirft den Satz raus – die Bildprobe mit FLUX hatte aus
+25.000 € 55.000 € gemacht.
 """
 
 from __future__ import annotations
@@ -22,52 +24,37 @@ import re
 import time
 
 from .analyse import mmss
+from .artefakte import TYP_NAME, beschlossen, kollektiv, zahlen
 
 MAX_TRANSKRIPT_ZEICHEN = 30000
 
 AUFTRAG = """\
-Du bereitest für eine Besprechungsrunde den Überblick über ihr laufendes Meeting vor. Er steht auf dem Bildschirm
-und zeigt auf einen Blick, was entschieden ist, was offen ist und wer was bis wann übernimmt.
+Du bereitest für eine Besprechungsrunde den Überblick über ihr laufendes Meeting vor. Die Ergebnisse (Entscheidungen,
+Aufgaben, offene Punkte) sind schon festgehalten und stehen unten; sie erscheinen unverändert im Überblick. Du
+lieferst nur den Kernsatz und die Gesprächsteile außerhalb der Agenda.
 
 Antworte ausschließlich mit einem JSON-Objekt mit genau diesen Schlüsseln:
 {{"kernaussage": "ein Satz, höchstens 15 Wörter: wo steht das Meeting gerade",
- "entschieden": [{{"punkt": Nummer des Agendapunkts oder null, "was": "Beschluss in höchstens 12 Wörtern"}}],
- "offen": [{{"punkt": Nummer oder null, "was": "offene Frage in höchstens 12 Wörtern"}}],
- "aufgaben": [{{"was": "Aufgabe in höchstens 10 Wörtern", "wer": "Name oder null", "bis": "Termin oder null"}}],
- "ausserhalb": [{{"zeit": "m:ss", "was": "Thema in höchstens 6 Wörtern"}}],
- "neu": ["1 bis 3 kurze Zeilen: was seit dem letzten Stand dazukam"]}}
+ "ausserhalb": [{{"zeit": "m:ss", "was": "Thema in höchstens 6 Wörtern"}}]{schluessel}}}
 
 Regeln:
 - Nur, was im Material steht. Zahlen, Beträge, Termine und Namen genau so wie dort – nichts runden, nichts ergänzen.
-- „entschieden“ nur, wenn die Gruppe es ausdrücklich beschlossen hat; ein Vorschlag bleibt „offen“.
-- Die festgestellten Ergebnisse je Agendapunkt unten sind geprüft – übernimm sie, statt sie neu zu formulieren.
-- Aufgaben: „wer“ und „bis“ nur, wenn gesagt, sonst null. Personen heißen im Transkript „Person N“; nenne sie nicht
-  so (dann null). Keine Bewertung von Personen.
+- Personen heißen im Transkript „Person N“; nenne sie nicht so. Keine Bewertung von Personen.
 - „ausserhalb“: Gesprächsteile ohne Bezug zur Agenda (z. B. Fußball, Urlaub), mit Startzeit; sonst leere Liste.
 - Leere Listen sind erlaubt. Deutsch.
-{fokus}{vorher}
+{fokus}
 MATERIAL:
 {material}
 """
 
-FOKUS = "\nFOKUS (Wunsch der Runde): {fokus} – nimm nur auf, was dazu gehört.\n"
-VORHER = "\nLETZTER STAND (für „neu“ – vergleiche damit, was dazukam):\n{vorher}\n"
+FOKUS = ("\nFOKUS (Wunsch der Runde): {fokus} – der Kernsatz handelt davon; unter „nummern“ stehen die Nummern der "
+         "festgehaltenen Ergebnisse, die dazugehören.\n")
+FOKUS_SCHLUESSEL = ',\n "nummern": [Nummern der festgehaltenen Ergebnisse, die zum Fokus gehören]'
 
 
-def zahlen(text: str) -> set[str]:
-    """Zahlen in vergleichbarer Form: „25.000“, „25000“ und „25 000“ werden zu „25000“; Uhrzeiten/Daten bleiben Ziffern."""
-    roh = re.findall(r"\d[\d.\s]*\d|\d", text)
-    return {re.sub(r"[.\s]", "", z) for z in roh}
-
-
-def zahlen_pruefen(eintraege: list[dict], quelle: set[str], felder=("was", "wer", "bis")) -> list[dict]:
-    """Einträge mit einer Zahl, die im Material nicht vorkommt, verwerfen (lieber weglassen als falsch zeigen)."""
-    aus = []
-    for e in eintraege:
-        text = " ".join(str(e.get(f) or "") for f in felder)
-        if zahlen(text) <= quelle:
-            aus.append(e)
-    return aus
+def _ohne_label(text: str) -> str:
+    """„Person N“ nicht auf den Bildschirm (Lastenheft: keine Personenlabels) – in Modelltexten „jemand“."""
+    return re.sub(r"\bPerson \d+\b", "jemand", text)
 
 
 def _liste(roh, felder: tuple[str, ...], n: int) -> list[dict]:
@@ -77,13 +64,8 @@ def _liste(roh, felder: tuple[str, ...], n: int) -> list[dict]:
             e = {felder[0]: e}
         if not isinstance(e, dict) or not str(e.get(felder[0]) or "").strip():
             continue
-        d = {f: (str(e[f]).strip()[:160] if e.get(f) not in (None, "", "null") else None) for f in felder}
-        for f, v in d.items():  # „Person N“ nicht auf den Bildschirm: als Zuständige weglassen, im Text „jemand“
-            if v and re.fullmatch(r"Person \d+", v):
-                d[f] = None
-            elif v:
-                d[f] = re.sub(r"\bPerson \d+\b", "jemand", v)
-        aus.append(d)
+        aus.append({f: (_ohne_label(str(e[f]).strip()[:160]) if e.get(f) not in (None, "", "null") else None)
+                    for f in felder})
     return aus[:n]
 
 
@@ -109,45 +91,72 @@ def kopf(meeting) -> dict:
     }
 
 
-def material(meeting, fokus: str | None = None) -> str:
-    """Meeting-Text wie beim Live-Bild plus die festgestellten Ergebnisse je Punkt (Regel 10)."""
-    aktuell = bool(fokus and re.search(r"aktuell|aktueller|aktuellen|dieser|laufend", fokus, re.I))
+def _aktuell(fokus: str | None) -> bool:
+    return bool(fokus and re.search(r"aktuell|aktueller|aktuellen|dieser|laufend", fokus, re.I))
+
+
+def auswahl(meeting, liste: list, fokus: str | None = None) -> list:
+    """Die Ergebnisse, die der Überblick zeigt: alle, beim Fokus „aktueller Punkt“ die dieses Punkts."""
     i = meeting.aktiver_punkt
-    if aktuell and 0 <= i < len(meeting.agenda):
+    if _aktuell(fokus) and 0 <= i < len(meeting.agenda):
+        return [a for a in liste if a.punkt == i]
+    return list(liste)
+
+
+def material(meeting, liste: list, fokus: str | None = None) -> str:
+    """Meeting-Text wie beim Live-Bild plus die festgehaltenen Ergebnisse mit Nummer."""
+    i = meeting.aktiver_punkt
+    if _aktuell(fokus) and 0 <= i < len(meeting.agenda):
         p = meeting.agenda[i]
         teile = [f"Titel: {meeting.titel}\nAgendapunkt {i + 1}: {p.titel}\nZiel: {p.ziel or '-'}",
                  "Transkript:", "\n".join(f"[{mmss(s.start)}] {s.sprecher}: {s.text}"
                                            for s in meeting.punkt_transkript(i) if s.text)]
     else:
         teile = [meeting_text(meeting)]
-    erg = []
-    for i, e in sorted(meeting.ergebnisse.items()):
-        if aktuell and i != meeting.aktiver_punkt:
-            continue
-        if not (0 <= i < len(meeting.agenda)):
-            continue
-        zeile = f"{i + 1}. {meeting.agenda[i].titel}: Ergebnis: {e.get('ergebnis') or 'keins ausgesprochen'}"
-        zeile += "".join(f"; Entscheidung: {d['was']}" + (f" ({d['ergebnis']})" if d.get("ergebnis") else "")
-                         for d in e.get("entscheidungen") or [])
-        zeile += "".join(f"; Aufgabe: {a['was']} (wer: {a.get('wer') or 'offen'}, bis: {a.get('bis') or 'offen'})"
-                         for a in e.get("aufgaben") or [])
-        erg.append(zeile)
-    if erg:
-        teile += ["", "Festgestellte Ergebnisse je Agendapunkt (geprüft):"] + erg
+    gewaehlt = auswahl(meeting, liste, fokus)
+    if gewaehlt:
+        teile += ["", "Festgehaltene Ergebnisse (Nummer. Art: was):"] + [a.kurz() for a in gewaehlt]
     return "\n".join(teile)
 
 
-async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | None = None, *,
-                    wahl) -> tuple[dict, dict]:
-    """Liefert (überblick, nutzung). `vorher`: der letzte Überblick (für „neu seit dem letzten Stand“)."""
+def _wer(a) -> str | None:
+    """Zuständige wie in tasks.json; ein Personenlabel bleibt vom Bildschirm fern."""
+    if not a.wer or kollektiv(a.wer) or re.match(r"^Person\b", a.wer):
+        return None
+    return a.wer
+
+
+def ergebnisse(liste: list) -> dict[str, list[dict]]:
+    """Entschieden / Offen / Aufgaben als Ansicht auf die Artefakte: jedes Ergebnis genau einmal, Wortlaut unverändert.
+    Entschieden = beschlossene und vorläufige Entscheidungen; Offen = offene Punkte, Risiken und bloße Vorschläge."""
+    nr = lambda a: (a.punkt + 1) if a.punkt is not None else None  # noqa: E731
+    aus: dict[str, list[dict]] = {"entschieden": [], "offen": [], "aufgaben": []}
+    for a in liste:
+        if a.typ == "aufgabe":
+            aus["aufgaben"].append({"id": a.id, "was": a.was, "wer": _wer(a), "bis": a.bis, "punkt": nr(a)})
+        elif beschlossen(a):
+            aus["entschieden"].append({"id": a.id, "was": a.was, "punkt": nr(a), "status": a.status})
+        else:
+            aus["offen"].append({"id": a.id, "was": a.was, "punkt": nr(a), "typ": a.typ})
+    return aus
+
+
+def _neu(gewaehlt: list, vorher: dict | None, fokus: str | None) -> list[str]:
+    """Was seit dem letzten Stand festgehalten wurde – aus den Nummern, ohne Modell."""
+    if not vorher or vorher.get("fokus") != fokus or "ids" not in vorher:
+        return ["erster Stand"]
+    alt = set(vorher["ids"])
+    return [f"{TYP_NAME[a.typ]}: {a.was}"[:140] for a in gewaehlt if a.id not in alt][:3]
+
+
+async def erstellen(client, meeting, liste: list | tuple = (), vorher: dict | None = None, fokus: str | None = None,
+                    *, wahl) -> tuple[dict, dict]:
+    """Liefert (überblick, nutzung). `liste`: die Artefakte; `vorher`: der letzte Überblick (für „neu“)."""
     t0 = time.monotonic()
-    stoff = material(meeting, fokus)
-    alt = ""
-    if vorher and vorher.get("fokus") == fokus:
-        alt = json.dumps({k: vorher.get(k) for k in ("entschieden", "offen", "aufgaben", "ausserhalb")},
-                         ensure_ascii=False)
-    auftrag = AUFTRAG.format(fokus=FOKUS.format(fokus=fokus) if fokus else "",
-                             vorher=VORHER.format(vorher=alt) if alt else "", material=stoff)
+    stoff = material(meeting, liste, fokus)
+    frei = bool(fokus) and not _aktuell(fokus)  # freier Fokus: das Modell wählt die passenden Ergebnisse
+    auftrag = AUFTRAG.format(schluessel=FOKUS_SCHLUESSEL if frei else "",
+                             fokus=FOKUS.format(fokus=fokus) if fokus else "", material=stoff)
     r = await client.chat.completions.create(
         model=wahl.analyse_modell, response_format={"type": "json_object"},
         messages=[{"role": "user", "content": auftrag}],
@@ -161,20 +170,28 @@ async def erstellen(client, meeting, vorher: dict | None = None, fokus: str | No
     u = getattr(r, "usage", None)
     nutzung = {"tokens_rein": getattr(u, "prompt_tokens", None), "tokens_raus": getattr(u, "completion_tokens", None),
                "sekunden": round(time.monotonic() - t0, 1)}
+    gewaehlt = auswahl(meeting, liste, fokus)
+    if frei and isinstance(roh.get("nummern"), list):
+        nummern = {n for n in roh["nummern"] if isinstance(n, int)}
+        gewaehlt = [a for a in gewaehlt if a.id in nummern]
+    kern = _ohne_label(str(roh.get("kernaussage") or "").strip()[:200])
     ueberblick = {
         **kopf(meeting),
-        "kernaussage": str(roh.get("kernaussage") or "").strip()[:200] or None,
-        "entschieden": zahlen_pruefen(_liste(roh.get("entschieden"), ("was", "punkt"), 8), quelle, ("was",)),
-        "offen": zahlen_pruefen(_liste(roh.get("offen"), ("was", "punkt"), 6), quelle, ("was",)),
-        "aufgaben": zahlen_pruefen(_liste(roh.get("aufgaben"), ("was", "wer", "bis"), 8), quelle),
-        "ausserhalb": _liste(roh.get("ausserhalb"), ("was", "zeit"), 4),
-        # „Person N“ gehört nicht auf den Bildschirm (Lastenheft: keine Personenbewertung) – auch nicht in „neu“
-        "neu": [re.sub(r"\bPerson \d+\b", "jemand", str(x).strip())[:140] for x in (roh.get("neu") or [])
-                if str(x).strip()][:3] if vorher
-        else ["erster Stand"],
+        "kernaussage": kern if kern and zahlen(kern) <= quelle else None,
+        **ergebnisse(gewaehlt),
+        "ausserhalb": [e for e in _liste(roh.get("ausserhalb"), ("was", "zeit"), 4) if zahlen(e["was"]) <= quelle],
+        "neu": _neu(gewaehlt, vorher, fokus),
+        "ids": [a.id for a in gewaehlt],
         "fokus": fokus,
     }
     return ueberblick, nutzung
+
+
+def _zeile(e: dict) -> str:
+    """Begriffe wie im Protokoll: vorläufige Entscheidung, bloßer Vorschlag, Risiko."""
+    zusatz = {"vorlaeufig": "vorläufig"}.get(e.get("status") or "") or {"risiko": "Risiko",
+                                                                       "entscheidung": "nur Vorschlag"}.get(e.get("typ") or "")
+    return e["was"] + (f" ({zusatz})" if zusatz else "")
 
 
 def als_markdown(u: dict) -> str:
@@ -185,19 +202,19 @@ def als_markdown(u: dict) -> str:
     if u.get("kernaussage"):
         z += ["", u["kernaussage"]]
     for titel, schluessel in (("✅ Entschieden", "entschieden"), ("🟡 Offen", "offen")):
-        z += ["", f"## {titel}"] + ([f"- {e['was']}" for e in u[schluessel]] or ["- –"])
+        z += ["", f"## {titel}"] + ([f"- {_zeile(e)}" for e in u[schluessel]] or ["- –"])
     z += ["", "## 📌 Aufgaben"] + ([f"- {a['was']} (wer: {a['wer'] or 'offen'}, bis: {a['bis'] or 'offen'})"
                                    for a in u["aufgaben"]] or ["- –"])
     z += ["", "## ↪ Außerhalb der Agenda"] + ([f"- {a['zeit'] or ''} {a['was']}".replace("-  ", "- ")
                                               for a in u["ausserhalb"]] or ["- keine Abschweifung"])
-    z += ["", "## Neu seit dem letzten Stand"] + [f"- {n}" for n in u["neu"]]
+    z += ["", "## Neu seit dem letzten Stand"] + ([f"- {n}" for n in u["neu"]] or ["- nichts Neues festgehalten"])
     return "\n".join(z) + "\n"
 
 
 def punkte(u: dict) -> list[str]:
     """Kurzfassung als Stichpunkte für die Karte (Handy, Verlauf)."""
-    aus = [f"Entschieden: {e['was']}" for e in u["entschieden"][:3]]
-    aus += [f"Offen: {e['was']}" for e in u["offen"][:2]]
+    aus = [f"Entschieden: {_zeile(e)}" for e in u["entschieden"][:3]]
+    aus += [f"Offen: {_zeile(e)}" for e in u["offen"][:2]]
     aus += [f"Aufgabe: {a['was']}" + (f" ({a['wer']}" + (f", bis {a['bis']}" if a["bis"] else "") + ")" if a["wer"] else "")
             for a in u["aufgaben"][:3]]
     return aus or [u.get("kernaussage") or "Noch nichts festgehalten."]
