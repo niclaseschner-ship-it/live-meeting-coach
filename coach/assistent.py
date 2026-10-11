@@ -80,6 +80,9 @@ AKTION: folie             – das letzte Rechercheergebnis mit Quellen als Folie
                             wenn die Gruppe das möchte („ja, mach eine Folie“).
 AKTION: karte <art>       – eine Karte zeigen, wenn die Runde genau das möchte: zusammenfassen (Zusammenfassung),
                             fehlt (was noch fehlt), stand (wo stehen wir), festgehalten (Protokoll, Liste).
+AKTION: neu_aufbereiten <wie>  – die zuletzt gezeigte Karte anders aufbereiten, wenn die Runde das zu ihr sagt
+                            („bereite das anders auf“, „mach es kürzer“): kürzer, ausführlicher, als_liste oder
+                            einfacher. Erscheint als neue Karte, die alte bleibt stehen.
 AKTION: pause             – die Gruppe möchte, dass du nicht mehr zuhörst. Sag, dass man dich über den
                             Knopf im Dashboard wieder einschaltet.
 AKTION: eintragen <nummer>; wer=…; bis=…     – Aufgabe, Entscheidung, offenen Punkt oder Risiko ergänzen, wenn
@@ -105,15 +108,15 @@ FOLIE_ZEILE_KLAR = ("                            nur wenn ausdrücklich eine Fol
 UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
 FEHLER = "Entschuldigung, das hat gerade nicht geklappt."
 # Aktionen, nach denen das System spricht (Floskel bzw. Karten-Bogen) – der Text des Modells entfällt dann
-STILLE_AKTIONEN = ("bild", "recherche", "folie", "karte", "eintragen")
+STILLE_AKTIONEN = ("bild", "recherche", "folie", "karte", "eintragen", "neu_aufbereiten")
 # Ticket #21/#27: Bestätigung und Wartezeit spricht das System selbst (coach/bestaetigung.py)
 BESTAETIGUNG_HINWEIS = """
 Eine kurze Bestätigung („Bin dran“) hat das System schon gesprochen, bevor deine Antwort kommt. Fang deshalb nicht
 mit „Okay“, „Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt.
 """
 STILLE_HINWEIS = """
-Bei bild, recherche, folie, karte und eintragen spricht das System selbst – schreib nach der Aktionszeile dann nichts
-mehr.
+Bei bild, recherche, folie, karte, eintragen und neu_aufbereiten spricht das System selbst – schreib nach der
+Aktionszeile dann nichts mehr.
 """
 
 
@@ -188,6 +191,11 @@ def aktion_lesen(zeile: str) -> dict | None:
         art = {"zusammenfassung": "zusammenfassen", "protokoll": "festgehalten", "liste": "festgehalten",
                "luecken": "fehlt", "lücken": "fehlt"}.get(wort, wort)
         return {"typ": "karte", "art": art} if art in ("zusammenfassen", "fehlt", "stand", "festgehalten") else None
+    if typ == "neu_aufbereiten":  # Ticket #84: die zuletzt gezeigte Karte anders aufbereiten
+        wie = rest.lower().strip()
+        from .neu_aufbereiten import WIE
+
+        return {"typ": "neu_aufbereiten", "wie": wie} if wie in WIE else None
     if typ == "eintragen":  # Ticket #26: Lücke per Stimme schließen (Basis/Text-Weg)
         from .artefakte import aktion_lesen as eintrag_lesen
 
@@ -1121,6 +1129,9 @@ class Assistent:
             art = "folie" if typ == "folie" else aktion["art"]
             await self._karten_lauf(Bogen(b.id, art, b.frage, b.quelle, b.t0, b.sprecher, abgeloest=b.abgeloest),
                                     floskel=False)
+        elif typ == "neu_aufbereiten":  # Ticket #84: letzte Karte per LLM-Aufruf neu aufbereiten
+            await self._karten_lauf(Bogen(b.id, "neu_aufbereiten", b.frage, b.quelle, b.t0, b.sprecher,
+                                          aktion["wie"], abgeloest=b.abgeloest), floskel=False)
         elif typ == "eintragen":
             a, _ = c.artefakte.eintragen(aktion.get("daten") or {})
             if a is not None:

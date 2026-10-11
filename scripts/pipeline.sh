@@ -33,6 +33,8 @@ stufe_a() {
   (cd "$WURZEL/cloudflare" && npx vitest run) 2>&1 | tee "$AUSGABE/a/vitest.log" || rc=1
   echo "▸ Worker: tsc --noEmit"
   (cd "$WURZEL/cloudflare" && npx tsc --noEmit) 2>&1 | tee "$AUSGABE/a/tsc.log" || rc=1
+  echo "▸ Frontend: node --test (static/*.js, ohne Browser)"
+  (cd "$WURZEL" && node --test tests/js/*.test.mjs) 2>&1 | tee "$AUSGABE/a/node_test.log" || rc=1
   if [ "$rc" = 0 ]; then echo "Stufe A grün · $AUSGABE/a"; else echo "Stufe A ROT · $AUSGABE/a" >&2; fi
   return "$rc"
 }
