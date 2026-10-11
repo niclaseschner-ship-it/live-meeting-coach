@@ -72,40 +72,9 @@ async def _knopf_meeting(texte: dict[bytes, str], archiv: bool = False) -> Coach
     return c
 
 
-def test_knopf_setzt_karte_und_vorschlag():
-    texte = {wav_aus(_proben(1)): "Satz Nummer 1"}
-
-    async def lauf():
-        c = await _knopf_meeting(texte)
-        meldungen = []
-
-        async def senden(n):
-            meldungen.append(n)
-        await knopfdruck.ausfuehren(c, "stand", senden=senden)
-        return c, meldungen
-
-    c, meldungen = asyncio.run(lauf())
-    assert c.knopf.fehler is None
-    karte = c.karten[-1]
-    assert karte["art"] == "stand" and karte["punkte"][-1].startswith("Vorschlag")
-    assert c.meeting.vorschlag["punkt"] == 1  # „Weiter zu Budget?“ – die Runde entscheidet
-    schritte = [m["schritt"] for m in meldungen]
-    assert "denke" in schritte and meldungen[-1]["schritt"] == "fertig"
-    assert all(m["typ"] == "knopf" and m["art"] == "stand" and 0 <= m["anteil"] <= 1 for m in meldungen)
-    assert c.knopf.laeuft is None and c.knopf.fehler is None
-
-
-def test_zweiter_knopf_waehrend_eines_laufs_wird_abgewiesen():
-    async def lauf():
-        c = await _knopf_meeting({})
-        knopfdruck.reservieren(c, "bild")
-        with pytest.raises(knopfdruck.KnopfFehler):
-            knopfdruck.reservieren(c, "stand")
-        c.knopf.laeuft = None
-        knopfdruck.reservieren(c, "stand")
-        assert c.knopf.laeuft == "stand"
-    asyncio.run(lauf())
-
+# Ticket #80: Die Karte-plus-Vorschlag-Probe für „Wo stehen wir?“ und die Doppelklick-Sperre laufen inzwischen
+# über den echten Weg (coach.assistent.bogen_starten) – siehe tests/test_bogen.py
+# (test_bogen_stand_schlaegt_naechsten_punkt_vor, test_bogen_sperre_knopf_wird_abgewiesen_zuruf_unterbricht_nur_die_stimme).
 
 # --- Weitere Knöpfe und Endpunkte ------------------------------------------------------
 
@@ -132,8 +101,8 @@ def test_regeln_und_protokoll_knopf(monkeypatch):
             c.hoerstrom.sekunden = c.meeting.virtuelle_zeit = nr * 13.0
             await c.hoerstrom._aeusserung(nr * 13.0 - 12.5, nr * 13.0 - 0.5, _proben(nr, 12.0))
             await asyncio.gather(*c.hoerstrom._analysen)
-        regeln = await knopfdruck.ausfuehren(c, "regeln")
-        await knopfdruck.ausfuehren(c, "protokoll")
+        regeln = await knopfdruck._regeln(c, "")
+        await knopfdruck._protokoll(c, "")
         return c, regeln
 
     try:

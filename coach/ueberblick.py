@@ -2,7 +2,7 @@
 Bildmodell. In Nestor Basis ersetzt er das Live-Bild (auch auf Zuruf „zeig uns die Übersicht“ → AKTION: bild),
 in Premium ist er umschaltbar neben dem Live-Bild.
 
-Aufbau wie die Zonen des Live-Bilds (onepager.py, Strukturanalyse Schritt 1):
+Aufbau wie die Zonen des Live-Bilds (coach/bild_gpt.py, Strukturanalyse Schritt 1):
     Kopf          Titel, Laufzeit, aktueller Punkt, Agenda mit Status          – aus dem Meeting-Zustand, ohne Modell
     ✅ Entschieden  nur ausdrücklich Beschlossenes, mit Ergebnis
     🟡 Offen        ausdrücklich genannte offene Fragen
@@ -22,7 +22,8 @@ import re
 import time
 
 from .analyse import mmss
-from .onepager import meeting_text
+
+MAX_TRANSKRIPT_ZEICHEN = 30000
 
 AUFTRAG = """\
 Du bereitest für eine Besprechungsrunde den Überblick über ihr laufendes Meeting vor. Er steht auf dem Bildschirm
@@ -84,6 +85,18 @@ def _liste(roh, felder: tuple[str, ...], n: int) -> list[dict]:
                 d[f] = re.sub(r"\bPerson \d+\b", "jemand", v)
         aus.append(d)
     return aus[:n]
+
+
+def meeting_text(meeting) -> str:
+    """Meeting als Text für die Live-Bild- und Überblick-Aufträge (coach/bild_gpt.py, coach/ueberblick.py)."""
+    zeilen = [f"Titel: {meeting.titel or '-'}", f"Ziel: {meeting.ziel or '-'}",
+              f"Laufzeit bisher: {mmss(meeting.jetzt())} Minuten", "", "Agenda:"]
+    for i, p in enumerate(meeting.agenda, start=1):
+        zeilen.append(f"{i}. {p.titel}" + (f" – {p.ziel}" if p.ziel else "")
+                      + f" [{meeting.status(i - 1)}]")
+    transkript = "\n".join(f"[{mmss(s.start)}] {s.sprecher}: {s.text}" for s in meeting.transkript if s.text)
+    zeilen += ["", "Transkript:", transkript[-MAX_TRANSKRIPT_ZEICHEN:]]
+    return "\n".join(zeilen)
 
 
 def kopf(meeting) -> dict:

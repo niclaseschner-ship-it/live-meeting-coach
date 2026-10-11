@@ -12,7 +12,7 @@ import base64
 import time
 
 from .config import EINST
-from .onepager import meeting_text
+from .ueberblick import meeting_text
 from .zustand import Meeting
 
 AUFTRAG = """\

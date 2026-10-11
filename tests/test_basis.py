@@ -348,8 +348,6 @@ def test_knoepfe_auch_ohne_knopfdruck_regeln_aus_ampeln():
     c._client = object()
     karte = asyncio.run(knopfdruck._regeln(c, ""))  # live: ohne KI-Aufruf
     assert karte["art"] == "regeln" and len(karte["punkte"]) == 2
-    knopfdruck.reservieren(c, "ueberblick")
-    assert c.knopf.laeuft == "ueberblick"
 
 
 # --- Ticket #15: Überblick auf Zuruf und im Takt, Protokoll am Ende ---------------------------------------------

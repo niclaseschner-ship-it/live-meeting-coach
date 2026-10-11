@@ -355,17 +355,9 @@ $("knopf-frage-form").onsubmit = (e) => {
   stimme.bereit();
   knopfDruecken("frage", { text }).then((ok) => { if (ok) $("knopf-frage").value = ""; });
 };
-// Fortschritt zwischen zwei Zustandsmeldungen: in den Stand einarbeiten, der nächste Schnappschuss bestätigt ihn
-function knopfMeldung(d) {
-  if (!zustand?.knopf) return;
-  zustand.knopf = { ...zustand.knopf, laeuft: d.schritt === "fertig" ? null : d.art, schritt: d.schritt, anteil: d.anteil,
-    fehler: d.fehler ?? null };
-  knopfRendern(zustand);
-}
 function knopfRendern(z) {
   aktionshilfeRendern(z, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
   if (phaseVon(z) !== "live") return; // sichtbar schaltet phaseAnzeigen() in rendern()
-  const k = z.knopf ?? {};
   const basis = basisStufe(z);
   const a = z.assistent ?? {};
   // Basis: kein Bildmodell (der Überblick steht für das Bild); Regeln-Knopf nur, wenn Regeln gewählt sind (Ticket #27)
@@ -378,8 +370,6 @@ function knopfRendern(z) {
   });
   $("knopf-bogen").hidden = !bogen && !knopfWartet;
   $("knopf-bogen").textContent = knopfWartet ? "Letzten Redebeitrag übernehmen …" : bogen ? `Nestor ist bei „${bogen.name}“ …` : "";
-  $("knopf-fehler").hidden = laeuft || !k.fehler;
-  $("knopf-fehler").textContent = k.fehler ?? "";
   // Funkgerät (Basis, Ticket #27): Sprechtaste am Laptop – Knopf halten oder Leertaste
   const tasteDa = basis && !!a.aktiv && a.zustand !== "pausiert";
   $("btn-taste").hidden = !tasteDa;
@@ -708,7 +698,6 @@ function verbinden() {
     if (d.typ === "stimme_stopp") { stimme.stopp(); return nestorStopp(); }
     if (d.typ === "nestor_text") return nestorText(d);
     if (d.typ === "pegel") { pegelAnzeigen(d.wert); return; }
-    if (d.typ === "knopf") { knopfMeldung(d); return; }
     zustand = d; formAusServer(d); rendern(); einstellungenRendern(d.einstellungen);
   };
   ws.onclose = () => setTimeout(verbinden, 1000);

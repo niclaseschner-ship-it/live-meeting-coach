@@ -234,7 +234,7 @@ def _einstiege():
         "assistent": lambda c: c.assistent._antworten(_bogen(c)),
         "nachfrage_einordnung": lambda c: bogen.einordnen(c._client, "Und bis wann?", "Bis Freitag.", wahl=c.wahl),
         "moderationssatz": lambda c: bogen.moderationssatz(c, {"titel": "Stand", "punkte": ["a"]}, "Ersatz"),
-        "knopf_stand": lambda c: knopfdruck._stand(c, ""),
+        "knopf_stand": lambda c: bogen.stand(c, _bogen(c)),
         "karte": lambda c: karten.verdichten(c._client, "Wo stehen wir?", "Bei Punkt eins. Das Budget steht.",
                                             kontext="Budget", wahl=c.wahl),
         "recherche": lambda c: recherche.recherchieren(c._client, "Mindestlohn 2027", wahl=c.wahl),
