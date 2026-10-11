@@ -290,18 +290,16 @@ function rendern() {
   // Knöpfe: in beiden Stufen gleich
   const fragenDa = aktiv && a?.aktiv && a.zustand !== "pausiert";
   const bogen = a?.bogen;
-  const frageBeschaeftigt = handyKnopfWartet || !!z.knopf?.laeuft || !!bogen;
+  const frageBeschaeftigt = handyKnopfWartet || !!bogen;
   $("btn-fragen").disabled = (!fragenDa || frageBeschaeftigt) && !fragen.haelt;
   document.querySelectorAll(".h-knopf").forEach((b) => {
-    b.disabled = handyKnopfWartet || !aktiv || !!z.knopf?.laeuft || !!bogen;
+    b.disabled = handyKnopfWartet || !aktiv || !!bogen;
     if (b.dataset.knopf === "bild") b.hidden = z.stufe === "basis"; // Basis: kein Bildmodell
     if (b.dataset.knopf === "regeln") b.hidden = !(z.regel_ids ?? []).length;
   });
-  if (handyKnopfWartet || bogen || z.knopf?.laeuft) $("knopf-stand").dataset.aktion = "1";
+  if (handyKnopfWartet || bogen) $("knopf-stand").dataset.aktion = "1";
   if (handyKnopfWartet) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Letzten Redebeitrag übernehmen …"; }
   else if (bogen) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = `Nestor ist bei „${bogen.name}“ …`; }
-  else if (z.knopf?.laeuft) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = "Nestor arbeitet …"; }
-  else if (z.knopf?.fehler) { $("knopf-stand").hidden = false; $("knopf-stand").textContent = z.knopf.fehler; }
   else if ($("knopf-stand").dataset.aktion) { $("knopf-stand").hidden = true; delete $("knopf-stand").dataset.aktion; }
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
   $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";

@@ -8,31 +8,19 @@ Bausteinen:
    protokoll Meeting-Artefakte erkennen (coach/artefakte.py, Ticket #26), daraus protokoll.md und eine Karte
    bild      das vorhandene Live-Bild (onepager_starten)
    frage     freie Frage, Antwort als Text-Karte über den vorhandenen Karten-Weg
-
-Fortschritt geht als {"typ": "knopf", "art", "schritt": "denke"|"fertig", "anteil": 0..1} an alle Dashboards; die
-Sekunden je Schritt landen ohne Inhalte in logs/nestor_zeiten.jsonl (Latenzmessung 4.2).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 from datetime import datetime
 
 from .analyse import mmss
-from .config import EINST
-
-log = logging.getLogger("coach.knopfdruck")
 
 ARTEN = ("stand", "regeln", "ueberblick", "protokoll", "bild", "frage", "zusammenfassen", "fehlt")
-NAMEN = {"stand": "Wo stehen wir?", "regeln": "Regeln eingehalten?", "ueberblick": "Überblick", "protokoll": "Protokoll",
-         "bild": "Bild", "frage": "Nestor fragen", "zusammenfassen": "Zusammenfassen", "fehlt": "Was fehlt?"}
-
-
-class KnopfFehler(RuntimeError):
-    """Knopf geht gerade nicht (kein Meeting, kein Schlüssel, läuft schon) – Text für die Oberfläche."""
+NAMEN = {"regeln": "Regeln eingehalten?", "protokoll": "Protokoll"}
 
 
 class Knopfstand:
@@ -40,71 +28,11 @@ class Knopfstand:
 
     def __init__(self) -> None:
         self.sperre = asyncio.Lock()  # ein Knopf zur Zeit
-        self.laeuft: str | None = None  # Art des laufenden Knopfs
-        self.schritt: str | None = None
-        self.anteil = 0.0
-        self.fehler: str | None = None
         self.protokoll: str | None = None  # Markdown vom Protokoll-Knopf (geht als protokoll.md in die Ablage)
         self.protokoll_zeit: float | None = None
 
     def schnappschuss(self) -> dict:
-        return {"laeuft": self.laeuft, "schritt": self.schritt, "anteil": round(self.anteil, 2),
-                "fehler": self.fehler, "protokoll": self.protokoll is not None}
-
-
-# --- Ablauf -----------------------------------------------------------------
-def reservieren(coach, art: str) -> None:
-    """Vor dem Start prüfen und belegen (synchron, damit ein Doppelklick nicht zwei Läufe startet)."""
-    k = coach.knopf
-    if art not in ARTEN:
-        raise KnopfFehler("Unbekannter Knopf.")
-    if coach.hoerstrom is None:
-        raise KnopfFehler("Es läuft kein Meeting.")
-    if coach._client is None:
-        raise KnopfFehler("Kein KI-Schlüssel – ohne ihn kann Nestor nichts auswerten.")
-    if k.laeuft:
-        raise KnopfFehler(f"Nestor ist noch bei „{NAMEN[k.laeuft]}“ – bitte kurz warten.")
-    k.laeuft, k.schritt, k.anteil, k.fehler = art, "denke", 0.0, None
-
-
-async def ausfuehren(coach, art: str, frage: str = "", senden=None) -> dict | None:
-    """Ein Knopf: die Analyse ausführen. `senden(nachricht)` verteilt den Fortschritt.
-    Ruft vorher `reservieren()` auf, falls das nicht schon geschehen ist. Liefert das Ergebnis oder None."""
-    k = coach.knopf
-    if k.laeuft != art:
-        reservieren(coach, art)
-    from .pipeline import _zeit_loggen, fehlertext
-
-    zeiten = {"ausloeser": "knopf", "art": art, "meeting_s": round(coach.meeting.jetzt(), 1)}
-    t0 = time.monotonic()
-
-    async def melden(schritt: str, anteil: float, **extra) -> None:
-        k.schritt, k.anteil = schritt, anteil
-        if senden is not None:
-            try:
-                await senden({"typ": "knopf", "art": art, "schritt": schritt, "anteil": round(anteil, 2), **extra})
-            except Exception:  # noqa: BLE001 – ein weggebrochenes Dashboard hält den Knopf nicht auf
-                log.debug("Fortschritt nicht gesendet", exc_info=True)
-
-    erg = None
-    async with k.sperre:
-        try:
-            await melden("denke", 0.0)
-            t1 = time.monotonic()
-            erg = await ANALYSEN[art](coach, frage)
-            zeiten["analyse_s"] = round(time.monotonic() - t1, 2)
-            await melden("fertig", 1.0)
-        except Exception as e:  # noqa: BLE001 – Fehler zeigen, Meeting läuft weiter
-            log.warning("Knopf „%s“ fehlgeschlagen: %s", art, fehlertext(e))
-            k.fehler = str(e) if isinstance(e, KnopfFehler) else f"„{NAMEN[art]}“ hat nicht geklappt ({fehlertext(e)})."
-            zeiten["fehler"] = type(e).__name__
-            await melden("fertig", 1.0, fehler=k.fehler)
-        finally:
-            zeiten["gesamt_s"] = round(time.monotonic() - t0, 2)
-            _zeit_loggen(zeiten)
-            k.laeuft = None
-            await coach.melden()
-    return erg
+        return {"protokoll": self.protokoll is not None}
 
 
 # --- Analysen -----------------------------------------------------------------
@@ -126,11 +54,6 @@ STAND = (f"Du bist {{name}}, der Moderationsassistent eines Präsenzmeetings. Di
          "erledigt ist oder das Gespräch schon beim nächsten ist, sonst null.\n"
          "sagen: was auffällt oder was die Runde jetzt tun sollte – NICHT vorlesen, was auf der Karte steht; beginnt "
          f"mit „Hier ist sie.“\n{GRUNDSATZ}")
-
-FRAGE = (f"Du bist {{name}}, der Moderationsassistent eines Präsenzmeetings. Die Runde hat dir eine Frage getippt; "
-         f"die Antwort erscheint als Karte auf dem Bildschirm. {KARTE_FORMAT}}}.\n"
-         "Der Titel nennt das Thema der Frage, die Stichpunkte beantworten sie – das Wichtigste zuerst, kurz.\n"
-         f"{GRUNDSATZ}")
 
 
 async def _karte_vom_modell(coach, system: str, nutzer: str, knopf: str, nutzung_art: str = "assistent") -> dict:
@@ -155,33 +78,6 @@ async def _karte_vom_modell(coach, system: str, nutzer: str, knopf: str, nutzung
 
 def _punkte(roh: dict, n: int = 5) -> list[str]:
     return [str(p)[:200] for p in (roh.get("punkte") or []) if str(p).strip()][:n]
-
-
-async def _stand(coach, frage: str) -> dict:
-    m = coach.meeting
-    roh = await _karte_vom_modell(coach, STAND.replace("{name}", EINST.assistent_name),
-                                  coach.assistent.kontext("Wo stehen wir, und was ist der nächste Schritt?"), "stand")
-    karte = {"art": "stand", "frage": NAMEN["stand"], "titel": str(roh.get("titel") or "Stand")[:80],
-             "punkte": _punkte(roh) or ["Dazu konnte Nestor gerade nichts sagen."]}
-    try:
-        ziel = int(roh.get("naechster_punkt")) - 1
-    except (TypeError, ValueError):
-        ziel = None
-    if ziel is not None and 0 <= ziel < len(m.agenda) and ziel != m.aktiver_punkt:
-        # derselbe Vorschlag wie bei der Themen-Zuordnung live: „Weiter zu …?“ – die Runde entscheidet
-        m.vorschlag = {"punkt": ziel, "titel": m.agenda[ziel].titel, "begruendung": "Vorschlag auf Knopfdruck"}
-    coach._karte_ablegen(karte)
-    return karte
-
-
-async def _frage(coach, frage: str) -> dict:
-    roh = await _karte_vom_modell(coach, FRAGE.replace("{name}", EINST.assistent_name),  # JSON-Klammern: kein format
-                                  coach.assistent.kontext(frage), "frage")
-    punkte = _punkte(roh) or ["Dazu konnte Nestor gerade nichts sagen."]
-    karte = {"art": "antwort", "frage": frage, "titel": str(roh.get("titel") or frage)[:80], "punkte": punkte}
-    coach.assistent.verlauf.append((frage, " ".join(punkte)))  # Rückfragen beziehen sich darauf (kontext)
-    coach._karte_ablegen(karte)
-    return karte
 
 
 async def _regeln(coach, frage: str, ablegen: bool = True) -> dict:
@@ -269,32 +165,6 @@ async def _protokoll(coach, frage: str, am_ende: bool = False) -> dict | None:
     return karte
 
 
-async def _ueberblick(coach, frage: str) -> dict:
-    """Überblick als Text (coach/ueberblick.py) – in beiden Stufen; legt zugleich eine Karte für den Verlauf ab."""
-    if not coach.meeting.transkript:
-        raise KnopfFehler("Noch nichts gesagt – für einen Überblick fehlt der Stoff.")
-    while coach._ueberblick_laeuft:  # läuft schon einer (Takt, Zuruf): abwarten, dann frisch
-        await asyncio.sleep(0.3)
-    u = await coach.ueberblick_bauen()
-    if u is None:
-        raise KnopfFehler(coach.onepager_fehler or "Der Überblick hat nicht geklappt.")
-    return {"version": coach.ueberblick_version}
-
-
-async def _bild(coach, frage: str) -> dict:
-    if not coach.meeting.transkript:
-        raise KnopfFehler("Noch nichts gesagt – für ein Bild fehlt der Stoff.")
-    coach.onepager_starten()  # läuft schon eins, wird danach nachgeholt
-    await coach.melden()
-    while coach._onepager_laeuft:
-        await asyncio.sleep(0.5)
-    if coach.onepager_fehler:
-        raise KnopfFehler(coach.onepager_fehler)
-    return {"version": coach.onepager_version}
-
-
-ANALYSEN = {"stand": _stand, "regeln": _regeln, "ueberblick": _ueberblick, "protokoll": _protokoll, "bild": _bild,
-            "frage": _frage, "zusammenfassen": _protokoll, "fehlt": _protokoll}
 # Ticket #27: jeder Knopf läuft als Antwortbogen (coach/assistent.py) – welcher Bogen?
 BOGEN = {"stand": "stand", "regeln": "regeln", "ueberblick": "ueberblick", "protokoll": "festgehalten", "bild": "bild",
          "zusammenfassen": "zusammenfassen", "fehlt": "fehlt", "folie": "folie"}

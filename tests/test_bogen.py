@@ -192,6 +192,28 @@ def test_bogen_sperre_knopf_wird_abgewiesen_zuruf_unterbricht_nur_die_stimme():
     assert "Ihr liegt gut in der Zeit." not in " ".join(_texte(gesendet))  # der abgelöste Bogen schweigt
 
 
+def test_bogen_stand_schlaegt_naechsten_punkt_vor():
+    """Ticket #80 (vormals knopfdruck._stand, toter Reservieren/Ausführen-Pfad): „Wo stehen wir?“ schlägt auf der
+    Karte den nächsten Agendapunkt vor, wenn das Modell ihn benennt – die Runde entscheidet (meeting.vorschlag)."""
+    async def ablauf():
+        c, gesendet = _coach()
+
+        async def chat(**kw):
+            inhalt = {"titel": "Budget offen", "punkte": ["Ihr seid bei Punkt eins.", "Vorschlag: zum Budget."],
+                      "naechster_punkt": 2}
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(inhalt)))],
+                                   usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20))
+        c._client.chat = SimpleNamespace(completions=SimpleNamespace(create=chat))
+        b = c.assistent.bogen_starten("stand", "Wo stehen wir?", "knopf")
+        await b.task
+        return c
+
+    c = asyncio.run(ablauf())
+    karte = c.karten[-1]
+    assert karte["art"] == "stand" and karte["punkte"][-1].startswith("Vorschlag")
+    assert c.meeting.vorschlag["punkt"] == 1  # „Weiter zu Maßnahmen?“ – die Runde entscheidet
+
+
 def test_knopf_ueber_die_api_ist_waehrend_eines_bogens_gesperrt(monkeypatch):
     from fastapi.testclient import TestClient
 
