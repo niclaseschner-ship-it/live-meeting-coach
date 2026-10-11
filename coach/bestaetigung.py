@@ -64,6 +64,15 @@ LANG_RE = re.compile(
 # Kein Auftrag – nichts zu bestätigen („Nestor, danke“, „Nestor, stopp“, ein spätes Nein)
 KEIN_AUFTRAG_RE = re.compile(r"^\W*(?:danke|dankeschön|vielen dank|passt|gut|okay|ok|super|stopp|stop|still|ruhe|"
                              r"nein|tschüss|das war'?s|das wars)\b", re.IGNORECASE)
+# Leitplanke „Halt“: nur Halte-Wörter und Füllwörter – kein Inhaltswort, also sofort verstummen.
+HALT_RE = re.compile(
+    r"^\s*(?:(?:stopp|stop|halt|warte|wart|moment|sekunde|still|ruhe|mal|kurz|bitte|eben|einen|eine|doch|jetzt)\b[\s,.;!?]*)+$",
+    re.IGNORECASE)
+
+
+def halt_wunsch(frage: str) -> bool:
+    """Nur ein Halt-Wunsch (der Name ist schon entfernt), kein Auftrag mit Inhalt."""
+    return bool(frage and HALT_RE.fullmatch(frage or ""))
 
 
 def stille_kuerzen(pcm: bytes, schwelle: int = 500, vorne: float = 0.03, hinten: float = 0.12) -> bytes:

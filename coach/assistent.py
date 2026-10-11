@@ -633,6 +633,9 @@ class Assistent:
             self.messen("ansprache", jetzt - ende)
             self._nachfrage_bis = -1e9
             frage = frage_aus(text)
+            if B.halt_wunsch(frage):
+                await self._halt()
+                return
             if len(frage.split()) < 3 and not BG.karten_art(frage) and not B.abbruch_wunsch(frage):
                 # nur der Name („Nestor?“) – auf die eigentliche Frage warten; _ja_sagen setzt das Fenster genau
                 self._angesprochen_bis = jetzt + JA_FENSTER_SEKUNDEN + 3.0
@@ -731,6 +734,19 @@ class Assistent:
         self.zustand = "denkt"
         b.task = asyncio.ensure_future(self._bogen_lauf(b))
         return b
+
+    async def _halt(self) -> None:
+        """Nestor verstummt sofort: laufenden Bogen abstoßen oder kurze Aufgabe abbrechen, dann zuhören."""
+        bogen = self.bogen
+        if bogen is not None and bogen.task is not None and not bogen.task.done():
+            self._bogen_abloesen()  # nur die Stimme stoppen, die Arbeit läuft still weiter (Rückgabe ignorieren)
+        elif self._aufgabe is not None and not self._aufgabe.done():
+            self._aufgabe.cancel()
+            self._sprechzeit_kappen()
+        self.coach.protokoll.append({"zeit": self.coach.meeting.jetzt(), "art": "halt"})
+        self._angesprochen_bis = self.coach.meeting.jetzt() + JA_FENSTER_SEKUNDEN + 3.0
+        self.zustand = "angesprochen"
+        await self.coach.melden()
 
     def _bogen_abloesen(self) -> asyncio.Future | None:
         """Stimme des laufenden Bogens stoppen; die Arbeit läuft still weiter."""
