@@ -96,7 +96,7 @@ async def _regeln(coach, frage: str, ablegen: bool = True) -> dict:
 def _protokoll_md(coach, am_ende: bool = False) -> str:
     """Protokoll aus den Meeting-Artefakten (Ticket #26): je Agendapunkt Entscheidungen, Aufgaben, offene Punkte und
     Risiken, danach was außerhalb der Agenda festgehalten wurde. Lücken stehen als „fehlt“ dabei."""
-    from .artefakte import FELD_NAME
+    from .artefakte import FELD_NAME, STATUS_NAME
 
     m, art = coach.meeting, coach.artefakte
     wie = "am Meetingende" if am_ende else "auf Knopfdruck"
@@ -108,7 +108,7 @@ def _protokoll_md(coach, am_ende: bool = False) -> str:
     def zeile(a) -> str:
         teile = [a.was]
         if a.typ == "entscheidung":
-            teile.append({"endgueltig": "beschlossen", "vorlaeufig": "vorläufig"}.get(a.status, "nur Vorschlag"))
+            teile.append(STATUS_NAME.get(a.status or "", "nur Vorschlag"))
         if a.typ != "entscheidung" or a.wer:
             teile.append(f"wer: {a.wer or 'offen'}")
         if a.typ in ("aufgabe", "offen") or a.bis:

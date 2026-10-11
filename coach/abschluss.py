@@ -14,6 +14,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from .artefakte import STATUS_NAME
 from .config import EINST
 
 # Stufe, Bedeutung, Faktor auf die API-Kosten (Lastenheft 4.5)
@@ -81,7 +82,8 @@ def meeting_markdown(d: dict, regelanalyse: dict | None = None) -> str:
             out.extend(["_Keine._", ""])
             return
         for x in werte:
-            teile = [str(x.get(f) or "⚠ fehlt") for f in felder]
+            teile = [str((STATUS_NAME.get(x.get(f), x.get(f)) if f == "status" else x.get(f)) or "⚠ fehlt")
+                     for f in felder]
             out.append("- " + " · ".join(teile))
         out.append("")
     liste("Entscheidungen", "entscheidungen", ("was", "status", "wer"))

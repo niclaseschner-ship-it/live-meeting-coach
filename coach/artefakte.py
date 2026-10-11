@@ -43,6 +43,7 @@ log = logging.getLogger("coach.artefakte")
 TYPEN = ("aufgabe", "entscheidung", "offen", "risiko")
 TYP_NAME = {"aufgabe": "Aufgabe", "entscheidung": "Entscheidung", "offen": "Offener Punkt", "risiko": "Risiko"}
 STATUS = ("endgueltig", "vorlaeufig", "vorschlag")
+STATUS_NAME = {"endgueltig": "beschlossen", "vorlaeufig": "vorläufig", "vorschlag": "nur Vorschlag"}  # in allen Ansichten
 # Pflichtfelder je Typ (Ticket #26, Tabelle „Artefakte und wann sie vollständig sind“); was = Handlung / was gilt /
 # präzise Frage / Ursache → Auswirkung
 PFLICHT = {
@@ -184,8 +185,7 @@ class Artefakt:
         """Eine Zeile für Kontext und Protokoll."""
         teile = [f"{self.id}. {TYP_NAME[self.typ]}: {self.was}"]
         if self.typ == "entscheidung":
-            teile.append({"endgueltig": "beschlossen", "vorlaeufig": "vorläufig", "vorschlag": "nur Vorschlag"}.get(
-                self.status or "vorschlag", ""))
+            teile.append(STATUS_NAME.get(self.status or "vorschlag", ""))
         if self.wer or self.typ != "entscheidung":
             teile.append(f"wer: {self.wer or 'fehlt'}")
         if self.bis or self.typ in ("aufgabe", "offen"):
