@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
-
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from . import transkription
 from .agenda_prompt import agenda_vorschlagen
@@ -55,28 +53,3 @@ async def agenda_transkript(datei: UploadFile = File(...)):
     except Exception as e:  # noqa: BLE001
         raise _fehler(e) from e
     return {"text": eingabe}
-
-
-@router.post("/api/agenda/sprache")
-async def agenda_sprache(bisher: str = Form("null"), verlauf: str = Form("[]"), datei: UploadFile = File(...)):
-    coach = _bereit()
-    try:
-        bisher_dict = json.loads(bisher)
-    except json.JSONDecodeError:
-        bisher_dict = None
-    try:
-        dialog = json.loads(verlauf)
-    except json.JSONDecodeError:
-        dialog = []
-    wav = await datei.read()
-    try:
-        eingabe = await transkription.text(coach._client, coach.wahl.text_modell, wav, EINST.sprache, "")
-    except Exception as e:  # noqa: BLE001
-        raise _fehler(e) from e
-    if not eingabe.strip():
-        raise HTTPException(400, "Darin war nichts zu verstehen.")
-    try:
-        ergebnis = await agenda_vorschlagen(coach._client, coach.wahl.analyse_modell, eingabe, bisher_dict, dialog)
-    except Exception as e:  # noqa: BLE001
-        raise _fehler(e) from e
-    return {**ergebnis, "eingabe": eingabe}
