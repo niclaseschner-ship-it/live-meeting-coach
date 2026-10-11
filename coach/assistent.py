@@ -1005,7 +1005,8 @@ class Assistent:
         if hinweise:
             z.append("Letzte Hinweise des Coaches: " + " | ".join(f"[{mmss(h.zeit)}] {h.text}" for h in hinweise))
         if c.onepager_analyse:
-            z += ["", "Letzte Strukturanalyse des Live-Bilds (kann veraltet sein):", c.onepager_analyse[:2500]]
+            z += ["", "Beschreibung des letzten Live-Bilds (kann veraltet sein; Ergebnisse gelten nur aus den "
+                  "festgehaltenen Artefakten):", c.onepager_analyse[:2500]]
         if getattr(c, "ueberblick", None):
             from .ueberblick import als_markdown
 

@@ -206,10 +206,10 @@ class Archiv:
                 json.dumps(c.artefakte.standardgliederung(), ensure_ascii=False, indent=1), encoding="utf-8")
             (self.ordner / "tasks.json").write_text(
                 json.dumps(c.artefakte.aufgaben_json(), ensure_ascii=False, indent=1), encoding="utf-8")
-        # Knopfdruck: das Protokoll vom Protokoll-Knopf hat Vorrang vor der Analyse hinter dem Bild
-        protokoll = getattr(getattr(c, "knopf", None), "protokoll", None) or c.onepager_analyse
-        if protokoll:
-            (self.ordner / "protokoll.md").write_text(protokoll, encoding="utf-8")
+        if getattr(c, "artefakte", None) is not None:  # beide Stufen aus den Artefakten, wie meeting.json
+            from .knopfdruck import _protokoll_md
+
+            (self.ordner / "protokoll.md").write_text(_protokoll_md(c, am_ende=True), encoding="utf-8")
         logs = WURZEL / "logs"
         _jsonl_seit(logs / "nestor_zeiten.jsonl", self.ordner / "debug" / "nestor_zeiten.jsonl", self.seit)
         _jsonl_seit(logs / "nutzung.jsonl", self.ordner / "debug" / "nutzung.jsonl", self.seit)

@@ -155,7 +155,7 @@ class Coach:
         self.ueberblick_version = 0
         self._ueberblick_laeuft = False
         self._ueberblick_nachholen = False  # Meetingende, während noch ein Überblick entsteht: danach noch einmal
-        self._protokoll_laeuft = False  # Basis: Protokoll am Meetingende (für protokoll.md im Paket)
+        self._protokoll_laeuft = False  # Protokoll am Meetingende (für protokoll.md im Paket)
         self._onepager_voll: dict | None = None  # letztes Gesamtbild – Grundlage der Fortschreibung
         self.assistent = Assistent(self)
         self.stumm = False  # Mikro stumm (Knopf in der Kopfleiste)
@@ -839,14 +839,11 @@ class Coach:
         if self.assistent.gespraech:
             await self.assistent.gespraech.schliessen()
         basis = self.bild_als_text
-        if basis and self._client is not None:
-            # Basis hat kein Abschlussbild, dessen Analyse in Premium protokoll.md ist (coach/archiv.py) – deshalb
-            # am Ende das Protokoll wie beim Knopf: die letzten Sätze auf Artefakte prüfen (Ticket #26), daraus
-            # protokoll.md (Ticket #15).
+        if self._client is not None:
+            # Beide Stufen: die letzten Sätze noch auf Artefakte prüfen, ohne Nachfrage – protokoll.md entsteht beim
+            # Ablegen aus genau diesen Artefakten (coach/archiv.py), wie meeting.json und tasks.json.
             self._protokoll_laeuft = True
             hintergrund(self._protokoll_am_ende())
-        elif self._client is not None:
-            hintergrund(self.artefakte.erkennen())  # Ticket #26: die letzten Sätze noch auswerten, ohne Nachfrage
         if self.onepager_am_ende:
             if basis:  # Abschluss-Überblick; entsteht gerade einer (Zuruf, Takt), wird er danach nachgeholt
                 frisch = (self.ueberblick is not None and not self._ueberblick_laeuft
