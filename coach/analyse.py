@@ -168,6 +168,8 @@ ANKUENDIGUNG = re.compile(
     # Subjekt zuerst, nur mit Zeitwort („Wir gehen jetzt zu …“) – „wir kommen zu dem Schluss“ bleibt außen vor
     r"\bwir (kommen|gehen|machen|springen|wechseln) (?:jetzt|nun|dann|gleich|als n(ä|ae)chstes)\b"
     r"(?: \w+){0,2}? (zu|zum|zur|mit)\b|"
+    # Aufforderung mit vorangestelltem Ziel, Zeitwort am Ende („Lass uns zu … gehen“) – dieselben Zeitwörter
+    r"\b(?:lass|lasst) uns (?:\w+ ){0,3}?(?:zu|zum|zur|mit)\b(?:\s+\w+){0,3}?\s+(?:kommen|gehen|machen|springen|wechseln)\b|"
     r"\bzum (zweiten|dritten|vierten|f(ü|ue)nften|sechsten|letzten) (punkt|thema|tagesordnungspunkt)|"
     r"weiter (zu|mit) (punkt|top|thema)|n(ä|ae)chste[nrs]? (punkt|thema|tagesordnungspunkt)|"
     r"zum n(ä|ae)chsten (punkt|thema)|punkt \w+ (der|unserer) (agenda|tagesordnung)",
@@ -211,6 +213,14 @@ _VERTAGT = re.compile(r"\b(?:sp(?:ä|ae)ter|nachher|danach|anschlie(?:ß|ss)end|
 def rueckwaerts(text: str) -> bool:
     """Ausdrückliche Rückkehr zu einem früheren Punkt (ohne Vertagung) – das Ziel prüft angekuendigter_punkt."""
     return bool(_RUECKWAERTS.search(text)) and not _VERTAGT.search(text)
+
+
+def frageform(text: str) -> bool:
+    """Frage statt Ansage? Ein Fragezeichen irgendwo im Satz reicht – auch bei mehreren Teilsätzen
+    („Nestor, fass zusammen: … und was ist der nächste Punkt bei X?“ ist als Ganzes eine Frage).
+    Die feste Ansage-Regel greift bei einer Frage nicht: Nestor soll den Satz bekommen, bevor die
+    Agenda wechselt."""
+    return "?" in text
 
 
 def angekuendigter_punkt(text: str, titel: list[str], aktiv: int) -> int | None:

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import aktionen, analyse, anbieter, ki_fehler, konfidenz, kosten, regeln, themen
 from .artefakte import Artefakte
-from .assistent import Assistent
+from .assistent import Assistent, angesprochen
 from .config import EINST, WURZEL, schluessel_info
 from .entscheider import Entscheider
 from .knopfdruck import Knopfstand
@@ -1016,7 +1016,11 @@ class Coach:
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
         self.artefakte.satz(zeilen or [seg])  # Ticket #72: Schnell-Erkennung bei klaren Signalen
-        ziel = analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt) if m.laeuft else None
+        # Die feste Ansage-Regel wechselt nur bei einer echten Ansage: eine Frage soll Nestor erst bekommen,
+        # bevor die Agenda wechselt, und ein Zuruf an Nestor übergibt die Entscheidung an ihn (Werkzeug/Aktion).
+        fest_gesperrt = analyse.frageform(seg.text) or angesprochen(seg.text)
+        ziel = (analyse.angekuendigter_punkt(seg.text, [p.titel for p in m.agenda], m.aktiver_punkt)
+                if m.laeuft and not fest_gesperrt else None)
         if ziel is not None:
             # Ausdrückliche Ansage mit Ziel: sofort wechseln, ohne auf die Themen-Zuordnung zu warten
             self.protokoll.append({"zeit": seg.ende, "art": "wechsel", "von": m.aktiver_punkt, "nach": ziel,
