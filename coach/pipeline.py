@@ -672,8 +672,8 @@ class Coach:
 
     def _anteil_kachel(self) -> tuple[str, str]:
         r = analyse.redeanteil(self.meeting) if self.meeting.laeuft else None
-        if r is None:
-            return "gruen", "Redeanteile ausgeglichen"
+        if r is None:  # allein oder nur eine Stimme erkannt: kein fairer Anteil, nichts zu werten
+            return "gruen", "wertet ab zwei erkannten Personen"
         grenze = f"Hinweis ab {r['grenze'] * 100:.0f} %"
         if r["rede"] < analyse.ANTEIL_MIN_REDE:
             return "gruen", f"noch zu wenig Gespräch · {grenze}"

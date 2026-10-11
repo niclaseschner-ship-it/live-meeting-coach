@@ -1316,6 +1316,15 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
     await lauf.bild(page, "imperativ")
 
     # Redeanteil („Alle kommen zu Wort“): steigt der größte Anteil während des Blocks, färbt sich die Kachel?
+    # Gewertet wird erst ab zwei Personen (coach/analyse.py redeanteil). Erkennt die Sprechertrennung in der
+    # synthetischen Aufnahme nur eine Stimme, gibt es keinen fairen Anteil – dann ist die Prüfung nicht anwendbar.
+    personen = await page.evaluate("""() => { const z = (typeof zustand !== 'undefined' && zustand) || {};
+      const erkannt = Object.entries(z.redeanteile || {}).filter(([w, s]) => w !== 'Person ?' && s >= 10).length;
+      return Math.max(erkannt, (z.teilnehmende || []).length); }""")
+    lauf.belege["redeanteil_personen"] = personen
+    if personen < 2:
+        lauf.belege["redeanteil_nicht_pruefbar"] = "nur eine Stimme erkannt – kein fairer Anteil"
+        return
     von, bis_ = t_mikro + mono[0]["start"], t_mikro + mono[-1]["ende"] + 8
     block = [(t - t_mikro, prozent, farbe) for t, prozent, farbe in uhr.monolog if von <= t <= bis_]
     werte = [prozent for _, prozent, _ in block]
