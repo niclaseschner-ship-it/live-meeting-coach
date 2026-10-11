@@ -191,6 +191,65 @@ def passt(muster: str, text: str) -> bool:
     return bool(re.search(muster, text or "", re.IGNORECASE))
 
 
+# --- Paketdateien nennen dieselben Ergebnisse (ein Ergebnis-Modell) -------------------------------------------------
+PAKET_DATEIEN = ("protokoll.md", "ueberblick.md", "meeting.json", "meeting.md", "tasks.json")
+
+
+def _abschnitt(md: str, titel: str) -> list[str]:
+    """Aufzählungszeilen unter einer Überschrift, die `titel` enthält (bis zur nächsten Überschrift)."""
+    aus, drin = [], False
+    for z in md.splitlines():
+        if z.startswith("#"):
+            drin = titel in z
+        elif drin and z.startswith("- ") and z not in ("- –", "- keine Abschweifung"):
+            aus.append(z[2:])
+    return aus
+
+
+def _vor(text: str, *trenner: str) -> str:
+    for t in trenner:
+        text = text.split(t)[0]
+    return text.strip()
+
+
+def paket_nennungen(dateien: dict[str, str]) -> dict[str, list[str]]:
+    """Welche Ergebnisse (Wortlaut, sortiert) jede vorhandene Paketdatei nennt; tasks.json nur die Aufgaben."""
+    v = VERTRAG["paket_ergebnisse"]
+    aus: dict[str, list[str]] = {}
+    if "meeting.json" in dateien:
+        m = json.loads(dateien["meeting.json"])
+        aus["meeting.json"] = sorted(e["was"] for g in v["meeting_gruppen"] for e in m.get(g) or [])
+        aus["meeting.json:aufgaben"] = sorted(e["was"] for e in m.get("aufgaben") or [])
+    if "tasks.json" in dateien:
+        aus["tasks.json"] = sorted(a["was"] for a in json.loads(dateien["tasks.json"]))
+    if "protokoll.md" in dateien:
+        aus["protokoll.md"] = sorted(_vor(z[2:], " · ", " – **fehlt") for z in dateien["protokoll.md"].splitlines()
+                                     if z.startswith("- "))
+    if "meeting.md" in dateien:
+        aus["meeting.md"] = sorted(_vor(z, " · ") for t in v["meeting_md_abschnitte"]
+                                   for z in _abschnitt(dateien["meeting.md"], t))
+    if "ueberblick.md" in dateien:
+        aus["ueberblick.md"] = sorted(_vor(z, " (wer:", " (nur Vorschlag)", " (vorläufig)", " (Risiko)")
+                                      for t in v["ueberblick_abschnitte"] for z in _abschnitt(dateien["ueberblick.md"], t))
+    return aus
+
+
+def paket_abweichungen(dateien: dict[str, str], abschlussseite: str | None = None) -> list[str]:
+    """Leer, wenn alle Paketdateien (und die Abschlussseite) dieselben Ergebnisse nennen wie meeting.json."""
+    n = paket_nennungen(dateien)
+    fehlen = [d for d in ("protokoll.md", "meeting.json", "tasks.json") if d not in dateien]
+    if fehlen:
+        return [f"fehlt im Paket: {', '.join(fehlen)}"]
+    bezug = n["meeting.json"]
+    aus = [f"{d}: {sorted(set(n[d]) ^ set(bezug))}" for d in ("protokoll.md", "meeting.md", "ueberblick.md")
+           if d in n and n[d] != bezug]
+    if n["tasks.json"] != n["meeting.json:aufgaben"]:
+        aus.append(f"tasks.json: {sorted(set(n['tasks.json']) ^ set(n['meeting.json:aufgaben']))}")
+    if abschlussseite is not None:
+        aus += [f"Abschlussseite ohne: {w}" for w in bezug if w not in abschlussseite]
+    return aus
+
+
 async def karten(page: Page) -> list[dict]:
     """Karten des Verlaufs aus dem Dashboard-Zustand (lesend, Zusatzbeleg zur sichtbaren Bühne)."""
     return await page.evaluate("() => (typeof zustand !== 'undefined' && zustand && zustand.karten) || []") or []
@@ -679,12 +738,19 @@ async def beenden_und_abschluss(page: Page, lauf: Lauf, download: Path) -> None:
     await datei.save_as(str(ziel))
     with zipfile.ZipFile(ziel) as z:
         namen = set(z.namelist())
+        paketdateien = {n: z.read(n).decode("utf-8", "replace") for n in PAKET_DATEIEN if n in namen}
         technik = json.loads(z.read("technik.json")) if "technik.json" in namen else {}
         protokoll = z.read("meeting.md").decode("utf-8", "replace") if "meeting.md" in namen else ""
         transkript = z.read("transkript.md").decode("utf-8", "replace") if "transkript.md" in namen else ""
         meeting_json = json.loads(z.read("meeting.json")) if "meeting.json" in namen else {}
     pflicht = {"meeting.md", "transkript.md", "agenda.md", "technik.json"}
     lauf.pruefen("ZIP enthält Pflichtdateien", pflicht <= namen, f"fehlt: {sorted(pflicht - namen)}")
+    dok = VERTRAG["paket_ergebnisse"]["abschlussseite"]
+    await warte(page, f"() => document.querySelectorAll('{dok} li').length > 0", 30)
+    abweichungen = paket_abweichungen(paketdateien, await text(page, dok))
+    lauf.belege["paket_ergebnisse"] = paket_nennungen(paketdateien)
+    lauf.pruefen("Paketdateien und Abschlussseite nennen dieselben Ergebnisse", not abweichungen,
+                 "; ".join(abweichungen)[:500], abweichung="paket_ergebnisse")
     lauf.belege["technik_json_stufe"] = {k: technik.get(k) for k in ("stufe", "anbieter") if k in technik}
     lauf.pruefen("technik.json nennt die gewählte Stufe", lauf.stufe in json.dumps(technik, ensure_ascii=False).lower(),
                  json.dumps(lauf.belege["technik_json_stufe"], ensure_ascii=False))

@@ -105,8 +105,7 @@ def test_erkennung_ergaenzt_statt_doppelt_und_kennt_quelle_und_agendapunkt():
     asyncio.run(c.artefakte.erkennen())
     assert len(c.artefakte.liste) == 1 and a.wer == "Sofie" and a.bis == "Freitag" and a.vollstaendig
     assert "1. Aufgabe: Zusammenfassung für die Statusseite erstellen" in c._client.anfragen[1]  # mit Nummer
-    assert c.meeting.ergebnisse[1]["aufgaben"] == [
-        {"was": "Zusammenfassung für die Statusseite erstellen", "wer": "Sofie", "bis": "Freitag"}]
+    assert c.artefakte.aufgaben_json()[0]["wer"] == "Sofie" and c.artefakte.beschluss(1) is None
 
 
 def test_keine_staendige_erkennung_mehr():

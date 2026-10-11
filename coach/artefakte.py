@@ -2,8 +2,8 @@
 Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_artefakte_2026-10-08.md.
 
 - **Ein Datenmodell** (`Artefakt`): Typ, Felder, Vollständigkeit, Lücken, Konfidenz, Quelle (Zeit, Satz),
-  Agendabezug, bestätigt ja/nein. Daraus abgeleitet: `Meeting.ergebnisse` im alten Format (Kontext für Nestor,
-  Überblick, Protokoll, Abschluss-Kopf) und die Standardgliederung für Abschluss und Export (#22).
+  Agendabezug, bestätigt ja/nein. Die einzige Quelle für Ergebnisse: Überblick, protokoll.md, meeting.json,
+  tasks.json, Karten und Nestors Kontext sind Ansichten darauf (Standardgliederung für Abschluss und Export, #22).
 - **Erkennung bei Bedarf** (Ticket #27): keine ständige Erkennung mehr. Erkannt wird still je **Abschnitt** – beim
   Punktwechsel, nach 20 Minuten am selben Punkt bzw. ohne Agenda alle 20 Minuten – und nur über diesen Abschnitt;
   daraus wird still eine Karte „Zusammenfassung · Punkt …“ im Verlauf. Auf Anfrage (Zusammenfassen, Was fehlt,
@@ -43,6 +43,7 @@ log = logging.getLogger("coach.artefakte")
 TYPEN = ("aufgabe", "entscheidung", "offen", "risiko")
 TYP_NAME = {"aufgabe": "Aufgabe", "entscheidung": "Entscheidung", "offen": "Offener Punkt", "risiko": "Risiko"}
 STATUS = ("endgueltig", "vorlaeufig", "vorschlag")
+STATUS_NAME = {"endgueltig": "beschlossen", "vorlaeufig": "vorläufig", "vorschlag": "nur Vorschlag"}  # in allen Ansichten
 # Pflichtfelder je Typ (Ticket #26, Tabelle „Artefakte und wann sie vollständig sind“); was = Handlung / was gilt /
 # präzise Frage / Ursache → Auswirkung
 PFLICHT = {
@@ -97,6 +98,11 @@ def inhaltsleer(was: str) -> bool:
 
 def kollektiv(wer: str | None) -> bool:
     return bool(wer) and wer.strip().lower() in KOLLEKTIV
+
+
+def beschlossen(a: "Artefakt") -> bool:
+    """Entscheidung, die gilt (endgültig oder vorläufig) – alles andere ist für die Ansichten noch offen."""
+    return a.typ == "entscheidung" and a.status in ("endgueltig", "vorlaeufig")
 
 
 def sprechbar_wer(wer: str | None) -> str:
@@ -179,8 +185,7 @@ class Artefakt:
         """Eine Zeile für Kontext und Protokoll."""
         teile = [f"{self.id}. {TYP_NAME[self.typ]}: {self.was}"]
         if self.typ == "entscheidung":
-            teile.append({"endgueltig": "beschlossen", "vorlaeufig": "vorläufig", "vorschlag": "nur Vorschlag"}.get(
-                self.status or "vorschlag", ""))
+            teile.append(STATUS_NAME.get(self.status or "vorschlag", ""))
         if self.wer or self.typ != "entscheidung":
             teile.append(f"wer: {self.wer or 'fehlt'}")
         if self.bis or self.typ in ("aufgabe", "offen"):
@@ -598,7 +603,6 @@ class Artefakte:
         if "was" in felder:
             a.vage = False
         a.bestaetigt, a.herkunft, a.geaendert = True, herkunft, self._jetzt()
-        self.ableiten()
         return a
 
     def loeschen(self, nr: int) -> bool:
@@ -606,7 +610,6 @@ class Artefakte:
         if a is None:
             return False
         self.liste.remove(a)
-        self.ableiten()
         return True
 
     def luecken_liste(self, n: int = 3, punkt: int | None = None) -> list[Artefakt]:
@@ -615,27 +618,10 @@ class Artefakte:
                       and (punkt is None or a.punkt == punkt)]
         return sorted(kandidaten, key=lambda a: (rang(a), a.zeit))[:n]
 
-    def ergebnisse_je_punkt(self) -> dict[int, dict]:
-        """Altes Format von Regel 10 (Meeting.ergebnisse) – für Nestors Kontext, Überblick, Protokoll und den
-        Abschluss-Kopf. Ergebnis eines Punkts = seine beschlossenen Entscheidungen."""
-        aus: dict[int, dict] = {}
-        for a in self.liste:
-            if a.punkt is None or a.ausserhalb:
-                continue
-            e = aus.setdefault(a.punkt, {"ergebnis": None, "entscheidungen": [], "aufgaben": []})
-            if a.typ == "entscheidung" and a.status != "vorschlag":
-                e["entscheidungen"].append({"was": a.was, "ergebnis": "vorläufig" if a.status == "vorlaeufig"
-                                            else "beschlossen"})
-            elif a.typ == "aufgabe":
-                e["aufgaben"].append({"was": a.was, "wer": None if kollektiv(a.wer) else a.wer, "bis": a.bis})
-        for e in aus.values():
-            beschl = [d["was"] for d in e["entscheidungen"]]
-            e["ergebnis"] = "; ".join(beschl)[:300] if beschl else None
-        return aus
-
-    def ableiten(self) -> None:
-        if self.coach is not None:
-            self.coach.meeting.ergebnisse = self.ergebnisse_je_punkt()
+    def beschluss(self, punkt: int) -> str | None:
+        """Was an einem Agendapunkt beschlossen ist, als eine Zeile (Agenda-Anzeige, Protokoll-Karte, Kontext)."""
+        return "; ".join(a.was for a in self.liste if a.punkt == punkt and not a.ausserhalb and beschlossen(a))[:300] \
+            or None
 
     def schnappschuss(self) -> dict:
         return {"liste": [a.bild() for a in self.liste],
@@ -803,7 +789,6 @@ class Artefakte:
                                     "stuecke": len(stuecke), "parallel": parallel, "anzahl": len(self.liste)})
         finally:
             self.laeuft = False
-            self.ableiten()
             await c.melden()
         return n
 
@@ -911,7 +896,6 @@ class Artefakte:
                     if a is not None and len(self.liste) > vorher:
                         a.schnell = True
                         neue.append(a)
-                self.ableiten()
                 c.protokoll.append({"zeit": m.jetzt(), "art": "artefakte_schnell", "saetze": len(neu),
                                     "neu": [a.id for a in neue], "sekunden": round(time.monotonic() - t0, 2)})
                 if neue:
@@ -1040,7 +1024,6 @@ class Artefakte:
                              status=(e.get("status") or "endgueltig") if e["typ"] == "entscheidung" else None,
                              reaktion=e.get("reaktion"), konfidenz=1.0, zeit=jetzt, bestaetigt=True,
                              herkunft=herkunft, punkt=punkt_an(m, jetzt) if m is not None else None)
-            self.ableiten()
         else:
             return None, "Das konnte ich keinem Eintrag zuordnen."
         return a, bestaetigung_text(a, felder)

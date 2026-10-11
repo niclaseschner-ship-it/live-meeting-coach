@@ -284,9 +284,11 @@ async def zusammenfassen(coach, b) -> tuple[dict, str]:
     art = coach.artefakte
     await art.nachholen()
     m = coach.meeting
-    beschl = [a for a in art.liste if a.typ == "entscheidung" and a.status != "vorschlag"]
+    from .artefakte import beschlossen
+
+    beschl = [a for a in art.liste if beschlossen(a)]
     aufgaben = [a for a in art.liste if a.typ == "aufgabe"]
-    offen = [a for a in art.liste if a.typ in ("offen", "risiko") or (a.typ == "entscheidung" and a.status == "vorschlag")]
+    offen = [a for a in art.liste if a.typ != "aufgabe" and not beschlossen(a)]
     liste = beschl[-5:] + aufgaben[-8:] + offen[-4:]
     karte = artefakt_karte(coach, "zusammenfassung", f"Zusammenfassung · Stand {mmss(m.jetzt())}", liste, True)
     if not liste:

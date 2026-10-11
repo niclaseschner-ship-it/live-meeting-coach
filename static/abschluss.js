@@ -44,13 +44,16 @@ async function laden() {
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Begriffe wie in protokoll.md und meeting.md (coach/artefakte.py STATUS_NAME)
+const STATUS_NAME = { endgueltig: "beschlossen", vorlaeufig: "vorläufig", vorschlag: "nur Vorschlag" };
 function dokumentHtml() {
   const d = letzterStand?.dokument;
   if (!d) return "<p>Das Dokument wird noch erstellt …</p>";
   const gruppe = (titel, key, felder) => {
     const xs = d[key] ?? [];
     const zeilen = xs.length ? xs.map((x) => `<li>${felder.map((f) => x[f]
-      ? esc(x[f]) : `<strong class="dok-luecke">${esc(f)} fehlt</strong>`).join(" · ")}</li>`).join("") : "<li>Keine</li>";
+      ? esc(f === "status" ? (STATUS_NAME[x[f]] ?? x[f]) : x[f])
+      : `<strong class="dok-luecke">${esc(f)} fehlt</strong>`).join(" · ")}</li>`).join("") : "<li>Keine</li>";
     return `<h3>${titel}</h3><ul>${zeilen}</ul>`;
   };
   let h = `<h1>${esc(d.kopf?.titel || "Meeting")}</h1><p>${esc(d.kopf?.datum || "")} · ${Math.round((d.kopf?.dauer_sekunden || 0)/60)} Minuten</p>`;
