@@ -30,6 +30,7 @@ Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_art
 from __future__ import annotations
 
 import asyncio
+import bisect
 import json
 import logging
 import re
@@ -486,6 +487,9 @@ class Artefakte:
         self._voll_offen = False                 # gebündelte Erkennung scheiterte – der Takt holt sie nach
         self._wiederholen_um: float | None = None
         self._abstand = WIEDERHOLEN_AB
+        # Ticket #79: letztes entfernen/aendern je Nummer, für den Knopf „Rückgängig“ – ("entfernt", Artefakt) oder
+        # ("geaendert", {Feld: alter Wert}); Nummern werden nie neu vergeben, daher genügt ein Platz je Nummer.
+        self._rueckgaengig: dict[int, tuple[str, object]] = {}
 
     # --- Daten ---------------------------------------------------------------------------------------------
     def holen(self, nr: int) -> Artefakt | None:
@@ -1005,6 +1009,69 @@ class Artefakte:
             return False
         a.abgelehnt = True
         return True
+
+    def _rueckgaengig_anbieten(self, art: str, nr: int, text: str) -> None:
+        """Band-Hinweis mit Knopf „Rückgängig“ (Ticket #79): läuft über die vorhandene Band-Aktion (coach/
+        entscheider.py); der Knopf schickt nur die Nummer an POST /api/artefakte/rueckgaengig – den vorherigen
+        Stand hält `self._rueckgaengig` server-seitig, damit die alte Nummer und der volle Stand zurückkommen
+        (kein neuer Eintrag über `eintragen`). Der Schlüssel kommt aus der Prozesszeit (nicht aus `self`), damit er
+        auch nach einem Neuaufbau von `Artefakte` (z. B. `Coach.einwand_umsetzen`) nie mit einem früheren
+        zusammenfällt und `einmalig` nicht schweigt."""
+        c = self.coach
+        if c is None:
+            return
+        c.entscheider.einmalig(c.meeting, f"{art}-{nr}-{time.monotonic()}", art, "hinweis", "gruppe", text,
+                               aktion={"text": "Rückgängig", "rueckgaengig": {"id": nr}}, dauer=90.0)
+
+    def entfernen(self, nr: int) -> Artefakt | None:
+        """Werkzeug `ergebnis_entfernen` (Premium) bzw. Aktion `entfernen` (Basis), Ticket #79: „nimm X von der
+        Liste“ – sofort ausgeführt über das vorhandene `loeschen`. Das entfernte Objekt bleibt unverändert in
+        `self._rueckgaengig` liegen (Nummern werden nie neu vergeben, `rueckgaengig` legt also genau dasselbe
+        Objekt wieder in die Liste, nicht einen neuen Eintrag mit neuer Nummer)."""
+        a = self.holen(nr)
+        if a is None or not self.loeschen(nr):
+            return None
+        self._rueckgaengig[nr] = ("entfernt", a)
+        self._rueckgaengig_anbieten("entfernt", nr, f"Entfernt: „{_text(a.was, 60)}“")
+        return a
+
+    def aendern(self, nr: int, was: str) -> Artefakt | None:
+        """Werkzeug `ergebnis_aendern` (Premium) bzw. Aktion `aendern` (Basis), Ticket #79: nur der Wortlaut ändert
+        sich, über das vorhandene `bearbeiten`; `rueckgaengig` setzt alle davon berührten Felder zurück (Wortlaut,
+        aber auch bestätigt/Herkunft/vage), nicht nur den Text."""
+        a = self.holen(nr)
+        if a is None or not (was or "").strip():
+            return None
+        vorher = {"was": a.was, "vage": a.vage, "bestaetigt": a.bestaetigt, "herkunft": a.herkunft,
+                  "geaendert": a.geaendert}
+        a = self.bearbeiten(nr, {"was": was}, herkunft="stimme")
+        if a is None or a.was == vorher["was"]:
+            return a
+        self._rueckgaengig[nr] = ("geaendert", vorher)
+        self._rueckgaengig_anbieten("geaendert", nr, f"Geändert: „{_text(a.was, 60)}“")
+        return a
+
+    def rueckgaengig(self, nr: int) -> Artefakt | None:
+        """Knopf „Rückgängig“ an der Band-Karte von `entfernen`/`aendern` (Ticket #79): stellt den vorherigen Stand
+        mit der ALTEN Nummer wieder her, ohne über `eintragen`/`bearbeiten` einen neuen Vorgang auszulösen – damit
+        bleiben Liste, Karten, Protokoll und meeting.json unverändert (kein Sonderfall für einen „wiederhergestellten“
+        Eintrag). Höchstens der letzte entfernen/ändern je Nummer ist rückgängig zu machen, nicht gestapelt."""
+        eintrag = self._rueckgaengig.pop(nr, None)
+        if eintrag is None:
+            return None
+        art, daten = eintrag
+        if art == "entfernt":
+            a = daten
+            if a not in self.liste:  # noch nicht anderweitig wieder eingefügt
+                pos = bisect.bisect_left([x.id for x in self.liste], a.id)
+                self.liste.insert(pos, a)
+        else:  # "geaendert": dieselbe Nummer ist noch da, nur die Felder zurücksetzen
+            a = self.holen(nr)
+            if a is None:
+                return None
+            for feld, wert in daten.items():
+                setattr(a, feld, wert)
+        return a
 
     def eintragen(self, daten: dict, herkunft: str = "stimme") -> tuple[Artefakt | None, str]:
         """„Nestor, Sofie übernimmt die Statusseite bis Freitag“: Premium-Werkzeug bzw. Basis-Aktion. Mit Nummer wird

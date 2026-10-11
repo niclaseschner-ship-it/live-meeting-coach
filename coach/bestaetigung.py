@@ -44,14 +44,17 @@ STAU = {("bild", "recherche"): "Ich bin noch am Bild, die Recherche mache ich da
         ("bild", "bild"): "Ich bin noch am Bild, das nächste mache ich danach."}
 ABWEHR = "Ich hab gerade zwei Sachen auf dem Zettel. Fragt mich gleich nochmal."
 NOTIERT = ["Notiert.", "Ist notiert."]
+# Ticket #79: Ergebnis per Zuruf entfernen/ändern – wie NOTIERT bestätigt das System selbst, sofort ausgeführt
+ENTFERNT = ["Entfernt.", "Ist runter von der Liste."]
+GEAENDERT = ["Geändert.", "Ist geändert."]
 # Seh-Inhalt (Folie, Überblick, Liste): kein Inhalt gesprochen, nur der Hinweis, dass die Karte da ist
 HIER = {"folie": "Hier ist die Folie.", "ueberblick": "Hier ist der Überblick.", "festgehalten": "Hier ist die Liste.",
         "karte": "Hier ist sie."}
 JA = "Ja?"
 ABGEBROCHEN = "Okay, lass ich."
 NICHTS_OFFEN = "Da läuft gerade nichts."
-ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + NOTIERT + list(HIER.values()) + [JA, ABGEBROCHEN,
-                                                                                       NICHTS_OFFEN]
+ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + NOTIERT + ENTFERNT + GEAENDERT + list(HIER.values()) + \
+    [JA, ABGEBROCHEN, NICHTS_OFFEN]
 
 STIL = ("Sprich locker, freundlich und zügig auf Deutsch, wie ein Kollege, der kurz Bescheid gibt. "
         "Natürliches Tempo, keine langen Pausen.")

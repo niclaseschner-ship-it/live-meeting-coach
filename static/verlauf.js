@@ -314,7 +314,7 @@ function ueberblickInhalt(u) {
 const bandWeg = new Set(); // weggeklickte Einträge (Hinweis-ids, "vorschlag-<punkt>")
 const BAND_ICON = { ton: "ton", ausreden: "ausreden", ueberlappung: "ausreden", fokus: "thema", zeit: "zeit",
   monolog: "kurz", alle: "alle", ergebnisse: "ergebnisse", luecken: "ergebnisse", fuenf: "zeit", namen: "alle",
-  taste: "mikro", vorschlag: "weiter" };
+  taste: "mikro", vorschlag: "weiter", entfernt: "ergebnisse", geaendert: "ergebnisse" };
 
 function bandEintraege(z) {
   const aktiv = z.laeuft || z.simulation || z.hoeren;
@@ -334,6 +334,8 @@ function bandEintraege(z) {
     let knopf = null;
     if (a?.bogen) knopf = { text: a.text, lauf: () => bandBogen(a.bogen, h.id) };
     else if (a?.karte) knopf = { text: a.text ?? "Zur Karte", lauf: () => verlaufZeigen(a.karte) };
+    // Ticket #79: Ergebnis per Zuruf entfernt/geändert – Knopf „Rückgängig“ schickt die Payload unverändert zurück
+    else if (a?.rueckgaengig) knopf = { text: a.text ?? "Rückgängig", lauf: () => bandRueckgaengig(a.rueckgaengig, h.id) };
     aus.push({ schluessel: h.id, art: h.art, text: h.text, rot: h.art === "ton" || h.stufe === "warnung", knopf,
       still: ["namen", "taste"].includes(h.art) });
   }
@@ -343,6 +345,11 @@ function bandEintraege(z) {
 async function bandBogen(art, id) {
   bandWeg.add(id);
   try { await api(`/api/knopf/${art}`, { band: true }); } catch { /* Meldung zeigt api() */ }
+}
+
+async function bandRueckgaengig(payload, id) {
+  bandWeg.add(id);
+  try { await api("/api/artefakte/rueckgaengig", payload); } catch { /* Meldung zeigt api() */ }
 }
 
 function bandRendern(z, box) {

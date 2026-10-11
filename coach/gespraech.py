@@ -70,6 +70,22 @@ WERKZEUGE = [
          "was": {"type": "string"}, "wer": {"type": "string"}, "bis": {"type": "string"},
          "status": {"type": "string", "enum": ["endgueltig", "vorlaeufig"]},
          "reaktion": {"type": "string"}}}},
+    {"type": "function", "name": "ergebnis_entfernen",
+     "description": "Ein festgehaltenes Artefakt aus der Liste entfernen, wenn die Gruppe das ausdrücklich sagt "
+                    "(„nimm das von der Liste“, „das brauchen wir nicht mehr“, „streich das wieder“). Sofort "
+                    "ausgeführt, die Karte bietet Rückgängig. Nummer aus „Festgehaltene Artefakte“ bzw. "
+                    "status_abfragen.",
+     "parameters": {"type": "object", "properties": {
+         "nummer": {"type": "integer", "description": "Nummer des Artefakts, das entfernt werden soll"}},
+         "required": ["nummer"]}},
+    {"type": "function", "name": "ergebnis_aendern",
+     "description": "Den Wortlaut eines festgehaltenen Artefakts ändern, wenn die Gruppe das ausdrücklich so "
+                    "möchte („nimm statt X Y“, „das ist falsch, richtig ist …“). Nur der Text ändert sich, nicht "
+                    "wer/bis/Status. Sofort ausgeführt, die Karte bietet Rückgängig.",
+     "parameters": {"type": "object", "properties": {
+         "nummer": {"type": "integer", "description": "Nummer des Artefakts, dessen Wortlaut sich ändert"},
+         "text": {"type": "string", "description": "der neue Wortlaut"}},
+         "required": ["nummer", "text"]}},
     {"type": "function", "name": "zuhoeren_pausieren",
      "description": "Die Gruppe möchte, dass du nicht mehr zuhörst. Wieder an nur über den Knopf im Dashboard.",
      "parameters": {"type": "object", "properties": {}}},
@@ -89,20 +105,21 @@ stattdessen von „jemandem“. Agendapunkte nennst du mit Nummer und Titel aus 
 Der Stand unten ist vom Beginn dieses Gesprächs. Ob das Bild fertig ist, wie viel Zeit bleibt oder bei welchem
 Punkt ihr seid, fragst du vor der Antwort mit status_abfragen ab – rate das nie.
 Du hörst über ein Raummikrofon; Gespräche der Gruppe untereinander, die nicht an dich gerichtet sind,
-beantwortest du nicht – dann bleibst du still. Für Bild, Recherche, Karten, Agendawechsel, Pause und Ende hast du
-Werkzeuge; bei Agendawechsel und Pause sag kurz dazu, was du tust.
+beantwortest du nicht – dann bleibst du still. Für Bild, Recherche, Karten, Ergebnisse eintragen/ändern/entfernen,
+Agendawechsel, Pause und Ende hast du Werkzeuge; bei Agendawechsel und Pause sag kurz dazu, was du tust.
 
 STAND DES MEETINGS (zu Beginn dieses Gesprächs):
 {kontext}
 """
 # Ohne Sofort-Bestätigung (LMC_BESTAETIGUNG=0) sagt das Modell selbst, dass es nachschaut
-OHNE_BESTAETIGUNG = ("\nBei bild_zeichnen, recherchieren, folie_erstellen, karte_zeigen und artefakt_eintragen spricht "
-                     "das System selbst – sag nichts dazu.\n")
+OHNE_BESTAETIGUNG = ("\nBei bild_zeichnen, recherchieren, folie_erstellen, karte_zeigen, artefakt_eintragen, "
+                     "ergebnis_entfernen und ergebnis_aendern spricht das System selbst – sag nichts dazu.\n")
 # Ticket #21: Bestätigung und Wartezeit spricht das System aus vorab erzeugten Floskeln (coach/bestaetigung.py)
 MIT_BESTAETIGUNG = """
 Oft hat das System schon kurz bestätigt („Bin dran“), bevor du drankommst. Fang deshalb nicht mit „Okay“,
 „Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt. Bei bild_zeichnen, recherchieren, folie_erstellen,
-karte_zeigen und artefakt_eintragen spricht das System selbst – ruf das Werkzeug auf, ohne etwas dazu zu sagen.
+karte_zeigen, artefakt_eintragen, ergebnis_entfernen und ergebnis_aendern spricht das System selbst – ruf das
+Werkzeug auf, ohne etwas dazu zu sagen.
 """
 
 
@@ -378,6 +395,29 @@ class Gespraech:
                 self._bogen.zusatz.append(aufgabe)
             await self._ausgabe(call_id, {"ok": a is not None, "eingetragen": a.kurz() if a else None,
                                           "hinweis": "das System hat „Notiert“ gesagt – sag nichts"})
+            return
+        if name in ("ergebnis_entfernen", "ergebnis_aendern"):  # Ticket #79: sofort ausgeführt, Karte bietet Rückgängig
+            from . import bestaetigung as B
+
+            nummer = arg.get("nummer") if isinstance(arg, dict) else None
+            nummer = nummer if isinstance(nummer, int) else None
+            if name == "ergebnis_entfernen":
+                a = self.coach.artefakte.entfernen(nummer) if nummer is not None else None
+                floskeln = B.ENTFERNT
+            else:
+                a = self.coach.artefakte.aendern(nummer, str(arg.get("text") or "")) if nummer is not None else None
+                floskeln = B.GEAENDERT
+            if a is not None:
+                self.coach.protokoll.append({"zeit": self.coach.meeting.jetzt(),
+                                             "art": "artefakt_entfernt" if name == "ergebnis_entfernen"
+                                             else "artefakt_geaendert", "id": nummer, "durch": "stimme"})
+                await self.coach.melden()
+            satz = self.a.floskeln.variante(floskeln) if a is not None else "Das finde ich in der Liste nicht."
+            aufgabe = asyncio.ensure_future(self.a.floskel_sagen(satz, self._bogen))
+            if self._bogen is not None:
+                self._bogen.zusatz.append(aufgabe)
+            await self._ausgabe(call_id, {"ok": a is not None, "hinweis": "das System hat dazu schon gesprochen – "
+                                                                          "sag nichts"})
             return
         if name in ("recherchieren", "bild_zeichnen"):  # lange Aufträge: kein Bogen, Ergebnis kommt still (Ticket #27)
             art = "recherche" if name == "recherchieren" else "bild"

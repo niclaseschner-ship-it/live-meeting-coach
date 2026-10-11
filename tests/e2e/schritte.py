@@ -684,6 +684,32 @@ async def kernknopf(page: Page, art: str, soll: str, lauf: Lauf, sekunden: float
     await lauf.bild(page, f"knopf_{art}")
 
 
+async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
+    """Ticket #79: eine getippte Frage läuft wie ein Zuruf über denselben Weg (coach/assistent.py:
+    `frage_beantworten` → `annehmen`); Premium ruft dafür das Realtime-Werkzeug `ergebnis_entfernen` auf
+    (Drehbuchregel „zuruf_ergebnis_entfernen“ – fake_anbieter.py liefert einen Werkzeugaufruf statt Sprache). Ziel
+    ist Artefakt #1, die Budget-Entscheidung aus Satz 2 der Agenda – deterministisch die erste je angelegte
+    Nummer (siehe drehbuch.json "schnell_beschluss_und_aufgabe": die Entscheidung bekommt #1, Sabines Aufgabe
+    #2, weil Mistral dort fälschlich auch #1 nennt). Deshalb läuft die Probe ganz am Ende des Ablaufs und macht
+    sich mit Rückgängig selbst wieder rückgängig, damit `beenden_und_abschluss` danach die Entscheidung
+    unverändert im Protokoll findet. Nur Premium: Basis hat (noch) keine passende Chat-Drehbuchregel dafür."""
+    if lauf.stufe != "premium":
+        return
+    lauf.schritt("Zuruf „nimm von der Liste“ entfernt ein Ergebnis per Werkzeug, Rückgängig holt es zurück")
+    await page.locator("#knopf-frage").fill("Nestor, nimm den Testpunkt von der Liste.")
+    await page.locator("#knopf-fragen").click()
+    da = await warte(page, "() => (document.getElementById('band')?.innerText || '').includes('Entfernt')", 30)
+    lauf.pruefen('Zuruf entfernt Ergebnis #1: Band zeigt „Entfernt … · Rückgängig“', da,
+                 "" if da else (await text(page, "#band"))[:160])
+    if not da:
+        return
+    await page.locator(".band-knopf", has_text="Rückgängig").first.click()
+    zurueck = await warte(page, "() => !(document.getElementById('band')?.innerText || '').includes('Entfernt')", 15)
+    lauf.pruefen("Rückgängig stellt das Ergebnis mit derselben Nummer wieder her (Band-Hinweis verschwindet)",
+                 zurueck, "" if zurueck else (await text(page, "#band"))[:160])
+    await lauf.bild(page, "zuruf_entfernen")
+
+
 async def transkript_pruefen(page: Page, lauf: Lauf, sekunden: float = 120) -> None:
     lauf.schritt("Sprache über das Fake-Mikro des Handys, sichtbares Transkript")
     saetze = DREHBUCH["audio"]["meeting_saetze"]

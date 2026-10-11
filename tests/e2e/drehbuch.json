@@ -549,8 +549,22 @@
         "Budget"
       ],
       "antwort_text": "Beschlossen sind höchstens neuntausend Euro Ausgaben und dreitausendfünfhundert Euro Zuschuss."
+    },
+    {
+      "id": "zuruf_ergebnis_entfernen",
+      "frage_enthaelt": [
+        "Testpunkt",
+        "von der Liste"
+      ],
+      "werkzeug": {
+        "name": "ergebnis_entfernen",
+        "argumente": {
+          "nummer": 1
+        }
+      }
     }
   ],
   "_ansprache": "Satz 4 spricht Nestor mit Namen an. Premium beantwortet ihn per Realtime (440 Hz, Karte „Sommerfest-Budget beschlossen“); Basis ignoriert die Ansprache (Funkgerät: nur Sprechtaste).",
-  "_schnell": "Ticket #72: Satz 2 (beschließen) und Satz 3 (liefert bis Freitag) lösen die Schnell-Erkennung aus – Karte ≤ 60 s. Satz 4 spricht Nestor an und zählt nicht. Satz 5 (prüfen wir noch) bekommt zuerst HTTP 500 (Band), beim nächsten Takt-Versuch das Ergebnis."
+  "_schnell": "Ticket #72: Satz 2 (beschließen) und Satz 3 (liefert bis Freitag) lösen die Schnell-Erkennung aus – Karte ≤ 60 s. Satz 4 spricht Nestor an und zählt nicht. Satz 5 (prüfen wir noch) bekommt zuerst HTTP 500 (Band), beim nächsten Takt-Versuch das Ergebnis.",
+  "_zuruf_entfernen": "Ticket #79: Regel „zuruf_ergebnis_entfernen“ – eine getippte Frage „Nestor, nimm den Testpunkt von der Liste“ liefert statt Sprache einen Werkzeugaufruf (ergebnis_entfernen, Nummer 1 = die Budget-Entscheidung aus Satz 2; Sabines Aufgabe aus Satz 3 bekommt #2, siehe 'schnell_beschluss_und_aufgabe'). Eingehängt als letzter Schritt vor beenden_und_abschluss (tests/e2e/schritte.py: zuruf_ergebnis_entfernen_pruefen, nur Premium), damit die spätere Protokollprüfung die Entscheidung unverändert vorfindet – die Probe macht sich mit Rückgängig selbst wieder gerade. Über den Getippt-Weg (/api/knopf/frage), nicht über die zeitgebundene meeting_saetze-WAV, damit keine bestehende indexabhängige Prüfung verschoben wird."
 }
