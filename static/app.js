@@ -378,16 +378,17 @@ function knopfRendern(z) {
 
 // ---------- Sprechtaste (Funkgerät, Ticket #27; Bedienmodell seit #66 gemeinsam: basis.js sprechknopf) ----------
 // Halten, sprechen, loslassen: der Ton der Frage geht als WAV an /api/frage/audio; drücken unterbricht Nestor.
-const TASTE_HILFE = "Halten und sprechen, dann loslassen. Leertaste funktioniert, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
+const TASTE_HILFE = "Klicken: sprechen, nochmal klicken zum Beenden. Halten: Funkgerät, loslassen beendet. Leertaste funktioniert, wenn kein Eingabefeld oder anderer Knopf fokussiert ist.";
 $("btn-taste").dataset.tip = TASTE_HILFE;
 $("btn-taste").setAttribute("aria-label", `Sprechtaste. ${TASTE_HILFE}`);
 $("btn-taste").setAttribute("aria-description", TASTE_HILFE);
 const taste = sprechknopf($("btn-taste"), {
   ...frageHalten,
   anzeige: (text) => { $("taste-text").textContent = text; },
-  ruhe: () => "Sprechtaste · halten",
+  ruhe: () => "Sprechtaste · klicken oder halten",
   start: () => { stimme.bereit(); stimme.stopp(); nestorStopp(); return frageHalten.start(); },
   leertaste: true,
+  liveText: (text) => { $("taste-text").textContent = text; }, // Ticket #86: Teiltext während des Sprechens
 });
 
 // ---------- Arbeitsring: lange Aufträge (Ticket #27) ----------

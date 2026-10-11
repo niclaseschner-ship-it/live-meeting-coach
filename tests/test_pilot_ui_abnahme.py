@@ -197,11 +197,7 @@ async def _agenda_mikro_mock_hold() -> None:
         async def agenda_route(route):
             sent.append(True)
             assert "multipart/form-data" in (route.request.headers.get("content-type") or "")
-            await route.fulfill(status=200, content_type="application/json", body=json.dumps({
-                "status": "ok", "eingabe": "Mocksprache", "antwort": "Mock-Antwort",
-                "titel": "Mockmeeting", "ziel": "Mockziel", "teilnehmende": [],
-                "punkte": [{"titel": "Mockpunkt", "ziel": "UI-Test", "minuten": 5}],
-            }))
+            await route.fulfill(status=200, content_type="application/json", body=json.dumps({"text": "Mocksprache"}))
 
         # Nur für diesen expliziten Frontend-Mock wird der gelesene WS-Stand mit
         # einem vorhandenen Agenda-Schlüssel gespiegelt; keine POST-API an den
@@ -224,7 +220,7 @@ async def _agenda_mikro_mock_hold() -> None:
             route.on_message(lambda nachricht: server_ws.send(nachricht))
 
         await page.route_web_socket("**/ws", route_ws)
-        await page.route("**/api/agenda/sprache", agenda_route)
+        await page.route("**/api/agenda/transkript", agenda_route)
         await page.goto(base + "/meeting", wait_until="domcontentloaded")
         button = page.locator("#agenda-mikro")
         await button.wait_for(state="visible", timeout=10_000)
@@ -235,13 +231,18 @@ async def _agenda_mikro_mock_hold() -> None:
         await page.mouse.down()
         held = await page.wait_for_function(
             "() => document.getElementById('agenda-mikro')?.classList.contains('haelt')", timeout=5000)
-        await asyncio.sleep(0.7)
+        await asyncio.sleep(0.7)  # echtes Halten (≥ 300 ms) – sendet wie ein Klick-Doppel, aber in einer Geste
         await page.mouse.up()
-        await page.wait_for_function("() => document.getElementById('agenda-antwort')?.textContent.includes('Mock-Antwort')",
+        # #86 Teil 2: nach dem Stopp steht der transkribierte Text editierbar im Feld – kein automatischer
+        # Agenda-Vorschlag mehr; „Absenden“ bleibt der bewusste nächste Schritt.
+        await page.wait_for_function("() => document.getElementById('agenda-feld')?.value === 'Mocksprache'",
                                      timeout=10_000)
         assert held is not None
         assert sent == [True]
-        assert await page.locator('#agenda-tabelle .agenda-zeile input[placeholder="Punkt"]').first.input_value() == "Mockpunkt"
+        assert await page.locator("#agenda-senden").text_content() == "Absenden"
+        punkt_felder = page.locator('#agenda-tabelle .agenda-zeile input[placeholder="Punkt"]')
+        punkte = [await punkt_felder.nth(i).input_value() for i in range(await punkt_felder.count())]
+        assert "Mockpunkt" not in punkte  # kein automatischer Vorschlag mehr – nur der Text im Feld
         await browser.close()
 
 

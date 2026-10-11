@@ -22,7 +22,8 @@ function agendaInit() {
       }),
       el("div", { class: "agenda-knoepfe" },
         el("button", { id: "agenda-mikro", class: "icon", type: "button",
-          "data-tip": "Sprechtaste: halten, sprechen, loslassen", "aria-label": "Sprechtaste halten" }, icon("mikro")),
+          "data-tip": "Klicken: sprechen, nochmal klicken zum Beenden. Halten: Funkgerät.",
+          "aria-label": "Sprechtaste: Klicken oder halten" }, icon("mikro")),
         el("button", { id: "agenda-senden", class: "primaer klein", type: "button" }, "Absenden"))),
     el("p", { id: "agenda-antwort", class: "agenda-antwort", role: "status", "aria-live": "polite", hidden: "" }),
     el("p", { id: "agenda-hinweis", class: "agenda-hinweis leise-text", hidden: "" },
@@ -34,14 +35,17 @@ function agendaInit() {
   $("agenda-feld").onkeydown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agendaSenden(); }
   };
-  // Ticket #66: dasselbe Bedienmodell wie jede Sprechtaste (basis.js: sprechknopf) – halten, sprechen, loslassen
+  // Ticket #66/#86: dasselbe Bedienmodell wie jede Sprechtaste (basis.js: sprechknopf) – Klick schaltet um,
+  // Halten bleibt ein Funkgerät. Anders als bei der Sprechtaste zu Nestor landet das Ergebnis nicht automatisch
+  // irgendwo, sondern editierbar im Eingabefeld (#86 Teil 2) – „Absenden“ bleibt der bewusste nächste Schritt.
   sprechknopf($("agenda-mikro"), {
     anzeige: (text) => { $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = text; },
     ruhe: () => null, // die Antwort (Rückfrage, Entwurf) bleibt stehen
     bereit: () => !agendaLaeuft && agendaSchluesselDa,
     start: () => agendaAufnahme.starten(),
     ende: () => agendaAufnahme.stoppen(),
-    senden: agendaSpracheSenden,
+    senden: agendaSpracheTranskribieren,
+    liveText: (text) => { $("agenda-feld").value = text; },
   });
   agendaTabelleRendern();
 }
@@ -126,10 +130,10 @@ function agendaUebernehmen(d, eingabe = "") {
   if (d.status === "rueckfrage") $("agenda-feld").focus();
   agendaTabelleRendern();
 }
-function agendaLaufendSetzen(an) {
+function agendaLaufendSetzen(an, label = "Agenda wird vorbereitet …") {
   agendaLaeuft = an;
   agendaSchluesselRendern(agendaSchluesselDa);
-  $("agenda-senden").textContent = an ? "Agenda wird vorbereitet …" : "Absenden";
+  $("agenda-senden").textContent = an ? label : "Absenden";
 }
 async function agendaSenden() {
   const text = $("agenda-feld").value.trim();
@@ -148,9 +152,10 @@ async function agendaSenden() {
 
 // ---------- Eingabe: Sprache (eigener kurzer Mitschnitt, kein Dauerstrom wie das Meeting-Mikro) ----------
 const agendaAufnahme = {
-  ctx: null, stream: null, worklet: null, proben: [], faktor: 1, pos: 0,
+  ctx: null, stream: null, worklet: null, proben: [], faktor: 1, pos: 0, liveTextSchicken: null,
   async starten() {
     this.proben = [];
+    this.liveTextSchicken = liveTextSammler(); // Ticket #86: Teiltext während des Sprechens (basis.js)
     try { this.ctx = new AudioContext({ sampleRate: RATE }); } catch { this.ctx = new AudioContext(); }
     try {
       // AudioContext direkt im Tastendruck aktivieren, bevor die Mikrofonfreigabe asynchron wartet.
@@ -175,7 +180,9 @@ const agendaAufnahme = {
     for (; p < f.length; p += this.faktor) {
       const i = Math.floor(p), a = f[i], b = f[i + 1] ?? a;
       const v = Math.max(-1, Math.min(1, a + (b - a) * (p - i)));
-      this.proben.push(v < 0 ? v * 0x8000 : v * 0x7fff);
+      const s16 = v < 0 ? v * 0x8000 : v * 0x7fff;
+      this.proben.push(s16);
+      this.liveTextSchicken?.(s16);
     }
     this.pos = p - f.length;
   },
@@ -183,7 +190,7 @@ const agendaAufnahme = {
     this.stream?.getTracks().forEach((t) => t.stop());
     await this.ctx?.close();
     const proben = this.proben;
-    this.ctx = this.stream = this.worklet = null; this.proben = [];
+    this.ctx = this.stream = this.worklet = null; this.proben = []; this.liveTextSchicken = null;
     return agendaWavBauen(proben, RATE);
   },
 };
@@ -198,18 +205,22 @@ function agendaWavBauen(proben, rate) {
   for (let i = 0; i < proben.length; i++) d.setInt16(44 + i * 2, proben[i], true);
   return new Blob([puffer], { type: "audio/wav" });
 }
-async function agendaSpracheSenden(wav) {
-  $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = "Agenda wird vorbereitet …";
-  agendaLaufendSetzen(true);
+// Ticket #86 Teil 2: nur transkribieren (wie heute aus der WAV) – der Text landet editierbar im Feld, kein
+// automatischer Agenda-Vorschlag mehr. "Absenden" (agendaSenden) löst den Vorschlag wie bei getippter Eingabe aus.
+async function agendaSpracheTranskribieren(wav) {
+  agendaLaufendSetzen(true, "Wird transkribiert …");
   try {
     const form = new FormData();
     form.append("datei", wav, "agenda.wav");
-    form.append("bisher", JSON.stringify(agendaBisherWert()));
-    form.append("verlauf", JSON.stringify(agendaDialog));
-    const r = await fetch("/api/agenda/sprache", { method: "POST", body: form });
+    const r = await fetch("/api/agenda/transkript", { method: "POST", body: form });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return { text: `Fehler: ${d.detail ?? r.status}`, fehler: true };
-    agendaUebernehmen(d, d.eingabe);
+    const text = (d.text ?? "").trim();
+    if (!text) return { text: "Darin war nichts zu verstehen.", fehler: true };
+    $("agenda-feld").value = text;
+    $("agenda-feld").focus();
+    $("agenda-antwort").hidden = true; $("agenda-antwort").textContent = ""; // kein Vorschlag, nur der Text im Feld
+    return null;
   } catch (err) {
     return { text: `Fehler: ${err.message ?? err}`, fehler: true };
   } finally { agendaLaufendSetzen(false); }

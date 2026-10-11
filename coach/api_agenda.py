@@ -44,6 +44,19 @@ async def agenda_vorschlag(daten: dict):
         raise _fehler(e) from e
 
 
+@router.post("/api/agenda/transkript")
+async def agenda_transkript(datei: UploadFile = File(...)):
+    """Ticket #86: nur die WAV transkribieren, ohne gleich einen Agenda-Vorschlag zu bauen – der Text landet
+    editierbar im Eingabefeld (static/agenda.js), „Absenden“ löst /api/agenda/vorschlag erst auf Zuruf aus."""
+    coach = _bereit()
+    wav = await datei.read()
+    try:
+        eingabe = await transkription.text(coach._client, coach.wahl.text_modell, wav, EINST.sprache, "")
+    except Exception as e:  # noqa: BLE001
+        raise _fehler(e) from e
+    return {"text": eingabe}
+
+
 @router.post("/api/agenda/sprache")
 async def agenda_sprache(bisher: str = Form("null"), verlauf: str = Form("[]"), datei: UploadFile = File(...)):
     coach = _bereit()

@@ -256,6 +256,7 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
             await schritte.stufe_waehlen(seite, stufe, lauf)
             await schritte.agenda_text(seite, lauf)
             await schritte.agenda_sprache(seite, lauf, ziel.agenda_halten_s)
+            await schritte.agenda_sprache_klick(seite, lauf)
             await schritte.start_gesperrt(seite, lauf)
             url = await schritte.qr_lesen(seite, lauf)
             handy_ctx, handy = await schritte.handy_koppeln(handy_browser, url, stufe, lauf, video)
