@@ -73,7 +73,7 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
             "gesehene_ziele": anbieter.gesehen(),
             "live_text": w.text_modell if w else None,
             "live_modell": w.live_modell if w else None,
-            "live_art": EINST.live_art,
+            "live_art": coach.live_art,
             "analyse": w.analyse_modell if w else None,
             "stimme": w.stimme_modell if w else None,
             "gespraech": w.realtime_modell if w and w.premium and w.assistent_modus == "gespraech" else None,

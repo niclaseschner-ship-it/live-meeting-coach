@@ -98,6 +98,11 @@ class Coach:
         self.entscheider = Entscheider(EINST.cooldown_sekunden)
         self.referenzen: dict[str, str] = {}  # Name -> data-URL eines kurzen WAV
         self.monolog_sekunden = EINST.monolog_sekunden
+        # Zur Laufzeit einstellbar (Dashboard-Kopfleiste, einstellen()); EINST selbst bleibt unveränderlich
+        # (Ticket #80 – vorher per object.__setattr__ auf EINST umgeschrieben).
+        self.live_art = EINST.live_art
+        self.onepager_minuten = EINST.onepager_minuten
+        self.aufnahme_speichern = EINST.aufnahme_speichern
         self.fehler: str | None = None
         self.simulation_laeuft = False
         self.beobachter: list = []  # async Callbacks, z. B. WebSocket-Broadcast
@@ -319,7 +324,6 @@ class Coach:
                 "kosten": self.kosten_stand(),
                 "aktionshilfe": aktionen.katalog(self, self.wahl),
                 "simulation": self.simulation_laeuft,
-                "block_sekunden": EINST.block_sekunden,
                 "ampeln": ampeln,
                 "hoeren": self.hoerstrom is not None,
                 "onepager_version": self.onepager_version,
@@ -327,9 +331,7 @@ class Coach:
                 "onepager_laeuft": self._onepager_laeuft,
                 "archiv": self.archiv.stand() if self.archiv else None,
                 "onepager_fehler": self.onepager_fehler,
-                "onepager_minuten": EINST.onepager_minuten,
                 "onepager_fokus": self.onepager_fokus,
-                "onepager_format": "png" if self.onepager_png else "svg",
                 "ueberblick": self.ueberblick,
                 "ueberblick_version": self.ueberblick_version,
                 "ueberblick_laeuft": self._ueberblick_laeuft,
@@ -448,9 +450,9 @@ class Coach:
                 "modus": w.assistent_modus if w else self._premium_vorlieben["assistent_modus"],
                 "stimme": w.stimme if w else self._premium_vorlieben["stimme"],
                 "stufe": self.stufe,
-                "aufnahme": EINST.aufnahme_speichern,
-                "bild_anbieter": w.bild_anbieter if w else None, "live_art": EINST.live_art,
-                "bild_minuten": EINST.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
+                "aufnahme": self.aufnahme_speichern,
+                "bild_anbieter": w.bild_anbieter if w else None, "live_art": self.live_art,
+                "bild_minuten": self.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
 
     def einstellen(self, daten: dict) -> None:
         """Einstellungen zur Laufzeit (Dashboard-Kopfleiste). Nur bekannte Felder, geprüfte Werte."""
@@ -479,11 +481,11 @@ class Coach:
                 if self.wahl is not None:
                     self.wahl = self.wahl.mit(**neu)
         if daten.get("live_art") in ("schnell", "sparsam"):
-            object.__setattr__(EINST, "live_art", daten["live_art"])  # gilt ab dem nächsten Meetingstart
+            self.live_art = daten["live_art"]  # gilt ab dem nächsten Meetingstart
         if "bild_minuten" in daten:
-            object.__setattr__(EINST, "onepager_minuten", max(0.0, min(60.0, float(daten["bild_minuten"]))))
+            self.onepager_minuten = max(0.0, min(60.0, float(daten["bild_minuten"])))
         if "aufnahme" in daten:
-            object.__setattr__(EINST, "aufnahme_speichern", bool(daten["aufnahme"]))  # ab dem nächsten Start
+            self.aufnahme_speichern = bool(daten["aufnahme"])  # ab dem nächsten Start
         if "monolog_sekunden" in daten:
             self.monolog_sekunden = max(20.0, min(300.0, float(daten["monolog_sekunden"])))
 
@@ -793,7 +795,7 @@ class Coach:
             if self.archiv is not None and self.archiv.beobachten in self.beobachter:
                 self.beobachter.remove(self.archiv.beobachten)
             try:  # Audio nur live – eine abgespielte Aufnahme liegt schon als Datei vor
-                self.archiv = Archiv(self, audio=EINST.aufnahme_speichern and not self.simulation_laeuft)
+                self.archiv = Archiv(self, audio=self.aufnahme_speichern and not self.simulation_laeuft)
                 self.beobachter.append(self.archiv.beobachten)
             except OSError as e:
                 log.warning("Meeting-Ablage nicht möglich: %s", e)

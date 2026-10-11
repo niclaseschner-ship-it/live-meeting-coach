@@ -160,7 +160,7 @@ class Hoerstrom:
         self._analysen: list[asyncio.Future] = []
         self.vektoren: deque = deque(maxlen=300)  # (start, ende, Fingerabdruck) je Äußerung – Namen (Ticket #27)
         self.live = None
-        self.sparsam = mit_text and EINST.live_art == "sparsam"  # Text je Äußerung statt Streaming
+        self.sparsam = mit_text and coach.live_art == "sparsam"  # Text je Äußerung statt Streaming
         self._vorlage = None  # Tests: {(start, ende): text} aus einem früheren Bericht (LMC_TEXT_VORLAGE)
         if self.sparsam and EINST.text_cache and os.getenv("LMC_TEXT_VORLAGE"):
             import json
