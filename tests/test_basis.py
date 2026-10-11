@@ -365,7 +365,7 @@ def test_knoepfe_auch_ohne_knopfdruck_regeln_aus_ampeln():
 
     c = Coach()
     c.meeting = _meeting()
-    c.meeting.regel_ids = ["kurz", "ton"]
+    c.meeting.regel_ids = ["alle", "ton"]
     c.hoerstrom = SimpleNamespace(live=None)
     c._client = object()
     karte = asyncio.run(knopfdruck._regeln(c, ""))  # live: ohne KI-Aufruf

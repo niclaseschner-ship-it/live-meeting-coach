@@ -420,7 +420,7 @@ async def hoerproben() -> None:
     c = client_fuer("basis")
     m = Meeting(titel="Messeplanung 2027", agenda=[Agendapunkt("Termin und Messestand", "", 1),
                                                    Agendapunkt("Budget", "", 1), Agendapunkt("Aufgaben verteilen", "", 1)],
-                regel_ids=["ausreden", "thema", "zeit", "kurz", "ton", "ergebnisse"])
+                regel_ids=["ausreden", "thema", "zeit", "alle", "ton", "ergebnisse"])
     gruss, start = A.begruessungstext(m, basis=True)
     texte = {"00_begruessung": gruss, "01_start": start}
     datei = AUSGABE / "aktionen_basis.json"

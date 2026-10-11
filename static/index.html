@@ -29,37 +29,71 @@
       <span id="ziel-anzeige"></span>
     </div>
 
-    <div id="nestor" class="nestor bereit" hidden>
-      <span class="welle" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-      <span id="nestor-zustand">hört zu</span>
-    </div>
-
-    <!-- Kopfleiste entschlackt (Ticket #17 Punkt 4): „eigener Schlüssel“ steht jetzt an der Stufen-Pille statt in
-         einer eigenen; Handy koppeln und Einstellungen – beides seltene, vorbereitende Aktionen, keine Aktionen
-         je Minute – stecken in einem gemeinsamen „Mehr“-Menü statt als zwei eigene Symbole. -->
+    <!-- Kopfleiste (Rückmeldung Niclas 11.10.2026): eine Statusgruppe statt vier Pillen, dazu genau zwei Menüs –
+         „Nestor, bitte …“ für alles, was Nestor tun soll, und ☰ für Ansicht, Geräte und Einstellungen. Was Nestor
+         gerade tut, steht nur noch in der Nestor-Zeile über den Karten. -->
     <div class="kopf-knoepfe">
-      <span id="modus-pill" class="pill" hidden></span>
+      <div class="status-gruppe">
+        <span id="status-pill" class="status-teil">Vorbereitung</span>
+        <span id="modus-pill" class="status-teil stufe" hidden></span>
+        <button id="btn-kosten" class="status-teil kosten-knopf" data-tip="Geschätzte Kosten dieses Meetings – klicken für Details"><span id="kosten-icon"></span><span id="kosten-wert">0,00 $</span></button>
+      </div>
       <a id="modus-wechseln" class="textknopf" href="/" hidden data-tip="Nur außerhalb eines laufenden Meetings">Stufe wechseln</a>
-      <span id="status-pill" class="pill">Vorbereitung</span>
-      <span id="aufnahme-pill" class="pill aufnahme" hidden data-tip="Audio wird lokal im Meeting-Ordner gespeichert (Testphase) – abschaltbar in den Einstellungen">Aufnahme</span>
       <button id="btn-ablage" class="pill ablage" hidden data-tip="Meeting-Ordner öffnen: Protokoll, Bild, Bericht, Aufnahme"></button>
-      <button id="btn-kosten" class="kosten-knopf" data-tip="Geschätzte OpenAI-Kosten dieses Meetings – klicken für Details"><span id="kosten-icon"></span><span id="kosten-wert">0,00 $</span></button>
-      <button id="btn-mikro" class="icon" data-tip="Mikro stumm schalten – nichts wird gehört oder ausgewertet" hidden></button>
-      <button id="btn-fragen" class="icon" data-tip="Nestor fragen (statt „Nestor, …“ zu sagen)" hidden></button>
-      <button id="btn-still" class="icon" data-tip="Nestor unterbrechen – ein laufender Auftrag kommt trotzdem still in den Verlauf" hidden></button>
       <!-- Arbeitsring (Ticket #27): lange Aufträge (Bild, Recherche) – „1 läuft · 1 wartet“, antippen zeigt beide, ✕ bricht ab -->
       <div class="kopf-arbeit">
         <button id="arbeitsring" class="arbeitsring" hidden><span class="kreisel"></span><span id="arbeit-text"></span></button>
         <ol id="arbeit-liste" class="arbeit-liste" hidden></ol>
       </div>
       <button id="btn-fortsetzen" class="icon warn" data-tip="Nestor hört nicht mit – wieder zuhören lassen" hidden></button>
-      <button id="btn-transkript" class="icon" data-tip="Transkript und alle Hinweise"></button>
-      <button id="btn-mikro-quelle" class="pill mikro-quelle" hidden><span id="mq-text"></span><span class="pegel-mini" aria-hidden="true"><i id="mq-pegel"></i></span></button>
+      <button id="btn-mikro" class="icon" data-tip="Mikro stumm schalten – nichts wird gehört oder ausgewertet" hidden></button>
+
+      <!-- „Nestor, bitte …“: die fünf Kernaktionen (szenarien/ui_vertrag.json „kernknoepfe“), darunter eingeklappt
+           Bild, Regelprüfung und die getippte Frage. Jede Zeile sagt in einem Satz, was herauskommt. -->
+      <div id="knopf-leiste" class="kopf-aktionen" hidden>
+        <button id="btn-aktionen" class="primaer wahl" aria-haspopup="true" aria-expanded="false">Nestor, bitte … <span aria-hidden="true">▾</span></button>
+        <div id="aktionen-menu" class="aufklappmenu aktionen-menu" hidden>
+          <p class="menu-gruppe">Zum Stand</p>
+          <button class="knopf-art" data-knopf="stand" data-label="Wo stehen wir?"><span class="aktion-text"><span class="aktion-name">Wo stehen wir?</span><span class="aktion-was">Agendapunkt, Restzeit, nächster Schritt</span></span><span class="aktion-preis"></span></button>
+          <button class="knopf-art" data-knopf="zusammenfassen" data-label="Ergebnisse bündeln"><span class="aktion-text"><span class="aktion-name">Ergebnisse bündeln</span><span class="aktion-was">Was bisher entschieden, verteilt oder offen ist</span></span><span class="aktion-preis"></span></button>
+          <button class="knopf-art" data-knopf="fehlt" data-label="Lücken klären"><span class="aktion-text"><span class="aktion-name">Lücken klären</span><span class="aktion-was">Wo noch fehlt, wer etwas macht oder bis wann</span></span><span class="aktion-preis"></span></button>
+          <p class="menu-gruppe">Zum Inhalt</p>
+          <div class="ueberblick-aktion">
+            <button class="knopf-art" data-knopf="ueberblick" data-label="Überblick"><span class="aktion-text"><span class="aktion-name">Überblick</span><span class="aktion-was">Was besprochen wurde, geordnet</span></span><span class="aktion-preis"></span></button>
+            <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Punkt</option><option value="gesamt">Meeting</option></select>
+          </div>
+          <button class="knopf-art" data-knopf="protokoll" data-label="Protokoll"><span class="aktion-text"><span class="aktion-name">Protokoll</span><span class="aktion-was">Alles Festgehaltene, zum Ändern und Herunterladen</span></span><span class="aktion-preis"></span></button>
+          <details class="zusatz-aktionen">
+            <summary>Mehr: Meetingbild, Regeln prüfen, Frage tippen</summary>
+            <div class="zusatz-aktionen-inhalt">
+              <button class="knopf-art" data-knopf="bild" data-label="Meetingbild"><span class="aktion-text"><span class="aktion-name">Meetingbild</span><span class="aktion-was">Das Meeting als Schaubild</span></span><span class="aktion-preis"></span></button>
+              <button class="knopf-art" data-knopf="regeln" data-label="Regeln prüfen"><span class="aktion-text"><span class="aktion-name">Regeln prüfen</span><span class="aktion-was">Wie es um eure Gesprächsregeln steht</span></span><span class="aktion-preis"></span></button>
+              <button id="btn-fragen" class="knopf-art" type="button" hidden><span class="aktion-text"><span class="aktion-name">Nestor zuhören lassen</span><span class="aktion-was">Statt „Nestor, …“ zu sagen – dann einfach fragen</span></span></button>
+              <form id="knopf-frage-form" class="knopf-frage">
+                <input id="knopf-frage" placeholder="Frage an Nestor tippen …" autocomplete="off" maxlength="500">
+                <button id="knopf-fragen" class="primaer" data-knopf="frage">Senden</button>
+              </form>
+            </div>
+          </details>
+          <details id="aktions-hilfe" class="aktions-kosten">
+            <summary>Was kosten die Aktionen?</summary>
+            <p class="aktions-kostenhinweis"></p>
+            <ul id="aktions-hilfe-liste" class="aktions-hilfe-liste"></ul>
+          </details>
+        </div>
+      </div>
+
+      <!-- ☰: Ansicht, Geräte, dieses Meeting, Einstellungen -->
       <div class="kopf-mehr">
-        <button id="btn-mehr" class="icon" data-tip="Weiteres: Handy koppeln, Einstellungen"></button>
-        <div id="mehr-menu" class="mehr-menu" hidden>
-          <button id="btn-handy" class="mehr-eintrag" type="button"><span class="mehr-label">Handy koppeln</span></button>
-          <button id="btn-einstellungen" class="mehr-eintrag" type="button"><span class="mehr-label">Einstellungen</span></button>
+        <button id="btn-mehr" class="icon" aria-label="Menü: Transkript, Mikrofon, Handy, Aufnahme, Einstellungen" aria-haspopup="true"></button>
+        <div id="mehr-menu" class="aufklappmenu mehr-menu" hidden>
+          <button id="btn-transkript" class="mehr-eintrag" type="button"><span class="mehr-label">Transkript und Hinweise<small>Mitlesen, was gesagt und angezeigt wurde</small></span></button>
+          <p class="menu-gruppe">Gerät</p>
+          <button id="btn-mikro-quelle" class="mehr-eintrag" type="button" hidden><span class="mehr-label"><span id="mq-text"></span><small id="mq-erklaerung"></small></span><span class="pegel-mini" aria-hidden="true"><i id="mq-pegel"></i></span></button>
+          <button id="btn-handy" class="mehr-eintrag" type="button"><span class="mehr-label">Handy koppeln<small>QR-Code für Mikrofon und Ton</small></span></button>
+          <p id="aufnahme-zeile" class="menu-gruppe" hidden>Dieses Meeting</p>
+          <div id="aufnahme-pill" class="mehr-eintrag nur-info" hidden><span class="mehr-label">Aufnahme an<small>Der Ton wird im Meeting-Ordner gespeichert (Testphase). Abschaltbar in den Einstellungen, ab dem nächsten Start.</small></span></div>
+          <button id="btn-einstellungen" class="mehr-eintrag" type="button"><span class="mehr-label">Einstellungen<small>Stimme, Live-Text, Schlüssel, Aufnahme</small></span></button>
         </div>
       </div>
       <button id="btn-start" class="primaer">Meeting starten</button>
@@ -67,48 +101,6 @@
       <button id="btn-neu" hidden>Neues Meeting</button>
     </div>
   </header>
-
-  <!-- Live-Regeln stehen separat über den Meetingaktionen, damit die gewählten Ampeln sofort sichtbar sind. -->
-  <section id="regeln-zone" class="regeln-zone" hidden aria-live="polite">
-    <h2>Gesprächsregeln</h2>
-    <div id="regel-ampeln" class="regel-ampeln"></div>
-    <div id="erinnerungen" class="erinnerungen"></div>
-  </section>
-
-  <!-- Knopfleiste: fünf kompakte Kernaktionen plus eigenständige Sprechtaste. -->
-  <section id="knopf-leiste" class="knopf-leiste" hidden>
-    <div class="knopf-knoepfe">
-      <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – klicken oder halten</span></button>
-      <button class="knopf-art" data-knopf="stand" data-label="Stand"><span class="aktion-name">Stand</span><span class="aktion-preis"></span></button>
-      <button class="knopf-art" data-knopf="zusammenfassen" data-label="Zusammenfassen"><span class="aktion-name">Zusammenfassen</span><span class="aktion-preis"></span></button>
-      <button class="knopf-art" data-knopf="fehlt" data-label="Lücken"><span class="aktion-name">Lücken</span><span class="aktion-preis"></span></button>
-      <button class="knopf-art" data-knopf="protokoll" data-label="Protokoll"><span class="aktion-name">Protokoll</span><span class="aktion-preis"></span></button>
-      <div class="ueberblick-aktion">
-        <button class="knopf-art" data-knopf="ueberblick" data-label="Überblick"><span class="aktion-name">Überblick</span><span class="aktion-preis"></span></button>
-        <select id="ueberblick-umfang" aria-label="Umfang des Überblicks"><option value="aktuell">Punkt</option><option value="gesamt">Meeting</option></select>
-      </div>
-    </div>
-    <details id="aktions-hilfe" class="aktions-kosten">
-      <summary>Aktionen und Kosten erklären</summary>
-      <p class="aktions-kostenhinweis"></p>
-      <ul id="aktions-hilfe-liste" class="aktions-hilfe-liste"></ul>
-    </details>
-    <details class="zusatz-aktionen">
-      <summary>Weitere Aktionen</summary>
-      <div class="zusatz-aktionen-inhalt">
-        <button class="knopf-art" data-knopf="bild" data-label="Meetingbild"><span class="aktion-name">Meetingbild</span><span class="aktion-preis"></span></button>
-        <button class="knopf-art" data-knopf="regeln" data-label="Regeln prüfen"><span class="aktion-name">Regeln prüfen</span><span class="aktion-preis"></span></button>
-        <form id="knopf-frage-form" class="knopf-frage">
-          <input id="knopf-frage" placeholder="Nestor fragen …" autocomplete="off" maxlength="500">
-          <button id="knopf-fragen" class="primaer" data-knopf="frage">Frage senden</button>
-        </form>
-      </div>
-    </details>
-    <div class="knopf-zeile">
-      <span id="knopf-bogen" class="knopf-bogen" hidden></span>
-      <span id="knopf-fehler" class="knopf-fehler" hidden></span>
-    </div>
-  </section>
 
   <!-- Kosten (Klapp-Fenster aus der Kopfleiste) -->
   <div id="kosten" class="klappfenster" hidden>
@@ -171,7 +163,7 @@
         <option value="sparsam">Sparsam – Text erst nach dem Satz, ~0,36 $/h</option>
       </select></label>
     <p id="e-live-hinweis" class="e-hinweis" hidden>Sparsam: Sätze erscheinen erst nach dem Ende der Äußerung
-      (meist ~1 s, bis ~4 s), Nestor antwortet entsprechend etwas später. Sprecher, Redeanteile, Monolog und
+      (meist ~1 s, bis ~4 s), Nestor antwortet entsprechend etwas später. Sprecher, Redeanteile und
       Unterbrechungen sind nicht betroffen. <strong>Gilt ab dem nächsten Meetingstart.</strong></p>
     <label class="schalter"><input type="checkbox" id="e-aufnahme"> <span>Audio speichern <small>lokal im
       Meeting-Ordner, zum Nachvollziehen in der Testphase; ab dem nächsten Start</small></span></label>
@@ -179,12 +171,8 @@
       <select id="e-bild-anbieter">
         <option value="openai">OpenAI – wie ChatGPT, ~8 ct/Bild</option>
       </select></label>
-    <label>Monolog ab <small>Sekunden</small><input id="e-monolog" type="number" min="20" max="300" step="5"></label>
   </div>
 
-  <!-- Band (Ticket #27): Regel-Hinweise und Nestors stille Angebote an die Runde („Noch 5 Minuten · Zusammenfassen ›“,
-       „Weiter zu …?“, Lücken, „Erkannt: …“). Verschwindet von selbst, höchstens ein Knopf. -->
-  <div id="band" class="band" hidden aria-live="polite"></div>
 
   <div id="fehler" class="fehler" hidden></div>
   <div id="mikro-weg" class="fehler" hidden></div>
@@ -264,49 +252,76 @@
   </section>
 
   <!-- Live -->
+  <!-- Live: Dashboard ohne Seitenrollen (Rückmeldung Niclas 11.10.2026). Drei Spalten füllen die Bildschirmhöhe,
+       gerollt wird nur innerhalb einer Kachel. Jede Kachel hat ein ⓘ (data-info, Texte in static/info.js). -->
   <main id="live" class="arbeitsflaeche" hidden>
-    <!-- links: Zeit, Agenda und die gewählten Regeln -->
-    <aside class="spalte">
+    <!-- links: Zeit und Agenda -->
+    <aside class="spalte spalte-links">
       <section class="karte zeit">
-        <div class="zeit-kopf"><span class="etikett">Jetzt</span><span id="laufzeit" class="laufzeit" data-tip="Laufzeit des Meetings"></span></div>
+        <div class="zeit-kopf"><span class="etikett">Jetzt</span><span class="kopf-rechts"><span id="laufzeit" class="laufzeit" data-tip="Laufzeit des Meetings"></span><button class="info" data-info="jetzt" aria-label="Was passiert hier?">i</button></span></div>
         <p id="punkt-titel" class="punkt-jetzt">–</p>
         <div id="countdown" class="countdown"></div>
         <div class="balken-zeit"><span id="zeit-fortschritt"></span></div>
         <p id="prognose" class="prognose"></p>
       </section>
-      <section class="karte">
-        <h2>Agenda</h2>
+      <section class="karte rollt">
+        <h2>Agenda <button class="info" data-info="agenda" aria-label="Was passiert hier?">i</button></h2>
         <ol id="agenda" class="agenda"></ol>
       </section>
-      <!-- Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte -->
     </aside>
 
-    <!-- Mitte: Nestor und der Verlauf (Ticket #27) – alles Inhaltliche als Karte, neueste vorn, ‹ › zum Blättern -->
-    <section class="karte verlauf-karte">
+    <!-- Mitte: Nestor, Hinweis-Band und der Verlauf (Ticket #27) – alles Inhaltliche als Karte, neueste vorn -->
+    <section class="spalte-mitte">
       <div id="nestor-zeile" class="nestor-zeile">
         <span id="nz-symbol" class="nz-symbol" aria-hidden="true"><i>N</i></span>
         <div class="nz-text">
           <strong id="nz-zustand">Nestor</strong>
           <span id="nz-gesagt" class="nz-gesagt"></span>
         </div>
+        <button id="btn-still" class="icon klein nz-stopp" data-tip="Nestor unterbrechen – ein laufender Auftrag kommt trotzdem still in den Verlauf" hidden></button>
+        <button class="info" data-info="nestor" aria-label="Was passiert hier?">i</button>
       </div>
-      <div class="vl-nav">
-        <button id="vl-zurueck" class="icon klein" data-tip="Ältere Karte" aria-label="Ältere Karte">‹</button>
-        <span id="vl-zaehler" class="vl-zaehler"></span>
-        <button id="vl-vor" class="icon klein" data-tip="Neuere Karte" aria-label="Neuere Karte">›</button>
-        <button id="vl-neu" class="vl-neu" hidden></button>
+      <!-- Band (Ticket #27): Regel-Hinweise und Nestors stille Angebote an die Runde („Weiter zu …?“, Lücken,
+           „Erkannt: …“). Verschwindet von selbst, höchstens ein Knopf. -->
+      <div id="band" class="band" hidden aria-live="polite"></div>
+      <div class="knopf-zeile">
+        <span id="knopf-bogen" class="knopf-bogen" hidden></span>
+        <span id="knopf-fehler" class="knopf-fehler" hidden></span>
       </div>
-      <div id="vl-buehne" class="vl-buehne"></div>
+      <section class="karte verlauf-karte">
+        <div class="vl-nav">
+          <button id="vl-zurueck" class="icon klein" data-tip="Ältere Karte" aria-label="Ältere Karte">‹</button>
+          <span id="vl-zaehler" class="vl-zaehler"></span>
+          <button id="vl-vor" class="icon klein" data-tip="Neuere Karte" aria-label="Neuere Karte">›</button>
+          <button id="vl-neu" class="vl-neu" hidden></button>
+          <button class="info" data-info="karte" aria-label="Was passiert hier?">i</button>
+        </div>
+        <div id="vl-buehne" class="vl-buehne"></div>
+      </section>
+      <!-- Basis (Funkgerät): Sprechtaste groß unter den Karten -->
+      <button id="btn-taste" class="taste" hidden><span class="i"></span><span id="taste-text">Sprechtaste – klicken oder halten</span></button>
     </section>
 
-    <!-- rechts: Redeanteile; experimentelle Dynamik nur im Abschluss (#52) -->
-    <aside class="spalte">
+    <!-- rechts: Regeln, Redeanteile, Festgehaltenes -->
+    <aside class="spalte spalte-rechts">
+      <section id="regeln-zone" class="karte regeln-zone" hidden aria-live="polite">
+        <h2>Gesprächsregeln <button class="info" data-info="regeln" aria-label="Was passiert hier?">i</button></h2>
+        <ul id="regel-ampeln" class="regel-liste"></ul>
+        <div id="erinnerungen" class="erinnerungen"></div>
+      </section>
       <section class="karte">
-        <h2>Redeanteile</h2>
+        <h2>Redeanteile <span class="kopf-rechts"><span class="umschalter" role="group" aria-label="Zeitraum">
+          <button id="anteil-5" class="an" type="button">5 min</button><button id="anteil-gesamt" type="button">gesamt</button></span>
+          <button class="info" data-info="anteile" aria-label="Was passiert hier?">i</button></span></h2>
         <div id="redeanteile" class="redeanteile"></div>
+      </section>
+      <section class="karte rollt">
+        <h2>Festgehalten <span class="kopf-rechts"><small id="fest-zahl"></small><button class="info" data-info="fest" aria-label="Was passiert hier?">i</button></span></h2>
+        <ul id="festgehalten" class="fest-liste"></ul>
       </section>
     </aside>
   </main>
+  <div id="info-blase" class="info-blase" hidden role="dialog"><button id="info-zu" class="info-zu" aria-label="Schließen">✕</button><strong id="info-titel"></strong><p id="info-stand" class="info-stand" hidden></p><p id="info-text"></p></div>
 
   <!-- Transkript und Hinweisverlauf: für alle aufklappbar -->
   <aside id="leiste" class="leiste" hidden>
@@ -323,6 +338,7 @@
 
   <script src="/static/basis.js"></script>
   <script src="/static/phase.js"></script>
+  <script src="/static/info.js"></script>
   <script src="/static/verlauf.js"></script>
   <script src="/static/agenda.js"></script>
   <script src="/static/app.js"></script>

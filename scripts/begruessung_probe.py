@@ -37,7 +37,7 @@ MEETING = {
     "titel": "Messeplanung 2027", "ziel": "Standkonzept und Budget für die Messe festlegen",
     "agenda": [{"titel": "Standkonzept", "minuten": 15}, {"titel": "Budget", "minuten": 20},
                {"titel": "Personal", "minuten": 10}, {"titel": "Zeitplan", "minuten": 15}],
-    "regel_ids": ["zeit", "kurz", "ergebnisse"], "regeln": ["Handys bleiben in der Tasche"],
+    "regel_ids": ["zeit", "alle", "ergebnisse"], "regeln": ["Handys bleiben in der Tasche"],
 }
 ZURUFE = {"zwischenruf": ("Passt, leg los!", "zwischenruf_passt.wav"), "nein": ("Nein.", "zwischenruf_nein.wav")}
 

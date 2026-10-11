@@ -18,7 +18,7 @@ def meeting_mit_agenda(minuten=(1, 2, 2)):
 
 def ampeln(m, themen_aktiv=True, karenz=1):
     liste = analyse.prozess_ampeln(
-        m, monolog_sekunden=60, karenz_bloecke=karenz, zeit_rot_prozent=10,
+        m, karenz_bloecke=karenz, zeit_rot_prozent=10,
         ueberlappung_min=0.5, ueberlappung_halte=30, themen_aktiv=themen_aktiv,
     )
     return {a["name"]: a for a in liste}
@@ -36,76 +36,51 @@ def test_szene1_alle_ampeln_gruen_und_countdown_laeuft():
     m.virtuelle_zeit = 20
     a = ampeln(m)
     assert {n: x["farbe"] for n, x in a.items()} == {
-        "Monolog": "gruen", "Agenda & Zeit": "gruen", "Fokus": "gruen", "Sprecherüberlappung": "gruen"}
+        "Agenda & Zeit": "gruen", "Fokus": "gruen", "Sprecherüberlappung": "gruen"}
     assert a["Agenda & Zeit"]["detail"] == "0:40 verbleibend"
     assert m.schnappschuss()["agenda"][0]["status"] == "aktuell"
 
 
-# --- FR-03 Monolog ---------------------------------------------------------
+# --- FR-03 Redeanteil (statt Monolog) ---------------------------------------
 
-def test_monolog_ab_einer_minute_gelb_und_nach_wechsel_gruen():
+def test_redeanteil_grenze_ist_das_anderthalbfache_des_fairen_anteils():
     m = meeting_mit_agenda()
-    m.segmente = [seg("A", 0, 30), seg("A", 31, 61)]
-    m.virtuelle_zeit = 62
-    assert ampeln(m)["Monolog"]["farbe"] == "gelb"
-    m.segmente.append(seg("B", 62, 70))
-    m.virtuelle_zeit = 70
-    assert ampeln(m)["Monolog"]["farbe"] == "gruen"
+    m.teilnehmende = ["A", "B", "C"]
+    m.segmente = [seg("A", 0, 160), seg("B", 160, 200)]  # A 80 % von 200 s
+    m.virtuelle_zeit = 200
+    r = analyse.redeanteil(m)
+    assert r["personen"] == 3 and round(r["grenze"], 2) == 0.5 and r["ueber"]
 
 
-def test_monolog_unter_schwelle_gruen():
+def test_redeanteil_ausgeglichen_kein_hinweis():
     m = meeting_mit_agenda()
-    m.segmente = [seg("A", 0, 55)]
-    m.virtuelle_zeit = 55
-    assert ampeln(m)["Monolog"]["farbe"] == "gruen"
+    m.segmente = [seg("A", 0, 60), seg("B", 60, 120), seg("C", 120, 170)]  # A 35 %, Grenze 50 %
+    m.virtuelle_zeit = 170
+    assert analyse.redeanteil(m)["ueber"] is False
 
 
-def test_erster_langer_monolog_wird_vor_erstem_voxtral_segment_erkannt():
-    """Ticket #29: Voxtral finalisiert eine lange erste Äußerung erst nach deren Ende; Browser-VAD reicht anonym."""
+def test_redeanteil_zaehlt_nur_die_letzten_fuenf_minuten():
     m = meeting_mit_agenda()
-    m.segmente = []
-    m.sprache_seit = 1
-    m.sprache_bis = 61.5
-    m.virtuelle_zeit = 62
-    assert analyse.monolog_live(m, 60) == (True, 61)
-    m.sprache_bis = 62
-    m.sprache_seit = 61.5  # Pause hat die fortlaufende Sprachphase zurückgesetzt
-    assert analyse.monolog_live(m, 60)[0] is False
+    m.segmente = [seg("A", 0, 400), seg("B", 400, 520), seg("A", 520, 580), seg("C", 580, 700)]
+    m.virtuelle_zeit = 700  # Fenster 400–700: A 60 s, B 120 s, C 120 s
+    assert analyse.redeanteil(m)["ueber"] is False
 
 
-def test_kurzer_einwurf_ist_noch_kein_dialog():
-    segs = [seg("A", 0, 40), seg("B", 40.5, 41.2, "Mhm."), seg("A", 41.5, 80)]
-    assert analyse.monolog(segs, schwelle=60) == ("A", 80)
-
-
-def test_monolog_ampel_erlischt_nach_stille():
+def test_redeanteil_braucht_genug_gespraech_und_zwei_personen():
     m = meeting_mit_agenda()
-    m.segmente = [seg("A", 0, 70)]
-    m.virtuelle_zeit = 90
-    m.letztes_block_ende = 90  # ein späterer Block ohne Rede wurde verarbeitet
-    assert ampeln(m)["Monolog"]["farbe"] == "gruen"
+    m.segmente = [seg("A", 0, 50), seg("B", 50, 62)]
+    m.virtuelle_zeit = 62  # nur 62 s Rede im Fenster
+    assert analyse.redeanteil(m)["ueber"] is False
+    m.segmente = [seg("A", 0, 300)]
+    m.virtuelle_zeit = 300
+    assert analyse.redeanteil(m) is None  # allein im Raum: kein fairer Anteil
 
 
-def test_monolog_rechnet_nicht_ueber_die_letzte_bekannte_aeusserung_hinaus():
-    """Benchmark 05.10.: Hochrechnung schrieb der vorigen Person die Rede der nächsten zu → Fehlalarme."""
+def test_unsichere_stimme_zaehlt_nicht():
     m = meeting_mit_agenda()
-    m.segmente = [seg("A", 0, 20), seg("A", 20.5, 40)]  # A spricht bis zum Blockende
-    m.letztes_block_ende = 40
-    m.virtuelle_zeit = 62
-    m.sprache_bis = 61.5  # es wird gesprochen – aber von wem, zeigt erst die nächste Äußerung
-    assert ampeln(m)["Monolog"]["farbe"] == "gruen"
-    m.segmente.append(seg("A", 40.5, 61))  # die Äußerung ist ausgewertet: weiter A
-    m.letztes_block_ende = 61
-    assert ampeln(m)["Monolog"]["farbe"] == "gelb"
-
-
-def test_monolog_zaehlt_nicht_weiter_wenn_rede_vor_blockende_endete():
-    m = meeting_mit_agenda()
-    m.segmente = [seg("A", 0, 30)]
-    m.letztes_block_ende = 40  # danach 10 s ohne A
-    m.sprache_bis = 61.5
-    m.virtuelle_zeit = 62
-    assert ampeln(m)["Monolog"]["farbe"] == "gruen"
+    m.segmente = [seg("A", 0, 100), seg("Person ?", 100, 250), seg("B", 250, 300)]
+    m.virtuelle_zeit = 300  # A 100 von 150 s sicher Zugeordnetem = 67 %, Grenze bei 2 Personen 75 %
+    assert analyse.redeanteil(m)["ueber"] is False
 
 
 # --- FR-04 / Szene 3 Zeit --------------------------------------------------

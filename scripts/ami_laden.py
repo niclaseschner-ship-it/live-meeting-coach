@@ -106,7 +106,7 @@ def main() -> None:
                 agenda.append({"titel": t["thema"], "ziel": "", "minuten": 5})
         meeting = {"titel": f"Fernbedienung entwerfen – {SITZUNG[m[-1]]} (AMI {m}, englisch)",
                    "ziel": "Eine neue Fernbedienung entwerfen (Designteam mit vier Rollen)",
-                   "agenda": agenda[:8], "regeln": [], "regel_ids": ["ausreden", "thema", "zeit", "kurz", "ton", "ergebnisse"],
+                   "agenda": agenda[:8], "regeln": [], "regel_ids": ["ausreden", "thema", "zeit", "alle", "ton", "ergebnisse"],
                    "teilnehmende": [], "assistent": True}
         probe = {"name": f"ami_{m}", "titel": f"AMI {m}: {SITZUNG[m[-1]]}",
                  "quelle": {"korpus": "AMI Meeting Corpus", "lizenz": "CC BY 4.0", "datei": f"{m}.Array1-01.wav"},

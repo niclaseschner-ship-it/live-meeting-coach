@@ -380,12 +380,11 @@ def test_bild_kommt_still_als_karte(monkeypatch):
 def test_nicht_gewaehlte_regeln_sind_unsichtbar():
     def lauf(regel_ids):
         c, _ = _coach(regel_ids=regel_ids)
-        c.monolog_sekunden = 20
         m = c.meeting
+        m.teilnehmende = ["A", "B"]
         m.segmente = [Segment("Person 1", "", 0, 650)]
-        m.virtuelle_zeit = 660  # 11 min am ersten Punkt (10 min geplant)
+        m.virtuelle_zeit = 660  # 11 min am ersten Punkt (10 min geplant), eine Stimme allein
         c.takt()
-        c._monolog_hinweis()
         m.ueberlappungen_gezaehlt = True
         m.ueberlappungen = [[650.0, 652.0], [655.0, 657.0]]
         c._ueberlappung_pruefen()
@@ -393,8 +392,8 @@ def test_nicht_gewaehlte_regeln_sind_unsichtbar():
 
     arten, ampeln = lauf([])
     assert arten == set() and ampeln == set()
-    arten, ampeln = lauf(["zeit", "kurz", "ausreden"])
-    assert {"zeit", "monolog", "ueberlappung"} <= arten and ampeln == {"kurz", "ausreden"}  # Zeit steht links
+    arten, ampeln = lauf(["zeit", "alle", "ausreden"])
+    assert {"zeit", "anteil", "ueberlappung"} <= arten and ampeln == {"alle", "ausreden"}  # Zeit steht links
 
 
 # --- Funkgerät (Basis) -------------------------------------------------------------------------------------------

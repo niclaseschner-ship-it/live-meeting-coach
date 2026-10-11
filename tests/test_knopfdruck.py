@@ -64,7 +64,7 @@ async def _knopf_meeting(texte: dict[bytes, str], archiv: bool = False) -> Coach
     c._client = Attrappe(texte)
     c.archiv_aktiv = archiv
     c.einrichten({"titel": "Knopf", "agenda": [{"titel": "Termin", "minuten": 5}, {"titel": "Budget", "minuten": 5}],
-                  "regel_ids": ["thema", "ton", "kurz"]})
+                  "regel_ids": ["thema", "ton", "alle"]})
     await c.hoeren_starten()
     # Stimmanalyse ohne Modell: eine Person je Äußerung
     c.hoerstrom.stimmen.analysieren = lambda p: {"person": 0, "abschnitte": [(0.0, len(p) / 16000, 0)],
@@ -87,7 +87,7 @@ def test_regeln_und_protokoll_knopf(monkeypatch):
 
     async def lauf():
         c = await _knopf_meeting(texte)
-        c.meeting.regel_ids = ["thema", "ton", "kurz", "ergebnisse"]
+        c.meeting.regel_ids = ["thema", "ton", "alle", "ergebnisse"]
 
         async def chat(**kw):
             inhalt = {"artefakte": [{"typ": "entscheidung", "was": "Termin im April", "status": "endgueltig",

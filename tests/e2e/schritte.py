@@ -282,8 +282,22 @@ async def vertrag_pruefen(page: Page, phase: str, geraet: str, stufe: str, lauf:
                  detail or "Pflicht sichtbar, nichts Unerwünschtes", abweichung=f"sichtbarkeit_{phase}_{geraet}")
 
 
+async def aktionen_auf(page: Page) -> None:
+    """Desktop: Die Kernaktionen stecken im Kopf-Menü „Nestor, bitte …“ (Niclas 11.10.2026) – vor dem Klick öffnen."""
+    if await page.locator("#aktionen-menu").count() and await page.locator("#aktionen-menu").is_hidden():
+        await page.locator("#btn-aktionen").click()
+
+
+async def menue_auf(page: Page) -> None:
+    """Desktop: Transkript, Mikrofon, Handy und Einstellungen stecken im Menü ☰."""
+    if await page.locator("#mehr-menu").is_hidden():
+        await page.locator("#btn-mehr").click()
+
+
 async def kernknoepfe_pruefen(page: Page, geraet: str, lauf: Lauf) -> None:
     sel = VERTRAG["kernknoepfe_selektor"][geraet]
+    if geraet == "desktop":
+        await aktionen_auf(page)
     loc = page.locator(sel)
     sichtbare = []
     for i in range(await loc.count()):
@@ -304,6 +318,8 @@ async def kernknoepfe_pruefen(page: Page, geraet: str, lauf: Lauf) -> None:
         if await loc.count():
             lauf.pruefen(f"Nachgeordnet unter „Weitere Aktionen“: {s.split('[')[-1].rstrip(']') if '[' in s else s}",
                          not await loc.first.is_visible(), "zugeklappt nicht sichtbar")
+    if geraet == "desktop":
+        await page.locator("#btn-aktionen").click()  # Menü wieder zu
 
 
 # --- Ablauf ----------------------------------------------------------------------------------------------------------
@@ -696,6 +712,7 @@ async def kernknopf_echt(page: Page, art: str, lauf: Lauf, sekunden: float = 90)
         lauf.pruefen(f"Kernknopf {beschriftung}", False, "blieb gesperrt")
         return
     vorher = max((k.get("id", 0) for k in await karten(page)), default=0)
+    await aktionen_auf(page)
     await page.locator(f'#knopf-leiste [data-knopf="{art}"]').click()
     t0, neu = time.monotonic(), None
     while time.monotonic() - t0 < sekunden and neu is None:
@@ -703,12 +720,10 @@ async def kernknopf_echt(page: Page, art: str, lauf: Lauf, sekunden: float = 90)
         if neu is None:
             await asyncio.sleep(1)
     titel = (neu or {}).get("titel") or ""
-    # Still Geliefertes (Bild, Überblick) springt nur nach vorn, wenn die vordere Karte älter als ~60 s ist – sonst
-    # zeigt der Verlauf „1 neues Ergebnis – jetzt ansehen ›“ (static/verlauf.js). Beides ist sichtbar.
+    # Jedes neue Ergebnis kommt nach vorn (static/verlauf.js), auch still Geliefertes – die Karte muss vorn stehen.
     klassen = json.dumps([f"vk-{a}" for a in sorted(arten)])
     sichtbar_ = bool(neu) and await warte(
-        page, f"() => {klassen}.some((k) => document.querySelector('#vl-buehne article.' + k)) || "
-              "(!!document.getElementById('vl-neu') && !document.getElementById('vl-neu').hidden)", 10)
+        page, f"() => {klassen}.some((k) => document.querySelector('#vl-buehne article.' + k))", 10)
     inhalt = json.dumps(neu or {}, ensure_ascii=False) + await text(page, "#vl-buehne")
     lauf.pruefen(f"Kernknopf {beschriftung}: neue Karte ({'/'.join(sorted(arten))}) sichtbar mit Sollfragment",
                  bool(neu) and sichtbar_ and passt(muster, inhalt),
@@ -729,6 +744,7 @@ async def kernknopf(page: Page, art: str, soll: str, lauf: Lauf, sekunden: float
     if not frei:
         lauf.pruefen(f"Kernknopf {beschriftung}", False, "blieb gesperrt")
         return
+    await aktionen_auf(page)
     await knopf.click()
     da = await warte(page, f"() => (document.getElementById('vl-buehne')?.innerText || '').includes({json.dumps(soll)})",
                      sekunden)
@@ -749,7 +765,8 @@ async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
     if lauf.stufe != "premium":
         return
     lauf.schritt("Zuruf „nimm von der Liste“ entfernt ein Ergebnis per Werkzeug, Rückgängig holt es zurück")
-    zusatz = page.locator("details.zusatz-aktionen").first  # das Fragefeld liegt unter „Weitere Aktionen“
+    await aktionen_auf(page)
+    zusatz = page.locator("#knopf-leiste details.zusatz-aktionen").first  # das Fragefeld liegt unter „Mehr“
     if await zusatz.count() and not await zusatz.evaluate("d => d.open"):
         await zusatz.locator("summary").click()
     await page.locator("#knopf-frage").fill("Nestor, nimm den Testpunkt von der Liste.")
@@ -769,7 +786,8 @@ async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
 async def _getippt_bis_karte(page: Page, frage: str, art: str, titel: str, sekunden: float = 45) -> dict | None:
     """Eine getippte Frage an Nestor und die neue Karte dieser Art mit diesem Titelanfang (aus dem Zustand, lesend)."""
     vorher = max((k.get("id", 0) for k in await karten(page)), default=0)
-    zusatz = page.locator("details.zusatz-aktionen").first  # das Fragefeld liegt unter „Weitere Aktionen“
+    await aktionen_auf(page)
+    zusatz = page.locator("#knopf-leiste details.zusatz-aktionen").first  # das Fragefeld liegt unter „Mehr“
     if await zusatz.count() and not await zusatz.evaluate("d => d.open"):
         await zusatz.locator("summary").click()
     await page.locator("#knopf-frage").fill(frage)
@@ -839,6 +857,7 @@ async def grenzfaelle_gespraech_pruefen(page: Page, lauf: Lauf) -> None:
 async def transkript_pruefen(page: Page, lauf: Lauf, sekunden: float = 120) -> None:
     lauf.schritt("Sprache über das Fake-Mikro des Handys, sichtbares Transkript")
     saetze = DREHBUCH["audio"]["meeting_saetze"]
+    await menue_auf(page)
     await page.locator("#btn-transkript").click()
     if lauf.echt:
         muster = SOLL_C["meeting_saetze"]
@@ -1128,7 +1147,7 @@ class Ergebnisuhr:
         self.band_texte: list[str] = []
         self.artefakte: list[str] = []
         self.taste_hinweise = 0
-        self.monolog: list[tuple[float, int, str]] = []  # (monotonic, Sekunden laut Anzeige, Farbe) – nur Änderungen
+        self.monolog: list[tuple[float, int, str]] = []  # (monotonic, größter Redeanteil in %, Farbe) – nur Änderungen
         self.karten: list[dict] = []
         self.punkte: list[str] = []  # Titel des jeweils aktuellen Agendapunkts („Jetzt“), in Reihenfolge
         self._task: asyncio.Task | None = None
@@ -1146,14 +1165,13 @@ class Ergebnisuhr:
                 d = await self.page.evaluate("""() => {
                   const z = (typeof zustand !== 'undefined' && zustand) || {};
                   const band = document.getElementById('band');
-                  const kurz = [...document.querySelectorAll('#regel-ampeln .ampel')]
-                    .find((a) => /kurz/i.test(a.querySelector('strong')?.textContent || ''));
+                  const kurz = document.querySelector('#regel-ampeln .regel[data-regel="alle"]');
                   return { buehne: document.getElementById('vl-buehne')?.innerText || '',
                     band: band && !band.hidden ? band.innerText : '',
                     segmente: (z.segmente || []).map((s) => s.text),
                     artefakte: ((z.artefakte || {}).liste || []).map((a) => a.was),
                     taste: (z.hinweise || []).filter((h) => h.art === 'taste').length,
-                    kurz: kurz ? { detail: kurz.querySelector('.detail')?.textContent || '',
+                    kurz: kurz ? { detail: kurz.querySelector('.info')?.dataset.stand || '',
                                    farbe: ['rot', 'gelb', 'gruen', 'grau'].find((f) => kurz.classList.contains(f)) || '',
                                    sichtbar: !!kurz.offsetParent } : null,
                     karten: (z.karten || []).map((k) => ({ id: k.id, art: k.art, titel: k.titel || '' })),
@@ -1183,10 +1201,10 @@ class Ergebnisuhr:
             if d["band"] and d["band"] not in self.band_texte:
                 self.band_texte.append(d["band"][:160])
             if d["kurz"]:
-                treffer = re.search(r"(\d+):(\d\d) am Stück", d["kurz"]["detail"])
-                sek = int(treffer[1]) * 60 + int(treffer[2]) if treffer else 0
-                if not self.monolog or self.monolog[-1][1:] != (sek, d["kurz"]["farbe"]):
-                    self.monolog.append((jetzt, sek, d["kurz"]["farbe"]))
+                treffer = re.search(r"größter Anteil (\d+) %", d["kurz"]["detail"])
+                prozent = int(treffer[1]) if treffer else 0
+                if not self.monolog or self.monolog[-1][1:] != (prozent, d["kurz"]["farbe"]):
+                    self.monolog.append((jetzt, prozent, d["kurz"]["farbe"]))
             if d.get("punkt") and d["punkt"] not in self.punkte:
                 self.punkte.append(d["punkt"])
             for k in d["karten"]:
@@ -1252,9 +1270,9 @@ def handy_wav_lage(name: str = "meeting_c") -> list[dict]:
     return json.loads((WURZEL / "tests" / "e2e" / "audio" / f"{name}.json").read_text(encoding="utf-8"))["saetze"]
 
 
-async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf: Lauf, schwelle: float = 60) -> None:
-    """#57/#67 auf echter Strecke: ein Block einer Stimme ≥ 90 s mit Pausen < 2 s → die Monologanzeige („Sich kurz
-    fassen“, mm:ss am Stück) wächst live und erreicht die Schwelle; danach „Nestor, bündel mir mal die Ergebnisse.“
+async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf: Lauf) -> None:
+    """#57/#67 auf echter Strecke: ein Block einer Stimme ≥ 90 s mit Pausen < 2 s → „Alle kommen zu Wort“ zeigt den
+    größten Redeanteil der letzten 5 Minuten; er steigt während des Blocks, und die Kachel wird gelb; danach „Nestor, bündel mir mal die Ergebnisse.“
     → Zusammenfassen. Premium hört den Namen; Basis (Funkgerät) braucht die Sprechtaste – das Handy hält sie im Takt
     der WAV genau über dem Imperativ (Startzeit der WAV = Tippen auf „Mikrofon und Ton“)."""
     lauf.schritt("Monolog-Block live und natürlicher Imperativ „bündle mir mal die Ergebnisse“")
@@ -1297,18 +1315,15 @@ async def monolog_und_imperativ(page: Page, handy: Page, uhr: Ergebnisuhr, lauf:
                  abweichung="imperativ_basis" if lauf.stufe == "basis" else None)
     await lauf.bild(page, "imperativ")
 
-    # Monologanzeige: Werte während des Blocks (Lage relativ zur WAV) – wächst sie live, erreicht sie die Schwelle?
+    # Redeanteil („Alle kommen zu Wort“): steigt der größte Anteil während des Blocks, färbt sich die Kachel?
     von, bis_ = t_mikro + mono[0]["start"], t_mikro + mono[-1]["ende"] + 8
-    block = [(t - t_mikro, sek, farbe) for t, sek, farbe in uhr.monolog if von <= t <= bis_]
-    werte = [sek for _, sek, _ in block]
-    steigend = sum(1 for a, b in zip(werte, werte[1:]) if b > a)
-    lauf.belege["monolog_anzeige"] = [(round(t, 1), sek, farbe) for t, sek, farbe in block][:200]
-    lauf.pruefen("Monologanzeige wächst live während des Blocks (≥ 10 steigende Schritte)", steigend >= 10,
-                 f"{steigend} Schritte, Werte {werte[:3]}…{werte[-3:]}")
-    hoch = max(werte, default=0)
-    farbe_erreicht = any(f in ("gelb", "rot") for _, sek, f in block if sek >= schwelle)
-    lauf.pruefen(f"Monologanzeige erreicht die Schwelle ({schwelle:.0f} s) und färbt sich",
-                 hoch >= schwelle and farbe_erreicht, f"höchstens {hoch} s, Farbe ab Schwelle={farbe_erreicht}")
+    block = [(t - t_mikro, prozent, farbe) for t, prozent, farbe in uhr.monolog if von <= t <= bis_]
+    werte = [prozent for _, prozent, _ in block]
+    lauf.belege["monolog_anzeige"] = [(round(t, 1), prozent, farbe) for t, prozent, farbe in block][:200]
+    lauf.pruefen("Größter Redeanteil steigt während des Blocks einer Stimme", len(werte) >= 2 and werte[-1] > werte[0],
+                 f"Werte {werte[:3]}…{werte[-3:]}")
+    lauf.pruefen("„Alle kommen zu Wort“ wird gelb, wenn eine Stimme über dem 1,5-Fachen ihres Anteils liegt",
+                 any(f in ("gelb", "rot") for _, _, f in block), f"höchstens {max(werte, default=0)} %")
 
 
 async def ergebnisse_ende_pruefen(uhr: Ergebnisuhr, lauf: Lauf) -> None:

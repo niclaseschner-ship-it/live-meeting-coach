@@ -100,7 +100,6 @@ class Coach:
         self.meeting = Meeting()
         self.entscheider = Entscheider(EINST.cooldown_sekunden)
         self.referenzen: dict[str, str] = {}  # Name -> data-URL eines kurzen WAV
-        self.monolog_sekunden = EINST.monolog_sekunden
         # Zur Laufzeit einstellbar (Dashboard-Kopfleiste, einstellen()); EINST selbst bleibt unveränderlich
         # (Ticket #80 – vorher per object.__setattr__ auf EINST umgeschrieben).
         self.live_art = EINST.live_art
@@ -205,7 +204,6 @@ class Coach:
         self.assistent = Assistent(self)
         self.assistent.aktiv = bool(daten.get("assistent", True))
         self.referenzen = {n: u for n, u in self.referenzen.items() if n in self.meeting.teilnehmende}
-        self.monolog_sekunden = EINST.monolog_sekunden
         self.fehler = None
         self.protokoll = []
         self._abschnitt_zuruecksetzen()
@@ -305,7 +303,6 @@ class Coach:
             p["beschluss"] = self.artefakte.beschluss(i)
         ampeln = analyse.prozess_ampeln(
             self.meeting,
-            monolog_sekunden=self.monolog_sekunden,
             karenz_bloecke=self.karenz_bloecke,
             zeit_rot_prozent=EINST.zeit_rot_prozent,
             ueberlappung_min=EINST.ueberlappung_min_sekunden,
@@ -318,6 +315,9 @@ class Coach:
             {
                 "phase": self.phase(),
                 "regel_status": self.regel_status(ampeln),
+                # Redeanteile der letzten 5 Minuten und die Grenze 1,5/n für die Grenzlinie im Dashboard
+                "redeanteile_5min": self.meeting.redeanteile(seit=self.meeting.jetzt() - analyse.ANTEIL_FENSTER),
+                "anteil_grenze": (lambda r: r and r["grenze"])(analyse.redeanteil(self.meeting)),
                 "dynamik": self.dynamik(),
                 "stumm": self.stumm,
                 "stufe": self.stufe,
@@ -371,12 +371,7 @@ class Coach:
             if r is None or rid == "zeit":
                 continue
             farbe, detail = "gruen", ""
-            if rid == "kurz":
-                dauer = analyse.monolog_live(m, self.monolog_sekunden)[1] if m.laeuft else 0.0
-                farbe = "rot" if dauer >= 1.5 * self.monolog_sekunden else "gelb" if dauer >= self.monolog_sekunden else "gruen"
-                detail = (f"{analyse.mmss(dauer)} am Stück · Hinweis ab {analyse.mmss(self.monolog_sekunden)}" if dauer > 0
-                          else f"Gespräch im Wechsel · Hinweis ab {analyse.mmss(self.monolog_sekunden)}")
-            elif rid == "ausreden":
+            if rid == "ausreden":
                 n = sum(1 for t in self._unterbrechungen_gemeldet if t >= jetzt - 300)
                 ov = len(analyse.ueberlappungs_vorfaelle(m, jetzt - 300))
                 ueber = a.get("Sprecherüberlappung", {})
@@ -395,9 +390,10 @@ class Coach:
                 else:
                     detail = "respektvoll"
             elif rid == "alle":
-                h = juengst("alle", 300)
-                farbe = "gelb" if h else "gruen"
-                detail = "nicht alle kommen zu Wort" if h else "alle beteiligt"
+                still = juengst("alle", 300)
+                farbe, detail = self._anteil_kachel()
+                if still and farbe == "gruen":
+                    farbe, detail = "gelb", "nicht alle kommen zu Wort"
             elif rid == "ergebnisse":
                 # Ticket #26: gelb, sobald nach einer Lücke gefragt wurde und sie noch offen ist (nicht abgelehnt)
                 offen = [a for a in self.artefakte.liste if a.nachgefragt and not a.abgelehnt and a.luecken()]
@@ -456,7 +452,7 @@ class Coach:
                 "stufe": self.stufe,
                 "aufnahme": self.aufnahme_speichern,
                 "bild_anbieter": w.bild_anbieter if w else None, "live_art": self.live_art,
-                "bild_minuten": self.onepager_minuten, "monolog_sekunden": self.monolog_sekunden}
+                "bild_minuten": self.onepager_minuten}
 
     def einstellen(self, daten: dict) -> None:
         """Einstellungen zur Laufzeit (Dashboard-Kopfleiste). Nur bekannte Felder, geprüfte Werte."""
@@ -490,8 +486,6 @@ class Coach:
             self.onepager_minuten = max(0.0, min(60.0, float(daten["bild_minuten"])))
         if "aufnahme" in daten:
             self.aufnahme_speichern = bool(daten["aufnahme"])  # ab dem nächsten Start
-        if "monolog_sekunden" in daten:
-            self.monolog_sekunden = max(20.0, min(300.0, float(daten["monolog_sekunden"])))
 
     async def stumm_schalten(self, an: bool) -> None:
         """Mikro stumm: nichts geht an OpenAI, nichts wird ausgewertet; ein offenes Gespräch mit Nestor endet."""
@@ -523,9 +517,6 @@ class Coach:
             return
         self._kosten_pruefen()
         self._hoechstdauer_pruefen()
-        # Monolog live: der Hinweis kommt, sobald die hochgezählte Rede die Schwelle erreicht
-        if analyse.monolog_live(m, self.monolog_sekunden)[0]:
-            self._monolog_hinweis()
         # Ticket #27: kein Live-Bild und kein Überblick im Takt mehr – nur auf Anfrage und am Ende. Stattdessen die
         # stille Zusammenfassung je Abschnitt (Punktwechsel, 20 min) aus coach/artefakte.py.
         self.assistent.takt()
@@ -534,6 +525,7 @@ class Coach:
         self._abschnitt_takt()
         if "alle" in m.regel_ids:
             self._alle_pruefen()
+        self._anteil_pruefen()
         if not 0 <= m.aktiver_punkt < len(m.agenda):
             return
         if "zeit" not in m.regel_ids:
@@ -643,30 +635,12 @@ class Coach:
         saetze = spur if saetze is None else saetze
         m.segmente_hinzufuegen(spur, saetze)
         self._ueberlappung_pruefen()
-        self._monolog_pruefen()
         await self.melden()  # Transkript und regelbasierte Ampeln sofort zeigen, nicht erst nach der KI-Analyse
         if saetze:
             text = "\n".join(f"{s.sprecher}: {s.text}" for s in saetze)
             await self._themen_pruefen(text)
             m.block_texte.append(text)
         await self.melden()
-
-    def _monolog_pruefen(self) -> None:
-        """FR-03: Hinweis ohne Namensnennung – beobachtet wird das Phänomen, nicht die Person."""
-        if analyse.monolog_live(self.meeting, self.monolog_sekunden)[0]:
-            self._monolog_hinweis()
-
-    def _monolog_hinweis(self) -> None:
-        if "kurz" not in self.meeting.regel_ids:
-            return  # Ticket #27: nicht gewählte Regeln sind unsichtbar
-        # Wartezeit je Person: ein neuer Monolog einer anderen Person wird sofort gemeldet (Benchmark 05.10.)
-        rede = analyse.laufende_rede(self.meeting.segmente)
-        self.entscheider.vorschlagen(
-            self.meeting, "monolog", "hinweis", "gruppe",
-            "Längerer Redeanteil – Raum für Rückfragen oder weitere Perspektiven?"
-            + regeln.vereinbart(self.meeting.regel_ids, "kurz"),
-            schluessel=f"monolog-{rede[0] if rede else ''}",
-        )
 
     def _alle_pruefen(self) -> None:
         """Regel „Alle kommen zu Wort“: nur beobachten, nicht bewerten (Lastenheft)."""
@@ -682,23 +656,33 @@ class Coach:
                 m, f"alle-still-{still}", "alle", "hinweis", "gruppe",
                 f"{still} von {len(m.teilnehmende)} Teilnehmenden {'hat' if still == 1 else 'haben'} "
                 "noch nicht gesprochen." + regeln.vereinbart(m.regel_ids, "alle"))
-        # Eine Person mit mehr als dem vereinbarten Anteil der Redezeit im gleitenden Fenster
-        fenster = EINST.dominanz_fenster_minuten * 60
-        anteile = m.redeanteile(seit=t - fenster)
-        gesamt = sum(anteile.values())
-        if gesamt >= fenster * 0.3 and max(anteile.values()) > EINST.dominanz_anteil * gesamt:
-            self.entscheider.vorschlagen(
-                m, "alle", "hinweis", "gruppe",
-                f"In den letzten {EINST.dominanz_fenster_minuten:.0f} Minuten hatte eine Person mehr als "
-                f"{EINST.dominanz_anteil * 100:.0f} % der Redezeit." + regeln.vereinbart(m.regel_ids, "alle"),
-                schluessel="alle-dominanz")
+
+    def _anteil_pruefen(self) -> None:
+        """Redet in den letzten 5 Minuten eine Person mehr als das 1,5-Fache ihres fairen Anteils? Teil der Regel „Alle
+        kommen zu Wort“ – ein Hinweis, ohne Namen: beobachtet wird das Phänomen, nicht die Person."""
+        m = self.meeting
+        r = analyse.redeanteil(m) if "alle" in m.regel_ids else None
+        if not r or not r["ueber"]:
+            return
+        self.entscheider.vorschlagen(
+            m, "anteil", "hinweis", "gruppe",
+            f"Irgendwie redet gerade vor allem eine Person ({r['anteil'] * 100:.0f} % der letzten 5 Minuten) – "
+            "was sagen die anderen?" + regeln.vereinbart(m.regel_ids, "alle"),
+            schluessel="anteil", cooldown=analyse.ANTEIL_FENSTER)
+
+    def _anteil_kachel(self) -> tuple[str, str]:
+        r = analyse.redeanteil(self.meeting) if self.meeting.laeuft else None
+        if r is None:
+            return "gruen", "Redeanteile ausgeglichen"
+        grenze = f"Hinweis ab {r['grenze'] * 100:.0f} %"
+        if r["rede"] < analyse.ANTEIL_MIN_REDE:
+            return "gruen", f"noch zu wenig Gespräch · {grenze}"
+        detail = f"größter Anteil {r['anteil'] * 100:.0f} % (5 min) · {grenze}"
+        return ("gelb" if r["ueber"] else "gruen"), detail
 
     def sprache_melden(self) -> None:
         """Mikrofon meldet gerade Sprache (vom Browser, etwa jede Sekunde)."""
-        jetzt = self.meeting.jetzt()
-        if jetzt - self.meeting.sprache_bis > analyse.SPRACHE_AKTUELL_SEKUNDEN:
-            self.meeting.sprache_seit = jetzt
-        self.meeting.sprache_bis = jetzt
+        self.meeting.sprache_bis = self.meeting.jetzt()
 
     def _ueberlappung_pruefen(self) -> None:
         """FR-06: technisches Signal, keine Bewertung von Unterbrechungen. Hinweis nur mit der Regel „Ausreden lassen“
@@ -929,7 +913,6 @@ class Coach:
             else:
                 m.ueberlappungen.append([a, b])
         self._ueberlappung_pruefen()
-        self._monolog_pruefen()
         await self.melden()
 
     def name_lernen(self, sprecher: str, text: str, start: float = 0.0, ende: float = 0.0) -> None:
@@ -1449,7 +1432,6 @@ class Coach:
         """Spielt ein Szenario in Blöcken ab. Optional mit Agenda-Wechseln ("wechsel": [{zeit, punkt}])."""
         daten = json.loads(pfad.read_text(encoding="utf-8"))
         self._einrichten(daten["setup"])
-        self.monolog_sekunden = daten.get("einstellungen", {}).get("monolog_sekunden", EINST.monolog_sekunden)
         segmente = sorted(
             (Segment(s["sprecher"], s["text"], s["start"], s["ende"]) for s in daten["segmente"]),
             key=lambda s: s.start,

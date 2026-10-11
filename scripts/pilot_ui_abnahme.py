@@ -444,13 +444,16 @@ async def meeting_starten(page: Page, stufe: str, lauf: Lauf) -> None:
     ids = state.get("regel_ids") or []
     lauf.pruefen("Ergebnisregel sitzt im aktiven Meetingzustand", "ergebnisse" in ids,
                  f"regel_ids={ids!r}")
-    buttons = page.locator("#knopf-leiste .knopf-art:visible")
+    if await page.locator("#aktionen-menu").is_hidden():
+        await page.locator("#btn-aktionen").click()  # Kernaktionen stecken im Kopf-Menü „Nestor, bitte …“
+    buttons = page.locator("#knopf-leiste #aktionen-menu > .knopf-art:visible, #knopf-leiste .ueberblick-aktion > .knopf-art:visible")
     count = await buttons.count()
     lauf.pruefen("Genau fünf kompakte Kernaktionen sichtbar", count == 5, f"sichtbar={count}")
     boxes = [await buttons.nth(i).bounding_box() for i in range(count)]
     heights = [b["height"] for b in boxes if b]
     lauf.pruefen("Kernknöpfe gleich hoch und kompakt", len(heights) == 5 and max(heights) - min(heights) < 2 and max(heights) <= 90,
                  f"Höhen: {[round(h, 1) for h in heights]}")
+    await page.locator("#btn-aktionen").click()  # Menü wieder zu
     await lauf.screenshot(page, "dashboard_live")
 
 
@@ -547,6 +550,8 @@ async def audio_abspielen(page: Page, phone: Page, lauf: Lauf, letzte_stimme: di
             stable_since = None
         last_signature = signature
         await asyncio.sleep(0.25)
+    if await page.locator("#mehr-menu").is_hidden():
+        await page.locator("#btn-mehr").click()  # Transkript steckt im Menü ☰
     await page.locator(UI["transcript_toggle"]).click()
     await warte(page, "() => document.getElementById('transkript')?.innerText.length > 0", timeout=30)
     transcript = await page.locator(UI["transcript"]).inner_text()
@@ -563,6 +568,8 @@ async def audio_abspielen(page: Page, phone: Page, lauf: Lauf, letzte_stimme: di
     z_vorher = await zustand(page)
     karten_vorher = {k.get("id") for k in z_vorher.get("karten", [])}
     zusammenfassen = page.locator('#knopf-leiste [data-knopf="zusammenfassen"]')
+    if await page.locator("#aktionen-menu").is_hidden():
+        await page.locator("#btn-aktionen").click()
     await zusammenfassen.wait_for(state="visible", timeout=20_000)
     if await zusammenfassen.is_disabled():
         raise RuntimeError("UI-Knopf ‚Ergebnisse bündeln‘ ist deaktiviert")

@@ -33,7 +33,6 @@ class Einstellungen:
     block_sekunden: int = int(_zahl("LMC_BLOCK_SEKUNDEN", 10))
 
     # FR-03 Monolog: Gelb ab dieser zusammenhängenden Redezeit
-    monolog_sekunden: float = _zahl("LMC_MONOLOG_SEKUNDEN", 60)
     # FR-04 Zeit: Gelb bei Ablauf; Rot ab dieser Überziehung in Prozent (0 = kein Rot)
     zeit_rot_prozent: float = _zahl("LMC_ZEIT_ROT_PROZENT", 10)
     # FR-05 Fokus-Karenzzeit: so lange klar themenfremd, bis Gelb
@@ -144,8 +143,6 @@ class Einstellungen:
     cooldown_sekunden: float = _zahl("LMC_COOLDOWN_SEKUNDEN", 90)
     # Regel „Alle kommen zu Wort“: ab wann stille Angemeldete gemeldet werden; Dominanz im gleitenden Fenster
     alle_still_minuten: float = _zahl("LMC_ALLE_STILL_MINUTEN", 10)
-    dominanz_anteil: float = _zahl("LMC_DOMINANZ_ANTEIL", 0.5)
-    dominanz_fenster_minuten: float = _zahl("LMC_DOMINANZ_FENSTER_MINUTEN", 10)
     port: int = int(_zahl("LMC_PORT", 8000))
     # Meeting-Ablage (nur Server): Ordner je Meeting; Audio dazu, solange wir testen (Einstellungen, abschaltbar)
     archiv: str = os.getenv("LMC_ARCHIV", str(WURZEL / "meetings"))

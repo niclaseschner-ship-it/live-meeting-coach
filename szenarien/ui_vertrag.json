@@ -1,7 +1,8 @@
 {
   "_zweck": "UI-Vertrag (Ticket #61, Stufe A statisch / Stufe B im Klick-Durchlauf). Abgeleitet aus den AUFTRÄGEN, nicht aus dem Code: Wo der Code abweicht, wird die Prüfung rot – das ist gewollt. Bei jedem UI-Auftrag wird zuerst diese Datei vom Auftrag aus geändert (Ticket-Text → Vertragszeile), dann der Code.",
   "_quellen": {
-    "kernknoepfe": "Pilotfeedback 09.10. (#55) und #66: genau fünf kompakte Kernknöpfe Stand, Zusammenfassen, Lücken, Protokoll, Überblick; Meetingbild, Regelprüfung und Frage nachgeordnet unter „Weitere Aktionen“.",
+    "kernknoepfe": "Pilotfeedback 09.10. (#55) und #66: genau fünf Kernaktionen; Meetingbild, Regelprüfung und Frage nachgeordnet unter „Mehr“. Niclas 11.10.2026: am Desktop als Menü „Nestor, bitte …“ in der Kopfleiste statt Knopfreihe, und klare Namen – „Stand“ heißt „Wo stehen wir?“, „Zusammenfassen“ heißt „Ergebnisse bündeln“, „Lücken“ heißt „Lücken klären“, jeweils mit einem Satz, was herauskommt.",
+    "dashboard": "Niclas 11.10.2026: Desktop im Meeting ohne Seitenrollen (Kopf und drei Spalten in Bildschirmhöhe), Regeln als Liste rechts, ⓘ mit Erklärung an jeder Kachel und jeder Regel, Kopfleiste mit einer Statusgruppe und genau zwei Menüs (Aktionen, ☰). „Sich kurz fassen“ entfällt.",
     "abschluss": "#67 Punkt 1: Abschlussreihenfolge Datenspende → Unterstützung → Protokoll → Paket.",
     "handy": "#53/#56: kein Meetingstart ohne gekoppeltes Handy mit aktivem Mikrofon und Ton; genau ein Handy (zweites wird abgewiesen).",
     "phasen": "#66: Inhalte, die in einer Phase nicht gebraucht werden, sind ausgeblendet – auf Handy und Desktop.",
@@ -39,15 +40,15 @@
   },
 
   "kernknoepfe": [
-    {"knopf": "stand", "beschriftung": "Stand"},
-    {"knopf": "zusammenfassen", "beschriftung": "Zusammenfassen"},
-    {"knopf": "fehlt", "beschriftung": "Lücken"},
+    {"knopf": "stand", "beschriftung": "Wo stehen wir?"},
+    {"knopf": "zusammenfassen", "beschriftung": "Ergebnisse bündeln"},
+    {"knopf": "fehlt", "beschriftung": "Lücken klären"},
     {"knopf": "protokoll", "beschriftung": "Protokoll"},
     {"knopf": "ueberblick", "beschriftung": "Überblick"}
   ],
-  "kernknoepfe_selektor": {"desktop": "#knopf-leiste .knopf-knoepfe .knopf-art", "handy": "#h-nestor-karte .h-knopfraster .h-knopf"},
+  "kernknoepfe_selektor": {"desktop": "#knopf-leiste #aktionen-menu > .knopf-art, #knopf-leiste #aktionen-menu > .ueberblick-aktion > .knopf-art", "handy": "#h-nestor-karte .h-knopfraster .h-knopf"},
   "nachgeordnet": {
-    "_zweck": "Gibt es, aber nur unter „Weitere Aktionen“ – nie neben den fünf Kernknöpfen.",
+    "_zweck": "Gibt es, aber nur unter „Mehr“ (Desktop: im Menü „Nestor, bitte …“ eingeklappt, Handy: „Weitere Aktionen“) – nie neben den fünf Kernknöpfen.",
     "desktop": ["#knopf-leiste .zusatz-aktionen [data-knopf=\"bild\"]", "#knopf-leiste .zusatz-aktionen [data-knopf=\"regeln\"]", "#knopf-fragen"],
     "handy": ["#h-nestor-karte .zusatz-aktionen [data-knopf=\"bild\"]", "#h-nestor-karte .zusatz-aktionen [data-knopf=\"regeln\"]", "#h-nestor-karte .zusatz-aktionen #btn-fragen"]
   },

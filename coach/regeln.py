@@ -48,10 +48,11 @@ KATALOG = [
     Regel("thema", "Beim Thema bleiben", "verlaesslich",
           "Inhalt passt ≥ 20 s nicht zum aktuellen Agendapunkt (Fokus-Ampel)", True),
     Regel("zeit", "Zeit einhalten", "verlaesslich", "Zeitbudget je Agendapunkt (Countdown, Ampel)", True),
-    Regel("kurz", "Sich kurz fassen – keine Monologe", "verlaesslich",
-          "Zusammenhängende Redezeit einer Person ≥ 60 s (Monolog-Ampel)", True),
+    # „Sich kurz fassen – keine Monologe“ (id "kurz") ist entfallen (Niclas, 11.10.2026): Sie prüfte zuletzt
+    # denselben Redeanteil wie „Alle kommen zu Wort“. Gespeicherte Einrichtungen mit "kurz" filtert gueltige().
     Regel("alle", "Alle kommen zu Wort", "verlaesslich",
-          "Angemeldete Personen ohne erkannte Stimme; eine Person mit mehr als der Hälfte der Redezeit", True),
+          "Angemeldete Personen ohne erkannte Stimme; eine Person mit mehr als dem 1,5-Fachen ihres fairen Anteils "
+          "in den letzten 5 Minuten", True),
     Regel("ton", "Respektvoller Ton – keine Beleidigungen, keine Kraftausdrücke", "verlaesslich",
           "Kraftausdrücke und persönliche Angriffe im Live-Text (Hinweis nur an die Moderation)", True),
     Regel("sachlich", "Sachlich bleiben – keine Killerphrasen", "experimentell",
@@ -68,7 +69,7 @@ KATALOG = [
           "nach, wenn bei einem davon Wer, Termin oder der Beschluss fehlt", True),
 ]
 NACH_ID = {r.id: r for r in KATALOG}
-STANDARD = ["ausreden", "thema", "zeit", "kurz"]
+STANDARD = ["ausreden", "thema", "zeit", "alle"]
 
 
 def katalog() -> list[dict]:

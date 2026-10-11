@@ -3,9 +3,9 @@
 // Ticket #27: Verlauf (Mitte) und Band (oben) – gemeinsam für Dashboard (app.js) und Handy (handy.js).
 // Verlauf: alles, was Inhalt ist, ist eine Karte (Antwort, Zusammenfassung, Recherche, Folie, Bild, Überblick,
 // Festgehalten). Neueste vorn, mit ‹ › (und Wischen) blättert man zurück wie durch Bilder in einer Chatgruppe;
-// nichts muss man wegklicken. Ein neues Ergebnis springt nach vorn und leuchtet kurz. Still Geliefertes (Bild,
-// Recherche, Abschnitts-Zusammenfassung, unterbrochener Bogen) springt nur nach vorn, wenn die vordere Karte älter
-// als ~60 s ist – sonst reiht es sich dahinter ein, mit dem Merker „1 neu ›“ (Nachtrag E).
+// nichts muss man wegklicken. Jedes neue Ergebnis kommt nach vorn und leuchtet kurz – auch still Geliefertes wie
+// eine fertige Recherche (Rückmeldung Niclas 11.10.2026: das Einreihen dahinter mit gelbem Merker verwirrte). Nur
+// wer gerade zurückgeblättert hat oder in einer Karte tippt, bleibt auf seiner Karte; dann zeigt › leise „neu“.
 // Band: Regel-Hinweise und Nestors stille Angebote, verschwinden von selbst, höchstens ein Knopf.
 
 const ART_ZEICHEN = { aufgabe: "☐", entscheidung: "✓", offen: "?", risiko: "!" };
@@ -15,7 +15,6 @@ const VK_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Fo
   regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick", zusammenfassung: "Zusammenfassung",
   fehlt: "Was noch fehlt", festgehalten: "Festgehalten", punkt: "Zusammenfassung", bild: "Live-Bild",
   beispiel: "So nutzt ihr Nestor", ergebnis: "Gerade festgehalten" };
-const STILL_VORN_SEKUNDEN = 60;
 let ergebnisSignal = false; // nur durch Klick einschaltbar, keine zusätzliche KI
 let signalAudio = null;
 function neuesErgebnisSignal() {
@@ -52,19 +51,15 @@ function verlaufEinordnen(z) {
   }
   for (const k of karten.filter((x) => x.id > verlauf.gesehen).sort((a, b) => a.id - b.id)) {
     verlauf.gesehen = k.id;
-    const vorn = nachId.get(verlauf.ordnung[0]);
-    const vornAlt = !vorn || (z.zeit - vorn.zeit) > STILL_VORN_SEKUNDEN;
-    if (!k.still || vornAlt || !verlauf.ordnung.length) {
-      verlauf.ordnung.unshift(k.id);
-      verlauf.index = 0;
-      verlauf.leuchten = k.id;
-      verlauf.richtung = 1;
-      setTimeout(() => { if (verlauf.leuchten === k.id) { verlauf.leuchten = null; } }, 2500);
-    } else {
-      verlauf.ordnung.splice(1, 0, k.id); // dahinter einreihen, Merker zeigen
+    verlauf.ordnung.unshift(k.id);
+    if (verlauf.index > 0 || verlauf.edit) { // jemand liest eine ältere Karte oder tippt: dort bleiben
+      verlauf.index += 1;
       verlauf.neu.push(k.id);
-      if (verlauf.index > 0) verlauf.index += 1; // die angezeigte Karte bleibt dieselbe
+      continue;
     }
+    verlauf.leuchten = k.id;
+    verlauf.richtung = 1;
+    setTimeout(() => { if (verlauf.leuchten === k.id) { verlauf.leuchten = null; } }, 2500);
   }
   verlauf.ordnung = verlauf.ordnung.filter((id) => nachId.has(id));
   verlauf.neu = verlauf.neu.filter((id) => verlauf.ordnung.includes(id));
@@ -135,7 +130,7 @@ function verlaufRendern(z) {
   w.vor.disabled = verlauf.index <= 0;
   w.zurueck.hidden = w.vor.hidden = n < 2;
   w.neu.hidden = !verlauf.neu.length;
-  w.neu.textContent = `${verlauf.neu.length} neues Ergebnis – jetzt ansehen ›`;
+  w.neu.textContent = "neu ›";
   w.neu.setAttribute("aria-live", "polite");
   // Nicht neu zeichnen, während jemand in einer Karte tippt – sonst verschwindet die Eingabe
   if (verlauf.edit && w.buehne.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
@@ -367,7 +362,7 @@ function ueberblickInhalt(u) {
 // --- Band (oben) ------------------------------------------------------------------------------------------------
 const bandWeg = new Set(); // weggeklickte Einträge (Hinweis-ids, "vorschlag-<punkt>")
 const BAND_ICON = { ton: "ton", ausreden: "ausreden", ueberlappung: "ausreden", fokus: "thema", zeit: "zeit",
-  monolog: "kurz", alle: "alle", ergebnisse: "ergebnisse", luecken: "ergebnisse", fuenf: "zeit", namen: "alle",
+  anteil: "alle", alle: "alle", ergebnisse: "ergebnisse", luecken: "ergebnisse", fuenf: "zeit", namen: "alle",
   taste: "mikro", vorschlag: "weiter", entfernt: "ergebnisse", geaendert: "ergebnisse" };
 
 function bandEintraege(z) {

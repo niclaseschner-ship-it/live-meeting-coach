@@ -615,6 +615,8 @@ async def aufzeichnen(seite: Page, referenz: dict, nur_knopfdruck: bool, bericht
 
 async def knopf_druecken(seite: Page, art: str, offline: bool, bericht: Bericht) -> None:
     t0 = time.monotonic()
+    if await seite.locator("#aktionen-menu").is_hidden():
+        await seite.locator("#btn-aktionen").click()  # Kernaktionen im Kopf-Menü „Nestor, bitte …“
     await seite.locator(f'.knopf-art[data-knopf="{art}"]').click()
     fertig = await warten_auf(seite, f"() => !(zustand.knopf && zustand.knopf.laeuft === '{art}')", 60.0)
     dauer = round(time.monotonic() - t0, 1)

@@ -29,7 +29,7 @@ MEETING = {
     "agenda": [{"titel": "Termin und Messestand", "ziel": "Standgröße und Lage entscheiden", "minuten": 1},
                {"titel": "Budget", "ziel": "Obergrenze beschließen", "minuten": 1},
                {"titel": "Aufgaben verteilen", "ziel": "Wer macht was bis wann", "minuten": 1}],
-    "regeln": [], "regel_ids": ["ausreden", "thema", "zeit", "kurz", "ton", "ergebnisse"],
+    "regeln": [], "regel_ids": ["ausreden", "thema", "zeit", "alle", "ton", "ergebnisse"],
     "teilnehmende": [], "assistent": True,
 }
 A, B, C = "onyx", "nova", "verse"  # am Stimmabgleich gewählt: deutlich verschieden voneinander

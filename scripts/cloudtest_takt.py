@@ -90,7 +90,7 @@ def taste_fenster(referenz: dict) -> list[dict]:
 
 
 # ---------- Bedienung: Knöpfe, die der Test drückt (Ticket #27) ----------
-BEDIEN_NAMEN = {"taste": "Sprechtaste", "stand": "Wo stehen wir?", "zusammenfassen": "Zusammenfassen",
+BEDIEN_NAMEN = {"taste": "Sprechtaste", "stand": "Wo stehen wir?", "zusammenfassen": "Ergebnisse bündeln",
                 "band": "Band „Zusammenfassen ›“", "abbrechen": "✕ Auftrag abbrechen", "still": "Still"}
 
 
@@ -736,6 +736,8 @@ class Regie:
         """Einen Knopf drücken, mitschreiben und (wie nach einer Frage) abwarten, bis Nestor fertig ist."""
         knopf = self.seite.locator(selektor).first
         try:
+            if ".knopf-art" in selektor and await self.seite.locator("#aktionen-menu").is_hidden():
+                await self.seite.locator("#btn-aktionen").click(timeout=5000)  # Kernaktionen im Kopf-Menü
             if not await knopf.is_visible() or await knopf.is_disabled():
                 return None
             t = self.jetzt()

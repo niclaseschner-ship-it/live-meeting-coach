@@ -1,4 +1,4 @@
-"""Regelbasierte Logik (Lastenheft Kap. 12): Monolog, Überlappung, Fokus-Status, vier Ampeln.
+"""Regelbasierte Logik (Lastenheft Kap. 12): Redeanteil, Überlappung, Fokus-Status, Ampeln.
 
 Alles hier ist reine Logik auf dem Meeting-Zustand und damit ohne Audio testbar.
 """
@@ -11,9 +11,6 @@ from . import regeln
 from .entscheider import Entscheider
 from .zustand import Meeting, Segment
 
-ZWISCHENLAUT_SEKUNDEN = 1.5  # kurze Einwürfe ("mhm") sind noch kein Dialog
-BLOCKRAND_SEKUNDEN = 3.0  # Rede bis so kurz vor Ende des letzten Blocks gilt als "spricht noch"
-SPRACHE_AKTUELL_SEKUNDEN = 2.5  # so frisch muss das Sprachsignal vom Mikrofon sein
 
 
 def mmss(sekunden: float) -> str:
@@ -21,90 +18,33 @@ def mmss(sekunden: float) -> str:
     return f"{s // 60}:{s % 60:02d}"
 
 
-# --- FR-03 Monolog ---------------------------------------------------------
+# --- FR-03 Redeanteil (statt Monolog) -----------------------------------------
+# Rückmeldung Niclas 11.10.2026: Die Monolog-Erkennung (Rede am Stück aus Mikrofon-Phase und Sprecherspur) war
+# zu verwinkelt. Gefragt ist das Phänomen „irgendwie redet nur einer“ – das zeigen die Redeanteile direkt.
+ANTEIL_FENSTER = 300.0  # gleitendes Fenster: die letzten 5 Minuten
+ANTEIL_FAKTOR = 1.5  # Hinweis, wenn eine Person mehr als das 1,5-Fache ihres fairen Anteils 1/n hat
+ANTEIL_MIN_REDE = 90.0  # so viel Rede muss im Fenster liegen, sonst ist der Anteil Zufall
+ANTEIL_ERKANNT = 10.0  # ab so viel Redezeit im ganzen Meeting zählt eine Stimme als Person
+UNSICHER = "Person ?"
 
-def laufende_rede(segmente: list[Segment], luecke: float = 3.0) -> tuple[str, float, float] | None:
-    """Wer spricht zuletzt wie lange am Stück? Liefert (sprecher, dauer, ende)."""
-    if not segmente:
+
+def redeanteil(meeting: Meeting, fenster: float = ANTEIL_FENSTER, faktor: float = ANTEIL_FAKTOR,
+               min_rede: float = ANTEIL_MIN_REDE) -> dict | None:
+    """Größter Redeanteil der letzten `fenster` Sekunden gegen die Grenze faktor/n.
+
+    n = Zahl der Personen: die angemeldeten Teilnehmenden oder, wenn mehr Stimmen erkannt sind, diese. Unsicher
+    zugeordnete Rede („Person ?“) zählt nicht mit. None, solange es keine zwei Personen gibt. `ueber` nur, wenn im
+    Fenster genug gesprochen wurde."""
+    gesamt = {k: v for k, v in meeting.redeanteile().items() if k != UNSICHER}
+    n = max(len(meeting.teilnehmende), sum(1 for v in gesamt.values() if v >= ANTEIL_ERKANNT))
+    if n < 2:
         return None
-    relevante = [s for s in segmente if s.dauer >= ZWISCHENLAUT_SEKUNDEN or s is segmente[-1]]
-    letzter = relevante[-1]
-    beginn, ende = letzter.start, letzter.ende
-    for s in reversed(relevante[:-1]):
-        if s.sprecher != letzter.sprecher or beginn - s.ende > luecke:
-            break
-        beginn = s.start
-    return letzter.sprecher, ende - beginn, ende
-
-
-def monolog_live(meeting: Meeting, schwelle: float) -> tuple[bool, float]:
-    """(Hinweis?, Anzeigedauer) der laufenden Rede.
-
-    Die Dauer folgt während einer frischen VAD-Sprachphase sofort dem Mikrofon, einschließlich kurzer Pausen bis
-    SPRACHE_AKTUELL_SEKUNDEN. So bleibt die Anzeige während eines langen, noch nicht segmentierten Beitrags live.
-    Sobald ein vorhergehendes Segment einer anderen Stimme den Sprecherwechsel belegt, gewinnt die neue Kette.
-    Die VAD kennt keine Person: Bei vorhandenen Segmenten wird deshalb ein Hinweis erst aus der bestätigten, aktuellen
-    Sprecherspur ausgelöst. Ohne Segmente darf die erste durchgehende VAD-Phase anonym den Hinweis auslösen.
-    """
-    rede = laufende_rede(meeting.segmente)
-    jetzt = meeting.jetzt()
-    signal_da = meeting.sprache_bis > -1e8
-    spricht_jetzt = signal_da and 0 <= jetzt - meeting.sprache_bis <= SPRACHE_AKTUELL_SEKUNDEN
-    phase_bekannt = meeting.sprache_seit > -1e8
-
-    if signal_da and not spricht_jetzt:
-        # Eine echte Pause beendet die Live-Anzeige, auch wenn ein älteres Segment lang genug war.
-        return False, 0.0
-
-    if spricht_jetzt and phase_bekannt:
-        phase_start = meeting.sprache_seit
-        phase_dauer = max(0.0, jetzt - phase_start)
-        if rede is None:
-            # Erste lange Äußerung: der Sprecher kann bis zum Commit noch unbekannt sein.
-            return phase_dauer >= schwelle, phase_dauer
-
-        sprecher, rede_dauer, ende = rede
-        rede_start = ende - rede_dauer
-        # Ein Segmentbeginn nach dem VAD-Start kann bloßer ASR-Verzug sein. Ein Wechsel ist erst belegt, wenn
-        # davor ein Segment einer anderen Stimme innerhalb derselben Sprachphase liegt.
-        wechsel_bestaetigt = any(
-            s.sprecher != sprecher and s.start < rede_start and s.ende >= phase_start
-            for s in meeting.segmente
-        )
-        if wechsel_bestaetigt:
-            # Der Start der neuen Kette ist bekannt; danach läuft ihre Anzeige mit den VAD-Ticks weiter.
-            dauer = max(0.0, jetzt - max(phase_start, rede_start))
-        elif ende < phase_start:
-            # Eine echte VAD-Pause hat die Phase nach dem letzten bekannten Segment neu begonnen.
-            dauer = phase_dauer
-        else:
-            # Gleiche bzw. noch nicht unterscheidbare Kette: VAD hält die Anzeige bis zum nächsten Segment aktuell,
-            # ohne die Warnung dem zuletzt bekannten Sprecher zuzuschreiben, bevor der Block ihn bestätigt.
-            dauer = max(rede_dauer, phase_dauer)
-        hinweis = rede_dauer >= schwelle and jetzt - ende <= BLOCKRAND_SEKUNDEN
-        return hinweis, dauer
-
-    if rede is None:
-        return False, 0.0
-
-    _, rede_dauer, ende = rede
-    if signal_da:
-        # Ein frisches VAD-Signal ohne gültigen Phasenbeginn (z. B. alte Zustände/Tests): nur bestätigte Spur.
-        dauer = rede_dauer
-        frisch = jetzt - ende <= BLOCKRAND_SEKUNDEN
-    else:
-        # Abspiel-/Unit-Test-Zustand ohne VAD: nur ein gerade abgeschlossenes Segment gilt als live.
-        dauer = rede_dauer if 0 <= jetzt - ende <= BLOCKRAND_SEKUNDEN else 0.0
-        frisch = dauer > 0
-    return frisch and rede_dauer >= schwelle, dauer
-
-
-def monolog(segmente: list[Segment], schwelle: float, luecke: float = 3.0) -> tuple[str, float] | None:
-    """Spricht die zuletzt sprechende Person seit mindestens `schwelle` Sekunden am Stück?"""
-    rede = laufende_rede(segmente, luecke)
-    if rede and rede[1] >= schwelle:
-        return rede[0], rede[1]
-    return None
+    anteile = {k: v for k, v in meeting.redeanteile(seit=meeting.jetzt() - fenster).items() if k != UNSICHER}
+    rede = sum(anteile.values())
+    anteil = max(anteile.values()) / rede if rede > 0 else 0.0
+    grenze = min(1.0, faktor / n)
+    return {"anteil": anteil, "grenze": grenze, "personen": n, "rede": rede,
+            "ueber": rede >= min_rede and anteil > grenze}
 
 
 # --- FR-06 Sprecherüberlappung ---------------------------------------------
@@ -317,7 +257,6 @@ def themen_auswerten(meeting: Meeting, entscheider: Entscheider, ergebnis: dict,
 def prozess_ampeln(
     meeting: Meeting,
     *,
-    monolog_sekunden: float,
     karenz_bloecke: int,
     zeit_rot_prozent: float,
     ueberlappung_min: float,
@@ -329,23 +268,6 @@ def prozess_ampeln(
     """Grün = im Rahmen, Gelb = Hinweis. Jede Ampel fällt von selbst zurück, wenn die Ursache endet (FR-08)."""
     jetzt = meeting.jetzt()
     ampeln = []
-
-    # 1. Monolog (FR-03): Gelb ab Schwelle, Grün sobald jemand anderes spricht
-    _, dauer = monolog_live(meeting, monolog_sekunden)
-    rede = laufende_rede(meeting.segmente)
-    sprecher_bestaetigt = bool(
-        rede and meeting.jetzt() - rede[2] <= BLOCKRAND_SEKUNDEN and abs(dauer - rede[1]) < 0.1
-    )
-    if dauer >= monolog_sekunden:
-        detail = (f"seit {mmss(dauer)} eine Stimme" if sprecher_bestaetigt and rede[1] >= monolog_sekunden
-                  else f"Live-Rede (Beta) · Stimme noch unbestätigt · {mmss(dauer)}")
-        ampeln.append({"name": "Monolog", "farbe": "gelb", "detail": detail})
-    elif dauer >= monolog_sekunden / 2:
-        detail = (f"eine Stimme seit {mmss(dauer)}" if sprecher_bestaetigt
-                  else f"Live-Rede (Beta) · Stimme noch unbestätigt · {mmss(dauer)}")
-        ampeln.append({"name": "Monolog", "farbe": "gruen", "detail": detail})
-    else:
-        ampeln.append({"name": "Monolog", "farbe": "gruen", "detail": "Gespräch im Wechsel"})
 
     # 2. Agenda & Zeit (FR-04)
     if 0 <= meeting.aktiver_punkt < len(meeting.agenda):

@@ -41,7 +41,7 @@ class Segment:
 class Hinweis:
     """Eine Zeile im Band oben (Ticket #27): Regel-Hinweise und Nestors stille Angebote an die Runde. Verschwindet von
     selbst (`dauer`), höchstens ein Knopf (`aktion`). `punkt`: gilt nur, solange dieser Agendapunkt aktiv ist."""
-    art: str  # monolog | zeit | fokus | ton | ueberlappung | alle | ausreden | fuenf | luecken | namen | taste | info
+    art: str  # anteil | zeit | fokus | ton | ueberlappung | alle | ausreden | fuenf | luecken | namen | taste | info
               # | entfernt | geaendert (Ticket #79: Rückgängig nach Zuruf)
     stufe: str  # hinweis | warnung | eskalation
     publikum: str  # moderation | gruppe | nachher
@@ -77,7 +77,6 @@ class Meeting:
     vorschlag: dict | None = None
     letztes_block_ende: float = 0.0  # Meetingzeit, bis zu der Audio verarbeitet ist
     sprache_bis: float = -1e9  # zuletzt vom Mikrofon gemeldete Sprachaktivität
-    sprache_seit: float = -1e9  # Beginn der aktuellen lückenlosen Sprachphase (auch vor erstem Sprechersegment)
     gestartet_um: float | None = None
     virtuelle_zeit: float | None = None  # gesetzt im Simulationsbetrieb
     _punkt_seit: float = 0.0

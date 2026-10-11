@@ -60,7 +60,7 @@ def _alle_selektoren(phase: str, geraet: str) -> list[str]:
 
 def test_vertrag_ist_vollstaendig_aufgebaut():
     assert VERTRAG["phasen"] == ["start", "vorbereitung", "live", "abschluss"]
-    assert [k["beschriftung"] for k in VERTRAG["kernknoepfe"]] == ["Stand", "Zusammenfassen", "Lücken", "Protokoll", "Überblick"]
+    assert [k["beschriftung"] for k in VERTRAG["kernknoepfe"]] == ["Wo stehen wir?", "Ergebnisse bündeln", "Lücken klären", "Protokoll", "Überblick"]
     assert VERTRAG["abschluss_reihenfolge"] == ["#ab-datenspende", "#ab-unterstuetzung", "#ab-protokoll", "#ab-paket"]
     assert VERTRAG["sprechknoepfe"]["bedienmodell"] in ("halten", "klick", "klick_oder_halten")
     for phase in VERTRAG["phasen"]:

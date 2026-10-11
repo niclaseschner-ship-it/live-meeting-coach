@@ -78,7 +78,7 @@ def test_ueberlappungsampel_durch_mischung_und_zurueck():
 
     def farbe():
         return {a["name"]: a["farbe"] for a in analyse.prozess_ampeln(
-            m, monolog_sekunden=60, karenz_bloecke=1, zeit_rot_prozent=10,
+            m, karenz_bloecke=1, zeit_rot_prozent=10,
             ueberlappung_min=0.5, ueberlappung_halte=30, themen_aktiv=True)}["Sprecherüberlappung"]
 
     assert farbe() == "gelb"

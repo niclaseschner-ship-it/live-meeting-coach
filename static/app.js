@@ -128,6 +128,9 @@ async function meetingStartAnfordern(erwartet = startStufeErmitteln()) {
 // ---------- Knöpfe ----------
 let einrichtungOffen = false;
 let leisteOffen = false;
+let anteilFenster = "5"; // Redeanteile: "5" = letzte 5 Minuten, "gesamt" = ganzes Meeting
+$("anteil-5").onclick = () => { anteilFenster = "5"; $("anteil-5").classList.add("an"); $("anteil-gesamt").classList.remove("an"); rendern(); };
+$("anteil-gesamt").onclick = () => { anteilFenster = "gesamt"; $("anteil-gesamt").classList.add("an"); $("anteil-5").classList.remove("an"); rendern(); };
 let reiter = "transkript";
 
 // Die Verlaufleiste beginnt unter der echten, ggf. umgebrochenen Kopfzeile.
@@ -157,17 +160,29 @@ $("btn-start").onclick = async () => {
 $("btn-stopp").onclick = async () => { await mikro.stoppen(); await api("/api/stopp"); location.href = "/abschluss"; };
 $("btn-neu").onclick = () => { einrichtungOffen = true; rendern(); window.scrollTo(0, 0); };
 $("btn-mikro").onclick = () => api("/api/stumm", { an: !zustand?.stumm });
-$("btn-fragen").onclick = () => { stimme.bereit(); api("/api/assistent/fragen"); };
+$("btn-fragen").onclick = () => { menuesZu(); stimme.bereit(); api("/api/assistent/fragen"); };
 $("btn-still").onclick = () => { stimme.stopp(); nestorStopp(); api("/api/assistent/stopp"); };
 $("btn-fortsetzen").onclick = () => api("/api/assistent/fortsetzen");
-$("btn-transkript").onclick = () => { leisteOffen = !leisteOffen; rendern(); };
+$("btn-transkript").onclick = () => { menuesZu(); leisteOffen = !leisteOffen; rendern(); };
 $("leiste-zu").onclick = () => { leisteOffen = false; rendern(); };
 $("reiter-transkript").onclick = () => { reiter = "transkript"; rendern(); };
 $("reiter-hinweise").onclick = () => { reiter = "hinweise"; rendern(); };
-// Kopfleiste entschlackt (Ticket #17 Punkt 4): Handy koppeln und Einstellungen stecken im „Mehr“-Menü – beides
-// seltene, vorbereitende Aktionen statt Aktionen je Minute. Ein Klick darauf wählt aus und schließt das Menü.
-$("btn-mehr").onclick = () => { $("mehr-menu").hidden = !$("mehr-menu").hidden; $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true; };
-$("btn-einstellungen").onclick = () => { $("mehr-menu").hidden = true; $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = $("handy-fenster").hidden = true; };
+// Kopfleiste (Rückmeldung Niclas 11.10.2026): genau zwei Menüs – „Nestor, bitte …“ (Aktionen) und ☰ (Transkript,
+// Mikrofon und Ton, Handy, Aufnahme, Einstellungen). Ein Klick auf einen Eintrag wählt aus und schließt das Menü.
+function menuesZu() {
+  $("mehr-menu").hidden = $("aktionen-menu").hidden = true;
+  $("btn-aktionen").setAttribute("aria-expanded", "false");
+}
+$("btn-mehr").onclick = () => {
+  const auf = $("mehr-menu").hidden; menuesZu(); $("mehr-menu").hidden = !auf;
+  $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true;
+};
+$("btn-aktionen").onclick = () => {
+  const auf = $("aktionen-menu").hidden; menuesZu(); $("aktionen-menu").hidden = !auf;
+  $("btn-aktionen").setAttribute("aria-expanded", String(auf));
+  $("kosten").hidden = $("einstellungen").hidden = $("handy-fenster").hidden = true;
+};
+$("btn-einstellungen").onclick = () => { menuesZu(); $("einstellungen").hidden = !$("einstellungen").hidden; $("kosten").hidden = $("handy-fenster").hidden = true; };
 $("btn-kosten").onclick = () => { $("kosten").hidden = !$("kosten").hidden; $("einstellungen").hidden = $("mehr-menu").hidden = true; if (zustand) kostenRendern(zustand); };
 $("btn-schluessel").onclick = (e) => { e.stopPropagation(); $("einstellungen").hidden = false; $("s-eingabe").focus(); };
 // Handy koppeln: QR-Code mit Kopplungscode; das Handy kann dann das Mikrofon übernehmen
@@ -182,10 +197,10 @@ async function handyFensterZeigen() {
   $("hf-text").replaceChildren(...(k.adresse ? [el("a", { href: k.adresse, target: "_blank", rel: "noopener" }, "Handy-Link öffnen oder kopieren")]
     : ["Für das Handy-Mikrofon ist eine erreichbare HTTPS-Adresse nötig. Richte diese Adresse ein: ", el("code", {}, k.befehl)]));
 }
-$("btn-handy").onclick = () => { $("mehr-menu").hidden = true; handyFensterZeigen(); };
+$("btn-handy").onclick = () => { menuesZu(); handyFensterZeigen(); };
 $("btn-handy-vorbereitung").onclick = handyFensterZeigen;
 $("btn-ton-hier").onclick = () => stimme.bereit(true);
-$("btn-mikro-quelle").onclick = handyFensterZeigen;
+$("btn-mikro-quelle").onclick = () => { menuesZu(); handyFensterZeigen(); };
 $("hf-laptop").onclick = async () => {
   stimme.bereit(true);
   try { await mikro.starten(zustand?.einstellungen?.assistent ?? true, "laptop"); } catch (e) { alert(`Mikrofon nicht verfügbar: ${e}`); }
@@ -194,10 +209,12 @@ $("hf-laptop").onclick = async () => {
 mikro.beiEnde = (grund) => { mikro.stoppen(); if (grund !== "uebernommen") console.warn("Laptop-Mikrofon beendet:", grund); };
 document.addEventListener("click", (e) => {
   if (!$("handy-fenster").hidden && !$("handy-fenster").contains(e.target) && !$("btn-handy").contains(e.target)
-      && !$("btn-mikro-quelle").contains(e.target) && !$("btn-handy-vorbereitung").contains(e.target)) $("handy-fenster").hidden = true;
+      && !$("btn-mikro-quelle").contains(e.target) && !$("btn-handy-vorbereitung").contains(e.target)
+      && !$("hf-laptop").contains(e.target)) $("handy-fenster").hidden = true;
   if (!$("einstellungen").hidden && !$("einstellungen").contains(e.target) && !$("btn-einstellungen").contains(e.target)) $("einstellungen").hidden = true;
   if (!$("kosten").hidden && !$("kosten").contains(e.target) && !$("btn-kosten").contains(e.target)) $("kosten").hidden = true;
   if (!$("mehr-menu").hidden && !$("mehr-menu").contains(e.target) && !$("btn-mehr").contains(e.target)) $("mehr-menu").hidden = true;
+  if (!$("aktionen-menu").hidden && !$("aktionen-menu").contains(e.target) && !$("btn-aktionen").contains(e.target)) menuesZu();
   if (!$("arbeit-liste").hidden && !$("arbeit-liste").contains(e.target) && !$("arbeitsring").contains(e.target)) $("arbeit-liste").hidden = true;
 });
 // Einstellungen: Modus und Stimme werden als Paar behandelt. Die Auswahl wird erst
@@ -262,7 +279,6 @@ async function einstellungsPaarAendern(feld, wert) {
 $("e-assistent").onchange = (e) => einstellen("assistent", e.target.checked);
 $("e-modus").onchange = (e) => { void einstellungsPaarAendern("modus", e.target.value); };
 $("e-stimme").onchange = (e) => { void einstellungsPaarAendern("stimme", e.target.value); };
-$("e-monolog").onchange = (e) => einstellen("monolog_sekunden", Number(e.target.value));
 $("e-bild-anbieter").onchange = (e) => einstellen("bild_anbieter", e.target.value);
 $("e-aufnahme").onchange = (e) => einstellen("aufnahme", e.target.checked);
 $("btn-ablage").onclick = () => api("/api/ablage/oeffnen");
@@ -346,13 +362,16 @@ function knopfDruecken(art, daten = {}) {
     knopfWartet = null; if (zustand) knopfRendern(zustand);
   }); // Fehler zeigt api() schon an
 }
-document.querySelectorAll("#knopf-leiste .knopf-art").forEach((b) => { b.onclick = () => knopfDruecken(b.dataset.knopf); });
+document.querySelectorAll("#knopf-leiste .knopf-art[data-knopf]").forEach((b) => {
+  b.onclick = () => { menuesZu(); knopfDruecken(b.dataset.knopf); };
+});
 $("ueberblick-umfang").onchange = () => aktionshilfeRendern(zustand, "#knopf-leiste .knopf-art, #knopf-fragen", $("ueberblick-umfang").value);
 $("knopf-frage-form").onsubmit = (e) => {
   e.preventDefault();
   const text = $("knopf-frage").value.trim();
   if (!text) return;
   stimme.bereit();
+  menuesZu();
   knopfDruecken("frage", { text }).then((ok) => { if (ok) $("knopf-frage").value = ""; });
 };
 function knopfRendern(z) {
@@ -492,20 +511,22 @@ function rendern() {
   $("ziel-anzeige").textContent = z.ziel || "";
   // Ablage: läuft die Aufnahme, und wo liegt das Meeting danach?
   const ab = z.archiv;
-  $("aufnahme-pill").hidden = !(ab?.aufnahme && z.hoeren);
+  $("aufnahme-pill").hidden = $("aufnahme-zeile").hidden = !(ab?.aufnahme && z.hoeren);
   $("btn-ablage").hidden = !(ab && !z.hoeren);
   $("btn-ablage").textContent = ab?.fertig ? "Abgelegt – Ordner öffnen" : "Wird abgelegt …";
   const pill = $("status-pill");
-  pill.className = "pill" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
-  pill.textContent = z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
-    : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung";
+  pill.className = "status-teil zustand" + (z.stumm ? " stumm" : z.simulation && z.hoeren ? " wiedergabe" : z.hoeren ? " live" : "");
+  // Live und Laufzeit in einem Teil – die Aufnahme steht nur noch im Menü (sah sonst aus wie ein zweites „Live“)
+  pill.textContent = (z.stumm ? "Stumm" : z.simulation && z.hoeren ? "Wiedergabe" : z.hoeren ? "Live"
+    : z.simulation ? "Demo" : z.laeuft ? "Läuft" : beendet ? "Beendet" : "Vorbereitung")
+    + (z.laeuft || z.hoeren ? ` ${mmss(z.zeit)}` : "");
+  pill.dataset.tip = z.hoeren ? `Meeting läuft seit ${mmss(z.zeit)}${ab?.aufnahme ? " · Aufnahme an (siehe Menü ☰)" : ""}` : "";
   // Stufe (Ticket #1)
   $("modus-pill").hidden = false; // Ticket #60: die Variante steht immer sichtbar da – auch wenn keine gewählt ist
   // „eigener Schlüssel“ (Ticket #17, entschlackte Kopfleiste) steht hier statt in einer eigenen Pille
   const eigenerSchluessel = z.schluessel?.quelle === "dashboard";
   $("modus-pill").textContent = !z.stufe ? "Keine Variante gewählt"
-    : (z.stufe === "basis" ? "Basis · Mistral" : "Premium · OpenAI")
-      + (eigenerSchluessel ? " · eigener Schlüssel" : "");
+    : (z.stufe === "basis" ? "Basis" : "Premium") + (eigenerSchluessel ? " · eigener Schlüssel" : "");
   $("modus-pill").dataset.tip = !z.stufe ? "Ohne bestätigte Variante startet kein Meeting – bitte auf der Startseite Basis oder Premium wählen."
     : (z.stufe === "basis" ? "Nestor Basis: alle KI-Dienste von Mistral AI (Frankreich), Verarbeitung in der EU"
       : "Nestor Premium: OpenAI, Gespräch und Live-Bild")
@@ -539,11 +560,17 @@ function rendern() {
   $("btn-handy-vorbereitung").textContent = handyVerbunden ? "Verbindung anzeigen" : "Handy verbinden";
   // Handy verbunden (gekoppelt, Seite offen) – auch bevor es Mikro und Ton übernimmt
   $("btn-mikro-quelle").hidden = z.simulation || (!m.quelle && !z.handys) || (!z.hoeren && m.quelle !== "handy" && !z.handys);
-  $("mq-text").textContent = m.quelle === "handy" ? "Mikro: Handy"
-    : m.quelle === "laptop" && z.hoeren ? "Mikro: Laptop" : `Handy verbunden${z.handys > 1 ? ` (${z.handys})` : ""}`;
-  $("btn-mikro-quelle").dataset.tip = m.quelle === "handy" ? "Das Handy hört zu – klicken zum Zurückholen" : "Der Laptop hört zu – klicken, um ein Handy zu koppeln";
+  // Klartext statt „Mikro: Handy · Ton: Handy“ (Rückmeldung Niclas 11.10.2026)
+  const geraetName = (q) => (q === "handy" ? "Handy" : q === "laptop" ? "Laptop" : null);
+  const mikroG = z.hoeren || m.quelle === "handy" ? geraetName(m.quelle) : null, tonG = geraetName(z.lautsprecher);
+  $("mq-text").textContent = mikroG && mikroG === tonG ? `Mikrofon und Lautsprecher: ${mikroG}`
+    : mikroG ? `Mikrofon: ${mikroG}${tonG ? ` · Lautsprecher: ${tonG}` : ""}`
+    : `Handy verbunden${z.handys > 1 ? ` (${z.handys})` : ""}`;
+  $("mq-erklaerung").textContent = mikroG === "Handy" && tonG === "Handy"
+    ? "Das Handy auf dem Tisch hört zu und spricht Nestors Stimme. Antippen zum Wechseln."
+    : mikroG === "Handy" ? "Das Handy auf dem Tisch hört zu. Antippen zum Wechseln."
+    : mikroG === "Laptop" ? "Der Laptop hört zu. Antippen, um ein Handy zu koppeln." : "Antippen für die Kopplung.";
   $("hf-laptop").hidden = !(z.hoeren && !z.simulation && m.quelle !== "laptop");
-  $("mq-text").textContent += z.lautsprecher ? ` · Ton: ${z.lautsprecher === "handy" ? "Handy" : "Laptop"}` : "";
   // Nestor ohne Lautsprecher (Tab zu, Handy neu geladen): sichtbar machen und hier übernehmen lassen
   $("ton-fehlt").hidden = !(z.hoeren && z.assistent?.aktiv && !z.lautsprecher);
   $("mikro-weg").hidden = !m.weg;
@@ -555,14 +582,10 @@ function rendern() {
   const a = z.assistent;
   const nestorDa = a?.aktiv && z.hoeren;
   knopfRendern(z);
-  $("nestor").hidden = !nestorDa;
   $("btn-fragen").hidden = !nestorDa || a.zustand === "pausiert" || basisStufe(z); // Basis: Sprechtaste
   $("btn-still").hidden = !nestorDa || !["spricht", "denkt", "recherchiert", "gespraech", "begruessung"].includes(a.zustand);
   $("btn-fortsetzen").hidden = !nestorDa || a.zustand !== "pausiert";
-  if (nestorDa) {
-    $("nestor").className = `nestor ${a.zustand}`;
-    $("nestor-zustand").textContent = `${a.name} ${NESTOR_TEXT[a.zustand] ?? a.zustand}`;
-  }
+  document.querySelector('#nestor-zeile .info').dataset.info = basisStufe(z) ? "basis_nestor" : "nestor";
   // Band (Ticket #27): Regel-Hinweise und stille Angebote, je mit höchstens einem Knopf
   bandRendern(z, $("band"));
   const bandHatInhalt = !$("band").hidden;
@@ -611,30 +634,40 @@ function liveRendern(z) {
       ...(p.beschluss ? [el("span", { class: "punkt-ergebnis" }, p.beschluss)] : [])),
     el("span", { class: "min" }, p.status === "offen" ? `${p.minuten} min` : `${mmss(p.genutzt)} / ${p.minuten}`))));
 
-  // Regeln als Ampeln (Zeit steht nur links); kommen schon verlässlich-vorn sortiert aus regel_status
-  // (Backend, einzige Quelle: coach/regeln.py). Räumlich getrennt wie die Kacheln in der Einrichtung
-  // (Ticket #10): Beta-Ampeln stehen unter einer eigenen kleinen Überschrift.
-  const ampel = (r) => el("div", { class: `ampel ${r.farbe}`,
-    "data-tip": (r.detail || r.titel) + (r.stufe === "experimentell" ? ` – ${r.kurzsatz}` : "") },
-    el("span", { class: "a-icon" }, icon(r.id)),
-    el("strong", {}, r.titel, ...(r.stufe === "experimentell" ? [konfSchild()] : [])),
-    el("span", { class: "detail" }, r.detail));
-  const regelStatus = z.regel_status ?? [];
-  const beta = regelStatus.filter((r) => r.stufe === "experimentell");
-  $("regel-ampeln").replaceChildren(
-    ...regelStatus.filter((r) => r.stufe !== "experimentell").map(ampel),
-    ...(beta.length ? [el("p", { class: "etikett ampel-beta-titel" }, "Beta"), ...beta.map(ampel)] : []));
+  // Regeln als Liste (rechts): Ampelpunkt, Name, ⓘ mit Erklärung und aktuellem Stand (Rückmeldung Niclas 11.10.2026).
+  // Reihenfolge kommt verlässlich-vorn aus regel_status (Backend, einzige Quelle: coach/regeln.py).
+  $("regel-ampeln").replaceChildren(...(z.regel_status ?? []).map((r) => el("li", { class: `regel ${r.farbe}`, "data-regel": r.id },
+    el("span", { class: "punkt", "aria-hidden": "true" }),
+    el("span", { class: "regel-name" }, r.titel, ...(r.stufe === "experimentell" ? [konfSchild()] : [])),
+    el("button", { class: "info", "data-info": r.id, "data-stand": r.detail || "", "aria-label": `${r.titel}: was passiert hier?` }, "i"))));
   $("erinnerungen").replaceChildren(...(z.regeln ?? []).map((t) => el("span", { "data-tip": "Erinnerung – wird nicht geprüft" }, t)));
-  // Ticket #27: nicht gewählte Regeln sind unsichtbar – ohne Regeln keine Karte (Sichtbarkeit: phaseAnzeigen)
 
-  // Redeanteile, ohne Bewertung
-  const anteile = Object.entries(z.redeanteile).sort((x, y) => y[1] - x[1]);
+  // Redeanteile, ohne Bewertung – letzte 5 Minuten (mit Grenzlinie 1,5/n) oder ganzes Meeting
+  const fenster = anteilFenster === "5" ? (z.redeanteile_5min ?? {}) : z.redeanteile;
+  const anteile = Object.entries(fenster).sort((x, y) => y[1] - x[1]);
+  const sicher = anteile.filter(([wer]) => wer !== "Person ?").reduce((s, [, x]) => s + x, 0) || 1;
   const summe = anteile.reduce((s, [, x]) => s + x, 0) || 1;
-  $("redeanteile").replaceChildren(...(anteile.length ? anteile.map(([wer, sek]) => el("div", { class: wer === "Person ?" ? "balken unsicher" : "balken",
-    "data-tip": wer === "Person ?" ? `${mmss(sek)} min nicht sicher zuzuordnen – zu kurz oder mehrere gleichzeitig` : `${mmss(sek)} min gesprochen` },
-    el("span", {}, wer.replace("Person ", "P ")),
-    el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${(sek / summe) * 100}%` })),
-    el("span", { class: "wert" }, `${Math.round((sek / summe) * 100)} %`))) : [el("span", { class: "leise-text" }, "Noch niemand erkannt.")]));
+  const grenze = anteilFenster === "5" ? z.anteil_grenze : null;
+  $("redeanteile").replaceChildren(...(anteile.length ? anteile.map(([wer, sek]) => {
+    const unsicher = wer === "Person ?";
+    const anteil = sek / (unsicher ? summe : sicher);
+    const spur = el("span", { class: "spur" }, Object.assign(el("span"), { style: `width:${anteil * 100}%` }));
+    if (grenze && !unsicher) spur.append(Object.assign(el("i", { class: "grenze" }), { style: `left:${grenze * 100}%` }));
+    return el("div", { class: `balken${unsicher ? " unsicher" : ""}${grenze && !unsicher && anteil > grenze ? " drueber" : ""}`,
+      "data-tip": unsicher ? `${mmss(sek)} min nicht sicher zuzuordnen – zählt beim Hinweis nicht mit` : `${mmss(sek)} min gesprochen` },
+      el("span", { class: "name" }, wer), spur, el("span", { class: "wert" }, unsicher ? mmss(sek) : `${Math.round(anteil * 100)} %`));
+  }) : [el("span", { class: "leise-text" }, anteilFenster === "5" ? "In den letzten 5 Minuten noch niemand erkannt." : "Noch niemand erkannt.")]));
+
+  // Festgehalten: Entscheidungen, Aufgaben, offene Punkte, Risiken – kompakt, ändern über das Protokoll
+  const fest = ((z.artefakte ?? {}).liste ?? []).filter((x) => !x.entfernt);
+  $("fest-zahl").textContent = fest.length ? String(fest.length) : "";
+  $("festgehalten").replaceChildren(...(fest.length ? [...fest].reverse().map((x) => el("li", { class: `fest ${x.typ}${x.erledigt ? " erledigt" : ""}`,
+      "data-tip": `${ART_TYP[x.typ]} · ${x.zeit_text}` },
+    el("span", { class: "art-zeichen", "aria-label": ART_TYP[x.typ] }, ART_ZEICHEN[x.typ]),
+    el("span", { class: "fest-text" }, x.was,
+      ...(x.wer || x.bis ? [el("small", {}, ` – ${[x.wer, x.bis ? `bis ${x.bis}` : null].filter(Boolean).join(" · ")}`)] : []),
+      ...((x.luecken ?? []).length && !x.abgelehnt ? [el("small", { class: "luecke-text" }, ` · ${x.luecken.map((l) => ART_LUECKE[l] ?? l).join(" · ")}`)] : []))))
+    : [el("li", { class: "leise-text" }, "Noch nichts – Entscheidungen und Aufgaben erscheinen hier von selbst.")]));
 
   nestorZeileRendern(z);
   verlaufRendern(z);
@@ -665,7 +698,6 @@ function einstellungenRendern(e) {
   $("e-modus").value = e.modus;
   $("e-stimme").value = e.stimme;
   stimmeOptionRendern(e.modus);
-  $("e-monolog").value = e.monolog_sekunden;
   $("e-bild-anbieter").value = e.bild_anbieter;
   $("e-live-art").value = e.live_art;
   $("e-aufnahme").checked = !!e.aufnahme;
@@ -707,8 +739,9 @@ function verbinden() {
 // Start: Icons setzen, Formular vorbelegen, Regeln, Szenarien und Aufnahmen laden
 (async () => {
   iconSetzen("btn-fragen", "frage"); iconSetzen("btn-still", "stopp"); iconSetzen("btn-fortsetzen", "weiter");
-  iconSetzen("btn-transkript", "transkript"); iconSetzen("btn-mehr", "mehr");
-  // btn-handy/btn-einstellungen stecken jetzt im „Mehr“-Menü mit sichtbarem Label (Ticket #17) – Icon davor, Label bleibt stehen
+  iconSetzen("btn-mehr", "menue");
+  // Einträge im Menü ☰ mit sichtbarem Label, Icon davor
+  $("btn-transkript").prepend(icon("transkript")); $("btn-mikro-quelle").prepend(icon("lautsprecher"));
   $("btn-einstellungen").prepend(icon("einstellungen")); $("btn-handy").prepend(icon("handy"));
   iconSetzen("kosten-icon", "muenze"); iconSetzen("leiste-zu", "zu");
   document.querySelector("#btn-taste .i").replaceChildren(icon("mikro"));

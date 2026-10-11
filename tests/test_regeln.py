@@ -38,10 +38,32 @@ def test_stille_angemeldete_werden_gemeldet():
     assert any("2 von 4 Teilnehmenden haben noch nicht gesprochen" in t for t in texte)
 
 
-def test_dominanz_im_gleitenden_fenster():
-    seg = [Segment("Person 1", "", 0, 500), Segment("Person 2", "", 500, 560)]
-    texte = _coach(["A", "B"], seg, 600)
-    assert any("mehr als 50 % der Redezeit" in t for t in texte)
+def _anteil(regel_ids, segmente, jetzt=600, teilnehmende=("A", "B", "C")):
+    c = Coach()
+    c._einrichten({"titel": "T", "teilnehmende": list(teilnehmende), "regel_ids": list(regel_ids)})
+    c.meeting.starten(virtuell=True)
+    c.meeting.segmente = segmente
+    c.meeting.virtuelle_zeit = jetzt
+    c.takt()
+    return c, [h.text for h in c.meeting.hinweise if h.art == "anteil"]
+
+
+def test_redeanteil_hinweis_ohne_namen_und_kachel_gelb():
+    seg = [Segment("Person 1", "", 300, 540), Segment("Person 2", "", 540, 600)]  # 80 % in 5 min, Grenze 50 %
+    c, texte = _anteil(["alle"], seg)
+    assert len(texte) == 1 and "was sagen die anderen?" in texte[0] and "Person 1" not in texte[0]
+    kachel = c.regel_status([])[0]
+    assert kachel["id"] == "alle" and kachel["farbe"] == "gelb" and "80 %" in kachel["detail"]
+
+
+def test_sich_kurz_fassen_ist_entfallen():
+    assert "kurz" not in regeln.NACH_ID and "kurz" not in regeln.STANDARD and "alle" in regeln.STANDARD
+    assert regeln.gueltige(["kurz", "alle"]) == ["alle"]  # alte Einrichtungen laufen weiter
+
+
+def test_redeanteil_ohne_regel_still():
+    seg = [Segment("Person 1", "", 300, 540), Segment("Person 2", "", 540, 600)]
+    assert _anteil(["zeit"], seg)[1] == []
 
 
 def test_ohne_gewaehlte_regel_kein_hinweis():
@@ -110,7 +132,7 @@ def test_konfidenz_katalog_zeigt_verlaessliche_signale_zuerst():
 
 def test_regel_status_ordnet_verlaessliche_vor_experimentelle_mit_kurzsatz():
     c = Coach()
-    c._einrichten({"titel": "T", "regel_ids": ["ausreden", "thema", "zeit", "kurz", "alle", "ton", "ergebnisse"]})
+    c._einrichten({"titel": "T", "regel_ids": ["ausreden", "thema", "zeit", "alle", "ton", "ergebnisse"]})
     c.meeting.starten(virtuell=True)
     status = c.regel_status([])
     stufen = [s["stufe"] for s in status]

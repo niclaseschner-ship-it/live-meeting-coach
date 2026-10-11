@@ -39,7 +39,7 @@ gemeinsamen Passworts. Die folgende Schnellstart-Anleitung beschreibt den lokale
   auf Anfrage und am Ende und schreibt das letzte Bild dabei fort; Basis hat kein Bildmodell und zeigt stattdessen
   einen Überblick als Text (Mistral).
 - **Links:** Countdown des aktuellen Punkts, Agenda mit Status, Vorschlag zum Weiterschalten.
-- **Rechts:** vier Signale (Monolog, Agenda & Zeit, Fokus, Sprecherüberlappung), aktueller Hinweis,
+- **Rechts:** Signale der gewählten Regeln (Redeanteil der letzten 5 Minuten, Fokus, Sprecherüberlappung), aktueller Hinweis,
   Redeanteile ohne Bewertung.
 - **Unten:** Live-Transkript mit laufendem Teiltext (nur Moderationsansicht).
 - Gruppenansicht für den Beamer: `/meeting?ansicht=gruppe`.
@@ -76,7 +76,7 @@ der Meeting-Zusammenfassung als Bild.
   Nestor und Live-Bild alle über diesen einen Schlüssel (Basis nutzt den Mistral-Schlüssel des Servers).
 - **Live-Text schnell oder sparsam** (Einstellungen): Standard ist „schnell“ (Streaming, Text schon beim
   Sprechen, ~1,02 $/h). „Sparsam“ schickt jede Äußerung einzeln (~0,36 $/h); Sätze erscheinen erst nach dem Satzende (im Mittel ~1 s, bis ~4 s)
-  und Nestor antwortet entsprechend später. Sprecher, Redeanteile, Monolog und Unterbrechungen sind nicht betroffen.
+  und Nestor antwortet entsprechend später. Sprecher, Redeanteile und Unterbrechungen sind nicht betroffen.
 - **Anbieter strikt getrennt:** Premium ausschließlich OpenAI, Basis ausschließlich Mistral. Frühere
   Codex-/Claude-Abo-Schalter wirken nicht mehr; fehlende Verbindungen führen zu einem Fehler, nicht zu einem anderen Anbieter.
 - **Testbibliothek:** Proben mit Referenz in [testbibliothek/](testbibliothek/README.md); Audio herstellen

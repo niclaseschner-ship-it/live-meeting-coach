@@ -49,7 +49,7 @@ async def lauf(probe: dict) -> Coach:
 
     def einrichten(daten: dict) -> None:
         original(daten)
-        coach.meeting.regel_ids = ["kurz", "alle"]
+        coach.meeting.regel_ids = ["alle"]
         coach.meeting.teilnehmende = personen + ["Stille Person"]
 
     coach._einrichten = einrichten

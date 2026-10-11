@@ -58,7 +58,7 @@ Signalquellen: **A** = Akustik/Stimmen (lokal: wer spricht, Überlappung, Pegel)
 | 2 | Eine Person spricht – keine Seitengespräche | Parallel laufende, meist leisere zweite Unterhaltung | A | ●○○ schwach | Überlappung (kurz) |
 | 3 | Beim Thema bleiben | Inhalt passt nicht zum aktuellen Agendapunkt | T + K | ●●○ mittel bis gut | Fokus-Ampel |
 | 4 | Zeit einhalten | Zeitbudget je Punkt, Beginn und Ende | U | ●●● gut | Countdown, Agenda-&-Zeit-Ampel |
-| 5 | Sich kurz fassen – keine Monologe | Zusammenhängende Redezeit einer Person | A | ●●● gut | Monolog-Ampel (≥ 60 s) |
+| 5 | ~~Sich kurz fassen – keine Monologe~~ (entfallen, in Regel 6 aufgegangen) | – | – | – | – |
 | 6 | Alle kommen zu Wort – niemand dominiert | Redeanteile, wer lange still ist | A (+ Teilnehmerzahl) | ●●○ mittel bis gut | Redeanteile ohne Bewertung |
 | 7 | Respektvoller Ton – keine Beleidigungen, keine Kraftausdrücke | Kraftausdrücke, persönliche Angriffe | T + K | ●●○ Kraftausdrücke gut, Angriffe mittel | – |
 | 8 | Sachlich bleiben – Ich-Botschaften, keine Killerphrasen | Killerphrasen, Pauschalisierungen, Du-Vorwürfe | T + K | ●○○ schwach (Auslegungssache) | – |
@@ -164,8 +164,18 @@ nach der Rückkehr (`scripts/nachlauf_fokus.py` misst dasselbe auf einem vorhand
 
 ### Regel 5 – Sich kurz fassen, keine Monologe
 
-**Vorhanden:** Monolog-Ampel ab 60 s zusammenhängender Rede. Sie ist erst verlässlich, seit die
-Sprechertrennung funktioniert (CAM++, 05.10.).
+**Entfallen (11.10.2026, Niclas):** Die Regel ist aus dem Katalog genommen, weil sie zuletzt dasselbe prüfte wie
+Regel 6. Die Redeanteil-Prüfung unten gehört jetzt allein zu „Alle kommen zu Wort“.
+
+**Zuletzt (11.10.2026):** Redeanteil statt Monolog-Erkennung. Hat eine Person in den letzten 5 Minuten
+mehr als das 1,5-Fache ihres fairen Anteils 1/n an der Redezeit, wird die Kachel gelb und das Band fragt ohne Namen:
+„Irgendwie redet gerade vor allem eine Person – was sagen die anderen?“ n ist die Zahl der angemeldeten
+Teilnehmenden oder, wenn mehr erkannt sind, der Stimmen mit ≥ 10 s Redezeit; „Person ?“ zählt nicht. Bei zwei
+Personen liegt die Grenze bei 75 %, bei drei bei 50 %, bei vier bei 37,5 %. Gewertet wird erst ab 90 s Rede im
+Fenster, höchstens ein Hinweis je 5 Minuten. Dieselbe Prüfung gilt für Regel 6.
+
+Die frühere Monolog-Ampel (≥ 60 s am Stück, aus Mikrofon-Sprachphase und Sprecherspur) ist entfernt: Rückmeldung
+Niclas 11.10.2026, zu verwinkelt für das, was die Runde wissen will. Der folgende Test beschreibt noch sie.
 
 **Test, vollautomatisch aus der Bibliothek:**
 - Aus der Sprecher-Referenz alle zusammenhängenden Redeabschnitte ≥ 60 s bestimmen, z. B. im Stadtrat
