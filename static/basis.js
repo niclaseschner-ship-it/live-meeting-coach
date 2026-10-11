@@ -152,6 +152,38 @@ const WORKLET = `class Sammler extends AudioWorkletProcessor {
 } registerProcessor("sammler", Sammler);`;
 const PAKET = 2400; // 100 ms
 const wsBasis = () => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+
+// ---------- Sprechknopf-Live-Text ----------
+// Kurzer WS-Kanal zu /ws/sprechknopf (coach/api_sprechknopf.py): PCM der laufenden Sprechknopf-Aufnahme geht
+// hinein, Teiltext kommt zurück. Best effort – fehlt Anbieter oder Kontingent, bleibt die Aufnahme ohne Teiltext,
+// nie ein Fehler. Genau eine Aufnahme ist je Tab aktiv, daher ein gemeinsamer Kanal für alle Sprechknöpfe
+// (agenda-mikro, btn-taste, btn-fragen); gefüttert wird er von mikro.daten() (Funkgerät, über halten.teile
+// wiederverwendet) bzw. von static/agenda.js (agendaAufnahme, eigener Mitschnitt).
+let liveTextKanal = null; // { schicken(pcmArrayBuffer) } – non-null genau während eine Aufnahme offen ist
+function liveTextOeffnen(beiTeiltext) {
+  let ws;
+  try { ws = new WebSocket(`${wsBasis()}/ws/sprechknopf`); }
+  catch { return null; }
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = (e) => {
+    try { const d = JSON.parse(e.data); if (typeof d.teil === "string") beiTeiltext(d.teil); }
+    catch { /* kein gültiges JSON – ignorieren, best effort */ }
+  };
+  ws.onerror = () => {}; // kein sichtbarer Fehler: die Aufnahme läuft ohne Teiltext weiter
+  return {
+    schicken(pcm) { if (ws.readyState === WebSocket.OPEN) ws.send(pcm); },
+    schliessen() { try { ws.close(); } catch { /* schon zu */ } },
+  };
+}
+// Sammelt einzelne Proben (Int16) zu PAKET-großen Blöcken und schickt sie an den offenen Kanal, falls einer offen
+// ist – für Aufnahmen (wie agendaAufnahme), die nicht schon paketweise wie mikro.daten() arbeiten.
+function liveTextSammler() {
+  const puffer = new Int16Array(PAKET); let n = 0;
+  return (probe) => {
+    puffer[n++] = probe;
+    if (n === PAKET) { liveTextKanal?.schicken(puffer.slice().buffer); n = 0; }
+  };
+}
 // Ein Mikrofon zur Zeit: der Server schließt die alte Quelle mit 4001, wenn eine andere (Laptop/Handy) übernimmt.
 const mikro = {
   ctx: null, stream: null, ws: null, puffer: new Int16Array(PAKET), n: 0,
@@ -200,6 +232,7 @@ const mikro = {
       if (this.n === PAKET) {
         if (halten.teile) halten.teile.push(this.puffer.slice()); // „Nestor fragen“ wird gehalten: mitschneiden
         if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.puffer.slice().buffer);
+        if (halten.teile && liveTextKanal) liveTextKanal.schicken(this.puffer.slice().buffer); // Sprechtaste: Teiltext
         this.n = 0;
       }
     }
@@ -267,11 +300,20 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
   return b;
 }
 
-// ---------- Sprechknopf: ein Bedienmodell für alle Sprechknöpfe (Ticket #66) ----------
+// ---------- Sprechknopf: ein Bedienmodell für alle Sprechknöpfe ----------
 // Agenda-Mikro, Sprechtaste am Laptop (auch Leertaste) und Sprechtaste am Handy verhalten sich gleich
-// (szenarien/ui_vertrag.json → „sprechknoepfe“):
-//   halten     → sofort Klasse „haelt“ und „Ich höre … loslassen zum Senden“ (noch bevor das Mikrofon offen ist)
-//   loslassen  → Klasse „verarbeitet“ und „Wird verarbeitet …“, dann das Ergebnis
+// (szenarien/ui_vertrag.json → „sprechknoepfe“) und kennen zwei Gesten:
+//   Klick (< 300 ms)   pointerdown öffnet sofort das Mikrofon; der kurze pointerup danach beendet NICHT, sondern
+//                      schaltet um – die Aufnahme läuft weiter, Klasse bleibt „haelt“, Text „Ich höre … zum
+//                      Senden nochmal klicken“. Der nächste pointerdown (zweiter Klick) beendet und sendet; der
+//                      pointerup danach löst nichts mehr aus.
+//   Halten (≥ 300 ms)  wie bisher: pointerdown startet, Loslassen beendet und sendet – ein Funkgerät.
+// setPointerCapture bei jedem pointerdown; pointerleave/blur beenden nur, solange tatsächlich gehalten wird (im
+// Umschaltmodus ist nichts mehr gedrückt); pointercancel beendet immer, in jedem Modus. Tastatur (Leertaste/Enter
+// am Knopf, dazu optional die Leertaste der ganzen Seite): kurzer Tipp = umschalten, Halten = Funkgerät. Eine
+// Obergrenze (o.hoechstens_ms, Standard 60 s) beendet und sendet automatisch; die Laufzeit steht sichtbar dabei
+// („Ich höre … 0:12“). Zeitquelle ist o.jetzt ?? performance.now (für Tests austauschbar).
+//   loslassen/zweiter Klick/Obergrenze → Klasse „verarbeitet“ und „Wird verarbeitet …“, dann das Ergebnis
 //   zu kurz    → Hinweis, wie es geht; Fehler (Mikrofon, Server) → Klasse „sprech-fehler“ und sichtbarer Text
 //   Zustände: ruhe → haelt → verarbeitet → meldung | fehler → (nach einigen Sekunden) ruhe
 // Danach kehrt die Anzeige nach einigen Sekunden in die Ruhe zurück. Was aufgenommen und wohin es geschickt wird,
@@ -283,10 +325,17 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
 //   abbrechen()             bei zu kurzem Halten (z. B. dem Server sagen, dass doch nichts kommt)
 //   bereit()                darf jetzt gehalten werden?
 //   leertaste               zusätzlich die Leertaste überall auf der Seite (außer in Eingabefeldern/anderen Knöpfen)
+//   liveText(text)          optional: laufender Teiltext während der Aufnahme (coach/api_sprechknopf.py)
+//   hoechstens_ms           optional: Obergrenze der Aufnahme (Standard 60 000)
+//   jetzt()                 optional: Zeitquelle für Tests (Standard performance.now)
+const UMSCHALT_SCHWELLE_MS = 300;
 const SPRECH_HAELT = "Ich höre … loslassen zum Senden";
-const SPRECH_KURZ = "Zu kurz – gedrückt halten, sprechen, dann loslassen.";
+const SPRECH_UMSCHALT = "Ich höre … zum Senden nochmal klicken";
+const SPRECH_KURZ = "Zu kurz – kurz klicken (schaltet um) oder gedrückt halten (Funkgerät), dann senden.";
 function sprechknopf(knopf, o) {
-  const s = { zustand: "ruhe", gedrueckt: false, start: null, uhr: null };
+  const jetzt = o.jetzt ?? (() => performance.now());
+  const s = { zustand: "ruhe", gedrueckt: false, umschalt: false, beendend: false, start: null, uhr: null,
+              pressStart: 0, laufUhr: null, obergrenzeUhr: null };
   function zeigen(zustand, text) {
     s.zustand = zustand;
     knopf.classList.toggle("haelt", zustand === "haelt");
@@ -299,21 +348,62 @@ function sprechknopf(knopf, o) {
     clearTimeout(s.uhr);
     s.uhr = setTimeout(() => { if (!s.gedrueckt && s.zustand !== "verarbeitet") zeigen("ruhe", o.ruhe?.() ?? null); }, ms);
   }
+  function laufzeitStarten() {
+    clearInterval(s.laufUhr);
+    s.laufUhr = setInterval(() => {
+      zeigen("haelt", `${s.umschalt ? SPRECH_UMSCHALT : SPRECH_HAELT} · ${mmss((jetzt() - s.pressStart) / 1000)}`);
+    }, 1000);
+  }
+  function laufzeitStoppen() { clearInterval(s.laufUhr); s.laufUhr = null; }
+  function obergrenzeStarten() {
+    clearTimeout(s.obergrenzeUhr);
+    s.obergrenzeUhr = setTimeout(() => { s.umschalt = false; beenden(); }, o.hoechstens_ms ?? 60000);
+  }
+  function obergrenzeStoppen() { clearTimeout(s.obergrenzeUhr); s.obergrenzeUhr = null; }
+  function liveTextSchliessen() { liveTextKanal?.schliessen(); liveTextKanal = null; }
+  function umschalten() { s.umschalt = true; zeigen("haelt", SPRECH_UMSCHALT); }
   async function an(e) {
     e?.preventDefault?.();
+    if (s.umschalt) { // zweiter Klick im Umschaltmodus: beendet und sendet; der folgende pointerup tut nichts mehr
+      s.umschalt = false;
+      beenden();
+      return;
+    }
     if (s.gedrueckt || s.zustand === "haelt" || s.zustand === "verarbeitet") return;
     if (knopf.disabled || knopf.hidden || (o.bereit && !o.bereit())) return;
-    s.gedrueckt = true; clearTimeout(s.uhr);
+    s.gedrueckt = true; s.beendend = false; clearTimeout(s.uhr);
+    s.pressStart = jetzt();
     zeigen("haelt", SPRECH_HAELT);
+    laufzeitStarten(); obergrenzeStarten();
+    if (o.liveText) liveTextKanal = liveTextOeffnen(o.liveText);
     const start = s.start = (async () => o.start())(); // synchron bis zum ersten await – noch in der Geste
     try { await start; } catch (err) {
       s.gedrueckt = false;
+      laufzeitStoppen(); obergrenzeStoppen(); liveTextSchliessen();
       zeigen("fehler", `Mikrofon nicht verfügbar: ${err?.message ?? err}`); spaeterRuhe();
     }
   }
-  async function aus() {
+  function los() { // pointerup/keyup: < 300 ms schaltet um, ≥ 300 ms beendet wie ein Halten
+    if (!s.gedrueckt) return; // schon im Umschaltmodus (nicht mehr physisch gedrückt) oder gar nicht aktiv
+    s.gedrueckt = false;
+    if (jetzt() - s.pressStart < UMSCHALT_SCHWELLE_MS) umschalten();
+    else beenden();
+  }
+  function beiVerlassenOderBlur() { // pointerleave/blur: nur im Halte-Modus (noch physisch gedrückt) beenden
     if (!s.gedrueckt) return;
     s.gedrueckt = false;
+    beenden();
+  }
+  function beiAbbruch() { // pointercancel: beendet immer, egal in welchem Modus
+    if (s.zustand !== "haelt") return;
+    s.gedrueckt = false; s.umschalt = false;
+    beenden();
+  }
+  async function beenden() {
+    if (s.beendend) return; // schon unterwegs (z. B. pointerup und danach pointercancel desselben Lifts)
+    s.beendend = true;
+    laufzeitStoppen(); obergrenzeStoppen(); liveTextSchliessen();
+    s.gedrueckt = false; s.umschalt = false;
     try { await s.start; } catch { return; } // den Fehler zeigt an()
     let wav;
     try { wav = await o.ende(); } catch (err) {
@@ -329,24 +419,27 @@ function sprechknopf(knopf, o) {
     if (r?.text) { zeigen(r.fehler ? "fehler" : "meldung", r.text); spaeterRuhe(); }
     else zeigen("ruhe", null);
   }
-  knopf.addEventListener("pointerdown", an);
-  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) knopf.addEventListener(ev, aus);
+  knopf.addEventListener("pointerdown", (e) => { try { knopf.setPointerCapture(e.pointerId); } catch { /* z. B. Tastatur */ } an(e); });
+  knopf.addEventListener("pointerup", los);
+  knopf.addEventListener("pointercancel", beiAbbruch);
+  knopf.addEventListener("pointerleave", beiVerlassenOderBlur);
   knopf.addEventListener("contextmenu", (e) => e.preventDefault());
   knopf.addEventListener("keydown", (e) => {
     if (!["Space", "Enter"].includes(e.code)) return;
     e.preventDefault(); e.stopPropagation(); if (!e.repeat) an(e);
   });
-  knopf.addEventListener("keyup", (e) => { if (["Space", "Enter"].includes(e.code)) { e.preventDefault(); e.stopPropagation(); aus(); } });
+  knopf.addEventListener("keyup", (e) => { if (["Space", "Enter"].includes(e.code)) { e.preventDefault(); e.stopPropagation(); los(); } });
   if (o.leertaste) {
     document.addEventListener("keydown", (e) => {
       if (e.code !== "Space" || knopf.hidden) return;
       if (e.target.closest?.("button, input, textarea, select, summary, a, [role='button'], [contenteditable='true']")) return;
       e.preventDefault(); if (!e.repeat) an(e);
     });
-    document.addEventListener("keyup", (e) => { if (e.code === "Space" && s.gedrueckt) { e.preventDefault(); aus(); } });
+    document.addEventListener("keyup", (e) => { if (e.code === "Space" && s.gedrueckt) { e.preventDefault(); los(); } });
   }
-  window.addEventListener("blur", aus);
-  return { get zustand() { return s.zustand; }, get haelt() { return s.gedrueckt; }, ruhe: () => { if (s.zustand === "ruhe") o.anzeige(o.ruhe?.() ?? "", "ruhe"); } };
+  window.addEventListener("blur", beiVerlassenOderBlur);
+  return { get zustand() { return s.zustand; }, get haelt() { return s.gedrueckt; }, get umschaltet() { return s.umschalt; },
+           ruhe: () => { if (s.zustand === "ruhe") o.anzeige(o.ruhe?.() ?? "", "ruhe"); } };
 }
 // Sprechtaste zu Nestor (Desktop und Handy): Aufnahme über halten, Frage an /api/frage/audio.
 const frageHalten = {

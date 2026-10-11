@@ -452,20 +452,63 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
 
 
 async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
-    """sekunden: Haltedauer – Stufe C hält bis nach dem Satzende der Agenda-WAV (echte Transkription)."""
-    lauf.schritt("Agenda per Sprache (Agenda-Mikro wie jeden Sprechknopf bedienen)")
-    vorher = await page.locator("#agenda-tabelle .agenda-zeile").count()
+    """sekunden: Haltedauer – Stufe C hält bis nach dem Satzende der Agenda-WAV (echte Transkription).
+
+    Nach dem Stopp (Halten → Loslassen) landet der transkribierte Text editierbar im Feld – kein automatischer
+    Agenda-Vorschlag mehr; „Absenden“ bleibt der bewusste nächste Schritt (geprüft von agenda_sprache_klick, das
+    die Klick-Geste bis zum Absenden durchspielt)."""
+    lauf.schritt("Agenda per Sprache (Agenda-Mikro wie jeden Sprechknopf bedienen, Halten)")
     await sprechknopf_halten(page, "#agenda-mikro", sekunden, lauf, "Agenda-Mikro")
     fertig = await warte(page, "() => document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden' && "
-                               "(document.getElementById('agenda-antwort')?.textContent || '').length > 0 && "
-                               "!(document.getElementById('agenda-antwort')?.textContent || '').startsWith('Agenda wird')",
-                         90 if lauf.echt else 60)
-    antwort = await text(page, "#agenda-antwort")
-    zeilen = await page.locator("#agenda-tabelle .agenda-zeile").count()
-    lauf.pruefen("Agenda per Sprache verarbeitet (Antwort sichtbar, Tabelle steht)",
-                 fertig and zeilen >= 2 and not antwort.startswith(("Fehler", "Mikrofon", "Zum Diktieren", "Zu kurz")),
-                 f"Antwort={antwort[:100]!r}, Zeilen {vorher}→{zeilen}")
+                               "(document.getElementById('agenda-feld')?.value || '').length > 0", 90 if lauf.echt else 60)
+    text_im_feld = await page.locator("#agenda-feld").input_value()
+    lauf.pruefen("Agenda per Sprache (Halten): transkribierter Text landet editierbar im Feld",
+                 fertig and bool(text_im_feld) and not text_im_feld.startswith(("Fehler", "Mikrofon", "Zu kurz")),
+                 f"Feld={text_im_feld[:100]!r}")
     await lauf.bild(page, "agenda_sprache")
+
+
+async def agenda_sprache_klick(page: Page, lauf: Lauf) -> None:
+    """Dieselbe Aufnahme-Infrastruktur, aber mit der Maus geklickt statt gehalten – Klick startet, der
+    zweite Klick (nach dem „Sprechen“) beendet und sendet. Danach steht der Text editierbar im Feld, „Absenden“
+    löst den Agenda-Vorschlag aus wie bei getippter Eingabe (vgl. agenda_text). Der Inhalt kommt über das
+    Drehbuch (Zuordnung der Fake-Transkription über den Dateinamen „agenda.wav“), nicht aus dem Fake-Mikro
+    selbst – welches WAV-Fixture dafür geladen ist, spielt also keine Rolle."""
+    lauf.schritt("Agenda-Mikro per Mausklick: Klick, sprechen, Klick → Text im Feld, Absenden")
+    knopf = page.locator("#agenda-mikro")
+    await knopf.wait_for(state="visible", timeout=15_000)
+    box = await knopf.bounding_box()
+    if not box:
+        lauf.pruefen("Agenda-Mikro per Mausklick: Knopf bedienbar", False, "keine Fläche")
+        return
+    mitte = (box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    await page.mouse.move(*mitte)
+    await page.mouse.down(); await page.mouse.up()  # erster Klick (< 300 ms): startet, schaltet um
+    umschaltet = await warte(page, "() => document.getElementById('agenda-mikro')?.classList.contains('haelt')", 5)
+    await asyncio.sleep(1.0)  # „sprechen“ – der Inhalt kommt aus dem Drehbuch, nicht vom Fake-Mikro selbst
+    await page.mouse.down(); await page.mouse.up()  # zweiter Klick: beendet und sendet
+    fertig = await warte(page, "() => document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden' && "
+                               "(document.getElementById('agenda-feld')?.value || '').length > 0", 60)
+    text_im_feld = await page.locator("#agenda-feld").input_value()
+    lauf.pruefen("Agenda-Mikro per Mausklick: Klick, sprechen (Fake-Mikro), Klick → Text im Feld",
+                 umschaltet and fertig and bool(text_im_feld)
+                 and not text_im_feld.startswith(("Fehler", "Mikrofon", "Zu kurz")),
+                 f"Feld={text_im_feld[:100]!r}")
+    await page.locator("#agenda-senden").click()
+    if lauf.echt:
+        muster = json.dumps(SOLL_C["agenda_punkte"])
+        verarbeitet = await warte(page, f"""() => {{
+            const punkte = [...document.querySelectorAll('#agenda-tabelle .agenda-zeile input[placeholder="Punkt"]')]
+              .map((e) => e.value);
+            return document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden'
+              && {muster}.every((m) => punkte.some((p) => new RegExp(m, 'i').test(p)));
+          }}""", 90)
+    else:
+        soll = next(r["antwort"] for r in DREHBUCH["chat"] if r["id"] == "agenda_entwurf")
+        verarbeitet = await warte(page, f"() => document.getElementById('f-titel')?.value === {json.dumps(soll['titel'])}", 60)
+    lauf.pruefen("Agenda-Mikro per Mausklick: Absenden löst den Agenda-Vorschlag aus (wie bei getippter Eingabe)",
+                 verarbeitet)
+    await lauf.bild(page, "agenda_mikro_klick")
 
 
 def qr_dekodieren(png: bytes) -> str:

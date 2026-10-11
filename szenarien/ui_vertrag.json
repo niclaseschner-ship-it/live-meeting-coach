@@ -5,7 +5,7 @@
     "abschluss": "#67 Punkt 1: Abschlussreihenfolge Datenspende → Unterstützung → Protokoll → Paket.",
     "handy": "#53/#56: kein Meetingstart ohne gekoppeltes Handy mit aktivem Mikrofon und Ton; genau ein Handy (zweites wird abgewiesen).",
     "phasen": "#66: Inhalte, die in einer Phase nicht gebraucht werden, sind ausgeblendet – auf Handy und Desktop.",
-    "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe – halten, sprechen, loslassen – mit gleicher Rückmeldung.",
+    "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe. Seit #86 zwei Gesten: Klick (< 300 ms) schaltet um (Aufnahme läuft weiter, zweiter Klick sendet), Halten (≥ 300 ms) bleibt das Funkgerät – beide mit gleicher Rückmeldung.",
     "sprechtaste_handy": "#66 Kommentar (Referenzlauf 20261010-100500, handy_live): Premium funktioniert wie ein Telefon (Ansprache per Name) – die Sprechtaste ist dort nachgeordnet (unter „Weitere Aktionen“); in Basis (Funkgerät) bleibt sie die große Hauptbedienung.",
     "handy_kopf": "#66 Kommentar: Der Meeting-Titel in der Handy-Kopfleiste wird nicht auf wenige Buchstaben abgeschnitten.",
     "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy.",
@@ -25,10 +25,11 @@
   },
 
   "sprechknoepfe": {
-    "bedienmodell": "halten",
+    "bedienmodell": "klick_oder_halten",
+    "_bedienmodell": "#86: Klick (< 300 ms) schaltet um – Aufnahme läuft weiter, zweiter Klick beendet und sendet. Halten (≥ 300 ms) bleibt wie bisher ein Funkgerät (loslassen beendet und sendet).",
     "rueckmeldung_klasse": "haelt",
     "rueckmeldung_text": "Ich höre",
-    "_nach_loslassen": "Nach dem Loslassen verschwindet „haelt“, und der Knopf zeigt sichtbar, dass verarbeitet wird (oder das Ergebnis/den Fehler).",
+    "_nach_loslassen": "Nach dem Loslassen (Halten) bzw. dem zweiten Klick (Umschaltmodus) verschwindet „haelt“, und der Knopf zeigt sichtbar, dass verarbeitet wird (oder das Ergebnis/den Fehler).",
     "knoepfe": [
       {"id": "agenda-mikro", "geraet": "desktop", "phase": "vorbereitung", "stufen": ["basis", "premium"], "name": "Agenda per Sprache"},
       {"id": "btn-taste", "geraet": "desktop", "phase": "live", "stufen": ["basis"], "name": "Sprechtaste"},

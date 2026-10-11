@@ -125,12 +125,13 @@ setInterval(() => { if (mikro.ctx?.state === "suspended") mikro.ctx.resume(); if
 // Nestor. In Basis der einzige Weg (Funkgerät), in Premium die Rückfall-Taste zum Namen (#66: klein unter „Weitere
 // Aktionen“). Was beim Halten gesagt wird, wertet der Server nicht noch einmal als Zuruf. Bedienmodell und
 // Rückmeldung wie jeder Sprechknopf (basis.js: sprechknopf, #66).
-const fragenRuhe = () => (zustand?.stufe === "premium" ? "Sprechtaste (falls der Name nicht ankommt)" : "Sprechtaste – halten und sprechen");
+const fragenRuhe = () => (zustand?.stufe === "premium" ? "Sprechtaste (falls der Name nicht ankommt)" : "Sprechtaste – klicken oder halten");
 const fragen = sprechknopf($("btn-fragen"), {
   ...frageHalten,
   anzeige: (text) => { $("fragen-text").textContent = text; },
   ruhe: fragenRuhe,
   start: () => { if (mikro.laeuft()) stimme.bereit(); stimme.stopp(); return frageHalten.start(); },
+  liveText: (text) => { $("fragen-text").textContent = text; }, // Teiltext während des Sprechens
 });
 // #66: Basis → große Taste als Hauptbedienung; Premium → klein unter „Weitere Aktionen“
 function fragenPlatzieren(stufe) {
