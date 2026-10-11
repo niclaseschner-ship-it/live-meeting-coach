@@ -86,6 +86,10 @@ AKTION: eintragen <nummer>; wer=…; bis=…     – Aufgabe, Entscheidung, offe
 AKTION: eintragen neu <typ>; was=…; wer=…; bis=…   die Gruppe es dir sagt („Sofie übernimmt die Statusseite bis
                             Freitag“). Nummer aus „Festgehaltene Artefakte“ unten; typ ist aufgabe, entscheidung,
                             offen oder risiko; weitere Felder: status=endgueltig|vorlaeufig, reaktion=….
+AKTION: entfernen <nummer>                   – ein Artefakt aus der Liste entfernen, wenn die Gruppe das
+                            ausdrücklich sagt („nimm das von der Liste“, „das brauchen wir nicht mehr“).
+AKTION: aendern <nummer>; was=…              – den Wortlaut eines vorhandenen Artefakts ändern, wenn die Gruppe
+                            das ausdrücklich so möchte („nimm statt X Y“). Nur der Text ändert sich.
 
 Beispiel:
 AKTION: keine
@@ -105,15 +109,15 @@ FOLIE_ZEILE_KLAR = ("                            nur wenn ausdrücklich eine Fol
 UEBERLAST = "Ich komme gerade nicht durch, versucht es gleich nochmal."
 FEHLER = "Entschuldigung, das hat gerade nicht geklappt."
 # Aktionen, nach denen das System spricht (Floskel bzw. Karten-Bogen) – der Text des Modells entfällt dann
-STILLE_AKTIONEN = ("bild", "recherche", "folie", "karte", "eintragen")
+STILLE_AKTIONEN = ("bild", "recherche", "folie", "karte", "eintragen", "entfernen", "aendern")
 # Ticket #21/#27: Bestätigung und Wartezeit spricht das System selbst (coach/bestaetigung.py)
 BESTAETIGUNG_HINWEIS = """
 Eine kurze Bestätigung („Bin dran“) hat das System schon gesprochen, bevor deine Antwort kommt. Fang deshalb nicht
 mit „Okay“, „Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt.
 """
 STILLE_HINWEIS = """
-Bei bild, recherche, folie, karte und eintragen spricht das System selbst – schreib nach der Aktionszeile dann nichts
-mehr.
+Bei bild, recherche, folie, karte, eintragen, entfernen und aendern spricht das System selbst – schreib nach der
+Aktionszeile dann nichts mehr.
 """
 
 
@@ -192,6 +196,17 @@ def aktion_lesen(zeile: str) -> dict | None:
         from .artefakte import aktion_lesen as eintrag_lesen
 
         return eintrag_lesen(rest)
+    if typ == "entfernen":  # Ticket #79: „nimm X von der Liste“ per Stimme (Basis/Text-Weg)
+        z = re.match(r"^#?(\d+)\s*$", rest)
+        return {"typ": "entfernen", "nummer": int(z[1])} if z else None
+    if typ == "aendern":  # Ticket #79: Wortlaut per Stimme ändern (Basis/Text-Weg)
+        kopf, _, feld = rest.partition(";")
+        z = re.match(r"^#?(\d+)\s*$", kopf.strip())
+        if not z:
+            return None
+        k, _, v = feld.partition("=")
+        was = v.strip() if k.strip().lower() == "was" else ""
+        return {"typ": "aendern", "nummer": int(z[1]), "was": was} if was else None
     return None
 
 
@@ -1143,6 +1158,19 @@ class Assistent:
                 await c.melden()
             await self.floskel_sagen(self.floskeln.variante(B.NOTIERT) if a is not None
                                      else "Das konnte ich keinem Eintrag zuordnen.", b)
+        elif typ in ("entfernen", "aendern"):  # Ticket #79: sofort ausgeführt, Karte bietet Rückgängig
+            nummer = aktion.get("nummer")
+            if typ == "entfernen":
+                a, floskeln = c.artefakte.entfernen(nummer), B.ENTFERNT
+            else:
+                a, floskeln = c.artefakte.aendern(nummer, aktion.get("was") or ""), B.GEAENDERT
+            if a is not None:
+                c.protokoll.append({"zeit": c.meeting.jetzt(),
+                                    "art": "artefakt_entfernt" if typ == "entfernen" else "artefakt_geaendert",
+                                    "id": nummer, "durch": "stimme"})
+                await c.melden()
+            await self.floskel_sagen(self.floskeln.variante(floskeln) if a is not None
+                                     else "Das finde ich in der Liste nicht.", b)
         else:
             await c.assistent_aktion(aktion)
 

@@ -1,9 +1,12 @@
 """Artefakt-Endpunkte (Ticket #26/#27): Lücken per Klick in der Karte schließen, Einträge bearbeiten.
 
-    POST /api/artefakte/bearbeiten  {"id", "was"?, "wer"?, "bis"?, "status"?, "reaktion"?, "typ"?}
-    POST /api/artefakte/neu         {"typ", "was", "wer"?, "bis"?}
-    POST /api/artefakte/loeschen    {"id"}
-    POST /api/artefakte/ablehnen    {"id"}                – „nicht nötig“: die Lücke wird nicht mehr markiert
+    POST /api/artefakte/bearbeiten    {"id", "was"?, "wer"?, "bis"?, "status"?, "reaktion"?, "typ"?}
+    POST /api/artefakte/neu           {"typ", "was", "wer"?, "bis"?}
+    POST /api/artefakte/loeschen      {"id"}
+    POST /api/artefakte/ablehnen      {"id"}                – „nicht nötig“: die Lücke wird nicht mehr markiert
+    POST /api/artefakte/rueckgaengig  {"id"}                – Knopf „Rückgängig“ am Band-Hinweis von entfernen/aendern
+                                        (Ticket #79); den vorherigen Stand hält `Artefakte._rueckgaengig` server-
+                                        seitig, die alte Nummer kommt unverändert zurück (kein neuer Eintrag).
 
 Was die Runde hier setzt, gilt als bestätigt und wird von der Erkennung nicht überschrieben. Der `coach` ist die eine
 laufende Instanz aus server.py, spät importiert (sonst Ringimport beim Hochfahren).
@@ -68,3 +71,16 @@ async def ablehnen(daten: dict) -> dict:
     ok = coach.artefakte.ablehnen(_nr(daten))
     await coach.melden()
     return {"ok": ok}
+
+
+@router.post("/api/artefakte/rueckgaengig")
+async def rueckgaengig(daten: dict) -> dict:
+    """Knopf am Band-Hinweis von `entfernen`/`aendern` (Ticket #79) – stellt mit derselben Nummer den vorherigen
+    Stand wieder her (coach/artefakte.py: `Artefakte.rueckgaengig`), kein neuer Eintrag."""
+    from .server import coach
+
+    a = coach.artefakte.rueckgaengig(_nr(daten))
+    if a is None:
+        raise HTTPException(404, "Nichts zum Rückgängigmachen (vielleicht schon abgelaufen).")
+    await coach.melden()
+    return {"ok": True, "artefakt": a.bild()}

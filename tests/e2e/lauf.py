@@ -293,6 +293,10 @@ async def durchlauf(ordner: Path, stufe: str, rauch: bool, ziel: Ziel) -> schrit
             if ziel.echt:
                 await schritte.ergebnisse_ende_pruefen(uhr, lauf)
                 await schritte.anbieterprotokoll_pruefen(seite, ziel.url, ziel.intern_geheimnis, lauf)
+            else:
+                # #79, letzter Schritt vor dem Abschluss (siehe Docstring dort): macht sich mit Rückgängig selbst
+                # wieder gerade, damit beenden_und_abschluss die Budget-Entscheidung unverändert im Protokoll sieht.
+                await schritte.zuruf_ergebnis_entfernen_pruefen(seite, lauf)
             await schritte.beenden_und_abschluss(seite, lauf, ordner)
             await schritte.handy_abschluss(handy, lauf)
             if ziel.echt:

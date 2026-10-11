@@ -562,14 +562,15 @@ button.luecke:hover { border-color: var(--rot); }
   font-size: 18px; font-weight: 600; background: var(--gelb-weich); color: #7A3F00; border: 2px solid var(--gelb);
   animation: auftauchen .35s ease-out; min-width: 0; }
 .band-eintrag.rot { background: var(--rot-weich); color: #8A0F1F; border-color: var(--rot); }
-.band-eintrag.fuenf, .band-eintrag.vorschlag, .band-eintrag.luecken { background: var(--marke-weich); color: var(--marke-2);
-  border-color: var(--marke); }
+.band-eintrag.fuenf, .band-eintrag.vorschlag, .band-eintrag.luecken, .band-eintrag.entfernt, .band-eintrag.geaendert {
+  background: var(--marke-weich); color: var(--marke-2); border-color: var(--marke); }
 .band-eintrag.leise { background: var(--flaeche); color: var(--text-2); border-color: var(--rand); font-size: 16px; }
 .band-icon svg { width: 24px; height: 24px; display: block; }
 .band-text { min-width: 0; overflow-wrap: anywhere; }
 .band-punkt { color: inherit; opacity: .6; }
 .band-knopf { background: var(--marke); border-color: var(--marke); color: #fff; padding: 6px 14px; font-size: 16px; }
-.band-eintrag.rot .band-knopf, .band-eintrag:not(.fuenf):not(.vorschlag):not(.luecken):not(.leise) .band-knopf {
+.band-eintrag.rot .band-knopf,
+.band-eintrag:not(.fuenf):not(.vorschlag):not(.luecken):not(.entfernt):not(.geaendert):not(.leise) .band-knopf {
   background: transparent; color: inherit; border-color: currentColor; }
 .band-zu { margin-left: auto; background: transparent; border-color: transparent; color: inherit; flex: none; }
 

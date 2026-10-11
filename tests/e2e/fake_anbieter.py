@@ -280,23 +280,45 @@ def openai_app(a: Anbieter, drehbuch: Drehbuch) -> Starlette:
     ])
 
 
-def realtime_text(drehbuch: Drehbuch, frage: str) -> tuple[str, str]:
-    """(Regel, Antworttext) für eine Realtime-Antwort: Begrüßung, eine Drehbuch-Antwort oder der Kartensatz."""
+def realtime_regel(drehbuch: Drehbuch, frage: str) -> dict:
+    """Die Drehbuch-Regel zu einer Realtime-Frage: Begrüßung, eine Drehbuch-Antwort/Werkzeugaufruf oder der
+    Kartensatz-Standard. Ticket #79: eine Regel kann statt `antwort_text` einen `werkzeug`-Aufruf liefern –
+    `_realtime_antwort` schickt dann `response.function_call_arguments.done` statt gesprochenem Text."""
     if "Begrüße" in frage:
-        return "begruessung", drehbuch.d["begruessung_premium"]
+        return {"id": "begruessung", "antwort_text": drehbuch.d["begruessung_premium"]}
     for regel in drehbuch.d.get("realtime", []):
         if all(t in frage for t in regel["frage_enthaelt"]):
-            return regel["id"], regel["antwort_text"]
-    return "realtime_standard", "Hier ist sie. Das Wichtige steht auf der Karte."
+            return regel
+    return {"id": "realtime_standard", "antwort_text": "Hier ist sie. Das Wichtige steht auf der Karte."}
 
 
 async def _realtime_antwort(ws: WebSocket, a: Anbieter, drehbuch: Drehbuch, tts: dict, frage: str = "") -> None:
-    """Eine gesprochene Antwort des Realtime-Modells: Transkript-Deltas und 440-Hz-PCM in Stücken."""
-    regel, text = realtime_text(drehbuch, frage)
+    """Eine Antwort des Realtime-Modells: entweder gesprochen (Transkript-Deltas und PCM in Stücken) oder, wenn die
+    Regel ein `werkzeug` nennt, ein reiner Funktionsaufruf ohne Ton (Ticket #79: ergebnis_entfernen/ergebnis_aendern) –
+    genauso, wie das echte Modell bei bild_zeichnen, recherchieren & Co. nichts dazu sagt."""
+    regel_dict = realtime_regel(drehbuch, frage)
+    regel, text = regel_dict["id"], regel_dict.get("antwort_text", "")
+    rid, item = f"resp_fake_{time.time_ns()}", f"item_out_{time.time_ns()}"
+    if regel_dict.get("werkzeug"):
+        werkzeug = regel_dict["werkzeug"]
+        call_id = f"call_fake_{time.time_ns()}"
+        a.protokoll(art="ws_ereignis", pfad="/v1/realtime", ereignis="response", regel=regel,
+                    werkzeug=werkzeug["name"])
+        await ws.send_text(json.dumps({"type": "response.created", "response": {"id": rid, "status": "in_progress"}}))
+        await ws.send_text(json.dumps({"type": "response.function_call_arguments.done", "response_id": rid,
+                                       "item_id": item, "call_id": call_id, "name": werkzeug["name"],
+                                       "arguments": json.dumps(werkzeug.get("argumente") or {}, ensure_ascii=False)}))
+        await ws.send_text(json.dumps({"type": "response.done", "response": {
+            "id": rid, "status": "completed",
+            "output": [{"id": item, "type": "function_call", "call_id": call_id, "name": werkzeug["name"],
+                        "arguments": json.dumps(werkzeug.get("argumente") or {}, ensure_ascii=False)}],
+            "usage": {"input_tokens": 150, "output_tokens": 20,
+                      "input_token_details": {"text_tokens": 150, "audio_tokens": 0},
+                      "output_token_details": {"text_tokens": 20, "audio_tokens": 0}}}}))
+        return
     dauer = ton_dauer(text, {**tts, "max_s": 6.0})
     a.protokoll(art="ws_ereignis", pfad="/v1/realtime", ereignis="response", regel=regel, ton_hz=a.hz,
                 ton_s=round(dauer, 2))
-    rid, item = f"resp_fake_{time.time_ns()}", f"item_out_{time.time_ns()}"
     await ws.send_text(json.dumps({"type": "response.created", "response": {"id": rid, "status": "in_progress"}}))
     pcm = (ton(a.hz, dauer) * 32767).astype("<i2").tobytes()
     worte = text.split(" ")

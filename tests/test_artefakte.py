@@ -166,6 +166,93 @@ def test_basis_aktion_eintragen():
     assert (b.typ, b.was, b.status, b.bestaetigt) == ("entscheidung", "Variante B nehmen", "endgueltig", True)
 
 
+def test_entfernen_validiert_nummer_und_rueckgaengig_bringt_dasselbe_objekt_mit_alter_nummer_zurueck():
+    """Ticket #79 (Nacharbeit): Rückgängig stellt die ALTE Nummer und den vollen Stand wieder her – kein neuer
+    Eintrag über `eintragen`, also keine Sonderfälle in Liste/Karten/Protokoll/meeting.json."""
+    c, _ = _coach()
+    a = c.artefakte.anlegen("aufgabe", "Monitor ersetzen", wer="Rao", bis="Freitag")
+    b = c.artefakte.anlegen("offen", "Zweiter Punkt")  # bleibt stehen, nur zur Reihenfolgen-Probe
+    assert c.artefakte.entfernen(99) is None and a in c.artefakte.liste  # unbekannte Nummer: nichts passiert
+    entfernt = c.artefakte.entfernen(a.id)
+    assert entfernt is a and a not in c.artefakte.liste
+    band = [h for h in c.meeting.hinweise if h.art == "entfernt"]
+    assert len(band) == 1 and band[0].text == 'Entfernt: „Monitor ersetzen“'
+    assert band[0].aktion == {"text": "Rückgängig", "rueckgaengig": {"id": a.id}}
+
+    assert c.artefakte.rueckgaengig(999) is None  # nichts zum Rückgängigmachen
+    wieder = c.artefakte.rueckgaengig(a.id)
+    assert wieder is a and a.id == entfernt.id  # dasselbe Objekt, dieselbe Nummer – kein neuer Eintrag
+    assert (wieder.wer, wieder.bis, wieder.typ) == ("Rao", "Freitag", "aufgabe")  # voller Stand, nicht nur „was“
+    assert [x.id for x in c.artefakte.liste] == sorted(x.id for x in c.artefakte.liste)  # Reihenfolge nach Nummer
+    assert c.artefakte.rueckgaengig(a.id) is None  # ein zweites Mal: schon verbraucht
+
+
+def test_aendern_validiert_nummer_und_rueckgaengig_setzt_wortlaut_und_bestaetigt_zurueck():
+    """Ticket #79 (Nacharbeit): Rückgängig nach `aendern` setzt nicht nur den Wortlaut zurück, sondern auch
+    bestätigt/Herkunft/vage – also den vollen Stand vor der Änderung, nicht nur den Text."""
+    c, _ = _coach()
+    a = c.artefakte.anlegen("offen", "Alter Wortlaut")  # erkannt, noch nicht bestätigt
+    assert c.artefakte.aendern(99, "Neuer Wortlaut") is None  # unbekannte Nummer
+    assert c.artefakte.aendern(a.id, "   ") is None and a.was == "Alter Wortlaut"  # leer: kein Rückgängig-Band
+    geaendert = c.artefakte.aendern(a.id, "Neuer Wortlaut")
+    assert geaendert is a and a.was == "Neuer Wortlaut" and a.bestaetigt and a.herkunft == "stimme"
+    band = [h for h in c.meeting.hinweise if h.art == "geaendert"]
+    assert len(band) == 1 and band[0].aktion == {"text": "Rückgängig", "rueckgaengig": {"id": a.id}}
+
+    wieder = c.artefakte.rueckgaengig(a.id)
+    assert wieder is a and a.was == "Alter Wortlaut" and not a.bestaetigt and a.herkunft == "erkannt"
+    assert c.artefakte.rueckgaengig(a.id) is None  # schon verbraucht
+
+
+def test_rueckgaengig_endpunkt_nimmt_nur_die_nummer_und_liefert_404_wenn_abgelaufen():
+    """Der Knopf schickt nur {"id"} an POST /api/artefakte/rueckgaengig (Ticket #79) – kein Sonderpayload."""
+    from fastapi.testclient import TestClient
+
+    from coach import server
+
+    server.coach.artefakte = Artefakte(server.coach)
+    a = server.coach.artefakte.anlegen("aufgabe", "Monitor ersetzen", wer="Rao", bis="Freitag")
+    with TestClient(server.app, client=("127.0.0.1", 5000)) as t:  # lokal: ohne Zugangsschutz
+        server.coach.artefakte.entfernen(a.id)
+        assert server.coach.artefakte.liste == []
+        r = t.post("/api/artefakte/rueckgaengig", json={"id": a.id})
+        assert r.json()["ok"] and r.json()["artefakt"]["id"] == a.id
+        wieder = server.coach.artefakte.liste[0]
+        assert wieder.id == a.id  # dieselbe Nummer, kein neuer Eintrag
+        assert (wieder.typ, wieder.was, wieder.wer, wieder.bis) == ("aufgabe", "Monitor ersetzen", "Rao", "Freitag")
+
+        b = server.coach.artefakte.anlegen("offen", "Vorher")
+        server.coach.artefakte.aendern(b.id, "Nachher")
+        r2 = t.post("/api/artefakte/rueckgaengig", json={"id": b.id})
+        assert r2.json()["ok"] and server.coach.artefakte.holen(b.id).was == "Vorher"
+
+        assert t.post("/api/artefakte/rueckgaengig", json={"id": 999}).status_code == 404
+        assert t.post("/api/artefakte/rueckgaengig", json={"id": a.id}).status_code == 404  # schon verbraucht
+
+
+def test_basis_aktion_entfernen_und_aendern():
+    """Ticket #79: Basis-Text-Weg – „AKTION: entfernen <nummer>“ bzw. „AKTION: aendern <nummer>; was=…“."""
+    from coach.assistent import aktion_lesen
+
+    assert aktion_lesen("AKTION: entfernen 3") == {"typ": "entfernen", "nummer": 3}
+    assert aktion_lesen("AKTION: entfernen") is None  # ohne Nummer: keine Aktion
+    assert aktion_lesen("AKTION: aendern 2; was=Neuer Wortlaut") == {"typ": "aendern", "nummer": 2,
+                                                                      "was": "Neuer Wortlaut"}
+    assert aktion_lesen("AKTION: aendern 2; was=") is None  # leerer Wortlaut: keine Aktion
+
+    c, _ = _coach()
+    a = c.artefakte.anlegen("aufgabe", "Monitor ersetzen")
+    gesagt = []
+
+    async def floskel(text, bogen=None):
+        gesagt.append(text)
+        return 0.0
+
+    c.assistent.floskel_sagen = floskel
+    asyncio.run(c.assistent.aktion_ausfuehren({"typ": "entfernen", "nummer": a.id}, None))
+    assert c.artefakte.liste == [] and gesagt and gesagt[0] in ("Entfernt.", "Ist runter von der Liste.")
+
+
 def test_premium_werkzeug_artefakt_eintragen():
     from coach.gespraech import WERKZEUGE, Gespraech
 
@@ -197,6 +284,47 @@ def test_premium_werkzeug_artefakt_eintragen():
     ausgabe = json.loads(gesendet[0]["item"]["output"])
     assert ausgabe["ok"] and gesagt and gesagt[0] in ("Notiert.", "Ist notiert.")  # das System sagt „Notiert“
     assert not any(e.get("type") == "response.create" for e in gesendet)  # das Modell sagt nichts dazu
+
+
+def test_premium_werkzeuge_ergebnis_entfernen_und_aendern():
+    """Ticket #79: Nummer wird validiert, das System spricht selbst, das Modell bekommt nichts zu sagen."""
+    from coach.gespraech import WERKZEUGE, Gespraech
+
+    assert {"ergebnis_entfernen", "ergebnis_aendern"} <= {w["name"] for w in WERKZEUGE}
+    c, _ = _coach()
+    a = c.artefakte.anlegen("aufgabe", "Monitor ersetzen")
+    b = c.artefakte.anlegen("offen", "Alter Wortlaut")
+    g = Gespraech(c.assistent)
+    gesendet = []
+
+    async def senden(e):
+        gesendet.append(e)
+
+    g._senden = senden
+    gesagt = []
+
+    async def floskel(text, bogen=None):
+        gesagt.append(text)
+        return 0.5
+
+    c.assistent.floskel_sagen = floskel
+
+    async def lauf():
+        await g._werkzeug("ergebnis_entfernen", json.dumps({"nummer": 999}), "c1")  # unbekannte Nummer
+        await g._werkzeug("ergebnis_entfernen", json.dumps({"nummer": a.id}), "c2")
+        await g._werkzeug("ergebnis_aendern", json.dumps({"nummer": b.id, "text": "Neuer Wortlaut"}), "c3")
+        await asyncio.sleep(0.01)
+
+    asyncio.run(lauf())
+    ausgabe = [json.loads(e["item"]["output"]) for e in gesendet]
+    assert ausgabe[0]["ok"] is False  # unbekannte Nummer: nichts entfernt, keine Karte
+    assert ausgabe[1]["ok"] is True and a not in c.artefakte.liste
+    assert ausgabe[2]["ok"] is True and b.was == "Neuer Wortlaut"
+    assert gesagt[0] == "Das finde ich in der Liste nicht."
+    assert gesagt[1] in ("Entfernt.", "Ist runter von der Liste.") and gesagt[2] in ("Geändert.", "Ist geändert.")
+    assert not any(e.get("type") == "response.create" for e in gesendet)  # das Modell sagt nichts dazu
+    band = {h.art for h in c.meeting.hinweise}
+    assert band == {"entfernt", "geaendert"}  # keine Karte für die unbekannte Nummer
 
 
 def test_klick_und_bearbeiten_im_dashboard():
