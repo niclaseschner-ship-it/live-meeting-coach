@@ -23,11 +23,12 @@ from .config import EINST
 
 log = logging.getLogger("coach.bogen")
 
-KARTEN_ARTEN = ("stand", "zusammenfassen", "fehlt", "festgehalten", "regeln", "ueberblick", "folie")
+KARTEN_ARTEN = ("stand", "zusammenfassen", "fehlt", "festgehalten", "regeln", "ueberblick", "folie",
+                "neu_aufbereiten")
 LANG_ARTEN = ("bild", "recherche")
 NAMEN = {"stand": "Wo stehen wir?", "zusammenfassen": "Ergebnisse bündeln", "fehlt": "Lücken klären",
          "festgehalten": "Gesamtprotokoll", "regeln": "Regeln prüfen", "ueberblick": "Überblick", "folie": "Folie",
-         "frage": "Frage", "bild": "Bild", "recherche": "Recherche"}
+         "frage": "Frage", "bild": "Bild", "recherche": "Recherche", "neu_aufbereiten": "Karte neu aufbereiten"}
 
 # --- Was will die Runde? Eindeutige Moderations-Aufträge direkt erkennen ------------------------------------------
 # Nur kurze, eindeutige Sätze – „fass zusammen, was Anna zum Budget gesagt hat“ ist eine Frage an das Modell.
@@ -389,7 +390,26 @@ async def folie(coach, b) -> tuple[dict | None, str]:
     return karte, B_HIER["folie"]
 
 
+async def neu_aufbereiten(coach, b) -> tuple[dict | None, str]:
+    """Die zuletzt gezeigte Karte per LLM-Aufruf neu aufbereiten (Ticket #84): „Nestor, bereite das kürzer auf“.
+    `b.fokus` trägt das „wie“ (kürzer, ausführlicher, als_liste, einfacher); `coach.karten[-1]` ist zu diesem
+    Zeitpunkt noch die vorherige Karte – diese Karte selbst kommt erst danach über `_karte_ablegen` dazu."""
+    from . import neu_aufbereiten as N
+
+    vorherige = coach.karten[-1] if coach.karten else None
+    if coach._client is None or not N.moeglich(vorherige):
+        return None, "Dafür habe ich gerade keine passende Karte."
+    karte, nutzung = await N.erstellen(coach._client, vorherige, b.fokus, wahl=coach.wahl)
+    if karte is None:
+        return None, "Das hat gerade nicht geklappt."
+    if nutzung:
+        from .pipeline import nutzung_loggen
+
+        nutzung_loggen({"art": "neu_aufbereiten", "modell": coach.wahl.analyse_modell, **nutzung})
+    return karte, B_HIER["karte"]
+
+
 from .bestaetigung import HIER as B_HIER  # noqa: E402
 
 BAUER = {"stand": stand, "zusammenfassen": zusammenfassen, "fehlt": fehlt, "festgehalten": festgehalten,
-         "regeln": regeln, "ueberblick": ueberblick, "folie": folie}
+         "regeln": regeln, "ueberblick": ueberblick, "folie": folie, "neu_aufbereiten": neu_aufbereiten}

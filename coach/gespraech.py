@@ -54,6 +54,13 @@ WERKZEUGE = [
      "parameters": {"type": "object", "properties": {"art": {
          "type": "string", "enum": ["zusammenfassen", "fehlt", "stand", "festgehalten", "ueberblick"]}},
          "required": ["art"]}},
+    {"type": "function", "name": "karte_neu_aufbereiten",
+     "description": "Die zuletzt gezeigte Karte anders aufbereiten, wenn die Runde das zu ihr sagt („bereite das "
+                    "anders auf“, „mach es kürzer“, „als Liste bitte“). Erscheint als neue Karte, die alte bleibt "
+                    "stehen. Das System sagt selbst dazu – sag nichts.",
+     "parameters": {"type": "object", "properties": {"wie": {
+         "type": "string", "enum": ["kürzer", "ausführlicher", "als_liste", "einfacher"]}},
+         "required": ["wie"]}},
     {"type": "function", "name": "status_abfragen",
      "description": "Aktuellen Stand abfragen: Laufzeit, aktueller Agendapunkt und Restzeit, ob das Live-Bild noch "
                     "gezeichnet wird oder fertig ist, Ergebnisse, letzte Hinweise. Immer nutzen, bevor du etwas "
@@ -112,14 +119,15 @@ STAND DES MEETINGS (zu Beginn dieses Gesprächs):
 {kontext}
 """
 # Ohne Sofort-Bestätigung (LMC_BESTAETIGUNG=0) sagt das Modell selbst, dass es nachschaut
-OHNE_BESTAETIGUNG = ("\nBei bild_zeichnen, recherchieren, folie_erstellen, karte_zeigen, artefakt_eintragen, "
-                     "ergebnis_entfernen und ergebnis_aendern spricht das System selbst – sag nichts dazu.\n")
+OHNE_BESTAETIGUNG = ("\nBei bild_zeichnen, recherchieren, folie_erstellen, karte_zeigen, karte_neu_aufbereiten, "
+                     "artefakt_eintragen, ergebnis_entfernen und ergebnis_aendern spricht das System selbst – "
+                     "sag nichts dazu.\n")
 # Ticket #21: Bestätigung und Wartezeit spricht das System aus vorab erzeugten Floskeln (coach/bestaetigung.py)
 MIT_BESTAETIGUNG = """
 Oft hat das System schon kurz bestätigt („Bin dran“), bevor du drankommst. Fang deshalb nicht mit „Okay“,
 „Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt. Bei bild_zeichnen, recherchieren, folie_erstellen,
-karte_zeigen, artefakt_eintragen, ergebnis_entfernen und ergebnis_aendern spricht das System selbst – ruf das
-Werkzeug auf, ohne etwas dazu zu sagen.
+karte_zeigen, karte_neu_aufbereiten, artefakt_eintragen, ergebnis_entfernen und ergebnis_aendern spricht das System
+selbst – ruf das Werkzeug auf, ohne etwas dazu zu sagen.
 """
 
 
@@ -436,6 +444,15 @@ class Gespraech:
                 self.a.zusatz_bogen(art)
             await self._ausgabe(call_id, {"ok": True, "hinweis": "die Karte erscheint, das System sagt dazu, was "
                                                                  "auffällt – sag nichts"})
+            return
+        if name == "karte_neu_aufbereiten":  # Ticket #84: letzte Karte per LLM-Aufruf neu aufbereiten
+            from .neu_aufbereiten import WIE
+
+            wie = str(arg.get("wie") or "")
+            if wie in WIE:
+                self.a.zusatz_bogen("neu_aufbereiten", wie)
+            await self._ausgabe(call_id, {"ok": wie in WIE, "hinweis": "die neue Karte erscheint, das System sagt "
+                                                                      "dazu – sag nichts"})
             return
         aktion = {"agendapunkt_wechseln": {"typ": "weiter", "ziel": str(arg.get("nummer", ""))},
                   "zuhoeren_pausieren": {"typ": "pause"}}.get(name)

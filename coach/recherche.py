@@ -14,10 +14,12 @@ import time
 
 AUFTRAG = """\
 Recherchiere im Web und gib einer Besprechungsrunde einen kurzen Überblick zum Thema unten.
-- Liefere 3 bis 5 konkrete, brauchbare Ergebnisse mit Namen, Unterschieden, Nutzen und Einschränkungen.
-- Deutsch, klar gegliedert, etwa 180 bis 300 Wörter. Jede überprüfbare Empfehlung braucht eine klickbare Quelle.
+- Erster Satz: der Kernsatz – die wichtigste Aussage in einem Satz, ohne Aufzählungszeichen.
+- Danach 3 bis 5 Stichpunkte (Zeile beginnt mit „- “), jeder mit einem **fett markierten** Stichwort am Anfang,
+  dahinter das Konkrete: Namen, Unterschiede, Nutzen, Einschränkungen.
+- Deutsch, höchstens 150 Wörter insgesamt. Jede überprüfbare Empfehlung braucht eine klickbare Quelle.
 - Aktueller Stand mit Jahreszahl, wo es darauf ankommt; Zahlen nur, wenn sie aus den Quellen stammen.
-- Wenn die Lage unklar oder umstritten ist, sag das.
+- Ist die Lage unklar oder umstritten, sag das im Kernsatz.
 - Wenn keine belastbaren Webquellen gefunden wurden, sage ausdrücklich, dass die Recherche nicht belegt ist.
 Thema: {frage}
 Einordnung (Meeting): {titel}

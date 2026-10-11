@@ -165,6 +165,60 @@ function beispielKarte(z) {
       : "„Nestor“ und eure Frage – direkt danach geht eine Nachfrage ohne Namen.", punkte: zeilen };
 }
 
+// --- Markdown-lite: fett, Listen, Zwischenüberschrift, Absätze – alles andere bleibt Text. Baut DOM-Knoten über
+// el() (document.createElement/createTextNode), nie innerHTML – bösartiger Text (<script>, onerror=, javascript:)
+// landet höchstens als Textknoten, nie als Markup (#84, für alle Karten gleich, nicht nur Recherche).
+function mdInline(zeile) {
+  const text = String(zeile ?? "");
+  const knoten = [];
+  const fett = /\*\*([^*]+)\*\*/g;
+  let letzte = 0, treffer;
+  while ((treffer = fett.exec(text))) {
+    if (treffer.index > letzte) knoten.push(document.createTextNode(text.slice(letzte, treffer.index)));
+    knoten.push(el("strong", {}, treffer[1]));
+    letzte = treffer.index + treffer[0].length;
+  }
+  if (letzte < text.length) knoten.push(document.createTextNode(text.slice(letzte)));
+  return knoten.length ? knoten : [document.createTextNode("")];
+}
+
+function mdLeichtKnoten(text) {
+  const zeilen = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const bloecke = [];
+  let absatz = [];
+  const absatzEnde = () => {
+    if (!absatz.length) return;
+    const p = el("p", {});
+    absatz.forEach((zeile, i) => { if (i > 0) p.append(el("br", {})); mdInline(zeile).forEach((n) => p.append(n)); });
+    bloecke.push(p);
+    absatz = [];
+  };
+  let i = 0;
+  while (i < zeilen.length) {
+    const zeile = zeilen[i];
+    if (!zeile.trim()) { absatzEnde(); i++; continue; }
+    const ueberschrift = /^#{1,6}\s+(.+)/.exec(zeile);
+    if (ueberschrift) { absatzEnde(); bloecke.push(el("h4", {}, ...mdInline(ueberschrift[1]))); i++; continue; }
+    const liste = /^\s*[-*]\s+(.+)/.exec(zeile), nummeriert = /^\s*\d+[.)]\s+(.+)/.exec(zeile);
+    if (liste || nummeriert) {
+      absatzEnde();
+      const ordnung = !!nummeriert, eintraege = [];
+      while (i < zeilen.length) {
+        const a = /^\s*[-*]\s+(.+)/.exec(zeilen[i]), n = /^\s*\d+[.)]\s+(.+)/.exec(zeilen[i]);
+        if (ordnung && n) { eintraege.push(n[1]); i++; }
+        else if (!ordnung && a) { eintraege.push(a[1]); i++; }
+        else break;
+      }
+      bloecke.push(el(ordnung ? "ol" : "ul", { class: "vk-punkte" }, ...eintraege.map((e) => el("li", {}, ...mdInline(e)))));
+      continue;
+    }
+    absatz.push(zeile);
+    i++;
+  }
+  absatzEnde();
+  return bloecke;
+}
+
 function karteBauen(k, z) {
   const a = el("article", { class: `vk vk-${k.art}${k.still ? " still" : ""}` });
   const kopf = el("header", { class: "vk-kopf" }, el("span", { class: "vk-art" }, VK_ART[k.art] ?? "Nestor"),
@@ -182,8 +236,8 @@ function karteBauen(k, z) {
     return a;
   }
   if (k.ids) { a.append(artefaktListe(k, z)); return a; }
-  if (k.punkte?.length) a.append(el("ul", { class: "vk-punkte" }, ...k.punkte.map((p) => el("li", {}, p))));
-  if (k.details) a.append(el("div", { class: "vk-recherche-text" }, k.details));
+  if (k.punkte?.length) a.append(el("ul", { class: "vk-punkte" }, ...k.punkte.map((p) => el("li", {}, ...mdInline(p)))));
+  if (k.details) a.append(el("div", { class: "vk-markdown" }, ...mdLeichtKnoten(k.details)));
   if (k.quellen?.length) {
     a.append(el("div", { class: "vk-quellen" }, el("strong", {}, "Quellen"), ...k.quellen.map((q) => el("div", {},
       el("a", { href: q.url, target: "_blank", rel: "noopener" }, q.titel), " ", el("small", {}, q.seite ?? "")))));
