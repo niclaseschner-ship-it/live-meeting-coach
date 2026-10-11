@@ -540,6 +540,10 @@ class Gespraech:
         c = self.coach
         text = self._antwort_text.strip()
         self._antwort_text = ""
+        if self._bogen is not None and text and not self._verworfen:
+            # vor _ton_ende eintragen: das gibt den Bogen frei, und der schreibt seinen Eintrag in nestor.jsonl
+            # womöglich schon beim nächsten await
+            self._bogen.gesagt = text
         stumm = self._stumm
         self._ton_ende(abgebrochen=False)
         self._antwort_laeuft = False
