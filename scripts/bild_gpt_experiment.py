@@ -40,7 +40,7 @@ Text überdecken. Nur Inhalte aus dem Material unten, nichts erfinden. Personen 
 
 
 def meeting_text() -> str:
-    from coach.onepager import meeting_text as mt
+    from coach.ueberblick import meeting_text as mt
     from coach.pipeline import Coach
     from coach.zustand import Segment
 

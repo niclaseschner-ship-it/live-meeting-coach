@@ -89,7 +89,7 @@ def test_ueberlappungsampel_durch_mischung_und_zurueck():
 # --- Live-Bild (One-Pager) -----------------------------------------------
 
 def test_meeting_text_enthaelt_agenda_status_und_transkript():
-    from coach.onepager import meeting_text
+    from coach.ueberblick import meeting_text
     from coach.zustand import Segment
 
     m = Meeting(titel="T", agenda=[Agendapunkt("A"), Agendapunkt("B")])

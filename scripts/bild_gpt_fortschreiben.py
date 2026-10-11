@@ -29,7 +29,7 @@ def main() -> None:
     alt = base64.b64encode((exp.ZIEL / "A_wie_chatgpt.png").read_bytes()).decode()
     exp_text = exp.meeting_text  # Stand 10:00 – für 12:40 die Zeitgrenze anheben
 
-    import coach.onepager as op
+    import coach.ueberblick as op
     from coach.pipeline import Coach
     from coach.zustand import Segment
     probe = json.loads((exp.WURZEL / "testbibliothek" / "proben" / "stadtrat" / "probe.json").read_text(encoding="utf-8"))
