@@ -696,6 +696,9 @@ async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
     if lauf.stufe != "premium":
         return
     lauf.schritt("Zuruf „nimm von der Liste“ entfernt ein Ergebnis per Werkzeug, Rückgängig holt es zurück")
+    zusatz = page.locator("details.zusatz-aktionen").first  # das Fragefeld liegt unter „Weitere Aktionen“
+    if await zusatz.count() and not await zusatz.evaluate("d => d.open"):
+        await zusatz.locator("summary").click()
     await page.locator("#knopf-frage").fill("Nestor, nimm den Testpunkt von der Liste.")
     await page.locator("#knopf-fragen").click()
     da = await warte(page, "() => (document.getElementById('band')?.innerText || '').includes('Entfernt')", 30)
@@ -782,8 +785,9 @@ async def beenden_und_abschluss(page: Page, lauf: Lauf, download: Path) -> None:
     # Nestors Seite: die Ansprache aus dem Drehbuch („Nestor, wie viel Budget …“) muss als eigene
     # Zeile mit Auslöser, Antwort und Zeit bis zum ersten Ton auftauchen (ohne den Satz der Runde selbst zu spiegeln).
     nestor_bogen = [e for e in nestor_zeilen if e.get("ausloeser") == "bogen"]
+    ansprache = "taste" if lauf.stufe == "basis" else "stimme"  # Basis hört nicht auf den Namen, sondern die Taste
     lauf.pruefen("ZIP enthält nestor.jsonl mit Nestors Antwort auf die Drehbuch-Ansprache",
-                 "nestor.jsonl" in namen and any(e.get("quelle") == "stimme" and e.get("antwort") for e in nestor_bogen),
+                 "nestor.jsonl" in namen and any(e.get("quelle") == ansprache and e.get("antwort") for e in nestor_bogen),
                  f"ausloeser_bogen={len(nestor_bogen)}, quellen={[e.get('quelle') for e in nestor_bogen]}")
     lauf.belege["technik_json_stufe"] = {k: technik.get(k) for k in ("stufe", "anbieter") if k in technik}
     lauf.pruefen("technik.json nennt die gewählte Stufe", lauf.stufe in json.dumps(technik, ensure_ascii=False).lower(),
