@@ -7,7 +7,9 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-from coach.abschluss import OrdnerAblage, meeting_html, meeting_markdown, paket, spenden_dateien, stufen
+from coach.abschluss import (
+    OrdnerAblage, SpendeDatei, SpendeTeilergebnis, meeting_html, meeting_markdown, paket, spenden_dateien, stufen,
+)
 from coach.config import EINST
 from coach.pipeline import Coach
 from coach.server import app
@@ -110,19 +112,31 @@ def test_paket_mit_aufnahme_enthaelt_wav(archiv_pfad):
 
 def test_ordnerablage_legt_dateien_unter_datum_und_kurz_id_ab(tmp_path):
     ablage = OrdnerAblage(tmp_path)
-    ablage.ablegen("abc12345", {"feedback.txt": b"Danke"})
+    ergebnis = ablage.ablegen("abc12345", [SpendeDatei("feedback.txt", inhalt=b"Danke")])
     [ordner] = list(tmp_path.iterdir())
     assert ordner.name.endswith("_abc12345")
     assert (ordner / "feedback.txt").read_bytes() == b"Danke"
+    assert ergebnis.vollstaendig is True
+    assert ergebnis.teile == [SpendeTeilergebnis("feedback.txt", 5, True)]
 
 
-def test_spenden_dateien_enthaelt_erwartete_teile(archiv_pfad):
+def test_spenden_dateien_enthaelt_erwartete_teile_in_upload_reihenfolge(archiv_pfad):
+    """Texte zuerst, die (optionale, große) Aufnahme zuletzt – scheitert sie, sind die Texte schon angekommen.
+    Eine Liste statt eines Dict, damit sich eine künftige weitere Textdatei einfach einreiht."""
     c = _abgelegtes_meeting()
     dateien = spenden_dateien(c.archiv.ordner, "Gut gemacht", mit_aufnahme=False)
-    assert set(dateien) == {"transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt", "technik.json"}
-    assert dateien["feedback.txt"] == b"Gut gemacht"
+    assert [d.name for d in dateien] == [
+        "transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt", "technik.json",
+    ]
+    [feedback] = [d for d in dateien if d.name == "feedback.txt"]
+    assert feedback.inhalt == b"Gut gemacht"
+    assert feedback.pfad is None
+
     dateien2 = spenden_dateien(c.archiv.ordner, "", mit_aufnahme=True)
-    assert "aufnahme.wav" in dateien2
+    assert [d.name for d in dateien2][-1] == "aufnahme.wav"  # zuletzt, nicht irgendwo dazwischen
+    [aufnahme] = [d for d in dateien2 if d.name == "aufnahme.wav"]
+    assert aufnahme.inhalt is None and aufnahme.pfad is not None  # gestreamt, nicht im Speicher gehalten
+    assert aufnahme.groesse() == aufnahme.pfad.stat().st_size
 
 
 # --- Endpunkte -------------------------------------------------------------------------------------
@@ -213,6 +227,8 @@ def test_spende_legt_erwartete_dateien_ab(monkeypatch, beendetes_meeting, tmp_pa
     r = _lokal().post("/api/abschluss/spende",
                        json={"einverstanden": True, "aufnahme": False, "feedback": "Gut gemacht"})
     assert r.status_code == 200
+    z = r.json()
+    assert z["vollstaendig"] is True  # lokale Ablage schlägt nie teilweise fehl
     [ordner] = list(ziel.iterdir())
     dateien = {p.name for p in ordner.iterdir()}
     assert {"transkript.md", "hinweise.md", "agenda.md", "dynamik.json", "feedback.txt"} <= dateien

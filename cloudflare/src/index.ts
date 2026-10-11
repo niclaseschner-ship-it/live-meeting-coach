@@ -239,23 +239,137 @@ async function handleInteressenten(request: Request, env: Env): Promise<Response
   return Response.json(rows.map(({ pin_hash: _hash, pin_bis: _bis, pin_versuche: _versuche, ...sichtbar }) => sichtbar));
 }
 
-/** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
-async function handleSpende(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
+// Datenspende: je Datei ein eigener Request, der Körper geht ohne Puffern direkt in R2 (kein formData()/
+// arrayBuffer() – das kopiert den ganzen Körper im Isolate). Kleine Dateien gehen als ein PUT; eine, die über
+// SPENDE_TEIL_MAX_BYTES liegt, lädt der Coach in Teilen über R2s Multipart-API hoch (start → je Teil ein PUT →
+// fertig). Pfad und Dateiname bleiben eng begrenzt (keine "..", feste Endungen), ein Abschluss-Request markiert
+// das Ende und löst die eine Telegram-Meldung aus (Größe/Status/Dauer je Datei, nie der Inhalt).
+const SPENDE_ID_MUSTER = /^[0-9a-f]{6,16}$/;
+const SPENDE_DATEI_MUSTER = /^[a-z0-9_-]+\.(?:md|json|jsonl|txt|wav)$/;
+const SPENDE_DATEI_MAX_BYTES = 300 * 1024 * 1024;
+// Multipart: je Teil höchstens SPENDE_TEIL_MAX_BYTES, höchstens SPENDE_TEIL_MAX_ANZAHL Teile – das Produkt ist
+// zugleich die Gesamtobergrenze einer mehrteiligen Datei und deckungsgleich mit SPENDE_DATEI_MAX_BYTES.
+const SPENDE_TEIL_MAX_BYTES = 50 * 1024 * 1024;
+const SPENDE_TEIL_MAX_ANZAHL = 6;
+
+function spendeGroesseLesbar(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+/** Liest und prüft den Content-Length-Header gegen eine Obergrenze – gemeinsam für den Einzel- und den
+ * Teil-Upload, nur mit unterschiedlichem Limit. */
+function spendeLaengePruefen(request: Request, maxBytes: number): { laenge: number } | Response {
+  const laenge = Number(request.headers.get("Content-Length") ?? "");
+  if (!Number.isFinite(laenge) || laenge <= 0) return new Response("Content-Length fehlt.", { status: 411 });
+  if (laenge > maxBytes) return new Response("Datei zu groß.", { status: 413 });
+  return { laenge };
+}
+
+/** Ein PUT, der Körper geht direkt in R2.put – für Dateien bis SPENDE_DATEI_MAX_BYTES. */
+async function spendeEinzelHochladen(request: Request, env: Env, schluessel: string): Promise<Response> {
+  if (request.method !== "PUT") return new Response("Nur PUT.", { status: 405 });
+  const laenge = spendeLaengePruefen(request, SPENDE_DATEI_MAX_BYTES);
+  if (laenge instanceof Response) return laenge;
+  if (!request.body) return new Response("Kein Körper.", { status: 400 });
+  await env.SPENDEN.put(schluessel, request.body, { httpMetadata: { contentType: "application/octet-stream" } });
+  return Response.json({ ok: true, bytes: laenge.laenge });
+}
+
+/** Eröffnet einen mehrteiligen Upload für eine große Datei und liefert die Upload-ID, mit der der Coach jeden
+ * Teil und zuletzt den Abschluss adressiert. */
+async function spendeMultipartStarten(request: Request, env: Env, schluessel: string): Promise<Response> {
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  try {
+    const upload = await env.SPENDEN.createMultipartUpload(schluessel, { httpMetadata: { contentType: "application/octet-stream" } });
+    return Response.json({ uploadId: upload.uploadId });
+  } catch {
+    return new Response("Multipart-Start fehlgeschlagen.", { status: 502 });
+  }
+}
+
+/** Lädt EINEN Teil eines mehrteiligen Uploads hoch – wie der Einzel-Upload gestreamt, nur mit dem engeren
+ * Teil-Limit statt der Gesamtobergrenze. */
+async function spendeMultipartTeilHochladen(
+  request: Request, env: Env, schluessel: string, teilRoh: string, uploadId: string | null,
+): Promise<Response> {
+  if (request.method !== "PUT") return new Response("Nur PUT.", { status: 405 });
+  const teilNr = Number(teilRoh);
+  if (!Number.isInteger(teilNr) || teilNr < 1 || teilNr > SPENDE_TEIL_MAX_ANZAHL) {
+    return new Response("Ungültige Teilnummer.", { status: 400 });
+  }
+  if (!uploadId) return new Response("upload fehlt.", { status: 400 });
+  const laenge = spendeLaengePruefen(request, SPENDE_TEIL_MAX_BYTES);
+  if (laenge instanceof Response) return laenge;
+  if (!request.body) return new Response("Kein Körper.", { status: 400 });
+  try {
+    const teil = await env.SPENDEN.resumeMultipartUpload(schluessel, uploadId).uploadPart(teilNr, request.body);
+    return Response.json({ partNumber: teil.partNumber, etag: teil.etag });
+  } catch {
+    return new Response("Teil-Upload fehlgeschlagen.", { status: 502 });
+  }
+}
+
+interface SpendeTeilAngabe { partNumber: number; etag: string }
+
+/** Fügt die zuvor hochgeladenen Teile zur fertigen Datei zusammen. */
+async function spendeMultipartAbschliessen(request: Request, env: Env, schluessel: string): Promise<Response> {
+  if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
+  const { uploadId, teile } = (await request.json()) as { uploadId?: string; teile?: SpendeTeilAngabe[] };
+  if (!uploadId || !Array.isArray(teile) || teile.length === 0) {
+    return new Response("Ungültiger Körper.", { status: 400 });
+  }
+  try {
+    const objekt = await env.SPENDEN.resumeMultipartUpload(schluessel, uploadId).complete(teile);
+    return Response.json({ ok: true, bytes: objekt.size });
+  } catch {
+    return new Response("Multipart-Abschluss fehlgeschlagen.", { status: 502 });
+  }
+}
+
+/** Lädt EINE Datei der Datenspende/des Feedbacks hoch (vom Coach aufgerufen, siehe coach/ablage_r2.py): je nach
+ * Größe als ein einzelner PUT oder in Teilen über die Multipart-Unterbefehle (`?teile=start`/`?teil=N&upload=`/
+ * `?teile=fertig`) – beides streamt den Körper direkt in R2, ohne ihn zu puffern. */
+async function handleSpendeDatei(
+  request: Request, env: Env, name: string, dateiname: string, url: URL,
+): Promise<Response> {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (!SPENDE_ID_MUSTER.test(name) || !SPENDE_DATEI_MUSTER.test(dateiname)) {
+    return new Response("Ungültiger Pfad.", { status: 400 });
+  }
+  const schluessel = `${name}/${dateiname}`;
+  const teileAktion = url.searchParams.get("teile");
+  if (teileAktion === "start") return spendeMultipartStarten(request, env, schluessel);
+  if (teileAktion === "fertig") return spendeMultipartAbschliessen(request, env, schluessel);
+  const teilRoh = url.searchParams.get("teil");
+  if (teilRoh !== null) return spendeMultipartTeilHochladen(request, env, schluessel, teilRoh, url.searchParams.get("upload"));
+  return spendeEinzelHochladen(request, env, schluessel);
+}
+
+interface SpendeTeilergebnis { datei: string; bytes: number; ok: boolean }
+
+/** Schließt eine Spende/ein Feedback ab (vom Coach aufgerufen, NACHDEM er jede Datei einzeln hochzuladen
+ * versucht hat): löst die eine Telegram-Meldung aus – ohne Dateiinhalte, nur Größe/Status je Datei und die
+ * Gesamtdauer – und sagt, ob alles ankam oder nur ein Teil. */
+async function handleSpendeAbschluss(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
   if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
-  const form = await request.formData();
-  let anzahl = 0;
-  for (const [dateiname, wert] of form.entries()) {
-    if (typeof wert !== "string") {
-      // FormDataEntryValue ist File | string; alles, was kein reiner Text ist, ist eine Datei
-      await env.SPENDEN.put(`${name}/${dateiname}`, await (wert as File).arrayBuffer());
-      anzahl++;
-    }
-  }
-  melden(ctx, env, `📦 Nestor: Datenspende / Feedback gespeichert\nPaket: ${name}\nDateien: ${anzahl}`);
-  return Response.json({ ok: true, dateien: anzahl });
+  if (!SPENDE_ID_MUSTER.test(name)) return new Response("Ungültiger Pfad.", { status: 400 });
+  const { ergebnisse, dauerMs } = (await request.json()) as { ergebnisse?: SpendeTeilergebnis[]; dauerMs?: number };
+  const liste = Array.isArray(ergebnisse) ? ergebnisse : [];
+  const vollstaendig = liste.length > 0 && liste.every((e) => e.ok);
+  const status = liste.length === 0 ? "fehlgeschlagen" : vollstaendig ? "vollständig" : "teilweise";
+  const zeilen = liste
+    .map((e) => `${e.ok ? "✅" : "❌"} ${e.datei} (${spendeGroesseLesbar(e.bytes ?? 0)})`)
+    .join("\n") || "– keine Dateien –";
+  const dauer = typeof dauerMs === "number" ? `${(dauerMs / 1000).toFixed(1)} s` : "unbekannt";
+  melden(ctx, env, `📦 Nestor: Datenspende/Feedback ${status}\nPaket: ${name}\nDauer: ${dauer}\n${zeilen}`);
+  return Response.json({ ok: true, vollstaendig });
 }
 
 /** Pfade, die ohne Anmeldung erreichbar bleiben: das Handy koppelt über den Kopplungscode. */
@@ -400,7 +514,14 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
   }
 
   if (pfad.startsWith("/intern/spende/")) {
-    return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);
+    const teile = pfad.slice("/intern/spende/".length).split("/").map(decodeURIComponent);
+    if (teile.length === 2 && teile[1] === "abschluss") {
+      return handleSpendeAbschluss(request, env, teile[0], ctx);
+    }
+    if (teile.length === 2) {
+      return handleSpendeDatei(request, env, teile[0], teile[1], url);
+    }
+    return new Response("Ungültiger Pfad.", { status: 400 });
   }
   if (pfad === "/intern/meeting-start") {
     return handleMeetingStart(request, env, ctx);

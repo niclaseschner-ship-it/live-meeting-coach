@@ -122,10 +122,15 @@ def test_abschlussseite_reihenfolge_und_datenspende_nach_zurueck_navigation(lauf
 
         # --- Sperre des Abschlusses während des Uploads (#43) -----------------------------------------------
         from coach import api_abschluss
+        from coach.abschluss import SpendeErgebnis, SpendeTeilergebnis
 
         class _LangsameAblage:
             def ablegen(self, name, dateien):
                 time.sleep(1.2)
+                # abschluss_spende liest .vollstaendig vom Ergebnis – dieser Test simuliert eine LANGSAME, aber
+                # am Ende VOLLSTÄNDIGE Ablage (er prüft nur die Sperre während des Uploads, nicht das
+                # Teilweise-Verhalten).
+                return SpendeErgebnis([SpendeTeilergebnis(d.name, d.groesse(), True) for d in dateien], 1.2)
 
         alte_ablage = api_abschluss._ablage
         api_abschluss._ablage = _LangsameAblage()

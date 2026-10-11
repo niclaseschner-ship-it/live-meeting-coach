@@ -46,7 +46,9 @@ Dev/Staging, NIE für prod gesetzt – siehe eigener Abschnitt unten.
 Browser ──Mail+PIN──► /anmelden, /pin (Worker, Cookie nestor_kunde, signiert MIT Ablaufzeit in COOKIE_GEHEIMNIS)
 Browser ──Anfrage───► Worker prüft Cookie, wählt/erzeugt Meeting-ID (signiertes Cookie nestor_meeting)
 Worker  ──fetch()───► Container (idFromName(meetingId)), Kopfzeilen X-Nestor-Geheimnis/-Kunde/-Meeting
-Coach   ──/intern/spende/<name>──► Worker (X-Nestor-Geheimnis) ──► R2 (nestor-spenden)
+Coach   ──PUT /intern/spende/<name>/<datei> je Datei──► Worker (X-Nestor-Geheimnis, gestreamt) ──► R2 (nestor-spenden)
+Coach   ──(große Datei: ?teile=start/?teil=N&upload=/?teile=fertig)──► Worker ──► R2-Multipart (nestor-spenden)
+Coach   ──POST .../abschluss──► Worker: EINE Telegram-Meldung (vollständig/teilweise, ohne Inhalte)
 Coach   ──/intern/kopplungstoken──► Worker (X-Nestor-Geheimnis) ──► signiertes, kurzlebiges QR-Token
 ```
 

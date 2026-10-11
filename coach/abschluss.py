@@ -10,7 +10,10 @@ import html
 import io
 import json
 import math
+import shutil
+import time
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -158,27 +161,67 @@ def paket(ordner: Path, mit_aufnahme: bool) -> bytes:
     return puffer.getvalue()
 
 
-def spenden_dateien(ordner: Path, feedback: str, mit_aufnahme: bool) -> dict[str, bytes]:
-    """Dateien für eine Datenspende: Transkript, Hinweise, Agenda, Dynamik, Feedback – optional die Aufnahme."""
+@dataclass(frozen=True)
+class SpendeDatei:
+    """Eine Datei der Spende/des Feedbacks, in Upload-Reihenfolge: Texte zuerst, die – optionale, große –
+    Aufnahme zuletzt, damit bei einem Abbruch wenigstens die Texte ankommen. `inhalt` für kleine, im Speicher
+    gehaltene Texte; `pfad` für Dateien, die von der Platte gestreamt werden, ohne sie ganz in den Speicher zu
+    lesen."""
+
+    name: str
+    inhalt: bytes | None = None
+    pfad: Path | None = None
+
+    def groesse(self) -> int:
+        return len(self.inhalt) if self.inhalt is not None else self.pfad.stat().st_size  # type: ignore[union-attr]
+
+
+@dataclass(frozen=True)
+class SpendeTeilergebnis:
+    """Ergebnis einer einzelnen hochgeladenen Datei – ohne ihren Inhalt, nur was die Telegram-Meldung braucht."""
+
+    datei: str
+    bytes: int
+    ok: bool
+
+
+@dataclass(frozen=True)
+class SpendeErgebnis:
+    """Rückmeldung einer Ablage: einzelne Dateien können fehlschlagen (typischerweise die große, optionale
+    Aufnahme), ohne dass die ganze Spende als gescheitert gilt – `vollstaendig` ist nur wahr, wenn jede Datei
+    ok war."""
+
+    teile: list[SpendeTeilergebnis]
+    dauer_sekunden: float
+
+    @property
+    def vollstaendig(self) -> bool:
+        return bool(self.teile) and all(t.ok for t in self.teile)
+
+
+def spenden_dateien(ordner: Path, feedback: str, mit_aufnahme: bool) -> list[SpendeDatei]:
+    """Dateien für eine Datenspende, in Upload-Reihenfolge: Transkript, Hinweise, Agenda, Dynamik, Feedback,
+    Technik – optional zuletzt die Aufnahme. Eine künftige weitere Textdatei reiht sich hier einfach vor der
+    Aufnahme ein."""
     ordner = Path(ordner)
     bericht = _bericht(ordner)
-    dateien = {
-        "transkript.md": _transkript_md(bericht.get("transkript", [])).encode("utf-8"),
-        "hinweise.md": _hinweise_md(bericht.get("hinweise", [])).encode("utf-8"),
-        "agenda.md": _agenda_md(bericht.get("agenda", [])).encode("utf-8"),
-        "dynamik.json": json.dumps(bericht.get("dynamik", {}), ensure_ascii=False, indent=1).encode("utf-8"),
-        "feedback.txt": (feedback or "").encode("utf-8"),
-        "technik.json": json.dumps(bericht.get("technik", {}), ensure_ascii=False, indent=2).encode("utf-8"),
-    }
+    dateien = [
+        SpendeDatei("transkript.md", inhalt=_transkript_md(bericht.get("transkript", [])).encode("utf-8")),
+        SpendeDatei("hinweise.md", inhalt=_hinweise_md(bericht.get("hinweise", [])).encode("utf-8")),
+        SpendeDatei("agenda.md", inhalt=_agenda_md(bericht.get("agenda", [])).encode("utf-8")),
+        SpendeDatei("dynamik.json", inhalt=json.dumps(bericht.get("dynamik", {}), ensure_ascii=False, indent=1).encode("utf-8")),
+        SpendeDatei("feedback.txt", inhalt=(feedback or "").encode("utf-8")),
+        SpendeDatei("technik.json", inhalt=json.dumps(bericht.get("technik", {}), ensure_ascii=False, indent=2).encode("utf-8")),
+    ]
     if mit_aufnahme and (ordner / "aufnahme.wav").exists():
-        dateien["aufnahme.wav"] = (ordner / "aufnahme.wav").read_bytes()
+        dateien.append(SpendeDatei("aufnahme.wav", pfad=ordner / "aufnahme.wav"))
     return dateien
 
 
 class Ablage:
-    """Schnittstelle für Spenden-Ablagen – schmal gehalten, eine R2-Umsetzung kommt in einem anderen Ticket."""
+    """Schnittstelle für Spenden-Ablagen – schmal gehalten, eine R2-Umsetzung in coach/ablage_r2.py."""
 
-    def ablegen(self, name: str, dateien: dict[str, bytes]) -> None:
+    def ablegen(self, name: str, dateien: list[SpendeDatei]) -> SpendeErgebnis:
         raise NotImplementedError
 
 
@@ -188,8 +231,16 @@ class OrdnerAblage(Ablage):
     def __init__(self, wurzel: Path | str | None = None) -> None:
         self.wurzel = Path(wurzel) if wurzel is not None else Path(EINST.spenden)
 
-    def ablegen(self, name: str, dateien: dict[str, bytes]) -> None:
+    def ablegen(self, name: str, dateien: list[SpendeDatei]) -> SpendeErgebnis:
+        start = time.monotonic()
         ordner = self.wurzel / f"{datetime.now():%Y-%m-%d}_{name}"
         ordner.mkdir(parents=True, exist_ok=True)
-        for dateiname, inhalt in dateien.items():
-            (ordner / dateiname).write_bytes(inhalt)
+        teile: list[SpendeTeilergebnis] = []
+        for datei in dateien:
+            ziel = ordner / datei.name
+            if datei.inhalt is not None:
+                ziel.write_bytes(datei.inhalt)
+            else:
+                shutil.copyfile(datei.pfad, ziel)  # type: ignore[arg-type]
+            teile.append(SpendeTeilergebnis(datei.name, datei.groesse(), True))
+        return SpendeErgebnis(teile, time.monotonic() - start)
