@@ -54,7 +54,6 @@ def bericht(coach, zeitreihe: list[dict] | None = None, **extra) -> dict:
         "karten": coach.karten,
         "folie": coach.folie,
         "ueberblick": getattr(coach, "ueberblick", None),
-        "ergebnisse": {str(i): e for i, e in m.ergebnisse.items()},
         "artefakte": [a.bild() for a in coach.artefakte.liste] if hasattr(coach, "artefakte") else [],
         "artefakte_verlauf": coach.artefakte.verlauf if hasattr(coach, "artefakte") else [],
         "agenda": [{"titel": p.titel, "minuten": p.minuten, "genutzt": round(m.genutzt(i), 1)}

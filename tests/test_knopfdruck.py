@@ -113,7 +113,8 @@ def test_regeln_und_protokoll_knopf(monkeypatch):
     protokoll = c.karten[-1]
     assert protokoll["art"] == "protokoll" and protokoll["punkte"][0] == "1. Termin: Termin im April"
     assert "- Stand buchen · wer: Lea · bis: offen – **fehlt: bis wann**" in c.knopf.protokoll
-    assert c.meeting.ergebnisse[0]["ergebnis"] == "Termin im April"
+    assert c.artefakte.beschluss(0) == "Termin im April"
+    assert c.schnappschuss()["agenda"][0]["beschluss"] == "Termin im April"
 
 
 def test_knopf_endpunkte():

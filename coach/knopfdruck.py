@@ -152,8 +152,8 @@ async def _protokoll(coach, frage: str, am_ende: bool = False) -> dict | None:
     if am_ende:
         return None
     if m.agenda:
-        punkte = [f"{i + 1}. {p.titel}: " + ((m.ergebnisse[i]["ergebnis"] or "kein Beschluss")
-                                              if i in m.ergebnisse else "nichts festgehalten")
+        belegt = {a.punkt for a in art.liste if not a.ausserhalb}
+        punkte = [f"{i + 1}. {p.titel}: " + (art.beschluss(i) or ("kein Beschluss" if i in belegt else "nichts festgehalten"))
                   for i, p in enumerate(m.agenda)]
     else:
         punkte = [a.kurz().split(". ", 1)[-1] for a in art.liste[-6:]] or ["Noch nichts festgehalten."]

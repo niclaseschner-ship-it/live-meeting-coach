@@ -298,6 +298,8 @@ class Coach:
 
     def schnappschuss(self) -> dict:
         daten = self.meeting.schnappschuss(EINST.zeit_rot_prozent)
+        for i, p in enumerate(daten["agenda"]):
+            p["beschluss"] = self.artefakte.beschluss(i)
         ampeln = analyse.prozess_ampeln(
             self.meeting,
             monolog_sekunden=self.monolog_sekunden,
@@ -425,7 +427,6 @@ class Coach:
             "aktueller_punkt": f"{m.aktiver_punkt + 1}. {akt.titel}" if akt else None,
             "restzeit_punkt": analyse.mmss(akt.minuten * 60 - m.genutzt(m.aktiver_punkt)) if akt else None,
             "live_bild": bild,
-            "ergebnisse": {f"{i + 1}": e.get("ergebnis") for i, e in m.ergebnisse.items()},
             "artefakte": [a.kurz() for a in self.artefakte.liste[-25:]],
             "letzte_hinweise": [h.text for h in m.hinweise[-3:]],
             "folie": ("wird gerade erstellt" if self._folie_laeuft else
@@ -1169,7 +1170,6 @@ class Coach:
         m.teiltext = ""
         self._abschnitt_zuruecksetzen()
         self.artefakte = Artefakte(self)
-        m.ergebnisse = {}
         if self.hoerstrom:
             from .stimmen import Personenregister
             self.hoerstrom.stimmen.register = Personenregister(EINST.stimm_schwelle)

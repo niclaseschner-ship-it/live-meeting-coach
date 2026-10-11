@@ -607,7 +607,7 @@ function liveRendern(z) {
     },
     el("span", { class: "nr" }, p.status === "abgeschlossen" ? "✓" : String(i + 1)),
     el("span", { class: "punkt-titel" }, p.titel,
-      ...(p.ergebnis?.ergebnis ? [el("span", { class: "punkt-ergebnis" }, p.ergebnis.ergebnis)] : [])),
+      ...(p.beschluss ? [el("span", { class: "punkt-ergebnis" }, p.beschluss)] : [])),
     el("span", { class: "min" }, p.status === "offen" ? `${p.minuten} min` : `${mmss(p.genutzt)} / ${p.minuten}`))));
 
   // Regeln als Ampeln (Zeit steht nur links); kommen schon verlässlich-vorn sortiert aus regel_status

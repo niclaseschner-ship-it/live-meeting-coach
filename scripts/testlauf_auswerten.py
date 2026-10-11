@@ -125,12 +125,10 @@ def probe_auswerten(name: str) -> tuple[list[str], dict]:
     erg.update(hinweise=len(b["hinweise"]))
 
     # Ergebnisse, Bilder, Kosten
-    if b.get("ergebnisse"):
-        z += ["**Ergebnisse (Regel 10)**", ""]
-        for i, e in sorted(b["ergebnisse"].items(), key=lambda x: int(x[0])):
-            titel = b["agenda"][int(i)]["titel"]
-            z.append(f"- {titel}: {e.get('ergebnis') or '–'} ({len(e.get('entscheidungen', []))} Entscheidungen, "
-                     f"{len(e.get('aufgaben', []))} Aufgaben)")
+    if b.get("artefakte"):
+        z += ["**Ergebnisse**", ""]
+        for a in b["artefakte"]:
+            z.append(f"- {a['id']}. {a['typ_name']}: {a['was']}")
         z.append("")
     bilder = sorted((WURZEL / "logs" / "testlauf" / name).glob("bild_*.png")) if (WURZEL / "logs" / "testlauf" / name).exists() else []
     k = b["kosten"]
