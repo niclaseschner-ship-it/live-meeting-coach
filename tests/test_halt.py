@@ -44,6 +44,8 @@ def test_halt_wunsch_wahr(text):
     "fass zusammen",
     "Moment, was haben wir beschlossen?",
     "warte, was war Punkt zwei?",
+    "bitte",
+    "jetzt mal",
 ])
 def test_halt_wunsch_falsch(text):
     assert not B.halt_wunsch(text)

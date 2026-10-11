@@ -66,7 +66,8 @@ KEIN_AUFTRAG_RE = re.compile(r"^\W*(?:danke|dankeschön|vielen dank|passt|gut|ok
                              r"nein|tschüss|das war'?s|das wars)\b", re.IGNORECASE)
 # Leitplanke „Halt“: nur Halte-Wörter und Füllwörter – kein Inhaltswort, also sofort verstummen.
 HALT_RE = re.compile(
-    r"^\s*(?:(?:stopp|stop|halt|warte|wart|moment|sekunde|still|ruhe|mal|kurz|bitte|eben|einen|eine|doch|jetzt)\b[\s,.;!?]*)+$",
+    r"^(?=.*\b(?:stopp|stop|halt|warte?|moment|sekunde|still|ruhe)\b)"  # mindestens ein echtes Halte-Wort
+    r"\s*(?:(?:stopp|stop|halt|warte|wart|moment|sekunde|still|ruhe|mal|kurz|bitte|eben|einen|eine|doch|jetzt)\b[\s,.;!?]*)+$",
     re.IGNORECASE)
 
 
