@@ -11,6 +11,7 @@ import pytest
 
 from coach.config import EINST
 from coach.zustand import Segment
+from tests.e2e.schritte import PAKET_DATEIEN, _abschnitt, paket_abweichungen, paket_nennungen
 
 ARTEFAKTE = [
     {"typ": "entscheidung", "was": "Budget höchstens 25.000 Euro", "status": "endgueltig", "wer": "die Runde",
@@ -34,23 +35,6 @@ class FakeClient:
         inhalt = {"kernaussage": "Budget steht", "ausserhalb": [], "artefakte": ARTEFAKTE}
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(inhalt)))],
                                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5))
-
-
-def _abschnitt(md: str, titel: str) -> list[str]:
-    """Aufzählungszeilen unter einer Überschrift, die `titel` enthält (bis zur nächsten Überschrift)."""
-    aus, drin = [], False
-    for z in md.splitlines():
-        if z.startswith("#"):
-            drin = titel in z
-        elif drin and z.startswith("- ") and z not in ("- –", "- keine Abschweifung"):
-            aus.append(z[2:])
-    return aus
-
-
-def _vor(text: str, *trenner: str) -> str:
-    for t in trenner:
-        text = text.split(t)[0]
-    return text.strip()
 
 
 def _meeting_ablegen(stufe: str, tmp_path, monkeypatch):
@@ -107,24 +91,16 @@ def test_paketdateien_nennen_dieselben_ergebnisse(stufe, tmp_path, monkeypatch):
     aufgaben = json.loads(lies("tasks.json"))
     protokoll, ueberblick, meeting_md = lies("protokoll.md"), lies("ueberblick.md"), lies("meeting.md")
 
+    dateien = {n: lies(n) for n in PAKET_DATEIEN}
+    assert paket_abweichungen(dateien) == []  # dieselbe Prüfung wie in Stufe B/C (tests/e2e/schritte.py)
+    nennungen = paket_nennungen(dateien)
     erwartet = sorted(a["was"] for a in ARTEFAKTE)
-    gruppen = ("entscheidungen", "aufgaben", "offene_punkte", "risiken", "parkplatz")
-    assert sorted(e["was"] for g in gruppen for e in meeting[g]) == erwartet
-    assert [a["was"] for a in aufgaben] == [a["was"] for a in meeting["aufgaben"]] == ["Drei Angebote einholen"]
+    assert all(nennungen[d] == erwartet for d in ("protokoll.md", "ueberblick.md", "meeting.json", "meeting.md"))
+    assert aufgaben and [a["was"] for a in aufgaben] == ["Drei Angebote einholen"]
     assert [a["id"] for a in aufgaben] == [a["id"] for a in meeting["aufgaben"]]  # dieselben Nummern
-
-    zeilen = [z for z in protokoll.splitlines() if z.startswith("- ")]
-    assert sorted(_vor(z[2:], " · ", " – **fehlt") for z in zeilen) == erwartet
-
-    ub = {t: _abschnitt(ueberblick, t) for t in ("Entschieden", "Offen", "Aufgaben")}
-    assert ub["Entschieden"] == ["Budget höchstens 25.000 Euro"]
-    assert ub["Offen"] == ["Wer bucht die Hotels?", "Messestand mieten (nur Vorschlag)"]
-    assert [_vor(a, " (wer:") for a in ub["Aufgaben"]] == ["Drei Angebote einholen"]
+    gruppen = ("entscheidungen", "aufgaben", "offene_punkte", "risiken", "parkplatz")
     assert sorted(c.ueberblick["ids"]) == sorted(e["id"] for g in gruppen for e in meeting[g])
-
-    md = [_vor(z, " · ") for t in ("Entscheidungen", "Aufgaben", "Offene Punkte", "Risiken", "Parkplatz")
-          for z in _abschnitt(meeting_md, t)]
-    assert sorted(md) == erwartet
+    assert _abschnitt(ueberblick, "Offen") == ["Wer bucht die Hotels?", "Messestand mieten (nur Vorschlag)"]
 
     # Dieselben Begriffe: ein bloßer Vorschlag heißt überall „nur Vorschlag“
     assert "Messestand mieten · nur Vorschlag" in protokoll and "Messestand mieten · nur Vorschlag" in meeting_md
@@ -132,3 +108,12 @@ def test_paketdateien_nennen_dieselben_ergebnisse(stufe, tmp_path, monkeypatch):
     # Die Bildanalyse ist nur Bildbeschreibung: sie erscheint in keiner Ergebnisdatei
     for text in (protokoll, ueberblick, meeting_md, json.dumps(meeting, ensure_ascii=False)):
         assert "Messe absagen" not in text and "Plakate drucken" not in text
+
+
+def test_paketpruefung_findet_abweichende_datei():
+    dateien = {"meeting.json": json.dumps({"entscheidungen": [{"was": "A"}], "aufgaben": [{"was": "B"}]}),
+               "tasks.json": json.dumps([{"was": "B"}]), "protokoll.md": "- A · beschlossen\n- B · wer: X\n",
+               "ueberblick.md": "## ✅ Entschieden\n- A\n## 📌 Aufgaben\n- C (wer: offen, bis: offen)\n"}
+    abw = paket_abweichungen(dateien, "A B")
+    assert len(abw) == 1 and abw[0].startswith("ueberblick.md")
+    assert paket_abweichungen({"meeting.json": "{}"}) == ["fehlt im Paket: protokoll.md, tasks.json"]

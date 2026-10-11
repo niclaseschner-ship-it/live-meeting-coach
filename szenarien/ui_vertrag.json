@@ -8,7 +8,8 @@
     "sprechknoepfe": "#66 und Pilotfeedback (Agenda-Mikro): ein einheitliches Bedienmodell für ALLE Sprechknöpfe – halten, sprechen, loslassen – mit gleicher Rückmeldung.",
     "sprechtaste_handy": "#66 Kommentar (Referenzlauf 20261010-100500, handy_live): Premium funktioniert wie ein Telefon (Ansprache per Name) – die Sprechtaste ist dort nachgeordnet (unter „Weitere Aktionen“); in Basis (Funkgerät) bleibt sie die große Hauptbedienung.",
     "handy_kopf": "#66 Kommentar: Der Meeting-Titel in der Handy-Kopfleiste wird nicht auf wenige Buchstaben abgeschnitten.",
-    "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy."
+    "stufe": "#60: keine Default-Stufe; die Stufe ist sichtbar (Pill aus dem Serverzustand) auf Desktop und Handy.",
+    "paket_ergebnisse": "Integritätsprüfung S2 (ein Ergebnis-Modell): Protokoll, Überblick, meeting.json/meeting.md, tasks.json und die Abschlussseite sind Ansichten auf dieselben Ergebnisse und nennen sie gleich – in beiden Stufen."
   },
 
   "phasen": ["start", "vorbereitung", "live", "abschluss"],
@@ -104,6 +105,14 @@
   },
 
   "abschluss_reihenfolge": ["#ab-datenspende", "#ab-unterstuetzung", "#ab-protokoll", "#ab-paket"],
+
+  "paket_ergebnisse": {
+    "bezug": "meeting.json",
+    "meeting_gruppen": ["entscheidungen", "aufgaben", "offene_punkte", "risiken", "parkplatz"],
+    "meeting_md_abschnitte": ["Entscheidungen", "Aufgaben", "Offene Punkte", "Risiken", "Parkplatz"],
+    "ueberblick_abschnitte": ["Entschieden", "Offen", "Aufgaben"],
+    "abschlussseite": "#ab-dokument"
+  },
 
   "regeln": [
     {"id": "start_ohne_handy_gesperrt", "beschreibung": "Desktop: „Meeting starten“ ist deaktiviert, solange kein Handy gekoppelt ist und Mikrofon und Ton aktiviert hat.", "selektor": "#btn-start"},
