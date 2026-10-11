@@ -49,11 +49,20 @@ class Zug:
         return max(t.ende for t in self.teile)
 
     def fertig(self, meetingzeit: float, uhr: float, teiltext_laeuft: bool, pause: float, max_warten: float) -> bool:
-        """Pause erreicht (seit dem letzten Satzende `pause` s, und niemand spricht gerade) oder zu lange gewartet
+        """Niemand spricht gerade und: Satz abgeschlossen (`abgeschlossen`) oder Pause erreicht (seit dem letzten
+        Satzende `pause` s) – oder zu lange gewartet
         (`max_warten` s Uhrzeit seit dem letzten Satz, auch wenn weiter geredet wird) oder zu viele Sätze."""
         if uhr - self.angekommen >= max_warten or len(self.teile) >= HOECHSTENS_SAETZE:
             return True
-        return meetingzeit - self.ende >= pause and not teiltext_laeuft
+        if teiltext_laeuft:
+            return False
+        return self.abgeschlossen() or meetingzeit - self.ende >= pause
+
+    def abgeschlossen(self) -> bool:
+        """Direkt angesprochen und der letzte Satz endet mit Satzzeichen (. ? !): ohne Pause hinaus. Ein offener Satz
+        oder ein Zug ohne Namen wartet die Pause ab – dort kann noch jemand weiterreden."""
+        letzter = next((t.text for t in reversed(self.teile) if t.text), "")
+        return self.gerichtet and letzter.rstrip().endswith((".", "?", "!"))
 
     def mehrere_sprecher(self) -> bool:
         return len({t.sprecher for t in self.teile if t.text}) > 1

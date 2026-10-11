@@ -716,6 +716,9 @@ async def zuruf_ergebnis_entfernen_pruefen(page: Page, lauf: Lauf) -> None:
 async def _getippt_bis_karte(page: Page, frage: str, art: str, titel: str, sekunden: float = 45) -> dict | None:
     """Eine getippte Frage an Nestor und die neue Karte dieser Art mit diesem Titelanfang (aus dem Zustand, lesend)."""
     vorher = max((k.get("id", 0) for k in await karten(page)), default=0)
+    zusatz = page.locator("details.zusatz-aktionen").first  # das Fragefeld liegt unter „Weitere Aktionen“
+    if await zusatz.count() and not await zusatz.evaluate("d => d.open"):
+        await zusatz.locator("summary").click()
     await page.locator("#knopf-frage").fill(frage)
     await page.locator("#knopf-fragen").click()
     t0 = time.monotonic()

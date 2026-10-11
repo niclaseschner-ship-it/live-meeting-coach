@@ -24,6 +24,9 @@ from coach.pipeline import Coach
 from coach.zustand import Agendapunkt, Meeting, Segment
 
 
+NESTOR: list[dict] = []  # was in logs/nestor.jsonl landen würde
+
+
 @pytest.fixture(autouse=True)
 def umgebung(monkeypatch):
     felder = {"assistent_modus": "gespraech", "nachfrage_sekunden": 8.0, "zug_pause_sekunden": 0.3,
@@ -32,7 +35,8 @@ def umgebung(monkeypatch):
     for k, v in felder.items():
         object.__setattr__(EINST, k, v)
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda e: None)
-    monkeypatch.setattr("coach.pipeline._zeit_loggen", lambda e: None)
+    NESTOR.clear()
+    monkeypatch.setattr("coach.pipeline._zeit_loggen", NESTOR.append)  # logs/nestor.jsonl
     yield
     for k, v in alt.items():
         object.__setattr__(EINST, k, v)
@@ -216,8 +220,22 @@ def test_zerlegte_bitte_ums_zusammenfassen_kommt_als_ein_satz_an():
     b, anfragen, c = asyncio.run(ablauf())
     assert b.art == "frage" and b.gerichtet
     assert anfragen == ["kannst du uns nochmal zusammenfassen was wir bis jetzt beschlossen haben"]
-    eintrag = [p for p in c.protokoll if p["art"] == "anfrage"][-1]
-    assert eintrag["ausloeser"] == "stimme" and eintrag["text"] == anfragen[0] and "dauer" in eintrag
+    eintrag = [e for e in NESTOR if e.get("ausloeser") == "bogen"][-1]  # derselbe Strom wie alle Bögen
+    assert eintrag["quelle"] == "stimme" and eintrag["text"] == anfragen[0] and eintrag["gerichtet"]
+    assert eintrag["zug"] == {"ausloeser": "ansprache", "sprecher": ["Person 1"], "saetze": 2}
+    assert eintrag["werkzeuge"] == [] and eintrag["nicht_an_mich"] is False and eintrag["frist_ueberschritten"] is False
+
+
+def test_abgeschlossener_satz_mit_namen_geht_ohne_pause_hinaus():
+    """Allgemeines Kriterium statt Wortmuster: endet der letzte Satz mit . ? !, wartet ein gerichteter Zug nicht auf
+    die Pause. Ein offener Satz und ein Zug ohne Namen warten sie ab; spricht gerade jemand, wartet auch er."""
+    z = GZ.Zug("ansprache", True, "Person 1", 50.0, [GZ.Teil("Person 1", "wo stehen wir gerade?", 10, 12)])
+    assert z.fertig(12.0, 50.0, False, 1.2, 6.0)
+    assert not z.fertig(12.0, 50.0, True, 1.2, 6.0)
+    offen = GZ.Zug("ansprache", True, "Person 1", 50.0, [GZ.Teil("Person 1", "kannst du uns zusammenfassen", 10, 12)])
+    assert not offen.fertig(12.0, 50.0, False, 1.2, 6.0)
+    ohne_namen = GZ.Zug("hoerfenster", False, "Person 1", 50.0, [GZ.Teil("Person 1", "Und bis wann?", 10, 12)])
+    assert not ohne_namen.fertig(12.0, 50.0, False, 1.2, 6.0)
 
 
 def test_frage_mit_naechstem_punkt_ueber_zwei_segmente_wechselt_die_agenda_nicht():
@@ -298,6 +316,11 @@ def test_satz_eines_anderen_im_hoerfenster_geht_mit_in_den_aufruf_und_nicht_an_m
     assert a.schnappschuss()["hoert_bis"] is None  # kein neues Hörfenster nach einem verworfenen Zug
     assert a.letzte is None or a.letzte.get("antwort") != "Gern, ich trage das ein."
     assert any(p["art"] == "nicht_an_mich" for p in c.protokoll)
+    eintrag = [e for e in NESTOR if e.get("ausloeser") == "bogen"][-1]
+    assert eintrag["nicht_an_mich"] and eintrag["werkzeuge"] == [{"name": "nicht_an_mich", "argumente": {}}]
+    assert eintrag["zug"]["sprecher"] == ["Mara", "Person 1"] and not eintrag["gerichtet"]
+    fenster = [(e["ereignis"], e["grund"]) for e in NESTOR if e.get("ausloeser") == "hoerfenster"]
+    assert ("nachfrage_offen", "antwort_fertig") in fenster and ("nachfrage_zu", "zug_begonnen") in fenster
     assert ws.typen().count("response.create") == 2  # kein Abschluss nach nicht_an_mich
 
 
@@ -342,7 +365,8 @@ def test_zusammenfassen_mit_bereich_legt_die_karte_ab_und_stoesst_genau_eine_abs
     assert ausgaben[0]["ok"] and ausgaben[0]["karte"]["titel"] == karten[0]["titel"]
     assert ausgaben[1]["ok"] is False and "eine Werkzeugrunde" in ausgaben[1]["fehler"]
     assert ws.typen().count("response.create") == 2  # Frage + genau eine Abschlussantwort
-    assert b.werkzeuge == ["zusammenfassen", "karte"]
+    assert [w["name"] for w in b.werkzeuge] == ["zusammenfassen", "karte"]
+    assert b.werkzeuge[0]["argumente"] == {"bereich": "punkt", "punkt": 1} and b.werkzeuge[1]["fehler"] == "zweite_runde"
     assert not [k for k in c.karten if k.get("titel") == "Noch eine"]
 
 
@@ -408,6 +432,7 @@ def test_ohne_ton_bis_zur_frist_kommt_das_ergebnis_still():
 
     still, c = asyncio.run(ablauf())
     assert still and any(p["art"] == "anfrage_frist" for p in c.protokoll)
+    assert [e for e in NESTOR if e.get("ausloeser") == "bogen"][-1]["frist_ueberschritten"]
 
 
 def test_halt_bleibt_deterministisch_auch_im_gespraech():

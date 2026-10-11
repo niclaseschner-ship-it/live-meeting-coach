@@ -115,7 +115,8 @@ Karten, die letzten fünf Minuten Transkript mit Sprechern).
 
 - **Gesprächszug** (`coach/gespraechszug.py`): Der Live-Text zerlegt Äußerungen in Segmente. Alle Sätze bis zu einer
   Pause (`LMC_ZUG_PAUSE_SEKUNDEN`, 1,2 s ab dem Satzende, und niemand spricht gerade) werden **eine** Anfrage;
-  spätestens nach `LMC_ZUG_MAX_WARTEN` (6 s) geht sie hinaus. Während ein Zug läuft, wechselt die feste Ansage-Regel
+  spätestens nach `LMC_ZUG_MAX_WARTEN` (6 s) geht sie hinaus. Mit Namen und abgeschlossenem Satz (endet auf . ? !)
+  geht sie ohne Pause hinaus, solange niemand weiterspricht. Während ein Zug läuft, wechselt die feste Ansage-Regel
   die Agenda nicht.
 - **Hörfenster:** Nach jeder Antwort darf ein Zug ohne Namen bis `LMC_NACHFRAGE_SEKUNDEN` (8 s) nach dem Ende der
   Wiedergabe **beginnen** (Ring „Ich höre zu“). Sagt währenddessen jemand anderes etwas, schließt das das Fenster
@@ -130,7 +131,9 @@ Karten, die letzten fünf Minuten Transkript mit Sprechern).
 - **Text-Weg** (Basis, Premium-Kurzantwort) unverändert, aber **ohne Hörfenster**: ob ein Satz ohne Namen gemeint war,
   kann nur das Gespräch entscheiden.
 
-Jede Anfrage steht im Protokoll als `anfrage` (Auslöser, Text, Werkzeuge, Dauer, gerichtet, verworfen).
+Jede Anfrage steht in `logs/nestor.jsonl` (Bogen-Eintrag: zusammengeführter Text, Zug mit Sprechern, Werkzeugaufrufe mit
+Argumenten, `nicht_an_mich`, Antwort, Zeit bis zum ersten Ton, `frist_ueberschritten`), dazu das Hörfenster
+(`nachfrage_offen`/`nachfrage_zu` mit Grund).
 
 ## Architektur
 
