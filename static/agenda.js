@@ -35,9 +35,9 @@ function agendaInit() {
   $("agenda-feld").onkeydown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); agendaSenden(); }
   };
-  // Ticket #66/#86: dasselbe Bedienmodell wie jede Sprechtaste (basis.js: sprechknopf) – Klick schaltet um,
-  // Halten bleibt ein Funkgerät. Anders als bei der Sprechtaste zu Nestor landet das Ergebnis nicht automatisch
-  // irgendwo, sondern editierbar im Eingabefeld (#86 Teil 2) – „Absenden“ bleibt der bewusste nächste Schritt.
+  // Dasselbe Bedienmodell wie jede Sprechtaste (basis.js: sprechknopf) – Klick schaltet um, Halten bleibt ein
+  // Funkgerät. Anders als bei der Sprechtaste zu Nestor landet das Ergebnis nicht automatisch irgendwo, sondern
+  // editierbar im Eingabefeld – „Absenden“ bleibt der bewusste nächste Schritt.
   sprechknopf($("agenda-mikro"), {
     anzeige: (text) => { $("agenda-antwort").hidden = false; $("agenda-antwort").textContent = text; },
     ruhe: () => null, // die Antwort (Rückfrage, Entwurf) bleibt stehen
@@ -155,7 +155,7 @@ const agendaAufnahme = {
   ctx: null, stream: null, worklet: null, proben: [], faktor: 1, pos: 0, liveTextSchicken: null,
   async starten() {
     this.proben = [];
-    this.liveTextSchicken = liveTextSammler(); // Ticket #86: Teiltext während des Sprechens (basis.js)
+    this.liveTextSchicken = liveTextSammler(); // Teiltext während des Sprechens (basis.js)
     try { this.ctx = new AudioContext({ sampleRate: RATE }); } catch { this.ctx = new AudioContext(); }
     try {
       // AudioContext direkt im Tastendruck aktivieren, bevor die Mikrofonfreigabe asynchron wartet.
@@ -205,7 +205,7 @@ function agendaWavBauen(proben, rate) {
   for (let i = 0; i < proben.length; i++) d.setInt16(44 + i * 2, proben[i], true);
   return new Blob([puffer], { type: "audio/wav" });
 }
-// Ticket #86 Teil 2: nur transkribieren (wie heute aus der WAV) – der Text landet editierbar im Feld, kein
+// Nur transkribieren (wie heute aus der WAV) – der Text landet editierbar im Feld, kein
 // automatischer Agenda-Vorschlag mehr. "Absenden" (agendaSenden) löst den Vorschlag wie bei getippter Eingabe aus.
 async function agendaSpracheTranskribieren(wav) {
   agendaLaufendSetzen(true, "Wird transkribiert …");

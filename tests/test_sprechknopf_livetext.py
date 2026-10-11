@@ -1,4 +1,4 @@
-"""Ticket #86 (V4, Teil 2): der kurze WS-Kanal für den Sprechknopf-Teiltext (coach/api_sprechknopf.py).
+"""Der kurze WS-Kanal für den Sprechknopf-Teiltext (coach/api_sprechknopf.py).
 
 Keine echten Anbieter: `LiveText`/`LiveTextMistral` werden durch eine Attrappe ersetzt (wie die vorhandenen
 Fakes in tests/test_kostenbremse.py, tests/test_hoeren_teilen.py). Geprüft wird nur das Vertrag: PCM rein, Teiltext
@@ -85,7 +85,7 @@ def test_pcm_geht_rein_teiltext_kommt_zurueck(lokal, verbunden):
 
 
 def test_nutzt_den_anbieter_der_gewaehlten_stufe(lokal, verbunden, monkeypatch):
-    """Anbietertrennung (#60): Premium nimmt LiveText (OpenAI), Basis LiveTextMistral – nie das andere."""
+    """Anbietertrennung: Premium nimmt LiveText (OpenAI), Basis LiveTextMistral – nie das andere."""
     aufrufe = []
 
     class Markierung(FakeLiveText):
@@ -121,7 +121,7 @@ def test_nach_kostendeckel_schliesst_der_kanal_sofort(lokal, verbunden, monkeypa
 
 
 def test_anbieter_nicht_erreichbar_schliesst_ohne_die_aufnahme_zu_stoeren(lokal, verbunden, monkeypatch):
-    """Best effort (#86): schlägt verbinden() fehl, bekommt der Browser nur einen Close-Code, keinen Fehlertext –
+    """Best effort: schlägt verbinden() fehl, bekommt der Browser nur einen Close-Code, keinen Fehlertext –
     basis.js (liveTextOeffnen) behandelt das als „kein Teiltext“, die Aufnahme läuft weiter."""
     from starlette.websockets import WebSocketDisconnect
 

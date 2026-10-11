@@ -388,7 +388,7 @@ const taste = sprechknopf($("btn-taste"), {
   ruhe: () => "Sprechtaste · klicken oder halten",
   start: () => { stimme.bereit(); stimme.stopp(); nestorStopp(); return frageHalten.start(); },
   leertaste: true,
-  liveText: (text) => { $("taste-text").textContent = text; }, // Ticket #86: Teiltext während des Sprechens
+  liveText: (text) => { $("taste-text").textContent = text; }, // Teiltext während des Sprechens
 });
 
 // ---------- Arbeitsring: lange Aufträge (Ticket #27) ----------

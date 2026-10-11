@@ -1,10 +1,10 @@
-"""Live-Teiltext für die Sprechknöpfe (Ticket #86, V4): ein kurzer WS-Kanal, der die PCM-Pakete einer
-Sprechknopf-Aufnahme (static/basis.js: sprechknopf/mikro/halten, static/agenda.js: agendaAufnahme) in die
-Live-Text-Klasse der gewählten Stufe streamt (coach/livetext.py) und den laufenden Teiltext zurückschickt.
+"""Live-Teiltext für die Sprechknöpfe: ein kurzer WS-Kanal, der die PCM-Pakete einer Sprechknopf-Aufnahme
+(static/basis.js: sprechknopf/mikro/halten, static/agenda.js: agendaAufnahme) in die Live-Text-Klasse der
+gewählten Stufe streamt (coach/livetext.py) und den laufenden Teiltext zurückschickt.
 
-Anbietertrennung (#60, coach/anbieter.py) gilt unverändert: der Kanal nutzt genau den Anbieter der bestätigten
+Die Anbietertrennung (coach/anbieter.py) gilt unverändert: der Kanal nutzt genau den Anbieter der bestätigten
 Wahl (coach.wahl) und denselben Client/dieselbe Hostwache wie jede andere KI-Verbindung des Meetings. Die
-Kostenbremse (#64) zählt über coach.live_text_kosten mit – wie beim Live-Text eines laufenden Meetings
+Kostenbremse zählt über coach.live_text_kosten mit – wie beim Live-Text eines laufenden Meetings
 (coach/hoeren.py).
 
 Der maßgebliche, fertige Text einer Sprechknopf-Aufnahme kommt weiter aus der vorhandenen WAV-Transkription nach

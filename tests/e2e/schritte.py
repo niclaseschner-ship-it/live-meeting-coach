@@ -454,9 +454,9 @@ async def sprechknopf_halten(page: Page, selektor: str, sekunden: float, lauf: L
 async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
     """sekunden: Haltedauer – Stufe C hält bis nach dem Satzende der Agenda-WAV (echte Transkription).
 
-    #86 Teil 2: nach dem Stopp (Halten → Loslassen) landet der transkribierte Text editierbar im Feld – kein
-    automatischer Agenda-Vorschlag mehr; „Absenden“ bleibt der bewusste nächste Schritt (geprüft von
-    agenda_sprache_klick, das die Klick-Geste bis zum Absenden durchspielt)."""
+    Nach dem Stopp (Halten → Loslassen) landet der transkribierte Text editierbar im Feld – kein automatischer
+    Agenda-Vorschlag mehr; „Absenden“ bleibt der bewusste nächste Schritt (geprüft von agenda_sprache_klick, das
+    die Klick-Geste bis zum Absenden durchspielt)."""
     lauf.schritt("Agenda per Sprache (Agenda-Mikro wie jeden Sprechknopf bedienen, Halten)")
     await sprechknopf_halten(page, "#agenda-mikro", sekunden, lauf, "Agenda-Mikro")
     fertig = await warte(page, "() => document.getElementById('agenda-senden')?.textContent.trim() === 'Absenden' && "
@@ -469,7 +469,7 @@ async def agenda_sprache(page: Page, lauf: Lauf, sekunden: float = 7.5) -> None:
 
 
 async def agenda_sprache_klick(page: Page, lauf: Lauf) -> None:
-    """#86: dieselbe Aufnahme-Infrastruktur, aber mit der Maus geklickt statt gehalten – Klick startet, der
+    """Dieselbe Aufnahme-Infrastruktur, aber mit der Maus geklickt statt gehalten – Klick startet, der
     zweite Klick (nach dem „Sprechen“) beendet und sendet. Danach steht der Text editierbar im Feld, „Absenden“
     löst den Agenda-Vorschlag aus wie bei getippter Eingabe (vgl. agenda_text). Der Inhalt kommt über das
     Drehbuch (Zuordnung der Fake-Transkription über den Dateinamen „agenda.wav“), nicht aus dem Fake-Mikro

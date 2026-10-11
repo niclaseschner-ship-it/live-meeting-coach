@@ -153,7 +153,7 @@ const WORKLET = `class Sammler extends AudioWorkletProcessor {
 const PAKET = 2400; // 100 ms
 const wsBasis = () => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
 
-// ---------- Sprechknopf-Live-Text (Ticket #86) ----------
+// ---------- Sprechknopf-Live-Text ----------
 // Kurzer WS-Kanal zu /ws/sprechknopf (coach/api_sprechknopf.py): PCM der laufenden Sprechknopf-Aufnahme geht
 // hinein, Teiltext kommt zurück. Best effort – fehlt Anbieter oder Kontingent, bleibt die Aufnahme ohne Teiltext,
 // nie ein Fehler. Genau eine Aufnahme ist je Tab aktiv, daher ein gemeinsamer Kanal für alle Sprechknöpfe
@@ -300,7 +300,7 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
   return b;
 }
 
-// ---------- Sprechknopf: ein Bedienmodell für alle Sprechknöpfe (Ticket #66, Gesten seit #86) ----------
+// ---------- Sprechknopf: ein Bedienmodell für alle Sprechknöpfe ----------
 // Agenda-Mikro, Sprechtaste am Laptop (auch Leertaste) und Sprechtaste am Handy verhalten sich gleich
 // (szenarien/ui_vertrag.json → „sprechknoepfe“) und kennen zwei Gesten:
 //   Klick (< 300 ms)   pointerdown öffnet sofort das Mikrofon; der kurze pointerup danach beendet NICHT, sondern
@@ -325,7 +325,7 @@ function wavAus(pcm) { // PCM 16 bit, 24 kHz, mono → WAV
 //   abbrechen()             bei zu kurzem Halten (z. B. dem Server sagen, dass doch nichts kommt)
 //   bereit()                darf jetzt gehalten werden?
 //   leertaste               zusätzlich die Leertaste überall auf der Seite (außer in Eingabefeldern/anderen Knöpfen)
-//   liveText(text)          optional: laufender Teiltext während der Aufnahme (#86, coach/api_sprechknopf.py)
+//   liveText(text)          optional: laufender Teiltext während der Aufnahme (coach/api_sprechknopf.py)
 //   hoechstens_ms           optional: Obergrenze der Aufnahme (Standard 60 000)
 //   jetzt()                 optional: Zeitquelle für Tests (Standard performance.now)
 const UMSCHALT_SCHWELLE_MS = 300;

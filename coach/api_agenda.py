@@ -46,8 +46,8 @@ async def agenda_vorschlag(daten: dict):
 
 @router.post("/api/agenda/transkript")
 async def agenda_transkript(datei: UploadFile = File(...)):
-    """Ticket #86: nur die WAV transkribieren, ohne gleich einen Agenda-Vorschlag zu bauen – der Text landet
-    editierbar im Eingabefeld (static/agenda.js), „Absenden“ löst /api/agenda/vorschlag erst auf Zuruf aus."""
+    """Nur die WAV transkribieren, ohne gleich einen Agenda-Vorschlag zu bauen – der Text landet editierbar im
+    Eingabefeld (static/agenda.js), „Absenden“ löst /api/agenda/vorschlag erst auf Zuruf aus."""
     coach = _bereit()
     wav = await datei.read()
     try:

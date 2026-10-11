@@ -1,4 +1,4 @@
-// Ticket #86, Stufe A: Die neuen Gesten des gemeinsamen Sprechknopf-Bedienmodells (static/basis.js: sprechknopf) –
+// Stufe A: Die Gesten des gemeinsamen Sprechknopf-Bedienmodells (static/basis.js: sprechknopf) –
 // Klick (< 300 ms) schaltet um (Aufnahme läuft weiter, zweiter Klick beendet und sendet), Halten (≥ 300 ms)
 // bleibt wie bisher ein Funkgerät. Lädt basis.js unverändert in einen kleinen DOM-/Timer-Stub (kein jsdom nötig,
 // Pi ist speicherknapp) – wie tests/js/markdown_lite.test.mjs vorgemacht hat.
