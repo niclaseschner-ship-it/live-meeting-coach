@@ -10,4 +10,5 @@ def test_technik_ist_im_paket_und_in_datenspende_aber_nicht_geheimnisse(tmp_path
     with zipfile.ZipFile(io.BytesIO(paket(tmp_path, False))) as z:
         assert json.loads(z.read("technik.json")) == technik
         assert b"nicht-exportieren" not in z.read("technik.json")
-    assert json.loads(spenden_dateien(tmp_path, "", False)["technik.json"]) == technik
+    [technik_datei] = [d for d in spenden_dateien(tmp_path, "", False) if d.name == "technik.json"]
+    assert json.loads(technik_datei.inhalt) == technik

@@ -207,7 +207,7 @@ def test_schluessel_taucht_nicht_in_bericht_paket_spende_oder_log_auf(archiv_pfa
         assert _TEST_SCHLUESSEL.encode("utf-8") not in daten
 
         dateien = spenden_dateien(c.archiv.ordner, "Testfeedback", mit_aufnahme=False)
-        assert all(_TEST_SCHLUESSEL.encode("utf-8") not in inhalt for inhalt in dateien.values())
+        assert all(_TEST_SCHLUESSEL.encode("utf-8") not in d.inhalt for d in dateien)
 
     assert _TEST_SCHLUESSEL not in caplog.text
 

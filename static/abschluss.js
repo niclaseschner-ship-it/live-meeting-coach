@@ -141,22 +141,38 @@ function spendeKnopfAktualisieren() {
 }
 $("sp-einverstanden").onchange = spendeKnopfAktualisieren;
 
+// Ticket #82: eigener fetch statt der gemeinsamen api()-Hilfe – die zeigt bei einem Fehler einen rohen alert()
+// mit dem Antworttext (z. B. ein nacktes 502 der Edge, wenn die Anfrage gar nicht erst bis zum Coach kommt).
+// Hier gibt es dafür genau EINE konkrete, verständliche Meldung in #sp-danke, je Dateien zuerst/Aufnahme-zuletzt
+// kann die Spende jetzt auch "teilweise" ankommen (die Texte sind dann trotzdem da).
 $("btn-spende").onclick = async () => {
   spendeLaeuft = true;
   $("btn-fertig").disabled = true;
-  $("btn-spende").textContent = "Wird hochgeladen … bitte warten";
+  $("btn-spende").textContent = "Wird hochgeladen … bitte warten (Texte zuerst, Aufnahme danach)";
   spendeKnopfAktualisieren();
   try {
-    await api("/api/abschluss/spende", {
-    einverstanden: $("sp-einverstanden").checked,
-    aufnahme: $("sp-aufnahme").checked,
-    feedback: $("fb-text").value.trim(),
+    const r = await fetch("/api/abschluss/spende", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        einverstanden: $("sp-einverstanden").checked,
+        aufnahme: $("sp-aufnahme").checked,
+        feedback: $("fb-text").value.trim(),
+      }),
     });
+    if (!r.ok) {
+      let grund = `Fehler ${r.status}`;
+      try { const d = await r.json(); if (d.detail) grund = d.detail; } catch { /* kein JSON, z. B. ein rohes 502 der Edge */ }
+      throw new Error(grund);
+    }
+    const d = await r.json();
     spendeGespeichert = true;
     $("sp-danke").hidden = false;
-  } catch {
+    $("sp-danke").textContent = d.vollstaendig === false
+      ? "Die Textdateien sind gespeichert, nur die Aufnahme leider nicht – bei Bedarf einfach erneut versuchen."
+      : "Danke! Die Datenspende wurde erfolgreich gespeichert.";
+  } catch (e) {
     $("sp-danke").hidden = false;
-    $("sp-danke").textContent = "Upload fehlgeschlagen. Die Daten sind noch hier – bitte erneut versuchen oder das ZIP sichern.";
+    $("sp-danke").textContent = `Upload fehlgeschlagen: ${e.message || "unbekannter Fehler"}. Die Daten sind noch hier – bitte erneut versuchen oder das ZIP sichern.`;
   } finally {
     spendeLaeuft = false;
     $("btn-fertig").disabled = Boolean(rueckkehrTimer);

@@ -239,23 +239,69 @@ async function handleInteressenten(request: Request, env: Env): Promise<Response
   return Response.json(rows.map(({ pin_hash: _hash, pin_bis: _bis, pin_versuche: _versuche, ...sichtbar }) => sichtbar));
 }
 
-/** Lädt Dateien zur Datenspende hoch (vom Coach selbst aufgerufen, siehe coach/ablage_r2.py). */
-async function handleSpende(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
+// Ticket #82 (Befund aus dem Pilot vom 10.10.): die vormalige Route rief `request.formData()` auf und je Datei
+// noch einmal `arrayBuffer()` – bei einer 45-MB-Aufnahme verdoppelte sich das im Isolate auf 90–135 MB, nahe an
+// dessen 128-MB-Grenze. Jetzt: je Datei ein eigener `PUT /intern/spende/<name>/<datei>`, der Körper geht ohne
+// Umweg direkt in `R2.put`. Ein eigener `POST .../abschluss` markiert das Ende und löst die EINE
+// Telegram-Meldung aus (Größe/Status/Dauer je Datei, nie der Inhalt). Pfad und Dateiname bleiben so eng wie
+// zuvor begrenzt (Ticket #63-Härtung bleibt erhalten), eine einzelne Datei höchstens 300 MB.
+const SPENDE_ID_MUSTER = /^[0-9a-f]{6,16}$/;
+const SPENDE_DATEI_MUSTER = /^[a-z0-9_-]+\.(?:md|json|jsonl|txt|wav)$/;
+const SPENDE_DATEI_MAX_BYTES = 300 * 1024 * 1024;
+
+function spendeGroesseLesbar(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+/** Lädt EINE Datei der Datenspende/des Feedbacks hoch (vom Coach aufgerufen, siehe coach/ablage_r2.py):
+ * streamt `request.body` direkt in `R2.put`, ohne ihn zu puffern. */
+async function handleSpendeDatei(
+  request: Request, env: Env, name: string, dateiname: string,
+): Promise<Response> {
+  if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
+    return new Response("Nicht erlaubt.", { status: 403 });
+  }
+  if (request.method !== "PUT") return new Response("Nur PUT.", { status: 405 });
+  if (!SPENDE_ID_MUSTER.test(name) || !SPENDE_DATEI_MUSTER.test(dateiname)) {
+    return new Response("Ungültiger Pfad.", { status: 400 });
+  }
+  const laenge = Number(request.headers.get("Content-Length") ?? "");
+  if (!Number.isFinite(laenge) || laenge <= 0) {
+    return new Response("Content-Length fehlt.", { status: 411 });
+  }
+  if (laenge > SPENDE_DATEI_MAX_BYTES) {
+    return new Response("Datei zu groß.", { status: 413 });
+  }
+  if (!request.body) return new Response("Kein Körper.", { status: 400 });
+  await env.SPENDEN.put(`${name}/${dateiname}`, request.body, {
+    httpMetadata: { contentType: "application/octet-stream" },
+  });
+  return Response.json({ ok: true, bytes: laenge });
+}
+
+interface SpendeTeilergebnis { datei: string; bytes: number; ok: boolean }
+
+/** Schließt eine Spende/ein Feedback ab (vom Coach aufgerufen, NACHDEM er jede Datei einzeln hochzuladen
+ * versucht hat): löst die eine Telegram-Meldung aus – ohne Dateiinhalte, nur Größe/Status je Datei und die
+ * Gesamtdauer – und sagt, ob alles ankam oder nur ein Teil (Ticket #82). */
+async function handleSpendeAbschluss(request: Request, env: Env, name: string, ctx: ExecutionContext): Promise<Response> {
   if (!workerGeheimnisPasst(request, env.WORKER_GEHEIMNIS)) {
     return new Response("Nicht erlaubt.", { status: 403 });
   }
   if (request.method !== "POST") return new Response("Nur POST.", { status: 405 });
-  const form = await request.formData();
-  let anzahl = 0;
-  for (const [dateiname, wert] of form.entries()) {
-    if (typeof wert !== "string") {
-      // FormDataEntryValue ist File | string; alles, was kein reiner Text ist, ist eine Datei
-      await env.SPENDEN.put(`${name}/${dateiname}`, await (wert as File).arrayBuffer());
-      anzahl++;
-    }
-  }
-  melden(ctx, env, `📦 Nestor: Datenspende / Feedback gespeichert\nPaket: ${name}\nDateien: ${anzahl}`);
-  return Response.json({ ok: true, dateien: anzahl });
+  if (!SPENDE_ID_MUSTER.test(name)) return new Response("Ungültiger Pfad.", { status: 400 });
+  const { ergebnisse, dauerMs } = (await request.json()) as { ergebnisse?: SpendeTeilergebnis[]; dauerMs?: number };
+  const liste = Array.isArray(ergebnisse) ? ergebnisse : [];
+  const vollstaendig = liste.length > 0 && liste.every((e) => e.ok);
+  const status = liste.length === 0 ? "fehlgeschlagen" : vollstaendig ? "vollständig" : "teilweise";
+  const zeilen = liste
+    .map((e) => `${e.ok ? "✅" : "❌"} ${e.datei} (${spendeGroesseLesbar(e.bytes ?? 0)})`)
+    .join("\n") || "– keine Dateien –";
+  const dauer = typeof dauerMs === "number" ? `${(dauerMs / 1000).toFixed(1)} s` : "unbekannt";
+  melden(ctx, env, `📦 Nestor: Datenspende/Feedback ${status}\nPaket: ${name}\nDauer: ${dauer}\n${zeilen}`);
+  return Response.json({ ok: true, vollstaendig });
 }
 
 /** Pfade, die ohne Anmeldung erreichbar bleiben: das Handy koppelt über den Kopplungscode. */
@@ -400,7 +446,14 @@ async function kern(request: Request, env: Env, ctx: ExecutionContext): Promise<
   }
 
   if (pfad.startsWith("/intern/spende/")) {
-    return handleSpende(request, env, decodeURIComponent(pfad.slice("/intern/spende/".length)), ctx);
+    const teile = pfad.slice("/intern/spende/".length).split("/").map(decodeURIComponent);
+    if (teile.length === 2 && teile[1] === "abschluss") {
+      return handleSpendeAbschluss(request, env, teile[0], ctx);
+    }
+    if (teile.length === 2) {
+      return handleSpendeDatei(request, env, teile[0], teile[1]);
+    }
+    return new Response("Ungültiger Pfad.", { status: 400 });
   }
   if (pfad === "/intern/meeting-start") {
     return handleMeetingStart(request, env, ctx);

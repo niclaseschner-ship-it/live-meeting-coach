@@ -19,7 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, R
 from fastapi.responses import JSONResponse
 
 from . import zugang
-from .abschluss import OrdnerAblage, meeting_daten, paket, spenden_dateien, stufen
+from .abschluss import OrdnerAblage, SpendeDatei, SpendeErgebnis, meeting_daten, paket, spenden_dateien, stufen
 from .ablage_r2 import AblageFehler, R2Ablage
 from .config import EINST, WORKER_USER_AGENT, schluessel_info, schluessel_speichern
 
@@ -34,10 +34,11 @@ _rueckkehr_task: asyncio.Task | None = None
 _rueckkehr_archiv = None
 
 
-async def _ablegen(dateien: dict[str, bytes]) -> None:
-    """Im Thread: der R2-Weg lädt über das Netz hoch und soll die Ereignisschleife nicht aufhalten."""
+async def _ablegen(dateien: list[SpendeDatei]) -> SpendeErgebnis:
+    """Im Thread: der R2-Weg lädt über das Netz hoch (je Datei einzeln gestreamt, Ticket #82) und soll die
+    Ereignisschleife nicht aufhalten."""
     try:
-        await asyncio.to_thread(_ablage.ablegen, _kurz_id(), dateien)
+        return await asyncio.to_thread(_ablage.ablegen, _kurz_id(), dateien)
     except AblageFehler as e:
         raise HTTPException(502, "Die Spende ließ sich gerade nicht ablegen – bitte später noch einmal.") from e
 
@@ -156,8 +157,11 @@ async def abschluss_spende(daten: dict):
         dateien = spenden_dateien(coach.archiv.ordner, str(daten.get("feedback") or ""), bool(daten.get("aufnahme")))
     except OSError as e:
         raise HTTPException(404, "Ablage noch nicht da – bitte kurz warten.") from e
-    await _ablegen(dateien)
-    return {"ok": True}
+    ergebnis = await _ablegen(dateien)
+    # Ticket #82: scheitert z. B. nur die große, optionale Aufnahme, sind die Texte trotzdem angekommen – die
+    # Seite zeigt das dann als "teilweise" an, statt die ganze Spende als Fehlschlag zu werten.
+    return {"ok": True, "vollstaendig": ergebnis.vollstaendig,
+            "dateien": [{"datei": t.datei, "bytes": t.bytes, "ok": t.ok} for t in ergebnis.teile]}
 
 
 @router.post("/api/abschluss/feedback")
@@ -166,7 +170,7 @@ async def abschluss_feedback(daten: dict):
     text = str(daten.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "Kein Feedback-Text.")
-    await _ablegen({"feedback.txt": text.encode("utf-8")})
+    await _ablegen([SpendeDatei("feedback.txt", inhalt=text.encode("utf-8"))])
     return {"ok": True}
 
 
@@ -184,7 +188,7 @@ async def feedback_jederzeit(daten: dict):
     art = daten.get("art") if daten.get("art") in _FEEDBACK_ARTEN else "feedback"
     seite = str(daten.get("seite") or "")[:200]
     inhalt = f"Art: {art}\nSeite: {seite}\n\n{text}"
-    await _ablegen({"feedback.txt": inhalt.encode("utf-8")})
+    await _ablegen([SpendeDatei("feedback.txt", inhalt=inhalt.encode("utf-8"))])
     return {"ok": True}
 
 
