@@ -406,3 +406,15 @@ def test_normalisieren_und_aehnlich():
     assert A.inhaltsleer("das übernehmen") and A.inhaltsleer("bis wann ungefähr")
     assert not A.inhaltsleer("Protokoll verschicken") and not A.inhaltsleer("das Protokoll verschicken")
     assert A.aehnlich("Zusammenfassung für die Statusseite erstellen", "Statusseite-Zusammenfassung erstellen")
+
+
+def test_optionen_mit_fast_gleichem_wortlaut_bleiben_getrennt():
+    """Datenspende 12.10.: vier Sofa-Optionen wurden zu einer, weil „Sofa“ und „stellen“ in allen vorkamen."""
+    from coach.artefakte import normalisieren
+
+    c, _ = _coach()
+    for was in ("Sofa vor das Fenster stellen", "Sofa an die große Wand stellen", "Sofa in die Nische stellen",
+                "Sofa direkt hinter die Tür stellen", "Vor das Fenster"):
+        c.artefakte.uebernehmen(normalisieren({"typ": "option", "was": was, "konfidenz": 0.9, "zeit": "1:04"}), 64.0)
+    assert [a.was for a in c.artefakte.liste] == ["Sofa vor das Fenster stellen", "Sofa an die große Wand stellen",
+                                                 "Sofa in die Nische stellen", "Sofa direkt hinter die Tür stellen"]

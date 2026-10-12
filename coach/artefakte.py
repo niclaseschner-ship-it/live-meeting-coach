@@ -398,11 +398,15 @@ def _woerter(t: str) -> set[str]:
     return {w for w in re.findall(r"\w+", (t or "").lower()) if len(w) >= 4}
 
 
-def aehnlich(a: str, b: str) -> bool:
-    """Gleiches Artefakt mit anderen Worten? Mindestens 60 % der Wörter des kürzeren kommen im anderen vor."""
+def aehnlich(a: str, b: str, typ: str | None = None) -> bool:
+    """Gleiches Artefakt mit anderen Worten? Mindestens 60 % der Wörter des kürzeren kommen im anderen vor. Optionen
+    und Kriterien unterscheiden sich oft nur in einem Wort („Sofa vor das Fenster stellen“, „Sofa an die Wand
+    stellen“) – dort müssen alle Wörter des kürzeren im anderen vorkommen."""
     wa, wb = _woerter(a), _woerter(b)
     if not wa or not wb:
         return False
+    if typ in ("option", "kriterium"):
+        return wa <= wb or wb <= wa
     return len(wa & wb) >= 0.6 * min(len(wa), len(wb))
 
 
@@ -544,10 +548,11 @@ class Artefakte:
             # Entscheidung. Ein anderer Typ unter derselben Nummer ist ein eigenes Artefakt.
             a = None
         if a is None and e.get("typ") and e.get("was"):
-            a = next((x for x in self.liste if x.typ == e["typ"] and aehnlich(x.was, e["was"])), None)
-        if a is None and not schnell and e.get("typ") and e.get("zeit") is not None:
+            a = next((x for x in self.liste if x.typ == e["typ"] and aehnlich(x.was, e["was"], x.typ)), None)
+        if a is None and not schnell and e.get("typ") not in (None, "option", "kriterium") and e.get("zeit") is not None:
             # Ticket #72: Die Vollauswertung formuliert ein schnell erkanntes Artefakt anders – derselbe Typ aus demselben
-            # Satz (±2 s) und keine andere Person ist dasselbe Artefakt, keine Dublette.
+            # Satz (±2 s) und keine andere Person ist dasselbe Artefakt, keine Dublette. Optionen nicht: ein Satz nennt oft
+            # mehrere („wir können es hierhin oder dorthin stellen“).
             a = next((x for x in self.liste if x.schnell and x.typ == e["typ"] and abs(x.zeit - e["zeit"]) <= 2.0
                       and (not e.get("wer") or not x.wer or x.wer == e["wer"])), None)
         if a is not None:
@@ -1102,7 +1107,7 @@ class Artefakte:
         e = normalisieren({**daten, "typ": daten.get("typ") or "aufgabe", "konfidenz": 1.0}) or {}
         a = self.holen(e["nummer"]) if e.get("nummer") else None
         if a is None and e.get("was"):
-            a = next((x for x in self.liste if aehnlich(x.was, e["was"]) and (not daten.get("typ") or x.typ == e["typ"])),
+            a = next((x for x in self.liste if aehnlich(x.was, e["was"], x.typ) and (not daten.get("typ") or x.typ == e["typ"])),
                      None)
         felder = {k: e[k] for k in ("was", "wer", "bis", "status", "reaktion") if e.get(k)}
         if a is not None:
