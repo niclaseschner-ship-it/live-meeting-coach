@@ -79,6 +79,15 @@ describe("QR-Kopplung ohne Login", () => {
     expect(await antwort.text()).not.toContain("Kein Meeting zugeordnet");
   });
 
+  it("ein frisch gescanntes Token geht vor dem alten Meeting-Cookie (Handy war schon einmal gekoppelt)", async () => {
+    const alt = encodeURIComponent(await meetingCookieSigniere({ meetingId: "M0", kunde: "pilot" }, GEHEIM));
+    const antwort = await worker.fetch(
+      anfrage(`/handy?k=ABCDEFGH&meeting=${encodeURIComponent(await token())}`, { Cookie: `nestor_meeting=${alt}` }), env, ctx);
+    expect(antwort.status).toBe(200);
+    expect(aufrufe[0].meetingId).toBe("M1");
+    expect(antwort.headers.get("Set-Cookie") ?? "").toMatch(/nestor_meeting=/);
+  });
+
   it("die nackte Meeting-ID im QR wird nicht mehr akzeptiert (kein Container)", async () => {
     const antwort = await worker.fetch(anfrage("/handy?k=ABCDEFGH&meeting=M1"), env, ctx);
     expect(antwort.status).toBe(400);

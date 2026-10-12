@@ -483,17 +483,18 @@ async function handleKopplungstoken(request: Request, env: Env): Promise<Respons
 async function meetingAufloesen(
   request: Request, url: URL, env: Env, kunde: string | null,
 ): Promise<{ ticket: MeetingTicket | null; neuGemintet: boolean; neuesMeeting: boolean }> {
+  // Ein frisch gescanntes Kopplungstoken geht vor dem Meeting-Cookie: Das Cookie lebt 30 Tage, und ein Handy, das
+  // schon einmal gekoppelt war, landete sonst im alten, beendeten Meeting (Datenspende 12.10.2026).
+  const kopplungsParam = url.searchParams.get("meeting");
+  const ausToken = kopplungsParam ? await kopplungstokenPruefen(kopplungsParam, env.COOKIE_GEHEIMNIS) : null;
+  // Das Handy koppelt an ein Meeting, das am Laptop schon begonnen hat – kein neues (Ticket #64: NESTOR_PAUSE
+  // betrifft das nicht).
+  if (ausToken) return { ticket: ausToken, neuGemintet: true, neuesMeeting: false };
+
   const ausCookie = await meetingCookiePruefen(cookieLesen(request.headers.get("Cookie"), MEETING_COOKIE), env.COOKIE_GEHEIMNIS);
   if (ausCookie) return { ticket: ausCookie, neuGemintet: false, neuesMeeting: false };
-
-  const kopplungsParam = url.searchParams.get("meeting");
-  if (kopplungsParam) {
-    const ausToken = await kopplungstokenPruefen(kopplungsParam, env.COOKIE_GEHEIMNIS);
-    // Das Handy koppelt an ein Meeting, das am Laptop schon begonnen hat – kein neues (Ticket #64: NESTOR_PAUSE
-    // betrifft das nicht).
-    if (ausToken) return { ticket: ausToken, neuGemintet: true, neuesMeeting: false };
-    return { ticket: null, neuGemintet: false, neuesMeeting: false }; // fremd/abgelaufen – NIE als meetingId übernehmen
-  }
+  // fremdes/abgelaufenes Token – NIE als meetingId übernehmen
+  if (kopplungsParam) return { ticket: null, neuGemintet: false, neuesMeeting: false };
 
   // Einzige Stelle, die wirklich ein brandneues Meeting mintet (Ticket #64: hier greift NESTOR_PAUSE).
   if (kunde) return { ticket: { meetingId: crypto.randomUUID(), kunde }, neuGemintet: true, neuesMeeting: true };

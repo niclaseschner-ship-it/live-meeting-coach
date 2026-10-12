@@ -93,15 +93,20 @@ RECHERCHE_AUFTRAG_RE = re.compile(
     r"schau\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?nach\b)",
     re.IGNORECASE,
 )
+# „die Folie, die du recherchiert hast“ meint das vorhandene Ergebnis, keinen neuen Auftrag (Datenspende 12.10.:
+# Nestor startete eine neue Recherche, statt die fertige vorzustellen)
+RECHERCHIERT_RE = re.compile(r"\brecherchiert\s+(?:hast|habt|hattest|hattet|wurde|worden)\b"
+                             r"|\b(?:hast|habt|hattest|hattet)\s+(?:du|ihr)\b.*\brecherchiert\b", re.IGNORECASE)
 
 
 def recherche_auftrag(frage: str) -> bool:
     """Explizite Suchaufträge vor dem Sprachmodell erkennen (nur Text-Weg; im Gespräch wählt das Modell das Werkzeug).
 
     Reine Wissensfragen bleiben normale Fragen; nur Verben wie „recherchier“, „such … nach“
-    oder „schau … nach“ starten sicher die Websuche.
+    oder „schau … nach“ starten sicher die Websuche. Ein Rückbezug auf schon Recherchiertes ist eine Frage.
     """
-    return bool(RECHERCHE_AUFTRAG_RE.search(frage or ""))
+    frage = RECHERCHIERT_RE.sub(" ", frage or "")
+    return bool(RECHERCHE_AUFTRAG_RE.search(frage))
 
 
 def bestaetigen(frage: str) -> bool:

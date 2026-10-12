@@ -125,6 +125,10 @@ def test_kein_auftrag_und_recherche_auftrag_erkennen():
     assert B.recherche_auftrag("Such mal im Netz nach den NIS2-Vorgaben.")
     assert B.recherche_auftrag("Schau bitte kurz nach, was NIS2 verlangt.")
     assert not B.recherche_auftrag("Was verlangt NIS2?")
+    # Datenspende 12.10.: Rückbezug auf eine fertige Recherche startet keine neue
+    assert not B.recherche_auftrag("Kannst du mir die Folie kurz vorstellen, die du recherchiert hast?")
+    assert not B.recherche_auftrag("Was hast du zu Feng Shui recherchiert?")
+    assert B.recherche_auftrag("Recherchiere die Grundlagen von Feng Shui.")
 
 
 def test_explizite_recherche_umgeht_die_aktionswahl_des_modells():
