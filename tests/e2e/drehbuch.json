@@ -489,7 +489,7 @@
       "id": "assistent_imperativ",
       "_zweck": "Basis (#89): „bündle mir mal die Ergebnisse“ versteht das Modell als Werkzeug zusammenfassen",
       "system_enthaelt": [
-        "STAND DES MEETINGS"
+        "Moderationsassistent und Teil dieser Runde"
       ],
       "nutzer_enthaelt": [
         "ndl"
@@ -505,7 +505,7 @@
     {
       "id": "assistent_antwort",
       "system_enthaelt": [
-        "STAND DES MEETINGS"
+        "Moderationsassistent und Teil dieser Runde"
       ],
       "antwort_text": "Sabine liefert die Fahrten bis Freitag."
     },
