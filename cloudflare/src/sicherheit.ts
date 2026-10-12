@@ -91,6 +91,32 @@ export async function containerAufrufenOderAusweichen(
   }
 }
 
+/** Meldungen der Container-Bibliothek selbst (nicht von Nestors App), solange der Container hochfährt oder gerade
+ * neu gestartet ist (@cloudflare/containers, containerFetch). */
+const KALTSTART_MELDUNGEN = ["Failed to start container", "Container suddenly disconnected",
+  "Error proxying request to container"];
+
+/** Kaltstart (Datenspende 12.10.2026: die erste Anfrage „Premium starten“ bekam 500, derselbe Aufruf 1,5 s später
+ * 200): Kommt eine 500 von der Container-Bibliothek, kurz warten und dieselbe Anfrage noch einmal schicken – höchstens
+ * `versuche`-mal. Fehler der App selbst und WebSocket-Upgrades gehen unverändert durch. */
+export async function mitKaltstartWiederholung(
+  request: Request,
+  senden: (r: Request) => Promise<Response>,
+  warten: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  versuche = 3,
+): Promise<Response> {
+  if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") return senden(request);
+  const vorlage = request.clone();
+  let antwort = await senden(request);
+  for (let i = 1; i < versuche && antwort.status === 500; i++) {
+    const text = await antwort.clone().text();
+    if (!KALTSTART_MELDUNGEN.some((m) => text.startsWith(m))) break;
+    await warten(800 * i);
+    antwort = await senden(vorlage.clone());
+  }
+  return antwort;
+}
+
 /** Notschalter (Ticket #64): Worker-Variable `NESTOR_PAUSE` = "1" – nur dieser eine Wert schaltet die Pause
  * ein, alles andere (fehlend, "0", irgendein anderer Text) lässt neue Meetings zu. Reine Var-Lektüre, kein
  * Geheimnis und kein Durable Object: die einzige Aufrufstelle (index.ts) prüft sie direkt dort, wo sie sonst

@@ -15,7 +15,9 @@ import {
   testzugangPinPruefen,
 } from "./pilotzugang";
 import { IpZaehler } from "./ratenbegrenzung";
-import { containerAufrufenOderAusweichen, mitSicherheitsheadern, pauseSeite, pausiert, workerGeheimnisPasst } from "./sicherheit";
+import {
+  containerAufrufenOderAusweichen, mitKaltstartWiederholung, mitSicherheitsheadern, pauseSeite, pausiert, workerGeheimnisPasst,
+} from "./sicherheit";
 import { meetingKurz, telegramMelden } from "./telegram";
 import { meetingBeenden, mitVariantenwahl, varianteText } from "./variantenwahl";
 import { KundenZaehler } from "./zaehler";
@@ -83,7 +85,7 @@ export class Nestor extends Container<Env> {
   }
 
   override async fetch(request: Request): Promise<Response> {
-    return mitVariantenwahl(request, this.wahlSpeicher, r => super.fetch(r));
+    return mitVariantenwahl(request, this.wahlSpeicher, r => mitKaltstartWiederholung(r, x => super.fetch(x)));
   }
 
   /** Ticket #60: nach „Fertig“ beendet – das Meeting-Cookie (30 Tage) führt nicht mehr in einen Container. Nur

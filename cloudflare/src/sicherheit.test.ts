@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  containerAufrufenOderAusweichen, mitSicherheitsheadern, pauseSeite, pausiert, workerGeheimnisPasst,
+  containerAufrufenOderAusweichen, mitKaltstartWiederholung, mitSicherheitsheadern, pauseSeite, pausiert,
+  workerGeheimnisPasst,
 } from "./sicherheit";
 
 describe("Worker-Geheimnis für /intern/*", () => {
@@ -64,6 +65,42 @@ describe("Kapazitätsfehler", () => {
   it("reicht WebSocket-Upgrades unverändert durch (sonst gehen Audio- und Handy-Kanal verloren)", () => {
     const upgrade = { status: 101, webSocket: {}, headers: new Headers() } as unknown as Response;
     expect(mitSicherheitsheadern(upgrade)).toBe(upgrade);
+  });
+});
+
+describe("Kaltstart des Containers", () => {
+  const ohneWarten = async () => {};
+  const anfrage = () => new Request("https://nestor.test/api/stufe", { method: "POST", body: JSON.stringify({ stufe: "premium" }) });
+
+  it("wiederholt eine 500 der Container-Bibliothek mit demselben Körper, bis die App antwortet", async () => {
+    const koerper: string[] = [];
+    const antworten = [new Response("Failed to start container: not ready", { status: 500 }), new Response("ok")];
+    const antwort = await mitKaltstartWiederholung(anfrage(), async (r) => {
+      koerper.push(await r.text());
+      return antworten.shift()!;
+    }, ohneWarten);
+    expect(antwort.status).toBe(200);
+    expect(koerper).toEqual(['{"stufe":"premium"}', '{"stufe":"premium"}']);
+  });
+
+  it("reicht einen Fehler der App unverändert durch, ohne Wiederholung", async () => {
+    let aufrufe = 0;
+    const antwort = await mitKaltstartWiederholung(anfrage(), async () => {
+      aufrufe++;
+      return new Response('{"detail":"kaputt"}', { status: 500 });
+    }, ohneWarten);
+    expect(antwort.status).toBe(500);
+    expect(aufrufe).toBe(1);
+  });
+
+  it("gibt nach drei Versuchen auf", async () => {
+    let aufrufe = 0;
+    const antwort = await mitKaltstartWiederholung(anfrage(), async () => {
+      aufrufe++;
+      return new Response("Container suddenly disconnected, try again", { status: 500 });
+    }, ohneWarten);
+    expect(antwort.status).toBe(500);
+    expect(aufrufe).toBe(3);
   });
 });
 
