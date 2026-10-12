@@ -66,14 +66,17 @@ def test_redeanteil_zaehlt_nur_die_letzten_fuenf_minuten():
     assert analyse.redeanteil(m)["ueber"] is False
 
 
-def test_redeanteil_braucht_genug_gespraech_und_zwei_personen():
+def test_redeanteil_braucht_genug_gespraech_und_rechnet_mit_mindestens_zwei_personen():
     m = meeting_mit_agenda()
     m.segmente = [seg("A", 0, 50), seg("B", 50, 62)]
     m.virtuelle_zeit = 62  # nur 62 s Rede im Fenster
     assert analyse.redeanteil(m)["ueber"] is False
+    # Datenspende 12.10.: einer redet fünf Minuten, die anderen schweigen (nie als Stimme erkannt) – das ist genau
+    # der Fall für den Hinweis
     m.segmente = [seg("A", 0, 300)]
     m.virtuelle_zeit = 300
-    assert analyse.redeanteil(m) is None  # allein im Raum: kein fairer Anteil
+    r = analyse.redeanteil(m)
+    assert r["personen"] == 2 and r["ueber"] is True
 
 
 def test_unsichere_stimme_zaehlt_nicht():

@@ -224,14 +224,14 @@ def _bild_oder_ueberblick(c):
 
 
 def _einstiege():
-    from coach import agenda_prompt, bogen, folie, karten, knopfdruck, recherche, transkription
+    from coach import agenda_prompt, bogen, folie, karten, kern, knopfdruck, recherche, transkription
 
     return {
         "live_text": _live_text,
         "text_je_aeusserung": lambda c: transkription.text(c._client, c.wahl.text_modell, _wav(), "de", ""),
         "zuordnung": lambda c: c._themen_pruefen("Person 1: Wir reden über das Budget."),
         "agenda": lambda c: agenda_prompt.agenda_vorschlagen(c._client, c.wahl.analyse_modell, "Budget 10 min", None),
-        "assistent": lambda c: c.assistent._antworten(_bogen(c)),
+        "assistent": lambda c: kern.text_antwort(c.assistent, _bogen(c)),
         "moderationssatz": lambda c: bogen.moderationssatz(c, {"titel": "Stand", "punkte": ["a"]}, "Ersatz"),
         "knopf_stand": lambda c: bogen.stand(c, _bogen(c)),
         "karte": lambda c: karten.verdichten(c._client, "Wo stehen wir?", "Bei Punkt eins. Das Budget steht.",

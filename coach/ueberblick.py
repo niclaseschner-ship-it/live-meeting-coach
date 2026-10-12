@@ -1,5 +1,5 @@
 """Überblick als Text (Ticket #13, beide Stufen): der Stand des Meetings als strukturierte Dashboard-Ansicht – ohne
-Bildmodell. In Nestor Basis ersetzt er das Live-Bild (auch auf Zuruf „zeig uns die Übersicht“ → AKTION: bild),
+Bildmodell. In Nestor Basis ersetzt er das Live-Bild (auch auf Zuruf „zeig uns die Übersicht“ → Werkzeug bild_zeichnen),
 in Premium ist er umschaltbar neben dem Live-Bild.
 
 Aufbau wie die Zonen des Live-Bilds (coach/bild_gpt.py, Strukturanalyse Schritt 1):
@@ -127,12 +127,15 @@ def _wer(a) -> str | None:
 
 
 def ergebnisse(liste: list) -> dict[str, list[dict]]:
-    """Entschieden / Offen / Aufgaben als Ansicht auf die Artefakte: jedes Ergebnis genau einmal, Wortlaut unverändert.
-    Entschieden = beschlossene und vorläufige Entscheidungen; Offen = offene Punkte, Risiken und bloße Vorschläge."""
+    """Entschieden / Offen / Aufgaben / Optionen als Ansicht auf die Artefakte: jedes Ergebnis genau einmal, Wortlaut
+    unverändert. Entschieden = beschlossene und vorläufige Entscheidungen; Offen = offene Punkte, Risiken und bloße
+    Vorschläge; Optionen = Optionen und Kriterien, die die Runde abwägt."""
     nr = lambda a: (a.punkt + 1) if a.punkt is not None else None  # noqa: E731
-    aus: dict[str, list[dict]] = {"entschieden": [], "offen": [], "aufgaben": []}
+    aus: dict[str, list[dict]] = {"entschieden": [], "offen": [], "aufgaben": [], "optionen": []}
     for a in liste:
-        if a.typ == "aufgabe":
+        if a.typ in ("option", "kriterium"):  # das Material der Entscheidung, noch nichts Offenes
+            aus["optionen"].append({"id": a.id, "was": a.was, "punkt": nr(a), "typ": a.typ})
+        elif a.typ == "aufgabe":
             aus["aufgaben"].append({"id": a.id, "was": a.was, "wer": _wer(a), "bis": a.bis, "punkt": nr(a)})
         elif beschlossen(a):
             aus["entschieden"].append({"id": a.id, "was": a.was, "punkt": nr(a), "status": a.status})
@@ -203,6 +206,8 @@ def als_markdown(u: dict) -> str:
         z += ["", u["kernaussage"]]
     for titel, schluessel in (("✅ Entschieden", "entschieden"), ("🟡 Offen", "offen")):
         z += ["", f"## {titel}"] + ([f"- {_zeile(e)}" for e in u[schluessel]] or ["- –"])
+    if u.get("optionen"):
+        z += ["", "## ⚖ Optionen und Kriterien"] + [f"- {TYP_NAME[e['typ']]}: {e['was']}" for e in u["optionen"]]
     z += ["", "## 📌 Aufgaben"] + ([f"- {a['was']} (wer: {a['wer'] or 'offen'}, bis: {a['bis'] or 'offen'})"
                                    for a in u["aufgaben"]] or ["- –"])
     z += ["", "## ↪ Außerhalb der Agenda"] + ([f"- {a['zeit'] or ''} {a['was']}".replace("-  ", "- ")
@@ -215,6 +220,7 @@ def punkte(u: dict) -> list[str]:
     """Kurzfassung als Stichpunkte für die Karte (Handy, Verlauf)."""
     aus = [f"Entschieden: {_zeile(e)}" for e in u["entschieden"][:3]]
     aus += [f"Offen: {_zeile(e)}" for e in u["offen"][:2]]
+    aus += [f"{TYP_NAME[e['typ']]}: {e['was']}" for e in u.get("optionen", [])[:4]]
     aus += [f"Aufgabe: {a['was']}" + (f" ({a['wer']}" + (f", bis {a['bis']}" if a["bis"] else "") + ")" if a["wer"] else "")
             for a in u["aufgaben"][:3]]
     return aus or [u.get("kernaussage") or "Noch nichts festgehalten."]

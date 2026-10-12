@@ -1,5 +1,5 @@
 """Ticket #84 ohne Netz: Karte per Zuruf neu aufbereiten – coach/neu_aufbereiten.py (das Modul), das Werkzeug
-„karte_neu_aufbereiten“ im Realtime-Gespräch (Premium) und die AKTION-Zeile „neu_aufbereiten“ (Basis)."""
+„karte_neu_aufbereiten“ – ein Werkzeug für beide Stufen (coach/kern.py)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from coach import assistent as A
+from coach import kern
 from coach import neu_aufbereiten as N
 from coach.assistent import Bogen
 from coach.config import EINST
@@ -90,15 +90,8 @@ def test_erstellen_ohne_punkte_in_der_antwort_liefert_nichts():
     assert neu is None
 
 
-# --- Basis: AKTION-Zeile ------------------------------------------------------------------------------------------
-def test_aktion_lesen_neu_aufbereiten():
-    assert A.aktion_lesen("AKTION: neu_aufbereiten kürzer") == {"typ": "neu_aufbereiten", "wie": "kürzer"}
-    assert A.aktion_lesen("AKTION: neu_aufbereiten als_liste") == {"typ": "neu_aufbereiten", "wie": "als_liste"}
-    assert A.aktion_lesen("AKTION: neu_aufbereiten irgendwas") is None
-    assert "neu_aufbereiten" in A.STILLE_AKTIONEN
-
-
-def test_aktion_ausfuehren_neu_aufbereiten_zeigt_eine_neue_karte_die_alte_bleibt():
+# --- Werkzeug im Kern (beide Stufen) ---------------------------------------------------------------------------
+def test_werkzeug_neu_aufbereiten_zeigt_eine_neue_karte_die_alte_bleibt():
     async def ablauf():
         c = Coach()
         c.stufe_setzen("basis")
@@ -106,7 +99,7 @@ def test_aktion_ausfuehren_neu_aufbereiten_zeigt_eine_neue_karte_die_alte_bleibt
         c.meeting.starten(virtuell=True)
         c._karte_ablegen({"art": "antwort", "frage": "Budget?", "titel": "Budget", "punkte": ["500 Euro"]})
         b = Bogen(1, "frage", "bereite das kürzer auf", "stimme", time.monotonic())
-        await c.assistent.aktion_ausfuehren({"typ": "neu_aufbereiten", "wie": "kürzer"}, b)
+        await kern.ausfuehren(c.assistent, b, "karte_neu_aufbereiten", {"wie": "kürzer"})
         return c
 
     c = asyncio.run(ablauf())
@@ -114,14 +107,14 @@ def test_aktion_ausfuehren_neu_aufbereiten_zeigt_eine_neue_karte_die_alte_bleibt
     assert c.karten[-1]["art"] == "antwort" and c.karten[-1]["frage"] == "Budget?"
 
 
-def test_aktion_ausfuehren_neu_aufbereiten_ohne_vorherige_karte_zeigt_nichts_neues():
+def test_werkzeug_neu_aufbereiten_ohne_vorherige_karte_zeigt_nichts_neues():
     async def ablauf():
         c = Coach()
         c.stufe_setzen("basis")
         c._client = _client()
         c.meeting.starten(virtuell=True)
         b = Bogen(1, "frage", "bereite das kürzer auf", "stimme", time.monotonic())
-        await c.assistent.aktion_ausfuehren({"typ": "neu_aufbereiten", "wie": "kürzer"}, b)
+        await kern.ausfuehren(c.assistent, b, "karte_neu_aufbereiten", {"wie": "kürzer"})
         return c
 
     c = asyncio.run(ablauf())
@@ -157,15 +150,14 @@ def test_werkzeug_karte_neu_aufbereiten_zeigt_die_karte_still_neu():
         c, g = _gespraech(_client())
         c._karte_ablegen({"art": "antwort", "frage": "Budget?", "titel": "Budget", "punkte": ["500 Euro"]})
         await g._werkzeug("karte_neu_aufbereiten", json.dumps({"wie": "kürzer"}), "call_1")
-        if c.assistent.bogen is not None and c.assistent.bogen.task is not None:
-            await c.assistent.bogen.task
+        await asyncio.gather(*g._aufgaben)
         return c, g
 
     c, g = asyncio.run(ablauf())
     assert [k["titel"] for k in c.karten] == ["Budget", "Kurzfassung"]
     ausgabe = [e for e in g._ws.gesendet if e["type"] == "conversation.item.create"]
     ausgabe_ergebnis = json.loads(ausgabe[0]["item"]["output"])
-    assert ausgabe_ergebnis["ok"] and "sag nichts" in ausgabe_ergebnis["hinweis"]
+    assert ausgabe_ergebnis["ok"] and ausgabe_ergebnis["karte"]["titel"] == "Kurzfassung" and g._abschluss
 
 
 def test_werkzeug_karte_neu_aufbereiten_unbekanntes_wie_wird_abgewiesen():

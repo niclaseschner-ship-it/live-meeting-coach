@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from modell_attrappe import Zug
 
 from coach import bestaetigung as B
 from coach import bogen as BG
@@ -45,18 +46,6 @@ def umgebung(tmp_path, monkeypatch):
         object.__setattr__(EINST, k, v)
 
 
-class _Strom:
-    def __init__(self, teile):
-        self.teile = teile
-
-    def __aiter__(self):
-        async def gen():
-            for t in self.teile:
-                await asyncio.sleep(0)
-                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=t))])
-        return gen()
-
-
 class _Ton:
     def __init__(self, zaehler, dauer=0.2):
         self.zaehler, self.dauer = zaehler, dauer
@@ -77,8 +66,8 @@ class _Ton:
 class Attrappe:
     """Ein Client für alles: Antworten (Strom), JSON-Aufrufe nach Inhalt, Sprachausgabe."""
 
-    def __init__(self, antwort=("AKTION: keine\nIhr seid bei Punkt eins.",), artefakte=(), verzoegerung: float = 0.0):
-        self.antwort = list(antwort)
+    def __init__(self, antwort=("Ihr seid bei Punkt eins.",), artefakte=(), verzoegerung: float = 0.0):
+        self.antwort = list(antwort)  # Züge des Modells (tests/modell_attrappe.py), der letzte wiederholt sich
         self.artefakte = list(artefakte)
         self.verzoegerung = verzoegerung
         self.anfragen: list[str] = []
@@ -93,7 +82,9 @@ class Attrappe:
         if self.verzoegerung:
             await asyncio.sleep(self.verzoegerung)
         if kw.get("stream"):
-            return _Strom(list(self.antwort))
+            from modell_attrappe import Strom
+
+            return Strom(self.antwort.pop(0) if len(self.antwort) > 1 else self.antwort[0])
         if "NEUE Sätze" in inhalt:
             roh = {"artefakte": self.artefakte.pop(0) if self.artefakte else []}
         elif "Karte" in inhalt and "zeigen" in inhalt:
@@ -281,7 +272,8 @@ def test_recherche_kommt_still_als_karte_ohne_ansage(monkeypatch):
     monkeypatch.setattr("coach.recherche.recherchieren", recherche)
 
     async def ablauf():
-        c, gesendet = _coach(Attrappe(antwort=["AKTION: recherche Mindestlohn 2027\n", "Ich schau nach."]))
+        c, gesendet = _coach(Attrappe(antwort=[Zug(werkzeuge=[("recherchieren", {"frage": "Mindestlohn 2027"})]),
+                                               "Ich schau nach, die Karte kommt gleich."]))
         b = c.assistent.bogen_starten("frage", "gib uns einen Überblick zum Mindestlohn", "stimme")
         await b.task
         for _ in range(20):
@@ -290,7 +282,7 @@ def test_recherche_kommt_still_als_karte_ohne_ansage(monkeypatch):
 
     c, gesendet = asyncio.run(ablauf())
     texte = _texte(gesendet)
-    assert texte[0] in B.KURZ and texte[1] in B.LANGE and len(texte) == 2  # kein „fertig“, kein Vorlesen
+    assert texte == [texte[0], "Ich schau nach, die Karte kommt gleich."] and texte[0] in B.KURZ  # kein „fertig“
     karte = c.karten[-1]
     assert karte["art"] == "recherche" and karte["still"] and karte["quellen"][0]["titel"] == "BMAS"
 
@@ -478,7 +470,7 @@ def test_28_nach_ja_gilt_der_naechste_satz_12_s_lang_als_frage():
     """„Nestor?“ → „Ja?“ → die Frage kommt – auch 11 s nach dem Ende von „Ja?“ und mit Verzug des Live-Texts – und
     wird beantwortet. Auf dem Text-Weg gibt es danach kein Hörfenster ohne Namen."""
     async def ablauf():
-        c, gesendet = _coach(Attrappe(antwort=("AKTION: keine\nZu Punkt eins habt ihr den Down-Pfad beschlossen.",)))
+        c, gesendet = _coach(Attrappe(antwort=("Zu Punkt eins habt ihr den Down-Pfad beschlossen.",)))
         a = c.assistent
         c.meeting.virtuelle_zeit = 274.8
         await a.satz("Nestor,", 274.0, "Person 2")
@@ -526,20 +518,12 @@ def test_28_nach_ja_endet_das_fenster_nach_12_s_und_nestor_hoert_wieder_zu():
     assert noch == "angesprochen" and zustand == "bereit" and bogen is None
 
 
-def test_karten_art_erkennt_eindeutige_auftraege():
-    assert BG.karten_art("fass mal kurz zusammen") == "zusammenfassen"
-    assert BG.karten_art("gib mir die Zusammenfassung") == "zusammenfassen"
-    assert BG.karten_art("was fehlt noch?") == "fehlt"
-    assert BG.karten_art("wo stehen wir gerade?") == "stand"
-    assert BG.karten_art("zeig uns das Protokoll") == "festgehalten"
-    assert BG.karten_art("fass zusammen, was Anna zum Budget gesagt hat") is None
-
-
 # --- Lücke korrigieren (Nachtrag A) --------------------------------------------------------------------------------
-def test_luecke_korrigieren_sagt_notiert_und_aendert_die_vorhandene_karte():
+def test_luecke_korrigieren_bestaetigt_und_aendert_die_vorhandene_karte():
     async def ablauf():
         c, gesendet = _coach(Attrappe(
-            antwort=["AKTION: eintragen 1; wer=Anna; bis=Freitag\n", "Okay, Anna macht das bis Freitag."],
+            antwort=[Zug(werkzeuge=[("artefakt_eintragen", {"nummer": 1, "wer": "Anna", "bis": "Freitag"})]),
+                     "Notiert, Anna schreibt das Runbook bis Freitag."],
             artefakte=[[{"typ": "aufgabe", "was": "Runbook schreiben", "zeit": "0:05", "konfidenz": 0.9}]]))
         c.meeting.transkript.append(Segment("Person 1", "Wir müssen das Runbook schreiben.", 4, 7))
         b = c.assistent.bogen_starten("fehlt", "was fehlt noch?", "knopf")
@@ -554,7 +538,7 @@ def test_luecke_korrigieren_sagt_notiert_und_aendert_die_vorhandene_karte():
     a = c.artefakte.holen(1)
     assert a.wer == "Anna" and a.bis == "Freitag" and not a.luecken()
     texte = _texte(gesendet)
-    assert texte[-1] in B.NOTIERT and "Anna macht das" not in " ".join(texte)
+    assert texte[-1] == "Notiert, Anna schreibt das Runbook bis Freitag."
     assert len(c.karten) == karten_vorher  # keine neue Karte – die vorhandene zeigt jetzt grün
     karte = c.karten[-1]
     assert karte["ids"] == [1] and karte["luecken_vorher"]["1"] == ["wer", "bis"]

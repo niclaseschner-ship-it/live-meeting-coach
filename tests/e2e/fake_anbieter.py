@@ -83,7 +83,10 @@ class Drehbuch:
 
         if not nachrichten:
             return None
-        system, nutzer = text(nachrichten[0]), text(nachrichten[-1])
+        # Nestors Text-Weg (coach/kern.py): nach einer Werkzeugrunde endet der Verlauf mit dem Ergebnis des Werkzeugs –
+        # gemeint ist weiter die letzte Bitte der Runde
+        nutzer_nachricht = next((n for n in reversed(nachrichten) if n.get("role") == "user"), nachrichten[-1])
+        system, nutzer = text(nachrichten[0]), text(nutzer_nachricht)
         for regel in self.d["chat"]:
             if all(s in system for s in regel.get("system_enthaelt", [])) and \
                     all(s in nutzer for s in regel.get("nutzer_enthaelt", [])):
@@ -153,12 +156,24 @@ def chat_route(a: Anbieter):
             a.protokoll(**basis, status=regel["fehler_status"], regel=regel["id"], fehler="simuliert")
             return JSONResponse({"error": {"message": "Fake: simulierter Anbieterfehler", "type": "server_error"}},
                                 status_code=regel["fehler_status"])
-        inhalt = Drehbuch.antwort_text(regel)
-        a.protokoll(**basis, status=200, regel=regel["id"])
+        nach_werkzeug = (koerper.get("messages") or [{}])[-1].get("role") == "tool"
+        werkzeug = regel.get("werkzeug") if koerper.get("tools") and not nach_werkzeug else None
+        inhalt = regel.get("abschluss_text", "Erledigt.") if nach_werkzeug and "werkzeug" in regel else \
+            Drehbuch.antwort_text(regel)
+        if werkzeug:  # Ticket #89: Basis versteht über Werkzeuge – die Regel ruft eins auf, statt zu antworten
+            inhalt = ""
+        a.protokoll(**basis, status=200, regel=regel["id"], **({"werkzeug": werkzeug["name"]} if werkzeug else {}))
         nutzung = {"prompt_tokens": 100, "completion_tokens": max(1, len(inhalt) // 4), "total_tokens": 100 + len(inhalt) // 4}
         kennung = f"chatcmpl-fake-{int(time.time() * 1000)}"
         if koerper.get("stream"):
             async def strom():
+                if werkzeug:
+                    aufruf = {"id": kennung, "object": "chat.completion.chunk", "created": int(time.time()),
+                              "model": koerper.get("model"), "choices": [{"index": 0, "delta": {
+                                  "role": "assistant", "tool_calls": [{"index": 0, "id": "aufruf001", "type": "function",
+                                  "function": {"name": werkzeug["name"], "arguments": json.dumps(
+                                      werkzeug.get("argumente", {}), ensure_ascii=False)}}]}, "finish_reason": None}]}
+                    yield f"data: {json.dumps(aufruf, ensure_ascii=False)}\n\n"
                 for i in range(0, len(inhalt), 24):
                     stueck = {"id": kennung, "object": "chat.completion.chunk", "created": int(time.time()),
                               "model": koerper.get("model"), "choices": [{"index": 0, "delta": {

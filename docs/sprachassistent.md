@@ -58,11 +58,11 @@ Zeile im Band oben oder als Karte im Verlauf. Einzige Ausnahme ist die Begrüßu
 | Beispiel | Was passiert |
 |---|---|
 | „Nestor, wie viel Zeit haben wir noch?“ | Bogen: Bestätigung, Antwort in einem Satz, Karte mit den Einzelheiten |
-| „Nestor, fass zusammen“, „… was fehlt noch?“, „… wo stehen wir?“, „… zeig das Protokoll“ | Karten-Bogen (eindeutige Sätze direkt erkannt, sonst `AKTION: karte` bzw. Werkzeug `karte_zeigen`): Karte, dazu ein bis zwei Sätze zu dem, was auffällt |
+| „Nestor, fass zusammen“, „… was fehlt noch?“, „… wo stehen wir?“, „… zeig das Protokoll“ | Das Modell wählt das Werkzeug (`zusammenfassen`, `karte_zeigen`, `karte`) – in beiden Stufen, ohne Wortmuster: Karte, dazu ein bis zwei Sätze zu dem, was auffällt |
 | „Wir kommen jetzt zum nächsten Punkt“ (ohne Namen) | Agendapunkt wechseln; die Zusammenfassung des alten Punkts kommt still als Karte |
-| „Nestor, Sofie übernimmt die Statusseite bis Freitag“ | Lücke schließen: Premium Werkzeug `artefakt_eintragen`, Basis `AKTION: eintragen` – Nestor sagt nur „Notiert.“, die Karte wird grün |
-| „Nestor, mach ein Bild davon“, „Visualisier nur den letzten Punkt“ | langer Auftrag: „Nehme ich mit …“, das Bild kommt still in den Verlauf (Basis: Überblick als Text, kurzer Bogen) |
-| „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | langer Auftrag Recherche: „Nehme ich mit …“, das Ergebnis kommt still als Karte mit Quellen |
+| „Nestor, Sofie übernimmt die Statusseite bis Freitag“ | Lücke schließen: Werkzeug `artefakt_eintragen` – Nestor sagt in einem Satz, was er notiert hat, die Karte wird grün |
+| „Nestor, mach ein Bild davon“, „Visualisier nur den letzten Punkt“ | langer Auftrag: Nestor sagt, dass er dran ist, das Bild kommt still in den Verlauf (Basis: Überblick als Text, kurzer Bogen) |
+| „Gib uns einen Überblick zu …“, „Wie ist der aktuelle Stand bei …?“ | langer Auftrag Recherche: Nestor sagt, dass er nachschaut, das Ergebnis kommt still als Karte mit Quellen; Fragen dazu beantwortet er aus der fertigen Recherche |
 | „Ja, mach eine Folie“ (nach einer Recherche) | Bogen „Folie“: Bestätigung, Folie als Karte, „Hier ist die Folie.“ |
 | „Nestor, erklär das Bild“ | normale Frage zum letzten Bild bzw. zur letzten Recherche |
 | „Nestor, lass die Recherche“, „brich das Bild ab“ | Auftrag abbrechen: „Okay, lass ich.“ |
@@ -174,11 +174,12 @@ erster Ton ~0,5 s später, ~1 Cent je Frage. Der Coach nutzt diesen Weg automati
 zustande kommt. Wird der Bogen unterbrochen, schweigt die Stimme, die Antwort wird trotzdem fertig und kommt als Karte.
 
 **Nestor Basis (Ticket #13, Funkgerät seit #27, nur Mistral):** immer der Weg „text“ – Sprechtaste ─► Ton der Frage
-als WAV an `/api/frage/audio` ─► Voxtral-Transkription ─► Bogen ─► `mistral-medium-latest` gestreamt (dieselbe
-`AKTION:`-Zeile, kein Tool-Call) ─► Satz für Satz Voxtral TTS mit der gespeicherten Stimme **Thorsten** (`voice_id`,
+als WAV an `/api/frage/audio` ─► Voxtral-Transkription ─► Bogen ─► `mistral-medium-latest` gestreamt mit
+demselben Werkzeugkatalog wie Premium (coach/kern.py, #89; nach einem Werkzeug ein zweiter Aufruf für den
+Abschlusssatz) ─► Satz für Satz Voxtral TTS mit der gespeicherten Stimme **Thorsten** (`voice_id`,
 Thorsten-Voice CC0, Referenz in `coach/stimmen/`) ─► Dashboard. Live-Text über Voxtral Realtime (für Transkript,
 Agenda-Ansagen, Fokus und das „Nein“). Basis reagiert nicht auf den Namen; Rückfrage-Fenster gibt es keins, die
-Sprechtaste unterbricht Nestor. „Zeig uns die Übersicht“ (`AKTION: bild`) stellt den **Überblick als Text** in den
+Sprechtaste unterbricht Nestor. „Zeig uns die Übersicht“ (Werkzeug `bild_zeichnen`) stellt den **Überblick als Text** in den
 Verlauf (`coach/ueberblick.py`). Kommt Mistral auch nach Wiederholungen nicht durch (HTTP 429), sagt Nestor: „Ich
 komme gerade nicht durch, versucht es gleich nochmal.“ Die Stil-Anweisung für die Stimme (`STIL_START`) gibt es bei
 Voxtral nicht. Gemessen 08.10. vor #27 ([messung_basis.md](messung_basis.md)): Sprechende → erster Ton ~2,0–2,1 s,

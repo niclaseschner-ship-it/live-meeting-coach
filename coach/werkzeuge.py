@@ -1,9 +1,10 @@
-"""Werkzeuge von Nestor im Gespräch (Premium) und ihre Prüfung.
+"""Werkzeuge von Nestor und ihre Prüfung – ein Katalog für beide Stufen (Premium im Gespräch, Basis im Text-Weg).
 
 Das Modell wählt das Werkzeug selbst – nach dem, was gemeint ist, nicht nach einzelnen Wörtern. Der Code prüft nur,
 ob die Argumente zum Meeting passen (Ergebnis-Nummer und Agendapunkt existieren, Zeitangabe lesbar, Karte nicht
 leer) – Leitplanke „Werkzeug-Validierung“. Was nicht passt, geht als Fehler an das Modell zurück, damit es kurz
-sagt, was nicht stimmt, statt etwas Falsches zu tun.
+sagt, was nicht stimmt, statt etwas Falsches zu tun. Ausgeführt werden sie in coach/kern.py; nach jedem Werkzeug
+sagt das Modell selbst, was es getan hat.
 """
 
 from __future__ import annotations
@@ -18,8 +19,7 @@ WERKZEUGE = [
     {"type": "function", "name": "zusammenfassen",
      "description": "Eine Zusammenfassung als Karte zeigen: was beschlossen, übernommen und offen ist, und was "
                     "besprochen wurde – für einen Agendapunkt (bereich=punkt, ohne Nummer der aktuelle), das ganze "
-                    "Meeting (gesamt) oder die Zeit seit mm:ss (seit). Du bekommst den Inhalt der Karte zurück und "
-                    "sagst danach ein bis zwei Sätze dazu, ohne sie vorzulesen.",
+                    "Meeting (gesamt) oder die Zeit seit mm:ss (seit). Du bekommst Karte und Besprochenes zurück.",
      "parameters": {"type": "object", "properties": {
          "bereich": {"type": "string", "enum": list(BEREICHE)},
          "punkt": {"type": "integer", "description": "Agendapunkt-Nummer bei bereich=punkt; weglassen = aktueller"},
@@ -27,7 +27,8 @@ WERKZEUGE = [
          "required": ["bereich"]}},
     {"type": "function", "name": "karte",
      "description": "Eine freie Karte zeigen, wenn deine Antwort Einzelheiten hat (Liste, Vergleich, Schritte, "
-                    "Zahlen). Kurzer Titel, höchstens zwölf knappe Punkte. Danach sagst du ein bis zwei Sätze.",
+                    "Zahlen) – oder wenn die Runde eine gezeigte Karte ergänzt oder anders haben möchte: dann die "
+                    "vollständige neue Karte. Kurzer Titel, höchstens zwölf knappe Punkte.",
      "parameters": {"type": "object", "properties": {
          "titel": {"type": "string"},
          "punkte": {"type": "array", "items": {"type": "string"}}},
@@ -38,63 +39,65 @@ WERKZEUGE = [
      "parameters": {"type": "object", "properties": {}}},
     {"type": "function", "name": "auftrag_abbrechen",
      "description": "Einen laufenden Hintergrund-Auftrag abbrechen („lass die Recherche“, „das Bild brauchen wir "
-                    "nicht mehr“). Ohne Art der jüngste. Das System bestätigt selbst – sag nichts dazu.",
+                    "nicht mehr“). Ohne Art der jüngste.",
      "parameters": {"type": "object", "properties": {"art": {"type": "string", "enum": list(AUFTRAG_ARTEN)}}}},
     {"type": "function", "name": "bild_zeichnen",
-     "description": "Visuelle Übersicht (Live-Bild) neu zeichnen lassen, dauert etwa eine Minute; das Bild erscheint "
-                    "später still im Verlauf. Nicht, wenn die Runde nur ein vorhandenes Bild erklärt haben möchte.",
+     "description": "Visuelle Übersicht über das Meeting zeigen (Live-Bild bzw. Überblick). Nicht, wenn die Runde "
+                    "nur ein vorhandenes Bild erklärt haben möchte.",
      "parameters": {"type": "object", "properties": {"fokus": {
          "type": "string", "description": "gesamt, ein Agendapunkt, was noch ansteht, wo Entscheidungen fehlen …"}},
          "required": ["fokus"]}},
     {"type": "function", "name": "agendapunkt_wechseln",
      "description": "Zum genannten Agendapunkt wechseln – nur, wenn die Gruppe das ausdrücklich möchte. Eine Frage "
-                    "nach dem nächsten Punkt ist kein Wechselwunsch.",
+                    "zum Punkt oder nach dem nächsten Punkt ist kein Wechselwunsch.",
      "parameters": {"type": "object", "properties": {"nummer": {"type": "integer"}}, "required": ["nummer"]}},
     {"type": "function", "name": "recherchieren",
-     "description": "Im Internet recherchieren, z. B. „gib uns einen Überblick zu …“ oder aktuelle Fakten. Läuft im "
-                    "Hintergrund; das Ergebnis erscheint später still als Karte mit Quellen. Formuliere die Frage ohne "
-                    "Namen und ohne Interna aus dem Meeting.",
+     "description": "Etwas Neues im Internet recherchieren („such mal raus …“, „gib uns einen Überblick zu …“, "
+                    "aktuelle Fakten). Läuft im Hintergrund; das Ergebnis erscheint später als Karte mit Quellen. "
+                    "Fragen zu einer fertigen Recherche beantwortest du selbst aus „Letzte Recherche“. Formuliere die "
+                    "Frage ohne Namen und ohne Interna aus dem Meeting.",
      "parameters": {"type": "object", "properties": {"frage": {"type": "string"}}, "required": ["frage"]}},
     {"type": "function", "name": "folie_erstellen",
-     "description": "Das letzte Rechercheergebnis mit Quellen als Folie im Dashboard zusammenstellen. Nur nach "
-                    "einer Recherche und wenn die Gruppe das möchte (z. B. „ja, mach eine Folie“).",
+     "description": "Das letzte Rechercheergebnis mit Quellen als Folie im Dashboard zusammenstellen – nur, wenn "
+                    "ausdrücklich eine Folie gewünscht ist („ja, mach eine Folie“). Eine Übersicht über das Meeting "
+                    "ist keine Folie.",
      "parameters": {"type": "object", "properties": {}}},
     {"type": "function", "name": "karte_zeigen",
      "description": "Eine feste Karte in den Verlauf stellen: fehlt (was noch fehlt, Lücken), stand (wo stehen wir), "
-                    "festgehalten (Protokoll, Liste des Festgehaltenen), ueberblick (Überblick als Text). Das System "
-                    "sagt selbst dazu, was auffällt – sag nichts.",
+                    "festgehalten (Protokoll, Liste des Festgehaltenen), ueberblick (Überblick als Text). Du bekommst "
+                    "den Inhalt zurück.",
      "parameters": {"type": "object", "properties": {"art": {
          "type": "string", "enum": ["fehlt", "stand", "festgehalten", "ueberblick"]}},
          "required": ["art"]}},
     {"type": "function", "name": "karte_neu_aufbereiten",
      "description": "Die zuletzt gezeigte Karte anders aufbereiten, wenn die Runde das zu ihr sagt („bereite das "
-                    "anders auf“, „mach es kürzer“, „als Liste bitte“). Erscheint als neue Karte, die alte bleibt "
-                    "stehen. Das System sagt selbst dazu – sag nichts.",
+                    "anders auf“, „mach es kürzer“, „als Liste bitte“). Erscheint als neue Karte, die alte bleibt.",
      "parameters": {"type": "object", "properties": {"wie": {
          "type": "string", "enum": ["kürzer", "ausführlicher", "als_liste", "einfacher"]}},
          "required": ["wie"]}},
     {"type": "function", "name": "artefakt_eintragen",
-     "description": "Eine Aufgabe, Entscheidung, einen offenen Punkt oder ein Risiko eintragen oder ergänzen, wenn die "
-                    "Gruppe es dir sagt („Sofie übernimmt die Statusseite bis Freitag“, „fürs Protokoll: wir nehmen "
-                    "Variante B“). Nummer aus „Festgehaltene Artefakte“, für Neues weglassen. Nur Felder, die gesagt "
-                    "wurden. Das System bestätigt mit „Notiert“ – sag nichts dazu.",
+     "description": "Etwas festhalten oder ergänzen, wenn die Gruppe es dir sagt: Aufgabe („Sofie übernimmt die "
+                    "Statusseite bis Freitag“), Entscheidung („fürs Protokoll: wir nehmen Variante B“), offener "
+                    "Punkt, Risiko, Option (eine Möglichkeit, die zur Wahl steht) oder Kriterium (woran die Runde "
+                    "die Optionen misst). Nummer aus „Festgehaltene Artefakte“, für Neues weglassen. Nur Felder, die "
+                    "gesagt wurden.",
      "parameters": {"type": "object", "properties": {
          "nummer": {"type": "integer", "description": "Nummer eines festgehaltenen Artefakts; weglassen für Neues"},
-         "typ": {"type": "string", "enum": ["aufgabe", "entscheidung", "offen", "risiko"]},
+         "typ": {"type": "string", "enum": ["aufgabe", "entscheidung", "offen", "risiko", "option", "kriterium"]},
          "was": {"type": "string"}, "wer": {"type": "string"}, "bis": {"type": "string"},
          "status": {"type": "string", "enum": ["endgueltig", "vorlaeufig"]},
          "reaktion": {"type": "string"}}}},
     {"type": "function", "name": "ergebnis_entfernen",
      "description": "Ein festgehaltenes Artefakt aus der Liste entfernen, wenn die Gruppe das ausdrücklich sagt "
                     "(„nimm das von der Liste“, „das brauchen wir nicht mehr“, „streich das wieder“). Sofort "
-                    "ausgeführt, die Karte bietet Rückgängig. Nummer aus „Festgehaltene Artefakte“.",
+                    "ausgeführt, das Dashboard bietet Rückgängig. Nummer aus „Festgehaltene Artefakte“.",
      "parameters": {"type": "object", "properties": {
          "nummer": {"type": "integer", "description": "Nummer des Artefakts, das entfernt werden soll"}},
          "required": ["nummer"]}},
     {"type": "function", "name": "ergebnis_aendern",
-     "description": "Den Wortlaut eines festgehaltenen Artefakts ändern, wenn die Gruppe das ausdrücklich so "
-                    "möchte („nimm statt X Y“, „das ist falsch, richtig ist …“). Nur der Text ändert sich, nicht "
-                    "wer/bis/Status. Sofort ausgeführt, die Karte bietet Rückgängig.",
+     "description": "Den Wortlaut eines festgehaltenen Artefakts ändern, wenn die Gruppe genau diesen Eintrag "
+                    "ändern möchte („nimm statt X Y“, „das ist falsch, richtig ist …“). Nur der Text ändert sich. "
+                    "Sofort ausgeführt, das Dashboard bietet Rückgängig. Nicht für Karten – dafür gibt es `karte`.",
      "parameters": {"type": "object", "properties": {
          "nummer": {"type": "integer", "description": "Nummer des Artefakts, dessen Wortlaut sich ändert"},
          "text": {"type": "string", "description": "der neue Wortlaut"}},
@@ -107,11 +110,13 @@ WERKZEUGE = [
                     "deinen Namen.", "parameters": {"type": "object", "properties": {}}},
 ]
 NAMEN = {w["name"] for w in WERKZEUGE}
-# Nach diesen Werkzeugen spricht das System selbst (Floskel bzw. Karten-Satz) – keine Abschlussantwort des Modells
-SYSTEM_SPRICHT = ("bild_zeichnen", "recherchieren", "folie_erstellen", "karte_zeigen", "karte_neu_aufbereiten",
-                  "artefakt_eintragen", "ergebnis_entfernen", "ergebnis_aendern", "auftrag_abbrechen")
-# Nach diesen sagt das Modell in einer Abschlussantwort ein bis zwei Sätze (mit dem Werkzeug-Ergebnis)
-ABSCHLUSS = ("zusammenfassen", "karte", "agendapunkt_wechseln", "zuhoeren_pausieren")
+NUR_GESPRAECH = ("nicht_an_mich", "gespraech_beenden")  # der Text-Weg ist immer gerichtet und hat kein Gespräch
+
+
+def fuer_chat() -> list[dict]:
+    """Der Katalog im Format der Chat-Schnittstelle (Text-Weg; OpenAI und Mistral verstehen dasselbe)."""
+    return [{"type": "function", "function": {k: w[k] for k in ("name", "description", "parameters")}}
+            for w in WERKZEUGE if w["name"] not in NUR_GESPRAECH]
 
 
 def zeit_lesen(text: str) -> float | None:

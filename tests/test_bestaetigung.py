@@ -7,6 +7,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from modell_attrappe import Zug
 
 from coach import bestaetigung as B
 from coach.config import EINST
@@ -29,18 +30,6 @@ def bestaetigung_an(tmp_path, monkeypatch):
         object.__setattr__(EINST, k, v)
 
 
-class _Strom:
-    def __init__(self, teile):
-        self.teile = teile
-
-    def __aiter__(self):
-        async def gen():
-            for t in self.teile:
-                await asyncio.sleep(0)
-                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=t))])
-        return gen()
-
-
 class _Ton:
     def __init__(self, zaehler):
         self.zaehler = zaehler
@@ -56,20 +45,26 @@ class _Ton:
         yield b"\x00\x00" * 200 + b"\x00\x30" * 4800 + b"\x00\x00" * 4000  # Stille, 0,2 s Ton, Stille
 
 
-def _attrappe(antwort_teile, tts_aufrufe):
+def _attrappe(zuege, tts_aufrufe):
+    from modell_attrappe import Strom
+
+    offen = list(zuege)
+
     async def create(**kw):
-        return _Strom(antwort_teile)
+        if not kw.get("stream"):  # Antwortkarte im Hintergrund: hier ohne Inhalt
+            raise RuntimeError("nur gestreamt")
+        return Strom(offen.pop(0) if offen else "")
     return SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
         audio=SimpleNamespace(speech=SimpleNamespace(with_streaming_response=SimpleNamespace(
             create=lambda **kw: _Ton(tts_aufrufe)))))
 
 
-def _coach(antwort_teile=("AKTION: keine\nIhr seid bei Punkt eins.",)):
+def _coach(zuege=("Ihr seid bei Punkt eins.",)):
     c = Coach()
     c.stufe_setzen("premium")
     tts = []
-    c._client = _attrappe(list(antwort_teile), tts)
+    c._client = _attrappe(list(zuege), tts)
     c.meeting.regel_ids = []
     c.meeting.starten(virtuell=True)
     gesendet: list[dict] = []
@@ -118,34 +113,9 @@ def test_kurze_floskeln_wechseln():
     assert all("gleich zurück" not in x.lower() for x in B.KURZ)
 
 
-def test_kein_auftrag_und_recherche_auftrag_erkennen():
+def test_danke_und_stopp_brauchen_keine_bestaetigung():
     assert not B.bestaetigen("danke, das war's") and not B.bestaetigen("stopp")
     assert B.bestaetigen("was ist beim Budget noch offen?")
-    assert B.recherche_auftrag("Recherchier bitte die NIS2-Vorgaben.")
-    assert B.recherche_auftrag("Such mal im Netz nach den NIS2-Vorgaben.")
-    assert B.recherche_auftrag("Schau bitte kurz nach, was NIS2 verlangt.")
-    assert not B.recherche_auftrag("Was verlangt NIS2?")
-    # Datenspende 12.10.: Rückbezug auf eine fertige Recherche startet keine neue
-    assert not B.recherche_auftrag("Kannst du mir die Folie kurz vorstellen, die du recherchiert hast?")
-    assert not B.recherche_auftrag("Was hast du zu Feng Shui recherchiert?")
-    assert B.recherche_auftrag("Recherchiere die Grundlagen von Feng Shui.")
-
-
-def test_explizite_recherche_umgeht_die_aktionswahl_des_modells():
-    async def ablauf():
-        c, _, _ = _coach(["AKTION: keine\nDazu weiß ich nichts."])
-        gestartet = []
-
-        async def lang(art, titel, fokus="", bogen=None):
-            gestartet.append((art, titel))
-            return True
-
-        c.assistent.lang_annehmen = lang
-        c.assistent.frage_beantworten("Recherchier bitte die NIS2-Vorgaben.", "taste")
-        await c.assistent.bogen.task
-        return gestartet
-
-    assert asyncio.run(ablauf()) == [("recherche", "Recherchier bitte die NIS2-Vorgaben.")]
 
 
 # --- Text-Weg (Basis und Premium „Kurzantwort“) ----------------------------------------------------------------
@@ -168,9 +138,10 @@ def test_bestaetigung_kommt_vor_der_antwort_und_ihr_text_vor_dem_ton():
     assert len(tts) == 1  # nur die Antwort ging an die Sprachausgabe, die Floskel nicht
 
 
-def test_lange_aufgabe_sagt_die_wartezeit_an():
+def test_lange_aufgabe_startet_im_hintergrund_und_nestor_sagt_es():
     async def ablauf():
-        c, gesendet, _ = _coach(["AKTION: recherche Mindestlohn 2027\n"])
+        c, gesendet, _ = _coach([Zug(werkzeuge=[("recherchieren", {"frage": "Mindestlohn 2027"})]),
+                                 "Ich schaue nach, die Karte kommt gleich."])
         _vorrat(c.assistent)
 
         async def langsam(*a, **k):
@@ -178,7 +149,6 @@ def test_lange_aufgabe_sagt_die_wartezeit_an():
         import coach.recherche
         coach.recherche.recherchieren, alt = langsam, coach.recherche.recherchieren
         try:
-            # Frage klingt nicht nach Recherche: die lange Ansage kommt mit der Aktionszeile
             await c.satz(Segment("Person 1", "Nestor, was gilt beim Mindestlohn ab 2027?", 1, 3))
             await c.assistent.bogen.task
             await asyncio.sleep(0.05)
@@ -191,13 +161,13 @@ def test_lange_aufgabe_sagt_die_wartezeit_an():
         return [n["text"] for n in gesendet if n["typ"] == "nestor_text"], auftraege
 
     texte, auftraege = asyncio.run(ablauf())
-    assert texte[0] in B.KURZ and texte[1] in B.LANGE and len(texte) == 2  # das Modell sagt nichts dazu
-    assert [(x["art"], x["zustand"]) for x in auftraege] == [("recherche", "laeuft")]
+    assert texte[0] in B.KURZ and texte[1:] == ["Ich schaue nach, die Karte kommt gleich."]
+    assert [(x["art"], x["titel"], x["zustand"]) for x in auftraege] == [("recherche", "Mindestlohn 2027", "laeuft")]
 
 
 def test_danke_wird_nicht_bestaetigt():
     async def ablauf():
-        c, gesendet, _ = _coach(["AKTION: keine\nGern."])
+        c, gesendet, _ = _coach(["Gern."])
         _vorrat(c.assistent)
         await c.satz(Segment("Person 1", "Nestor, danke dir sehr.", 1, 3))
         await c.assistent.bogen.task
@@ -208,8 +178,10 @@ def test_danke_wird_nicht_bestaetigt():
 
 # --- Aufträge abbrechen --------------------------------------------------------------------------------------
 def test_recherche_per_stimme_abbrechen_und_weitere_wartet():
+    abbrechen = Zug(werkzeuge=[("auftrag_abbrechen", {"art": "recherche"})])
+
     async def ablauf():
-        c, gesendet, _ = _coach()
+        c, gesendet, _ = _coach([abbrechen, "Okay, die lasse ich.", abbrechen, "Die andere auch."])
         a = c.assistent
         _vorrat(a)
         import coach.recherche
@@ -224,9 +196,10 @@ def test_recherche_per_stimme_abbrechen_und_weitere_wartet():
             await asyncio.sleep(0.05)
             vorher = a.auftraege.schnappschuss()
             await c.satz(Segment("Person 1", "Nestor, lass die Recherche.", 5, 7))
-            await asyncio.sleep(0.05)
+            await a.bogen.task
             mitte = a.auftraege.schnappschuss()
             await c.satz(Segment("Person 1", "Nestor, vergiss die Recherche.", 8, 9))
+            await a.bogen.task
             await asyncio.sleep(0.05)
             return vorher, mitte, a.auftraege.schnappschuss(), erste.cancelled(), zweite.cancelled(), gesendet
         finally:
@@ -236,7 +209,8 @@ def test_recherche_per_stimme_abbrechen_und_weitere_wartet():
     assert [x["zustand"] for x in vorher] == ["laeuft", "wartet"]
     assert [(x["titel"], x["zustand"]) for x in mitte] == [("Mindestlohn 2027", "laeuft")]  # die jüngste zuerst weg
     assert nachher == [] and erste_weg and zweite_weg
-    assert [n["text"] for n in gesendet if n["typ"] == "nestor_text"].count(B.ABGEBROCHEN) == 2
+    texte = [n["text"] for n in gesendet if n["typ"] == "nestor_text"]
+    assert "Okay, die lasse ich." in texte and "Die andere auch." in texte
 
 
 def test_bild_auftrag_laeuft_wartet_und_ist_per_x_abbrechbar():
@@ -265,21 +239,16 @@ def test_bild_auftrag_laeuft_wartet_und_ist_per_x_abbrechbar():
 
 
 def test_abbruch_ohne_offenen_auftrag_sagt_das():
+    """Das Werkzeug meldet „nichts offen“ ans Modell, das es in eigenen Worten sagt."""
     async def ablauf():
-        c, gesendet, _ = _coach()
-        _vorrat(c.assistent)
+        c, gesendet, _ = _coach([Zug(werkzeuge=[("auftrag_abbrechen", {})]), "Da läuft gerade nichts."])
         await c.satz(Segment("Person 1", "Nestor, lass die Recherche.", 1, 3))
-        return gesendet
+        await c.assistent.bogen.task
+        return c, gesendet
 
-    assert [n["text"] for n in asyncio.run(ablauf()) if n["typ"] == "nestor_text"] == [B.NICHTS_OFFEN]
-
-
-def test_abbruchwunsch_erkennen():
-    assert B.abbruch_wunsch("Nestor, lass die Recherche") and B.abbruch_art("Nestor, lass die Recherche") == "recherche"
-    assert B.abbruch_wunsch("Nestor, brich das Bild ab") and B.abbruch_art("brich das Bild ab") == "bild"
-    assert B.abbruch_wunsch("Nestor, die Folie brauchen wir nicht")
-    assert not B.abbruch_wunsch("Nestor, lass uns über das Budget reden")
-    assert not B.abbruch_wunsch("Nestor, zeig uns das Bild")
+    c, gesendet = asyncio.run(ablauf())
+    assert c.assistent.letzte["antwort"] == "Da läuft gerade nichts."
+    assert c.assistent.bogen is None and c.assistent.letzte["aktion"] == {"werkzeuge": ["auftrag_abbrechen"]}
 
 
 # --- Realtime-Gespräch -----------------------------------------------------------------------------------------
@@ -365,7 +334,7 @@ def test_transkript_laeuft_als_text_mit():
     assert texte[0]["neu"] and texte[0]["frage"] == "wo stehen wir?" and texte[0]["delta"]
 
 
-def test_langes_werkzeug_sagt_die_wartezeit_an_ohne_zweite_antwort():
+def test_langes_werkzeug_meldet_den_hintergrund_ans_modell_ohne_eigene_ansage():
     async def ablauf():
         c, g, ws, gesendet = _gespraech()
         c.meeting.transkript.append(Segment("Person 1", "Wir planen den Stand.", 0, 2))
@@ -374,12 +343,12 @@ def test_langes_werkzeug_sagt_die_wartezeit_an_ohne_zweite_antwort():
         c.bild_erstellen = nichts
         await g._werkzeug("bild_zeichnen", json.dumps({"fokus": "gesamt"}), "call_1")
         await asyncio.sleep(0.01)
-        return ws, gesendet
+        return g, ws, gesendet
 
-    ws, gesendet = asyncio.run(ablauf())
-    texte = [n["text"] for n in gesendet if n["typ"] == "nestor_text"]
-    assert len(texte) == 1 and texte[0] in B.LANGE
+    g, ws, gesendet = asyncio.run(ablauf())
+    assert [n["text"] for n in gesendet if n["typ"] == "nestor_text"] == []  # das Modell sagt es selbst
     assert [e["type"] for e in ws.gesendet] == ["conversation.item.create"]  # Ergebnis ans Modell, kein response.create
+    assert "Hintergrund" in ws.gesendet[0]["item"]["output"] and g._abschluss  # danach genau eine Abschlussantwort
 
 
 def test_recherche_im_gespraech_abbrechen():

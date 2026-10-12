@@ -490,7 +490,7 @@ async def basis_formulieren(client, meeting, vorstellung: bool, *, wahl) -> str 
 
 def in_stuecke(text: str, hoechstens: int = 400) -> list[str]:
     """Für die Sprachausgabe: ganze Sätze, zu Stücken bis etwa `hoechstens` Zeichen gebündelt."""
-    from .assistent import saetze_teilen
+    from .kern import saetze_teilen
 
     saetze, rest = saetze_teilen(text + " ")
     saetze += [rest.strip()] if rest.strip() else []

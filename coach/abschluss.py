@@ -69,7 +69,7 @@ def meeting_daten(ordner: Path) -> dict:
     """Korrigier- und kopierbare Standardgliederung aus Ticket #22."""
     pfad = Path(ordner) / "meeting.json"
     return json.loads(pfad.read_text(encoding="utf-8")) if pfad.exists() else {
-        "kopf": {"titel": _bericht(Path(ordner)).get("titel", "Meeting")}, "entscheidungen": [], "aufgaben": [],
+        "kopf": {"titel": _bericht(Path(ordner)).get("titel", "Meeting")}, "entscheidungen": [], "optionen": [], "kriterien": [], "aufgaben": [],
         "offene_punkte": [], "risiken": [], "parkplatz": [], "agenda": [], "luecken": 0,
     }
 
@@ -90,6 +90,9 @@ def meeting_markdown(d: dict, regelanalyse: dict | None = None) -> str:
             out.append("- " + " · ".join(teile))
         out.append("")
     liste("Entscheidungen", "entscheidungen", ("was", "status", "wer"))
+    if d.get("optionen") or d.get("kriterien"):  # nur, wo die Runde Optionen abgewogen hat
+        liste("Optionen", "optionen", ("was",))
+        liste("Kriterien", "kriterien", ("was",))
     liste("Aufgaben", "aufgaben", ("was", "wer", "bis"))
     liste("Offene Punkte", "offene_punkte", ("was", "wer", "bis"))
     liste("Risiken", "risiken", ("was", "wer", "reaktion"))

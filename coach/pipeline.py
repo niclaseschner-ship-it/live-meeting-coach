@@ -672,8 +672,8 @@ class Coach:
 
     def _anteil_kachel(self) -> tuple[str, str]:
         r = analyse.redeanteil(self.meeting) if self.meeting.laeuft else None
-        if r is None:  # allein oder nur eine Stimme erkannt: kein fairer Anteil, nichts zu werten
-            return "gruen", "wertet ab zwei erkannten Personen"
+        if r is None:
+            return "gruen", "Redeanteile ausgeglichen"
         grenze = f"Hinweis ab {r['grenze'] * 100:.0f} %"
         if r["rede"] < analyse.ANTEIL_MIN_REDE:
             return "gruen", f"noch zu wenig Gespräch · {grenze}"
@@ -765,8 +765,15 @@ class Coach:
         """Regel 7: nur an die Moderation, ohne Namen und ohne Wertung (Lastenheft: keine Personenbewertung)."""
         m = self.meeting
         for t in stellen:
+            # Überlappende Fenster der Themen-Zuordnung melden dieselbe Stelle mehrfach – sie zählt nur einmal
+            # (Datenspende 12.10.: drei Kraftausdrücke, gemeldet als „5. Stelle“ und „9× rauer Ton“)
+            schluessel = re.sub(r"\W+", " ", str(t["zitat"]).lower()).strip()
+            if any(e["art"] == "ton" and e.get("schluessel") == schluessel and e["zeit"] >= m.jetzt() - 300
+                   for e in self.protokoll):
+                continue
             # jede Stelle zählt, auch wenn der Hinweis wegen der Wartezeit nicht erneut erscheint
-            self.protokoll.append({"zeit": m.jetzt(), "art": "ton", "ton": t["art"], "zitat": t["zitat"]})
+            self.protokoll.append({"zeit": m.jetzt(), "art": "ton", "ton": t["art"], "zitat": t["zitat"],
+                                   "schluessel": schluessel})
             n = sum(1 for e in self.protokoll if e["art"] == "ton" and e["zeit"] >= m.jetzt() - 300)
             zaehler = f" ({n}. Stelle in den letzten 5 Minuten)" if n > 1 else ""
             text = (f"Eine Äußerung könnte als persönlicher Angriff ankommen: „{t['zitat']}“"
@@ -998,13 +1005,16 @@ class Coach:
             return  # der Coach hört sich selbst über den Lautsprecher – nicht ins Transkript
         if self.assistent.vorstellung_bis is not None:
             self.name_lernen(seg.sprecher, seg.text, seg.start, seg.ende)
+        an_nestor = self.assistent.an_nestor(seg.ende, seg.text)  # eine Bitte an Nestor ist kein Gesprächsinhalt
         for z in zeilen or [seg]:
             z.sprecher = self.namen.get(z.sprecher, z.sprecher)
             m.transkript.append(z)
-            self._abschnitt.append(z)
+            if not an_nestor:
+                self._abschnitt.append(z)
         m.transkript.sort(key=lambda s: s.start)
         m.teiltext = ""
-        self.artefakte.satz(zeilen or [seg])  # Ticket #72: Schnell-Erkennung bei klaren Signalen
+        if not an_nestor:  # was die Runde Nestor zum Festhalten sagt, trägt er selbst ein (coach/kern.py)
+            self.artefakte.satz(zeilen or [seg])  # Ticket #72: Schnell-Erkennung bei klaren Signalen
         # Die feste Ansage-Regel wechselt nur bei einer echten Ansage: eine Frage soll Nestor erst bekommen,
         # bevor die Agenda wechselt, und ein Zuruf an Nestor übergibt die Entscheidung an ihn (Werkzeug/Aktion) –
         # auch für die weiteren Sätze desselben Gesprächszugs, die der Live-Text als eigene Segmente liefert.
@@ -1141,10 +1151,6 @@ class Coach:
                 self.punkt_wechseln(i)
         elif aktion["typ"] == "pause":
             self.assistent.zustand = "pausiert"
-        elif aktion["typ"] == "eintragen":  # Basis: „Nestor, Sofie übernimmt die Statusseite bis Freitag“ (#26)
-            a, _ = self.artefakte.eintragen(aktion.get("daten") or {})
-            if a is not None:
-                self.protokoll.append({"zeit": m.jetzt(), "art": "artefakt_eingetragen", "id": a.id, "durch": "stimme"})
         await self.melden()
 
     async def einwand_umsetzen(self) -> None:

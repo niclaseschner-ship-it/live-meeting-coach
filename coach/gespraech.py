@@ -3,10 +3,10 @@
 Wird Nestor angesprochen, öffnet sich eine Sitzung; danach hört das Modell selbst mit – das Mikrofon geht direkt
 hinein. Wann es antwortet, entscheidet der Coach (create_response aus): jede Anfrage an Nestor – Name, Sprechtaste,
 Knopf mit Freitext, getippt oder ein Gesprächszug im Hörfenster (coach/gespraechszug.py) – kommt als EIN Aufruf mit
-dem aktuellen Stand des Meetings. Vorsortiert wird nichts: welches Werkzeug passt und ob ein Zug ohne Namen
-überhaupt an Nestor ging (Werkzeug `nicht_an_mich`), entscheidet das Modell (coach/werkzeuge.py).
-Schranken im Code: höchstens eine Werkzeugrunde und eine Abschlussantwort je Anfrage, geprüfte Werkzeug-Argumente,
-Frist bis zum ersten Ton (danach kommt das Ergebnis still als Karte).
+dem aktuellen Stand des Meetings. Anweisung, Werkzeuge und ihre Ausführung teilt das Gespräch mit Basis
+(coach/kern.py); ob ein Zug ohne Namen überhaupt an Nestor ging, entscheidet das Modell (Werkzeug `nicht_an_mich`).
+Schranken im Code: höchstens eine Werkzeugrunde und genau eine Abschlussantwort je Anfrage – nach einem Werkzeug sagt
+das Modell, was es getan hat –, Frist bis zum ersten Ton (danach kommt das Ergebnis still als Karte).
 Reinreden macht Nestor still – aber nur die Stimme: die Antwort wird fertig erzeugt und kommt als Karte in den
 Verlauf. Bild und Recherche sind lange Aufträge im Hintergrund; das Ergebnis kommt still.
 Ist eine Weile Ruhe oder sagt die Runde „danke, das war's“, schließt die Sitzung. Kosten nur, solange sie offen ist.
@@ -22,52 +22,13 @@ import time
 
 from . import anbieter
 from . import gespraechszug as GZ
-from . import werkzeuge as W
+from . import kern
 from .config import EINST
 from .werkzeuge import WERKZEUGE  # noqa: F401 – Katalog, auch für Drehbuch-Prüfungen
 
 log = logging.getLogger("coach.gespraech")
 
 RATE = 24000
-
-ANWEISUNG = """\
-Du bist {name}, Moderationsassistent und Teil dieser Runde in einem Präsenzmeeting. Du sprichst mit der
-Gruppe wie ein erfahrener, freundlicher Kollege, der den Überblick behält: natürlich, locker, auf Deutsch, per „ihr“,
-nie „Sie“.
-
-So arbeitest du:
-- Jede Nachricht der Runde an dich ist eine Anfrage. Du antwortest in einem Bogen: ein, höchstens zwei gesprochene
-  Sätze, das Wichtigste zuerst. Einzelheiten gehören auf eine Karte (zusammenfassen, karte, karte_zeigen) – lies
-  nie vor, was dort steht.
-- Wähle das Werkzeug nach dem, was gemeint ist, nicht nach einzelnen Wörtern. „Fass den Punkt zusammen“ meint den
-  aktuellen Agendapunkt, „seit eben“ oder „seit der Pause“ einen Zeitraum, „das Ganze“ das Meeting. Eine Frage,
-  in der „nächster Punkt“ vorkommt, ist kein Wunsch, die Agenda zu wechseln. Wer zwei Dinge will (zusammenfassen
-  UND den nächsten Schritt nennen), bekommt beides.
-- Höchstens eine Werkzeugrunde je Anfrage: rufe alle nötigen Werkzeuge auf einmal auf.
-- Erfinde nichts. „Beschlossen“ oder „festgehalten“ sagst du nur, wenn es unten als Entscheidung steht oder
-  ausdrücklich so gesagt wurde; ein Vorschlag bleibt ein Vorschlag. Nummern von Ergebnissen und Agendapunkten nur
-  aus dem Stand unten.
-- Ist unklar, was gemeint ist, frag in einem kurzen Satz nach, statt zu raten.
-- Nachrichten, die mit „(Ohne deinen Namen …)“ beginnen, kamen ohne Namen direkt nach deiner Antwort; Zeilen mit
-  „Name: …“ stammen von verschiedenen Personen. Ist so eine Nachricht nicht an dich gerichtet (die Runde redet
-  untereinander, jemand spricht eine Person an, ein Kommentar zur Sache), ruf nur nicht_an_mich auf und sag nichts.
-  Eine Anschlussfrage an deine Antwort oder eine Bitte an dich beantwortest du.
-- Gespräche der Gruppe, die du nur mithörst, kommentierst du nie von dir aus.
-- Personen heißen im Transkript „Person N“ – sprich stattdessen von „jemandem“. Agendapunkte nennst du mit Nummer und
-  Titel aus der Agenda unten, sprechbar: „Punkt zwei, Budget“.
-
-STAND DES MEETINGS (bei jeder Anfrage neu):
-{lage}
-"""
-# Ohne Sofort-Bestätigung (LMC_BESTAETIGUNG=0) sagt das Modell selbst, dass es nachschaut
-OHNE_BESTAETIGUNG = ("\nBei " + ", ".join(W.SYSTEM_SPRICHT) + " spricht das System selbst – sag nichts dazu.\n")
-# Bestätigung und Wartezeit spricht das System aus vorab erzeugten Floskeln (coach/bestaetigung.py)
-MIT_BESTAETIGUNG = ("""
-Oft hat das System schon kurz bestätigt („Bin dran“), bevor du drankommst. Fang deshalb nicht mit „Okay“,
-„Moment“, „Klar“ oder „Gern“ an, sondern direkt mit dem Inhalt. Bei """ + ", ".join(W.SYSTEM_SPRICHT)
-                    + """ spricht das System selbst – ruf das Werkzeug auf, ohne etwas dazu zu sagen.
-""")
-
 
 class GespraechGesperrt(RuntimeError):
     """Ticket #64: Meeting-Kostendeckel erreicht – `starten` verweigert eine neue Realtime-Sitzung. Die
@@ -135,9 +96,8 @@ class Gespraech:
         await self.warten(bogen)
 
     def anweisung(self) -> str:
-        """Bedienlogik und der aktuelle Stand des Meetings – bei jeder Anfrage neu."""
-        return (ANWEISUNG.format(name=EINST.assistent_name, lage=self.a.lage())
-                + (MIT_BESTAETIGUNG if EINST.bestaetigung else OHNE_BESTAETIGUNG))
+        """Bedienlogik und der aktuelle Stand des Meetings – bei jeder Anfrage neu (dieselbe wie in Basis)."""
+        return kern.anweisung(self.a)
 
     async def _fragen(self, frage: str, bogen, stand_senden: bool = True) -> None:
         self._frage = frage
@@ -364,128 +324,39 @@ class Gespraech:
                             "audio_end_ms": int(w["gekuerzt"] * 1000)})
 
     async def _werkzeug(self, name: str, argumente: str, call_id: str | None) -> None:
-        """Ein Werkzeugaufruf des Modells: prüfen, ausführen, Ergebnis zurück. Keine eigene Antwort anstoßen – ob eine
-        Abschlussantwort folgt, entscheidet `_antwort_fertig` (höchstens eine je Anfrage)."""
-        from . import bestaetigung as B
-
-        c, m = self.coach, self.coach.meeting
+        """Ein Werkzeugaufruf des Modells: im Kern ausführen (coach/kern.py), Ergebnis zurück. Keine eigene Antwort
+        anstoßen – die eine Abschlussantwort stößt `_antwort_fertig` an, sobald alle Ergebnisse da sind."""
         try:
             arg = json.loads(argumente)
         except json.JSONDecodeError:
             arg = {}
-        aufruf = {"name": name, "argumente": arg}  # Nestors Seite: jeder Aufruf mit Argumenten in nestor.jsonl
-        if self._bogen is not None:
-            self._bogen.werkzeuge.append(aufruf)
         if self._abschluss_laeuft:  # Schranke: nur eine Werkzeugrunde je Anfrage
-            aufruf["fehler"] = "zweite_runde"
+            if self._bogen is not None:
+                self._bogen.werkzeuge.append({"name": name, "argumente": arg, "fehler": "zweite_runde"})
             await self._ausgabe(call_id, {"ok": False, "fehler": "Nur eine Werkzeugrunde je Anfrage – sag kurz, was "
                                                                   "noch zu tun wäre."})
             return
-        arg, fehler = W.pruefen(name, arg, nummern={a.id for a in c.artefakte.liste}, agenda=len(m.agenda),
-                                aktiver_punkt=m.aktiver_punkt, jetzt=m.jetzt(), gerichtet=self._gerichtet())
-        if fehler:
-            aufruf["fehler"] = fehler
-        if fehler and name not in ("artefakt_eintragen", "ergebnis_entfernen", "ergebnis_aendern"):
-            c.protokoll.append({"zeit": m.jetzt(), "art": "werkzeug_abgelehnt", "werkzeug": name, "fehler": fehler})
-            await self._ausgabe(call_id, {"ok": False, "fehler": fehler})
-            self._abschluss = True  # das Modell sagt kurz, was nicht geht
-            return
-        if name == "nicht_an_mich":  # schweigen: begonnenen Ton verwerfen, nichts ablegen
-            self._verworfen = True
-            if self._bogen is not None:
-                self._bogen.verworfen = True
-            if self._ton_beginn is not None:
-                await c.direkt_senden({"typ": "stimme_stopp"})
-                self._ton_ende(abgebrochen=True)
-            self._stumm = True
-            await self._ausgabe(call_id, {"ok": True})
-            return
-        if name == "artefakt_eintragen":  # Lücke korrigieren: „Notiert“, Karte wird grün
-            a = None if fehler else c.artefakte.eintragen(arg)[0]
-            if a is not None:
-                c.protokoll.append({"zeit": m.jetzt(), "art": "artefakt_eingetragen", "id": a.id, "durch": "stimme"})
-                await c.melden()
-            satz = self.a.floskeln.variante(B.NOTIERT) if a is not None else "Das konnte ich keinem Eintrag zuordnen."
-            self._system_sagt(satz)
-            await self._ausgabe(call_id, {"ok": a is not None, "eingetragen": a.kurz() if a else None, "fehler": fehler,
-                                          "hinweis": "das System hat „Notiert“ gesagt – sag nichts"})
-            return
-        if name in ("ergebnis_entfernen", "ergebnis_aendern"):  # sofort ausgeführt, Karte bietet Rückgängig
-            nummer = arg.get("nummer")
-            if fehler:
-                a = None
-            elif name == "ergebnis_entfernen":
-                a = c.artefakte.entfernen(nummer)
+        if name == "nicht_an_mich":
+            ausgabe = await kern.ausfuehren(self.a, self._bogen, name, arg, gerichtet=self._gerichtet())
+            if ausgabe.get("schweigen"):  # schweigen: begonnenen Ton verwerfen, nichts ablegen
+                self._verworfen = True
+                if self._ton_beginn is not None:
+                    await self.coach.direkt_senden({"typ": "stimme_stopp"})
+                    self._ton_ende(abgebrochen=True)
+                self._stumm = True
             else:
-                a = c.artefakte.aendern(nummer, str(arg.get("text") or ""))
-            if a is not None:
-                c.protokoll.append({"zeit": m.jetzt(), "art": "artefakt_entfernt" if name == "ergebnis_entfernen"
-                                    else "artefakt_geaendert", "id": nummer, "durch": "stimme"})
-                await c.melden()
-            floskeln = B.ENTFERNT if name == "ergebnis_entfernen" else B.GEAENDERT
-            self._system_sagt(self.a.floskeln.variante(floskeln) if a is not None
-                              else "Das finde ich in der Liste nicht.")
-            await self._ausgabe(call_id, {"ok": a is not None, "fehler": fehler,
-                                          "hinweis": "das System hat dazu schon gesprochen – sag nichts"})
+                self._abschluss = True  # direkt angesprochen: das Modell antwortet doch
+            await self._ausgabe(call_id, ausgabe)
             return
-        if name == "auftrag_abbrechen":  # das Modell nennt die Art des laufenden Auftrags
-            a = self.a.auftraege.ziel_art(arg.get("art"))
-            if a is not None:
-                self.a.auftrag_abbrechen(a.id)
-                await c.melden()
-            self._system_sagt(B.ABGEBROCHEN if a is not None else B.NICHTS_OFFEN)
-            await self._ausgabe(call_id, {"ok": a is not None, "hinweis": "das System hat es bestätigt – sag nichts"})
-            return
-        if name in ("recherchieren", "bild_zeichnen"):  # lange Aufträge: kein Bogen, Ergebnis kommt still
-            art = "recherche" if name == "recherchieren" else "bild"
-            fokus = str(arg.get("fokus") or "")
-            fokus = "" if fokus.lower() in ("gesamt", "alles") else fokus
-            titel = str(arg.get("frage") or self._frage) if art == "recherche" else self._frage
-            aufgabe = asyncio.ensure_future(self.a.lang_annehmen(art, titel, fokus, self._bogen))
-            if self._bogen is not None:
-                self._bogen.zusatz.append(aufgabe)
-            await self._ausgabe(call_id, {"ok": True, "hinweis": "läuft im Hintergrund, das Ergebnis erscheint still "
-                                                                 "im Verlauf – sag nichts dazu"})
-            return
-        if name in ("folie_erstellen", "karte_zeigen"):  # Karten-Bogen: das System spricht selbst
-            art = "folie" if name == "folie_erstellen" else str(arg.get("art") or "")
-            if art in ("folie", "fehlt", "stand", "festgehalten", "ueberblick"):
-                self.a.zusatz_bogen(art)
-            await self._ausgabe(call_id, {"ok": True, "hinweis": "die Karte erscheint, das System sagt dazu, was "
-                                                                 "auffällt – sag nichts"})
-            return
-        if name == "karte_neu_aufbereiten":  # letzte Karte per LLM-Aufruf neu aufbereiten
-            from .neu_aufbereiten import WIE
-
-            wie = str(arg.get("wie") or "")
-            if wie in WIE:
-                self.a.zusatz_bogen("neu_aufbereiten", wie)
-            await self._ausgabe(call_id, {"ok": wie in WIE, "hinweis": "die neue Karte erscheint, das System sagt "
-                                                                      "dazu – sag nichts"})
-            return
-        if name == "zusammenfassen":  # Karte aus den Ergebnissen des Bereichs, danach ein bis zwei Sätze
-            self._floskel_falls_still()
-            self._abschluss = True
-            self._aufgaben.append(asyncio.ensure_future(self._zusammenfassen(arg, call_id)))
-            return
-        if name == "karte":  # freie Karte, danach ein bis zwei Sätze
-            self._floskel_falls_still()
-            self._karte({"art": "antwort", "titel": arg["titel"], "punkte": arg["punkte"]})
-            self.a.letzte_aktion = {"typ": "karte", "art": "frei"}
-            self._abschluss = True
-            await c.melden()
-            await self._ausgabe(call_id, {"ok": True, "hinweis": "die Karte steht – sag ein bis zwei Sätze, was "
-                                                                 "auffällt, ohne sie vorzulesen"})
-            return
-        aktion = {"agendapunkt_wechseln": {"typ": "weiter", "ziel": str(arg.get("nummer", ""))},
-                  "zuhoeren_pausieren": {"typ": "pause"}}.get(name)
-        if aktion:
-            await c.assistent_aktion(aktion)
-            self.a.letzte_aktion = aktion
-            self._abschluss = True  # kurz sagen, was Nestor tut
+        self._floskel_falls_still()
+        self._abschluss = True
         if name in ("gespraech_beenden", "zuhoeren_pausieren"):
             self.beenden_nach_antwort = True
-        await self._ausgabe(call_id, {"ok": True})
+        self._aufgaben.append(asyncio.ensure_future(self._werkzeug_lauf(name, arg, call_id)))
+
+    async def _werkzeug_lauf(self, name: str, arg: dict, call_id: str | None) -> None:
+        ausgabe = await kern.ausfuehren(self.a, self._bogen, name, arg, gerichtet=self._gerichtet())
+        await self._ausgabe(call_id, ausgabe)
 
     def _system_sagt(self, satz: str) -> None:
         """Das System bestätigt selbst (Floskel) – im laufenden Bogen, damit er erst danach endet."""
@@ -499,34 +370,9 @@ class Gespraech:
         if EINST.bestaetigung and b is not None and "floskel" not in b.zeiten and not self._stumm:
             self._system_sagt(self.a.floskeln.kurz())
 
-    def _karte(self, karte: dict) -> dict:
-        b = self._bogen
-        frage = (b.frage if b is not None else self._frage) or ""
-        return self.coach._karte_ablegen({**karte, "frage": frage[:200], "still": self._stumm,
-                                          **({"bogen": b.id} if b is not None else {})})
-
-    async def _zusammenfassen(self, arg: dict, call_id: str | None) -> None:
-        from . import bogen as BG
-
-        try:
-            karte, _, auszug = await BG.bereich_karte(self.coach, arg["bereich"], arg.get("punkt"), arg.get("seit"))
-        except Exception as e:  # noqa: BLE001 – ehrlich sagen statt zu hängen
-            log.warning("Zusammenfassen fehlgeschlagen: %s", type(e).__name__)
-            await self._ausgabe(call_id, {"ok": False, "fehler": "Die Zusammenfassung hat gerade nicht geklappt."})
-            return
-        self._karte(karte)
-        self.a.letzte_aktion = {"typ": "karte", "art": "zusammenfassen"}
-        await self.coach.melden()
-        await self._ausgabe(call_id, {
-            "ok": True, "karte": {"titel": karte["titel"], "punkte": karte["punkte"]},
-            "besprochen": auszug or "(in diesem Bereich noch nichts gesagt)",
-            "hinweis": "Die Karte steht. Sag ein bis zwei Sätze, was auffällt (was beschlossen ist, was offen ist, "
-                       "was als Nächstes ansteht) – nicht vorlesen; „beschlossen“ nur, was auf der Karte als "
-                       "Entscheidung steht."})
-
     async def _abschluss_anstossen(self) -> None:
         if self._aufgaben:
-            await asyncio.wait(self._aufgaben, timeout=10.0)
+            await asyncio.wait(self._aufgaben, timeout=kern.AUSFUEHREN_FRIST + 1.0)
         if self.offen:
             await self._antworten_lassen()
         else:
@@ -574,7 +420,8 @@ class Gespraech:
                              "aktion": getattr(self.a, "letzte_aktion", None)}
             if self._bogen is not None:  # Nestors Seite (#83): fließt am Bogenende in logs/nestor.jsonl
                 self._bogen.gesagt, self._bogen.aktion = text, self.a.letzte["aktion"]
-            c.antwort_karte(self._frage, text, self.a.letzte["aktion"], [], still=stumm)
+            if not (self._bogen is not None and self._bogen.karte):  # eine Werkzeug-Karte steht schon
+                c.antwort_karte(self._frage, text, self.a.letzte["aktion"], [], still=stumm)
             self.a.verlauf.append((self._frage, text))
             c.protokoll.append({"zeit": c.meeting.jetzt(), "art": "assistent", "modus": "gespraech",
                                 "frage": self._frage, "antwort": text, "aktion": self.a.letzte["aktion"],

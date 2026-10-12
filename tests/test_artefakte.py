@@ -151,19 +151,21 @@ def test_abgelehnte_luecke_kommt_nicht_mehr_ins_band():
     assert c.artefakte.luecken_liste() == []
 
 
-def test_basis_aktion_eintragen():
-    from coach.assistent import aktion_lesen
+def test_werkzeug_eintragen_ergaenzt_vorhandenes_und_legt_neues_an():
+    """Ein Werkzeug für beide Stufen (coach/kern.py): ergänzen mit Nummer, neu mit Typ – auch Optionen."""
+    from coach import kern
 
-    aktion = aktion_lesen("AKTION: eintragen 1; wer=Sofie; bis=Freitag")
-    assert aktion == {"typ": "eintragen", "daten": {"nummer": 1, "wer": "Sofie", "bis": "Freitag"}}
     c, _ = _coach()
     c.artefakte.anlegen("aufgabe", "Statusseite-Zusammenfassung erstellen")
-    asyncio.run(c.assistent_aktion(aktion))
-    neu = aktion_lesen("AKTION: eintragen neu entscheidung; was=Variante B nehmen")
-    asyncio.run(c.assistent_aktion(neu))
-    a, b = c.artefakte.liste
-    assert (a.wer, a.bis, a.herkunft) == ("Sofie", "Freitag", "stimme") and a.vollstaendig
-    assert (b.typ, b.was, b.status, b.bestaetigt) == ("entscheidung", "Variante B nehmen", "endgueltig", True)
+    a = c.assistent
+    erg = asyncio.run(kern.ausfuehren(a, None, "artefakt_eintragen", {"nummer": 1, "wer": "Sofie", "bis": "Freitag"}))
+    asyncio.run(kern.ausfuehren(a, None, "artefakt_eintragen", {"typ": "entscheidung", "was": "Variante B nehmen"}))
+    asyncio.run(kern.ausfuehren(a, None, "artefakt_eintragen", {"typ": "option", "was": "Sofa an die lange Wand"}))
+    x, y, z = c.artefakte.liste
+    assert erg["ok"] and erg["fehlt_noch"] == [] and "Sofie" in erg["eingetragen"]
+    assert (x.wer, x.bis, x.herkunft) == ("Sofie", "Freitag", "stimme") and x.vollstaendig
+    assert (y.typ, y.was, y.status, y.bestaetigt) == ("entscheidung", "Variante B nehmen", "endgueltig", True)
+    assert (z.typ, z.was) == ("option", "Sofa an die lange Wand") and z.vollstaendig and "wer" not in z.kurz()
 
 
 def test_entfernen_validiert_nummer_und_rueckgaengig_bringt_dasselbe_objekt_mit_alter_nummer_zurueck():
@@ -230,18 +232,13 @@ def test_rueckgaengig_endpunkt_nimmt_nur_die_nummer_und_liefert_404_wenn_abgelau
         assert t.post("/api/artefakte/rueckgaengig", json={"id": a.id}).status_code == 404  # schon verbraucht
 
 
-def test_basis_aktion_entfernen_und_aendern():
-    """Ticket #79: Basis-Text-Weg – „AKTION: entfernen <nummer>“ bzw. „AKTION: aendern <nummer>; was=…“."""
-    from coach.assistent import aktion_lesen
-
-    assert aktion_lesen("AKTION: entfernen 3") == {"typ": "entfernen", "nummer": 3}
-    assert aktion_lesen("AKTION: entfernen") is None  # ohne Nummer: keine Aktion
-    assert aktion_lesen("AKTION: aendern 2; was=Neuer Wortlaut") == {"typ": "aendern", "nummer": 2,
-                                                                      "was": "Neuer Wortlaut"}
-    assert aktion_lesen("AKTION: aendern 2; was=") is None  # leerer Wortlaut: keine Aktion
+def test_werkzeug_entfernen_und_aendern_ohne_eigene_floskel():
+    """Ticket #79 im Kern: sofort ausgeführt, das Ergebnis geht ans Modell – das sagt selbst, was passiert ist."""
+    from coach import kern
 
     c, _ = _coach()
     a = c.artefakte.anlegen("aufgabe", "Monitor ersetzen")
+    b = c.artefakte.anlegen("offen", "Alter Wortlaut")
     gesagt = []
 
     async def floskel(text, bogen=None):
@@ -249,8 +246,12 @@ def test_basis_aktion_entfernen_und_aendern():
         return 0.0
 
     c.assistent.floskel_sagen = floskel
-    asyncio.run(c.assistent.aktion_ausfuehren({"typ": "entfernen", "nummer": a.id}, None))
-    assert c.artefakte.liste == [] and gesagt and gesagt[0] in ("Entfernt.", "Ist runter von der Liste.")
+    weg = asyncio.run(kern.ausfuehren(c.assistent, None, "ergebnis_entfernen", {"nummer": a.id}))
+    neu = asyncio.run(kern.ausfuehren(c.assistent, None, "ergebnis_aendern", {"nummer": b.id, "text": "Neuer Wortlaut"}))
+    fehlt = asyncio.run(kern.ausfuehren(c.assistent, None, "ergebnis_entfernen", {"nummer": 999}))
+    assert weg["ok"] and neu["ok"] and fehlt["ok"] is False and "999" in fehlt["fehler"]
+    assert c.artefakte.liste == [b] and b.was == "Neuer Wortlaut" and gesagt == []
+    assert {h.art for h in c.meeting.hinweise} == {"entfernt", "geaendert"}  # Rückgängig im Band
 
 
 def test_premium_werkzeug_artefakt_eintragen():
@@ -266,13 +267,6 @@ def test_premium_werkzeug_artefakt_eintragen():
         gesendet.append(e)
 
     g._senden = senden
-    gesagt = []
-
-    async def floskel(text, bogen=None):
-        gesagt.append(text)
-        return 0.5
-
-    c.assistent.floskel_sagen = floskel
 
     async def lauf():
         await g._werkzeug("artefakt_eintragen", json.dumps({"nummer": 1, "wer": "Sofie", "bis": "Freitag"}), "c1")
@@ -282,12 +276,12 @@ def test_premium_werkzeug_artefakt_eintragen():
     a = c.artefakte.liste[0]
     assert (a.wer, a.bis) == ("Sofie", "Freitag")
     ausgabe = json.loads(gesendet[0]["item"]["output"])
-    assert ausgabe["ok"] and gesagt and gesagt[0] in ("Notiert.", "Ist notiert.")  # das System sagt „Notiert“
-    assert not any(e.get("type") == "response.create" for e in gesendet)  # das Modell sagt nichts dazu
+    assert ausgabe["ok"] and "Sofie" in ausgabe["eingetragen"]
+    assert g._abschluss  # das Modell bestätigt danach in einer Abschlussantwort, kein „Notiert“ vom System
 
 
 def test_premium_werkzeuge_ergebnis_entfernen_und_aendern():
-    """Ticket #79: Nummer wird validiert, das System spricht selbst, das Modell bekommt nichts zu sagen."""
+    """Ticket #79: Nummer wird validiert; was passiert ist, geht ans Modell, das es in der Abschlussantwort sagt."""
     from coach.gespraech import WERKZEUGE, Gespraech
 
     assert {"ergebnis_entfernen", "ergebnis_aendern"} <= {w["name"] for w in WERKZEUGE}
@@ -301,13 +295,6 @@ def test_premium_werkzeuge_ergebnis_entfernen_und_aendern():
         gesendet.append(e)
 
     g._senden = senden
-    gesagt = []
-
-    async def floskel(text, bogen=None):
-        gesagt.append(text)
-        return 0.5
-
-    c.assistent.floskel_sagen = floskel
 
     async def lauf():
         await g._werkzeug("ergebnis_entfernen", json.dumps({"nummer": 999}), "c1")  # unbekannte Nummer
@@ -316,13 +303,11 @@ def test_premium_werkzeuge_ergebnis_entfernen_und_aendern():
         await asyncio.sleep(0.01)
 
     asyncio.run(lauf())
-    ausgabe = [json.loads(e["item"]["output"]) for e in gesendet]
-    assert ausgabe[0]["ok"] is False  # unbekannte Nummer: nichts entfernt, keine Karte
-    assert ausgabe[1]["ok"] is True and a not in c.artefakte.liste
-    assert ausgabe[2]["ok"] is True and b.was == "Neuer Wortlaut"
-    assert gesagt[0] == "Das finde ich in der Liste nicht."
-    assert gesagt[1] in ("Entfernt.", "Ist runter von der Liste.") and gesagt[2] in ("Geändert.", "Ist geändert.")
-    assert not any(e.get("type") == "response.create" for e in gesendet)  # das Modell sagt nichts dazu
+    ausgabe = {e["item"]["call_id"]: json.loads(e["item"]["output"]) for e in gesendet}
+    assert ausgabe["c1"]["ok"] is False  # unbekannte Nummer: nichts entfernt, keine Karte
+    assert ausgabe["c2"]["ok"] is True and a not in c.artefakte.liste
+    assert ausgabe["c3"]["ok"] is True and b.was == "Neuer Wortlaut"
+    assert not any(e.get("type") == "response.create" for e in gesendet)  # die Abschlussantwort kommt erst danach
     band = {h.art for h in c.meeting.hinweise}
     assert band == {"entfernt", "geaendert"}  # keine Karte für die unbekannte Nummer
 

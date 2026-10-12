@@ -133,7 +133,9 @@ Modelle in Basis: Live-Text `voxtral-mini-transcribe-realtime-2602` (Verzug 240 
 Recherche über die Conversations-API mit `web_search`, Stimme `voxtral-mini-tts-latest` mit der über
 `LMC_BASIS_STIMME` konfigurierten Mistral-Custom-Voice. Der aktuelle Standard ist eine vollständig KI-generierte
 Referenzstimme; Modell und Stimme lassen sich über `LMC_BASIS_STIMME_MODELL` und `LMC_BASIS_STIMME` konfigurieren.
-Nestors `AKTION:`-Zeile bleibt Text, kein Tool-Call (Mistral hat in xbuddy Tool-Calls halluziniert).
+Nestor versteht in Basis über denselben Werkzeugkatalog wie Premium (Tool-Calls, #89, 12.10.2026). Die frühere
+`AKTION:`-Zeile mit Wortmustern davor ist entfallen; dass Mistral dabei keine Werkzeuge erfindet, prüft der
+Prüfstand (`scripts/nestor_pruefstand.py`).
 
 **Premium-Stimmenwahl:** Nova ist nur für Kurzantworten (Text mit TTS) verfügbar, nicht für das
 Realtime-Gespräch. Modus und Stimme werden vor jeder Änderung als Paar geprüft; eine unzulässige Kombination
@@ -392,8 +394,7 @@ Agendapunkte müssen keine Entscheidung haben.
   aktuellen Stand: Eine Lücke, die die Runde schließt, wird in derselben Karte grün – es entsteht keine neue Karte.
   Was die Runde setzt, gilt als bestätigt und wird von der Erkennung nicht überschrieben.
 - **Lücke korrigieren per Stimme** ist ein normaler kurzer Bogen: Premium „Nestor, Anna macht das bis Freitag“
-  (Realtime-Werkzeug `artefakt_eintragen`), Basis dasselbe per Sprechtaste (`AKTION: eintragen`) – Nestor sagt nur
-  „Notiert.“
+  (Werkzeug `artefakt_eintragen`, Basis per Sprechtaste) – Nestor sagt in einem Satz, was er notiert hat.
 - **Fünf Minuten vor dem geplanten Ende** (immer, auch ohne Regel; geplantes Ende = Summe der Agendaminuten, bei
   kurzen Meetings zur Hälfte): still ins Band, als Angebot ohne Frage: „Noch 5 Minuten · Zusammenfassen ›“. Der Knopf
   löst den Bogen „Zusammenfassen“ aus (Zusammenfassung aus den Artefakten plus höchstens drei Lücken – zuerst

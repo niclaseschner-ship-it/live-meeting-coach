@@ -176,7 +176,7 @@ def test_werkzeug_katalog_enthaelt_die_neuen_werkzeuge_und_keine_statusabfrage()
     for name in ("zusammenfassen", "karte", "nicht_an_mich", "auftrag_abbrechen"):
         assert name in W.NAMEN
     assert "status_abfragen" not in W.NAMEN
-    assert set(W.SYSTEM_SPRICHT) <= W.NAMEN and set(W.ABSCHLUSS) <= W.NAMEN
+    assert set(W.NUR_GESPRAECH) <= W.NAMEN
 
 
 # --- Bereichs-Zusammenfassung ----------------------------------------------------------------------------------
@@ -377,13 +377,15 @@ def test_ergebnis_mit_unbekannter_nummer_wird_nicht_entfernt():
         b = c.assistent.bogen_starten("frage", "nimm das von der Liste", "stimme")
         await asyncio.sleep(0.01)
         await g._werkzeug("ergebnis_entfernen", json.dumps({"nummer": 4}), "call_1")
+        await g._antwort_fertig({})  # Werkzeugrunde fertig → das Modell sagt, was nicht geht
+        await asyncio.sleep(0.05)
         await _fertig(c, g, b)
         return c, ws
 
     c, ws = asyncio.run(ablauf())
     assert [a.id for a in c.artefakte.liste] == [1]
     assert ws.ausgaben()[0]["ok"] is False and "Nummer 4" in ws.ausgaben()[0]["fehler"]
-    assert ws.typen().count("response.create") == 1
+    assert ws.typen().count("response.create") == 2
 
 
 def test_agendawechsel_auf_einen_fehlenden_punkt_wechselt_nicht_und_das_modell_sagt_es():
@@ -410,11 +412,14 @@ def test_auftrag_abbrechen_per_werkzeug():
         b = a.bogen_starten("frage", "lass die Recherche", "stimme")
         await asyncio.sleep(0.01)
         await g._werkzeug("auftrag_abbrechen", json.dumps({"art": "recherche"}), "call_1")
+        await g._antwort_fertig({})  # Werkzeugrunde fertig → das Modell bestätigt in eigenen Worten
+        await asyncio.sleep(0.05)
         await _fertig(c, g, b)
         return a, auftrag, ws
 
     a, auftrag, ws = asyncio.run(ablauf())
-    assert a.auftraege.liste == [] and ws.ausgaben()[0]["ok"]
+    assert a.auftraege.liste == [] and ws.ausgaben()[0]["ok"] and ws.ausgaben()[0]["abgebrochen"] == "Förderprogramme"
+    assert ws.typen().count("response.create") == 2
 
 
 def test_ohne_ton_bis_zur_frist_kommt_das_ergebnis_still():

@@ -9,6 +9,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from modell_attrappe import Zug
 
 from coach.abschluss import paket, spenden_dateien
 from coach.archiv import Archiv
@@ -34,40 +35,28 @@ def umgebung(tmp_path, monkeypatch):
         object.__setattr__(EINST, k, v)
 
 
-class _Strom:
-    """Antwort-Stream des Sprachmodells: eine AKTION-Zeile, dann der gesprochene Text."""
-
-    def __init__(self, zeilen: str) -> None:
-        self.zeilen = zeilen
-
-    def __aiter__(self):
-        async def gen():
-            for stueck in (self.zeilen[:20], self.zeilen[20:]):
-                await asyncio.sleep(0)
-                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=stueck))])
-        return gen()
-
-
 class Attrappe:
     """Nur der Chat-Weg wird gebraucht: EINST.stimme_aus überspringt die echte Sprachausgabe. Nicht gestreamte
     Aufrufe (z. B. die Karte zur Antwort, Ticket #74) bekommen eine einfache, nicht-leere Antwort."""
 
-    def __init__(self, antwort: str) -> None:
-        self.antwort = antwort
+    def __init__(self, *zuege) -> None:
+        self.zuege = list(zuege)  # Züge des Modells (tests/modell_attrappe.py)
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     async def _create(self, **kw):
         if kw.get("stream"):
-            return _Strom(self.antwort)
+            from modell_attrappe import Strom
+
+            return Strom(self.zuege.pop(0) if self.zuege else "")
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
             content='{"zeigen": false}'))], usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5))
 
 
-def _coach(antwort: str) -> Coach:
+def _coach(*zuege) -> Coach:
     c = Coach()
     c.stufe_setzen("premium")
     c._einrichten({"titel": "Team Runde", "agenda": [{"titel": "Start", "minuten": 5}]})
-    c._client = Attrappe(antwort)
+    c._client = Attrappe(*zuege)
     c.meeting.starten(virtuell=True)
     c.direkt.append(lambda n: asyncio.sleep(0))  # Nachrichten ans Dashboard müssen niemand erreichen
     return c
@@ -82,7 +71,7 @@ def _zeilen(pfad) -> list[dict]:
 # --- Eine Anfrage, eine Zeile mit den geforderten Feldern ----------------------------------------------------------
 def test_eine_anfrage_erzeugt_eine_zeile_mit_allen_feldern(tmp_path):
     async def ablauf():
-        c = _coach("AKTION: keine\nIhr liegt gut in der Zeit.")
+        c = _coach("Ihr liegt gut in der Zeit.")
         b = c.assistent.bogen_starten("frage", "Wo stehen wir?", "stimme")
         await b.task
         return c, b
@@ -93,8 +82,8 @@ def test_eine_anfrage_erzeugt_eine_zeile_mit_allen_feldern(tmp_path):
     assert len(bogen_zeilen) == 1
     z = bogen_zeilen[0]
     assert z["quelle"] == "stimme"  # Auslöser: hier per Ansprache/Stimme
-    assert z["art"] == "frage"  # erkannte Absicht (kein Werkzeugaufruf – AKTION: keine)
-    assert z["aktion"] is None
+    assert z["art"] == "frage"
+    assert z["aktion"] is None and z["werkzeuge"] == []  # kein Werkzeugaufruf
     assert z["antwort"] == "Ihr liegt gut in der Zeit."  # Nestors gesprochener Text
     assert z["kartenart"] is None  # reine Antwort, keine Karte
     assert z["fehler"] is None
@@ -103,9 +92,9 @@ def test_eine_anfrage_erzeugt_eine_zeile_mit_allen_feldern(tmp_path):
 
 
 def test_werkzeugaufruf_mit_argumenten_und_kartenart_landen_in_der_zeile(tmp_path):
-    """Eine Bild-Aktion mit Fokus-Argument gilt als erkannter Werkzeugaufruf; die Kartenart leitet sich daraus ab."""
+    """Ein Werkzeugaufruf steht mit seinen Argumenten in der Zeile; die Kartenart leitet sich daraus ab."""
     async def ablauf():
-        c = _coach("AKTION: karte stand\nHier ist der Stand.")
+        c = _coach(Zug(werkzeuge=[("karte_zeigen", {"art": "stand"})]), "Hier ist der Stand.")
         b = c.assistent.bogen_starten("frage", "Zeig mir den Stand", "knopf")
         await b.task
         for z in list(b.zusatz):
@@ -116,14 +105,15 @@ def test_werkzeugaufruf_mit_argumenten_und_kartenart_landen_in_der_zeile(tmp_pat
     zeilen = _zeilen(tmp_path / "logs" / "nestor.jsonl")
     [z] = [e for e in zeilen if e.get("ausloeser") == "bogen"]
     assert z["quelle"] == "knopf"
-    assert z["aktion"] == {"typ": "karte", "art": "stand"}
-    assert z["kartenart"] == "stand"
+    assert z["aktion"] == {"werkzeuge": ["karte_zeigen"]}
+    assert z["werkzeuge"] == [{"name": "karte_zeigen", "argumente": {"art": "stand"}}]
+    assert z["kartenart"] == "stand" and z["antwort"] == "Hier ist der Stand."
 
 
 # --- Paket und Spende enthalten nestor.jsonl, wenn es etwas zu zeigen gibt ------------------------------------------
 def test_nestor_jsonl_landet_im_paket_und_in_der_spende(tmp_path):
     async def ablauf():
-        c = _coach("AKTION: keine\nAlles im Blick.")
+        c = _coach("Alles im Blick.")
         c.archiv = Archiv(c, audio=False)  # vor der Anfrage: self.seit muss davor liegen (archiv.py: _jsonl_seit)
         b = c.assistent.bogen_starten("frage", "Wie stehen wir?", "stimme")
         await b.task

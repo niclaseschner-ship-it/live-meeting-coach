@@ -486,11 +486,28 @@
       }
     },
     {
+      "id": "assistent_imperativ",
+      "_zweck": "Basis (#89): „bündle mir mal die Ergebnisse“ versteht das Modell als Werkzeug zusammenfassen",
+      "system_enthaelt": [
+        "STAND DES MEETINGS"
+      ],
+      "nutzer_enthaelt": [
+        "ndl"
+      ],
+      "werkzeug": {
+        "name": "zusammenfassen",
+        "argumente": {
+          "bereich": "gesamt"
+        }
+      },
+      "abschluss_text": "Hier ist die Zusammenfassung: Das Budget ist beschlossen, Sabine liefert die Fahrten."
+    },
+    {
       "id": "assistent_antwort",
       "system_enthaelt": [
-        "antwortest nur, wenn man dich anspricht"
+        "STAND DES MEETINGS"
       ],
-      "antwort_text": "AKTION: keine\nSabine liefert die Fahrten bis Freitag."
+      "antwort_text": "Sabine liefert die Fahrten bis Freitag."
     },
     {
       "id": "karte_budget",

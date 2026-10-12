@@ -29,37 +29,6 @@ NAMEN = {"stand": "Wo stehen wir?", "zusammenfassen": "Ergebnisse bündeln", "fe
          "festgehalten": "Gesamtprotokoll", "regeln": "Regeln prüfen", "ueberblick": "Überblick", "folie": "Folie",
          "frage": "Frage", "bild": "Bild", "recherche": "Recherche", "neu_aufbereiten": "Karte neu aufbereiten"}
 
-# --- Text-Weg (Basis, Premium-Kurzantwort): eindeutige Moderations-Aufträge direkt erkennen ----------------------
-# Nur kurze, eindeutige Sätze – „fass zusammen, was Anna zum Budget gesagt hat“ ist eine Frage an das Modell. Im
-# Gespräch (Premium) entscheidet das Modell selbst über seine Werkzeuge; dort wird nichts vorsortiert.
-FUELL = {"bitte", "mal", "kurz", "doch", "uns", "mir", "nochmal", "jetzt", "gerade", "einmal", "eben", "okay", "ok",
-         "hey", "noch", "schnell", "gerne", "gern", "denn", "eigentlich", "kannst", "könntest", "du", "würdest",
-         "magst", "vielleicht", "bis", "hier", "dann", "also", "und", "ja"}
-MUSTER = [
-    ("zusammenfassen", r"(?:fass|fasse|fasst)(?: mir)?(?: das| alles| es| den punkt| den aktuellen punkt| bisher| soweit| die ergebnisse| ergebnisse)?"
-                       r" zusammen|(?:gib|gibst|mach|machst|zeig|zeigst|hätte gern|hätten gern|ich hätte gern"
-                       r"|wir hätten gern|wir brauchen|ich brauche)? ?(?:die |eine )?zusammenfassung(?: geben| machen)?"
-                       r"|zusammenfassen|ergebnisse bündeln|bündel(?:e)?(?: mir)? die ergebnisse|"
-                       r"bündle(?: mir)? die ergebnisse|bündeln wir die ergebnisse|lass(?: uns)? die ergebnisse bündeln"),
-    ("fehlt", r"was fehlt|welche lücken(?: gibt es| haben wir)?|wo fehlt was|was ist offen|was haben wir offen"
-              r"|wo sind lücken|was fehlt uns|lücken klären"),
-    ("stand", r"wo stehen wir|wie weit sind wir|wo sind wir|wie ist der stand|was ist der stand"),
-    ("festgehalten", r"(?:zeig|zeigst|gib|gibst)(?: das protokoll| die liste| was wir festgehalten haben"
-                     r"| was festgehalten ist)|was haben wir festgehalten|was ist festgehalten|protokoll"
-                     r"|was haben wir notiert|gesamtprotokoll"),
-]
-
-
-def karten_art(frage: str) -> str | None:
-    """Ist das ein eindeutiger Moderations-Auftrag (Zusammenfassen, Was fehlt, Wo stehen wir, Festgehalten)?"""
-    t = re.sub(r"[^\wäöüß ]", " ", (frage or "").lower())
-    s = " ".join(w for w in t.split() if w not in FUELL)
-    for art, muster in MUSTER:
-        if re.fullmatch(muster, s):
-            return art
-    return None
-
-
 # --- Moderationssatz ------------------------------------------------------------------------------------------
 SATZ = """\
 Du bist {name}, Moderationsassistent eines Präsenzmeetings. Auf dem Bildschirm erscheint gerade diese Karte:
@@ -167,13 +136,14 @@ def bereich_waehlen(meeting, artefakte: list, bereich: str, punkt: int | None = 
 
 
 def zusammenfassung_auswahl(artefakte: list) -> list:
-    """Was auf die Karte passt: Beschlossenes zuerst, dann Aufgaben, dann Offenes (je die jüngsten)."""
+    """Was auf die Karte passt: Beschlossenes zuerst, dann Optionen und Kriterien, Aufgaben, Offenes (je die jüngsten)."""
     from .artefakte import beschlossen
 
     beschl = [a for a in artefakte if beschlossen(a)]
+    abwaegen = [a for a in artefakte if a.typ in ("option", "kriterium")]
     aufgaben = [a for a in artefakte if a.typ == "aufgabe"]
-    offen = [a for a in artefakte if a.typ != "aufgabe" and not beschlossen(a)]
-    return beschl[-5:] + aufgaben[-8:] + offen[-4:]
+    offen = [a for a in artefakte if a.typ in ("entscheidung", "offen", "risiko") and not beschlossen(a)]
+    return beschl[-5:] + abwaegen[-8:] + aufgaben[-8:] + offen[-4:]
 
 
 NACHHOLEN_FRIST = 4.0  # so lange darf das Nachholen der Ergebnisse eine Zusammenfassung aufhalten
@@ -193,7 +163,7 @@ async def bereich_karte(coach, bereich: str = "gesamt", punkt: int | None = None
     liste = zusammenfassung_auswahl(artefakte)
     karte = artefakt_karte(coach, "zusammenfassung", titel, liste, True)
     if not liste:
-        karte["punkte"] = ["Hier ist noch keine Entscheidung und keine Aufgabe festgehalten."]
+        karte["punkte"] = ["Hier ist noch nichts festgehalten."]
     luecken = [a for a in art.luecken_liste(12) if a in artefakte][:3]
     for a in luecken:
         a.nachgefragt = True
@@ -204,15 +174,15 @@ async def bereich_karte(coach, bereich: str = "gesamt", punkt: int | None = None
     return karte, liste, auszug
 
 
-async def zusammenfassen(coach, b) -> tuple[dict, str]:
+async def zusammenfassen(coach, b, satz: bool = True) -> tuple[dict, str]:
     karte, liste, _ = await bereich_karte(coach, "gesamt")
     if not liste:
-        karte["punkte"] = ["Bisher ist keine Entscheidung und keine Aufgabe festgehalten."]
+        karte["punkte"] = ["Bisher ist noch nichts festgehalten."]
     ersatz = ersatz_luecken(liste) if liste else "Hier ist sie. Bisher habe ich noch nichts Festes notiert."
-    return karte, await moderationssatz(coach, karte, ersatz)
+    return karte, (await moderationssatz(coach, karte, ersatz) if satz else ersatz)
 
 
-async def fehlt(coach, b) -> tuple[dict, str]:
+async def fehlt(coach, b, satz: bool = True) -> tuple[dict, str]:
     art = coach.artefakte
     await art.nachholen()
     liste = art.luecken_liste(12)
@@ -220,10 +190,10 @@ async def fehlt(coach, b) -> tuple[dict, str]:
     if not liste:
         karte["punkte"] = ["Keine Lücken: Alles Festgehaltene hat Wer und Termin."]
         return karte, "Hier ist sie. Gerade fehlt nichts – alles hat jemanden und einen Termin."
-    return karte, await moderationssatz(coach, karte, ersatz_luecken(liste))
+    return karte, (await moderationssatz(coach, karte, ersatz_luecken(liste)) if satz else ersatz_luecken(liste))
 
 
-async def festgehalten(coach, b) -> tuple[dict, str]:
+async def festgehalten(coach, b, satz: bool = True) -> tuple[dict, str]:
     art = coach.artefakte
     await art.nachholen()
     from .knopfdruck import _protokoll_md
@@ -234,11 +204,10 @@ async def festgehalten(coach, b) -> tuple[dict, str]:
     if not art.liste:
         karte["punkte"] = ["Noch nichts festgehalten."]
     n = sum(1 for a in art.liste if a.luecken() and not a.abgelehnt)
-    satz = B_HIER["festgehalten"] + (f" Bei {n} Einträgen fehlt noch etwas." if n else "")
-    return karte, satz
+    return karte, B_HIER["festgehalten"] + (f" Bei {n} Einträgen fehlt noch etwas." if n else "")
 
 
-async def stand(coach, b) -> tuple[dict, str]:
+async def stand(coach, b, satz: bool = True) -> tuple[dict, str]:
     """Ein Aufruf liefert Karte und Satz (schneller als zwei)."""
     from . import knopfdruck
 
@@ -254,11 +223,11 @@ async def stand(coach, b) -> tuple[dict, str]:
         ziel = None
     if ziel is not None and 0 <= ziel < len(m.agenda) and ziel != m.aktiver_punkt:
         m.vorschlag = {"punkt": ziel, "titel": m.agenda[ziel].titel, "begruendung": "Vorschlag auf Knopfdruck"}
-    satz = re.sub(r"\s+", " ", str(roh.get("sagen") or "")).strip() or "Hier ist sie."
-    return karte, satz[:300]
+    gesagt = re.sub(r"\s+", " ", str(roh.get("sagen") or "")).strip() or "Hier ist sie."
+    return karte, gesagt[:300]
 
 
-async def regeln(coach, b) -> tuple[dict, str]:
+async def regeln(coach, b, satz: bool = True) -> tuple[dict, str]:
     from . import knopfdruck
 
     karte = await knopfdruck._regeln(coach, "", ablegen=False)
@@ -272,7 +241,7 @@ async def regeln(coach, b) -> tuple[dict, str]:
     return karte, satz
 
 
-async def ueberblick(coach, b) -> tuple[dict | None, str]:
+async def ueberblick(coach, b, satz: bool = True) -> tuple[dict | None, str]:
     if not coach.meeting.transkript:
         return ({"art": "antwort", "titel": "Überblick", "punkte": ["Noch nichts gesagt – für einen Überblick fehlt "
                                                                     "der Stoff."]}, "Dafür habt ihr noch zu wenig gesagt.")
@@ -288,7 +257,7 @@ async def ueberblick(coach, b) -> tuple[dict | None, str]:
     return karte, B_HIER["ueberblick"]
 
 
-async def folie(coach, b) -> tuple[dict | None, str]:
+async def folie(coach, b, satz: bool = True) -> tuple[dict | None, str]:
     if coach.letzte_recherche is None:
         return None, "Dafür brauche ich erst eine Recherche."
     f = await coach.folie_bauen(karte=False)
@@ -299,7 +268,7 @@ async def folie(coach, b) -> tuple[dict | None, str]:
     return karte, B_HIER["folie"]
 
 
-async def neu_aufbereiten(coach, b) -> tuple[dict | None, str]:
+async def neu_aufbereiten(coach, b, satz: bool = True) -> tuple[dict | None, str]:
     """Die zuletzt gezeigte Karte per LLM-Aufruf neu aufbereiten (Ticket #84): „Nestor, bereite das kürzer auf“.
     `b.fokus` trägt das „wie“ (kürzer, ausführlicher, als_liste, einfacher); `coach.karten[-1]` ist zu diesem
     Zeitpunkt noch die vorherige Karte – diese Karte selbst kommt erst danach über `_karte_ablegen` dazu."""

@@ -25,20 +25,21 @@ ANTEIL_FENSTER = 300.0  # gleitendes Fenster: die letzten 5 Minuten
 ANTEIL_FAKTOR = 1.5  # Hinweis, wenn eine Person mehr als das 1,5-Fache ihres fairen Anteils 1/n hat
 ANTEIL_MIN_REDE = 90.0  # so viel Rede muss im Fenster liegen, sonst ist der Anteil Zufall
 ANTEIL_ERKANNT = 10.0  # ab so viel Redezeit im ganzen Meeting zählt eine Stimme als Person
+# Ein Meeting hat mindestens zwei Personen (Niclas, 12.10.2026) – wer allein redet, während die anderen schweigen,
+# ist genau der Fall, den der Hinweis zeigen soll, auch wenn die Stillen nie als Stimme erkannt wurden
+ANTEIL_MIN_PERSONEN = 2
 UNSICHER = "Person ?"
 
 
 def redeanteil(meeting: Meeting, fenster: float = ANTEIL_FENSTER, faktor: float = ANTEIL_FAKTOR,
-               min_rede: float = ANTEIL_MIN_REDE) -> dict | None:
+               min_rede: float = ANTEIL_MIN_REDE) -> dict:
     """Größter Redeanteil der letzten `fenster` Sekunden gegen die Grenze faktor/n.
 
-    n = Zahl der Personen: die angemeldeten Teilnehmenden oder, wenn mehr Stimmen erkannt sind, diese. Unsicher
-    zugeordnete Rede („Person ?“) zählt nicht mit. None, solange es keine zwei Personen gibt. `ueber` nur, wenn im
-    Fenster genug gesprochen wurde."""
+    n = Zahl der Personen: die angemeldeten Teilnehmenden oder, wenn mehr Stimmen erkannt sind, diese – mindestens
+    zwei. Unsicher zugeordnete Rede („Person ?“) zählt nicht mit. `ueber` nur, wenn im Fenster genug gesprochen
+    wurde."""
     gesamt = {k: v for k, v in meeting.redeanteile().items() if k != UNSICHER}
-    n = max(len(meeting.teilnehmende), sum(1 for v in gesamt.values() if v >= ANTEIL_ERKANNT))
-    if n < 2:
-        return None
+    n = max(ANTEIL_MIN_PERSONEN, len(meeting.teilnehmende), sum(1 for v in gesamt.values() if v >= ANTEIL_ERKANNT))
     anteile = {k: v for k, v in meeting.redeanteile(seit=meeting.jetzt() - fenster).items() if k != UNSICHER}
     rede = sum(anteile.values())
     anteil = max(anteile.values()) / rede if rede > 0 else 0.0

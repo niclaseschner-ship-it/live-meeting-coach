@@ -4,12 +4,14 @@ import asyncio
 from types import SimpleNamespace
 
 from coach import assistent as a
+from coach import kern
 from coach.pipeline import Coach
 from coach.anbieter import wahl_fuer
 from coach.config import EINST
 from coach.zustand import Agendapunkt, Segment
 
 import pytest
+from modell_attrappe import Zug
 
 
 @pytest.fixture(autouse=True)
@@ -33,15 +35,8 @@ def test_frage_ohne_namen_und_anrede():
     assert a.frage_aus("Was kommt als Nächstes, Nestor?") == "Was kommt als Nächstes?"
 
 
-def test_aktionszeile_lesen():
-    assert a.aktion_lesen("AKTION: keine") is None
-    assert a.aktion_lesen("AKTION: bild was noch ansteht") == {"typ": "bild", "fokus": "was noch ansteht"}
-    assert a.aktion_lesen("AKTION: weiter 3") == {"typ": "weiter", "ziel": "3"}
-    assert a.aktion_lesen("Wir sind bei Punkt zwei.") is None
-
-
 def test_saetze_teilen_laesst_unfertigen_rest_stehen():
-    fertig, rest = a.saetze_teilen("Ihr seid bei Punkt zwei. Entschieden ist noch nich")
+    fertig, rest = kern.saetze_teilen("Ihr seid bei Punkt zwei. Entschieden ist noch nich")
     assert fertig == ["Ihr seid bei Punkt zwei."] and rest == "Entschieden ist noch nich"
 
 
@@ -147,35 +142,10 @@ def test_ansage_waehrend_nestor_spricht_wechselt_den_punkt():
     assert c.meeting.transkript and "Agendapunkt drei" in c.meeting.transkript[-1].text
 
 
-class _Strom:
-    def __init__(self, teile):
-        self.teile = teile
+def _attrappe(*zuege):
+    from modell_attrappe import chat_attrappe
 
-    def __aiter__(self):
-        async def gen():
-            for t in self.teile:
-                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=t))])
-        return gen()
-
-
-class _Ton:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *x):
-        return False
-
-    async def iter_bytes(self, n):
-        yield bytes(24000 * 2)  # 1 s Stille
-
-
-def _attrappe(antwort_teile):
-    async def create(**kw):
-        return _Strom(antwort_teile)
-    return SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
-        audio=SimpleNamespace(speech=SimpleNamespace(with_streaming_response=SimpleNamespace(create=lambda **kw: _Ton()))),
-    )
+    return chat_attrappe(*zuege)
 
 
 def test_frage_antwort_mit_aktion_und_sprachausgabe(monkeypatch):
@@ -184,7 +154,8 @@ def test_frage_antwort_mit_aktion_und_sprachausgabe(monkeypatch):
     async def ablauf():
         c = Coach()
         c.stufe_setzen("premium")
-        c._client = _attrappe(["AKTION: weiter 2\nGut, dann geht es weiter mit Punkt zwei. ", "Punkt eins ist abgeschlossen."])
+        c._client = _attrappe(Zug(werkzeuge=[("agendapunkt_wechseln", {"nummer": 2})]),
+                              "Gut, dann geht es weiter mit Punkt zwei. Punkt eins ist abgeschlossen.")
         c.meeting.agenda = [Agendapunkt("Start"), Agendapunkt("Budget")]
         c.meeting.regel_ids = []
         c.meeting.starten(virtuell=True)
@@ -208,7 +179,7 @@ def test_ohne_namen_keine_antwort():
     async def ablauf():
         c = Coach()
         c.stufe_setzen("premium")
-        c._client = _attrappe(["AKTION: keine\nHallo."])
+        c._client = _attrappe("Hallo.")
         c.meeting.starten(virtuell=True)
         await c.satz(Segment("Person 1", "Wir sollten das Budget prüfen.", 1, 3))
         return c
@@ -217,13 +188,13 @@ def test_ohne_namen_keine_antwort():
     assert c.assistent._aufgabe is None and c.assistent.letzte is None
 
 
-def test_aktion_keine_wird_nicht_vorgelesen(monkeypatch):
+def test_antwort_ohne_werkzeug_wird_gesprochen(monkeypatch):
     monkeypatch.setattr("coach.pipeline.nutzung_loggen", lambda e: None)
 
     async def ablauf():
         c = Coach()
         c.stufe_setzen("premium")
-        c._client = _attrappe(["AKTION: keine\nIhr seid bei Punkt eins."])
+        c._client = _attrappe("Ihr seid bei Punkt eins.")
         c.meeting.starten(virtuell=True)
         await c.satz(Segment("Person 1", "Nestor, wie viel Zeit haben wir noch?", 1, 3))
         await c.assistent.bogen.task
@@ -237,7 +208,6 @@ def test_recherche_text_ohne_eingebettete_quellen():
 
     roh = "Der Mindestlohn liegt bei 13,90 Euro. ([bmas.de](https://www.bmas.de/x?utm=a))  Mehr [hier](https://y)."
     assert vorlesbar(roh) == "Der Mindestlohn liegt bei 13,90 Euro. Mehr hier."
-    assert a.aktion_lesen("AKTION: recherche Mindestlohn aktuell") == {"typ": "recherche", "frage": "Mindestlohn aktuell"}
 
 
 def test_folie_nach_recherche():
@@ -245,9 +215,7 @@ def test_folie_nach_recherche():
     from types import SimpleNamespace
 
     from coach import folie, kosten
-    from coach.assistent import aktion_lesen
 
-    assert aktion_lesen("AKTION: folie") == {"typ": "folie"}
     assert kosten.dollar({"art": "folie", "modell": "gpt-5.4-mini", "tokens_rein": 1e6, "tokens_raus": 0}) == 0.75
 
     class Attrappe:  # liefert eine feste JSON-Antwort statt OpenAI

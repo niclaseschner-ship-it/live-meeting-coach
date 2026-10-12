@@ -183,10 +183,10 @@ def test_ansprache_startet_kein_gespraech_nach_kostendeckel(monkeypatch):
     aufrufe = _ws_verbinden_verboten(monkeypatch)
     text_weg_versucht = []
 
-    async def _stub_antworten(b, bestaetigt=False):
+    async def _stub_antworten(a, b, bestaetigt=False):
         text_weg_versucht.append(bestaetigt)
 
-    monkeypatch.setattr(coach.assistent, "_antworten", _stub_antworten)
+    monkeypatch.setattr("coach.kern.text_antwort", _stub_antworten)
     b = Bogen(1, "frage", "Wie weit sind wir?", "stimme", time.monotonic())
 
     ok = asyncio.run(coach.assistent._gespraech_starten(b))

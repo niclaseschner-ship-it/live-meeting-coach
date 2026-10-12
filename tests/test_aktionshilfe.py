@@ -2,7 +2,6 @@ from coach import aktionen
 from coach.config import Einstellungen
 from coach.pipeline import Coach
 from coach.zustand import Agendapunkt, Segment
-from coach.bogen import karten_art
 
 
 def test_aktionsumfang_passt_zum_verhalten():
@@ -29,12 +28,6 @@ def test_kosten_steigen_mit_kontext_und_unterscheiden_umfang():
     erg = aktionen.katalog(c, Einstellungen())['aktionen']['ueberblick']
     assert erg['kosten'] != erg['kosten_gesamt']
     assert 'US-ct' in erg['kosten']
-
-
-def test_neue_buttonnamen_auch_als_gesprochener_auftrag():
-    assert karten_art("Ergebnisse bündeln") == "zusammenfassen"
-    assert karten_art("Lücken klären") == "fehlt"
-    assert karten_art("Gesamtprotokoll") == "festgehalten"
 
 
 def test_beide_oberflaechen_nutzen_sichtbare_hilfe():

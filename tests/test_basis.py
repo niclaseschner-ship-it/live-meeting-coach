@@ -105,10 +105,13 @@ def test_begruessung_basis_ohne_rueckfragen_ohne_namen():
     assert "ohne Namen" in start_premium and "Telefon" in start_premium
 
 
-def test_systemanweisung_basis_bild_ist_uebersicht():
-    s = A.system_text(wahl_fuer("basis"))
-    assert "AKTION: bild" in s and "Übersicht" in s and "nach wenigen Sekunden im Verlauf" in s
-    assert "nach wenigen Sekunden im Verlauf" not in A.system_text(wahl_fuer("premium"))
+def test_text_weg_bekommt_den_katalog_ohne_gespraechswerkzeuge():
+    """Basis versteht über dieselben Werkzeuge wie Premium (#89) – ohne die, die nur im Gespräch Sinn haben."""
+    from coach import werkzeuge as W
+
+    namen = {w["function"]["name"] for w in W.fuer_chat()}
+    assert {"bild_zeichnen", "recherchieren", "zusammenfassen", "karte", "artefakt_eintragen"} <= namen
+    assert "nicht_an_mich" not in namen and "gespraech_beenden" not in namen
 
 
 # --- Live-Text Voxtral: Text den Äußerungen zuordnen --------------------------------------------------------------
@@ -284,7 +287,7 @@ def test_ueberblick_mit_fokus_waehlt_nur_nummern_aus():
     assert u["ids"] == [2] and u["entschieden"] == [] and u["offen"] == [] and u["aufgaben"][0]["id"] == 2
 
 
-def test_basis_bild_aktion_macht_ueberblick(monkeypatch):
+def test_basis_bild_werkzeug_macht_ueberblick(monkeypatch):
     from coach.pipeline import Coach
 
     c = Coach()
@@ -298,8 +301,11 @@ def test_basis_bild_aktion_macht_ueberblick(monkeypatch):
 
         from coach.assistent import Bogen
 
+        from coach import kern
+
         b = Bogen(1, "frage", "zeig uns die Übersicht", "taste", time.monotonic())
-        await c.assistent.aktion_ausfuehren({"typ": "bild", "fokus": "gesamt"}, b)
+        erg = await kern.ausfuehren(c.assistent, b, "bild_zeichnen", {"fokus": "gesamt"})
+        assert erg["ok"] and erg["karte"]["titel"].startswith("Überblick")
 
     object.__setattr__(EINST, "stimme_aus", True)
     try:
@@ -377,32 +383,26 @@ _LEER = {"kernaussage": "x", "entschieden": [], "offen": [], "aufgaben": [], "au
 
 
 def test_visuelle_uebersicht_ist_keine_folie():
-    """Cloud-Lauf 08.10.: nach einer Recherche machte Mistral aus „mach uns die visuelle Übersicht“ eine Folie."""
-    assert A.aktion_pruefen({"typ": "folie"}, "mach uns die visuelle Übersicht.") == {"typ": "bild", "fokus": "gesamt"}
-    assert A.aktion_pruefen({"typ": "folie"}, "Ja, mach uns dazu eine Folie.") == {"typ": "folie"}
-    assert A.aktion_pruefen({"typ": "folie"}, "ja gerne") == {"typ": "folie"}  # Antwort auf „Soll ich eine Folie …?“
-    assert A.aktion_pruefen({"typ": "recherche", "frage": "x"}, "gib uns einen Überblick zu Messeständen") == {
-        "typ": "recherche", "frage": "x"}
-    s = A.system_text(wahl_fuer("basis"))
-    assert "visuelle Übersicht" in s and "Eine Übersicht über das Meeting ist keine Folie" in s
+    """Cloud-Lauf 08.10.: nach einer Recherche machte Mistral aus „mach uns die visuelle Übersicht“ eine Folie. Das
+    regelt jetzt die Beschreibung im Katalog, nicht ein Nachschalter im Code."""
+    from coach import werkzeuge as W
+
+    folie = next(w for w in W.WERKZEUGE if w["name"] == "folie_erstellen")["description"]
+    assert "Eine Übersicht über das Meeting ist keine Folie" in folie
 
 
-def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
+def test_basis_werkzeug_bild_zeigt_den_ueberblick_und_nestor_sagt_dazu_etwas():
     from coach.pipeline import Coach
+    from modell_attrappe import Zug, chat_attrappe
 
     c = Coach()
     c.stufe_setzen("basis")
     fake = FakeClient(_LEER)
-
-    class Strom:
-        def __aiter__(self):
-            async def gen():
-                yield SimpleNamespace(usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(
-                    content="AKTION: folie\nDie Folie erscheint gleich im Dashboard."))])
-            return gen()
+    chat = chat_attrappe(Zug(werkzeuge=[("bild_zeichnen", {"fokus": "gesamt"})]),
+                         "Hier ist der Überblick, beschlossen sind höchstens 25.000 Euro.")
 
     async def create(**kw):
-        return Strom() if kw.get("stream") else await fake._create(**kw)
+        return await chat.chat.completions.create(**kw) if kw.get("stream") else await fake._create(**kw)
 
     c._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     c.meeting = _meeting()
@@ -411,10 +411,6 @@ def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
     async def lauf():
         c.assistent.frage_beantworten("Nestor, mach uns die visuelle Übersicht.", "taste")  # Funkgerät: Sprechtaste
         await c.assistent.bogen.task
-        for _ in range(50):
-            if c.ueberblick:
-                break
-            await asyncio.sleep(0.02)
 
     object.__setattr__(EINST, "stimme_aus", True)
     try:
@@ -422,7 +418,9 @@ def test_zuruf_mit_folie_aktion_zeigt_in_basis_den_ueberblick():
     finally:
         object.__setattr__(EINST, "stimme_aus", False)
     assert c.ueberblick and c.folie is None
-    assert c.assistent.letzte["aktion"] == {"typ": "bild", "fokus": "gesamt"}
+    assert c.assistent.letzte["aktion"] == {"werkzeuge": ["bild_zeichnen"]}
+    assert "25.000" in c.assistent.letzte["antwort"]
+    assert chat.aufrufe[-1]["tool_choice"] == "none"  # die Abschlussrunde ruft keine Werkzeuge mehr
 
 
 def test_kein_ueberblick_und_kein_bild_mehr_im_takt():

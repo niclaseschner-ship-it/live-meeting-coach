@@ -8,8 +8,9 @@
 // wer gerade zurückgeblättert hat oder in einer Karte tippt, bleibt auf seiner Karte; dann zeigt › leise „neu“.
 // Band: Regel-Hinweise und Nestors stille Angebote, verschwinden von selbst, höchstens ein Knopf.
 
-const ART_ZEICHEN = { aufgabe: "☐", entscheidung: "✓", offen: "?", risiko: "!" };
-const ART_TYP = { aufgabe: "Aufgabe", entscheidung: "Entscheidung", offen: "Offener Punkt", risiko: "Risiko" };
+const ART_ZEICHEN = { aufgabe: "☐", entscheidung: "✓", offen: "?", risiko: "!", option: "◇", kriterium: "⚖" };
+const ART_TYP = { aufgabe: "Aufgabe", entscheidung: "Entscheidung", offen: "Offener Punkt", risiko: "Risiko",
+  option: "Option", kriterium: "Kriterium" };
 const ART_LUECKE = { was: "was genau?", wer: "wer?", bis: "bis wann?", status: "beschlossen?", reaktion: "Reaktion?" };
 const VK_ART = { antwort: "Nestor antwortet", recherche: "Recherche", folie: "Folie", stand: "Wo stehen wir?",
   regeln: "Regeln", protokoll: "Protokoll", ueberblick: "Überblick", zusammenfassung: "Zusammenfassung",
@@ -282,7 +283,10 @@ function artFormular(a) {
       el("button", { class: "klein leise", type: "button", onclick: async () => {
         verlauf.edit = null; await api("/api/artefakte/loeschen", { id: a.id }); } }, "Löschen")] : []),
       el("button", { class: "klein leise", type: "button", onclick: () => { verlauf.edit = null; verlaufRendern(zustand); } }, "Abbrechen")));
-  const sichtbar = () => { status.hidden = typ.value !== "entscheidung"; f.reaktion.hidden = typ.value !== "risiko"; };
+  const sichtbar = () => {
+    status.hidden = typ.value !== "entscheidung"; f.reaktion.hidden = typ.value !== "risiko";
+    f.querySelector(".art-zwei").hidden = ["option", "kriterium"].includes(typ.value);  // nur „was“
+  };
   typ.onchange = sichtbar; sichtbar();
   f.onsubmit = async (e) => {
     e.preventDefault();
@@ -352,6 +356,8 @@ function ueberblickInhalt(u) {
     el("div", { class: "ub-raster" },
       block("gruen", "✅", "Entschieden", liste(u.entschieden, "Noch nichts ausdrücklich beschlossen.", (e) => [e.was])),
       block("bernstein", "🟡", "Offen", liste(u.offen, "Keine offenen Fragen genannt.", (e) => [e.was])),
+      ...(u.optionen?.length ? [block("blau", "⚖", "Optionen und Kriterien", liste(u.optionen, "",
+        (e) => [el("small", {}, `${ART_TYP[e.typ] ?? ""}: `), e.was]))] : []),
       block("blau", "📌", "Aufgaben", liste(u.aufgaben, "Noch keine Aufgaben verteilt.", (a) => [a.was,
         el("small", {}, ` – ${a.wer ?? "wer: offen"}${a.bis ? ` · bis ${a.bis}` : ""}`)])),
       block("grau", "↪", "Außerhalb der Agenda", liste(u.ausserhalb, "Keine Abschweifung.", (a) => [

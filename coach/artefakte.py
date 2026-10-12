@@ -1,5 +1,6 @@
-"""Meeting-Artefakte (Ticket #26, Ablauf seit Ticket #27): Aufgabe, Entscheidung, offener Punkt, Risiko – erkannt,
-Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_artefakte_2026-10-08.md.
+"""Meeting-Artefakte (Ticket #26, Ablauf seit Ticket #27): Aufgabe, Entscheidung, offener Punkt, Risiko, dazu Option
+und Kriterium (der Weg zur Entscheidung: was zur Wahl steht und woran die Runde misst) – erkannt, Lücken markiert, per
+Stimme oder Klick geschlossen. Grundlage: docs/meeting_artefakte_2026-10-08.md.
 
 - **Ein Datenmodell** (`Artefakt`): Typ, Felder, Vollständigkeit, Lücken, Konfidenz, Quelle (Zeit, Satz),
   Agendabezug, bestätigt ja/nein. Die einzige Quelle für Ergebnisse: Überblick, protokoll.md, meeting.json,
@@ -14,7 +15,7 @@ Lücken markiert, per Stimme oder Klick geschlossen. Grundlage: docs/meeting_art
 - **Fünf Minuten vor dem geplanten Ende** (immer): Band „Noch 5 Minuten · Zusammenfassen ›“ – der Knopf löst den
   Bogen „Zusammenfassen“ aus. Nestor fragt nicht mit der Stimme.
 - **Lücken schließen:** „Nestor, Sofie übernimmt die Statusseite bis Freitag“ (Premium: Realtime-Werkzeug
-  `artefakt_eintragen`, Basis per Sprechtaste: `AKTION: eintragen`) – Nestor sagt „Notiert“, die Karte wird grün;
+  `artefakt_eintragen`, Basis per Sprechtaste dasselbe Werkzeug) – Nestor sagt, was er notiert hat, die Karte wird grün;
   oder Klick auf die Lücke in der Karte.
 
 - **Schnell-Erkennung bei klaren Signalen** (Ticket #72): Fällt in einem fertigen Satz ein klares Signal
@@ -41,8 +42,9 @@ from .analyse import mmss
 
 log = logging.getLogger("coach.artefakte")
 
-TYPEN = ("aufgabe", "entscheidung", "offen", "risiko")
-TYP_NAME = {"aufgabe": "Aufgabe", "entscheidung": "Entscheidung", "offen": "Offener Punkt", "risiko": "Risiko"}
+TYPEN = ("aufgabe", "entscheidung", "offen", "risiko", "option", "kriterium")
+TYP_NAME = {"aufgabe": "Aufgabe", "entscheidung": "Entscheidung", "offen": "Offener Punkt", "risiko": "Risiko",
+            "option": "Option", "kriterium": "Kriterium"}
 STATUS = ("endgueltig", "vorlaeufig", "vorschlag")
 STATUS_NAME = {"endgueltig": "beschlossen", "vorlaeufig": "vorläufig", "vorschlag": "nur Vorschlag"}  # in allen Ansichten
 # Pflichtfelder je Typ (Ticket #26, Tabelle „Artefakte und wann sie vollständig sind“); was = Handlung / was gilt /
@@ -52,6 +54,8 @@ PFLICHT = {
     "entscheidung": ("was", "status", "wer"),
     "offen": ("was", "wer", "bis"),
     "risiko": ("was", "wer", "reaktion"),
+    "option": ("was",),
+    "kriterium": ("was",),
 }
 FELD_NAME = {"was": "was", "wer": "wer", "bis": "bis wann", "status": "beschlossen?", "reaktion": "Reaktion"}
 # „Wir“ ist keine verantwortliche Person (PMI: genau ein Owner)
@@ -185,6 +189,8 @@ class Artefakt:
     def kurz(self) -> str:
         """Eine Zeile für Kontext und Protokoll."""
         teile = [f"{self.id}. {TYP_NAME[self.typ]}: {self.was}"]
+        if self.typ in ("option", "kriterium"):  # Material der Entscheidung: kein Wer, kein Termin
+            return " · ".join(teile + (["außerhalb der Agenda"] if self.ausserhalb else []))
         if self.typ == "entscheidung":
             teile.append(STATUS_NAME.get(self.status or "vorschlag", ""))
         if self.wer or self.typ != "entscheidung":
@@ -218,13 +224,20 @@ Erkenne in den NEUEN Sätzen Meeting-Artefakte – unabhängig davon, ob sie zu 
 - risiko: mögliches KÜNFTIGES Problem („wenn X, dann“, „Gefahr“, „könnte uns verzögern“, „ist gefährdet“, „müssen
   aufpassen, dass“). was = Ursache → Auswirkung; wer = wer es beobachtet; reaktion = vermeiden/verringern/in Kauf
   nehmen mit Maßnahme; hoch = true bei großer Auswirkung; vage = true bei diffuser Sorge ohne Auswirkung.
+- option: eine Möglichkeit, die zur Wahl steht („wir können es an die Wand stellen“, „Variante B wäre …“, „eine
+  Alternative ist …“). Je Möglichkeit eine Option. was = die Möglichkeit, kurz, dazu genannte Vor- und Nachteile
+  („Vor das Fenster: gut zum Lesen, kein Blick nach draußen“). Kommen später Vor- oder Nachteile dazu, gib die nummer
+  und den ergänzten Wortlaut an. Wird eine Option gewählt, ist das eine entscheidung.
+- kriterium: woran die Runde die Optionen misst („wichtig ist uns das Licht“, „Kosten unter 500 Euro“, „es muss bis
+  Mai fertig sein“). was = das Kriterium, kurz.
 Was NICHT dazugehört:
 - Ankündigungen zum Ablauf des Meetings („heute müssen wir zu einer Zahl kommen“, „beim Bus reicht mir ein
   Überblick“), was die Runde gerade jetzt im Meeting tut („ich rekonstruiere die Zeitlinie“), Berichte
   über Vergangenes und Ursachen eines schon eingetretenen Vorfalls, Fragen, die gleich im Gespräch beantwortet werden,
   und das bloße Thema eines Agendapunkts (ein konkreter Beschluss, eine Aufgabe oder ein Prüfauftrag dazu gehört
   dagegen dazu).
-- Alles, was an den Assistenten „Nestor“ geht, auch Antworten auf seine Angebote („ja, mach eine Folie“).
+- Alles, was an den Assistenten „Nestor“ geht, auch Antworten auf seine Angebote („ja, mach eine Folie“), und was
+  Nestor selbst recherchieren oder zeigen soll – das ist keine Aufgabe der Runde.
 - Bruchstücke ohne erkennbaren Inhalt („kannst du das übernehmen?“, „und bis wann?“) – außer sie ergänzen ein
   festgehaltenes Artefakt eindeutig.
 Felder:
@@ -291,6 +304,12 @@ SIGNALE = {
         r"klären|klären\s+wir|ungeklärt|parken|kommen\s+wir\s+(?:noch\s+)?(?:darauf\s+)?zurück|prüfen\s+wir\s+noch|"
         r"noch\s+prüfen)", re.IGNORECASE),
     "risiko": re.compile(r"\b(?:risiko|gefahr|gefährdet|könnte\s+uns)", re.IGNORECASE),
+    "option": re.compile(
+        r"\b(?:option(?:en)?|alternative|variante|möglichkeit|(?:wir\s+)?könnten\s+(?:es|das|ihn|sie|auch)|"
+        r"können\s+(?:es|das|ihn|sie)\s+(?:auch\s+)?(?:\w+\s+){0,4}(?:stellen|machen|nehmen|legen))", re.IGNORECASE),
+    "kriterium": re.compile(
+        r"\b(?:kriteri\w*|wichtig\s+ist\s+(?:uns|mir)|es\s+muss\s+\w+|maßstab|worauf\s+es\s+ankommt)",
+        re.IGNORECASE),
 }
 
 
@@ -313,7 +332,9 @@ Prüfe nur diese neuen Sätze, ob wirklich eines darin steckt:
 - offen: Frage oder Punkt, der für später liegen bleibt, auch ein Prüfauftrag („prüfen wir noch, ob …“); wer klärt,
   bis wann.
 - risiko: mögliches künftiges Problem (Ursache → Auswirkung).
-Nicht dazu: alles an den Assistenten „Nestor“, der Ablauf des Meetings, Berichte über Vergangenes, Ideen ohne Zusage.
+- option: eine Möglichkeit, die zur Wahl steht (je Möglichkeit eine; was = kurz, mit genannten Vor- und Nachteilen).
+- kriterium: woran die Runde die Optionen misst (Licht, Kosten, Termin …).
+Nicht dazu: alles an den Assistenten „Nestor“, der Ablauf des Meetings, Berichte über Vergangenes.
 Nur ausdrücklich Gesagtes, fehlende Felder null. Relative Fristen anhand des Meetingdatums auflösen.
 Ergänzt ein Satz ein schon festgehaltenes Artefakt (Termin, Verantwortliche, Beschluss eines Vorschlags), gib dessen
 nummer und nur die neuen Felder an – nie doppelt anlegen. Sonst nummer null (nur Nummern aus „Schon festgehalten“,
@@ -666,6 +687,8 @@ class Artefakte:
                      "dauer_sekunden": round(m.jetzt(), 1), "geplant_minuten": geplant,
                      "ziel_erreicht": None},  # Urteil der Runde, kommt mit der Korrekturansicht (#22)
             "entscheidungen": nach("entscheidung"),
+            "optionen": nach("option"),
+            "kriterien": nach("kriterium"),
             "aufgaben": nach("aufgabe"),
             "offene_punkte": offen,
             "risiken": nach("risiko"),
@@ -949,7 +972,7 @@ class Artefakte:
             liste = [a for a in self.liste if von <= a.zeit < bis and not a.ausserhalb]
             if sprache < MIN_SPRACHE and not liste:
                 return None
-            ordnung = {"entscheidung": 0, "aufgabe": 1, "offen": 2, "risiko": 3}
+            ordnung = {"entscheidung": 0, "option": 1, "kriterium": 2, "aufgabe": 3, "offen": 4, "risiko": 5}
             liste.sort(key=lambda a: (ordnung[a.typ], a.zeit))
             titel_punkt = m.agenda[punkt].titel if punkt is not None and 0 <= punkt < len(m.agenda) else None
             if grund == "punkt" and titel_punkt:
@@ -1094,27 +1117,3 @@ class Artefakte:
         else:
             return None, "Das konnte ich keinem Eintrag zuordnen."
         return a, bestaetigung_text(a, felder)
-
-
-def aktion_lesen(rest: str) -> dict:
-    """Basis: „AKTION: eintragen 3; wer=Sofie; bis=Freitag“ oder „AKTION: eintragen neu aufgabe; was=…; wer=…“."""
-    teile = [t.strip() for t in re.split(r"[;|]", rest) if t.strip()]
-    daten: dict = {}
-    if teile:
-        kopf = teile[0].lower()
-        if (z := re.match(r"^#?(\d+)$", kopf)):
-            daten["nummer"] = int(z[1])
-            teile = teile[1:]
-        elif kopf.startswith("neu"):
-            typ = kopf[3:].strip()
-            if typ in TYPEN:
-                daten["typ"] = typ
-            teile = teile[1:]
-    for t in teile:
-        k, _, v = t.partition("=")
-        if not _:
-            k, _, v = t.partition(":")
-        k = k.strip().lower()
-        if k in ("was", "wer", "bis", "status", "reaktion", "typ") and v.strip():
-            daten[k] = v.strip()
-    return {"typ": "eintragen", "daten": daten}

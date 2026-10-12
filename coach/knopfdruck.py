@@ -94,8 +94,8 @@ async def _regeln(coach, frage: str, ablegen: bool = True) -> dict:
 
 
 def _protokoll_md(coach, am_ende: bool = False) -> str:
-    """Protokoll aus den Meeting-Artefakten (Ticket #26): je Agendapunkt Entscheidungen, Aufgaben, offene Punkte und
-    Risiken, danach was außerhalb der Agenda festgehalten wurde. Lücken stehen als „fehlt“ dabei."""
+    """Protokoll aus den Meeting-Artefakten (Ticket #26): je Agendapunkt Entscheidungen, Optionen, Kriterien, Aufgaben,
+    offene Punkte und Risiken, danach was außerhalb der Agenda festgehalten wurde. Lücken stehen als „fehlt“ dabei."""
     from .artefakte import FELD_NAME, STATUS_NAME
 
     m, art = coach.meeting, coach.artefakte
@@ -107,6 +107,8 @@ def _protokoll_md(coach, am_ende: bool = False) -> str:
 
     def zeile(a) -> str:
         teile = [a.was]
+        if a.typ in ("option", "kriterium"):
+            return "- " + a.was
         if a.typ == "entscheidung":
             teile.append(STATUS_NAME.get(a.status or "", "nur Vorschlag"))
         if a.typ != "entscheidung" or a.wer:
@@ -122,8 +124,8 @@ def _protokoll_md(coach, am_ende: bool = False) -> str:
         if not liste:
             return ["_Nichts festgehalten._"]
         aus = []
-        for typ, titel in (("entscheidung", "Entscheidungen"), ("aufgabe", "Aufgaben"), ("offen", "Offene Punkte"),
-                           ("risiko", "Risiken")):
+        for typ, titel in (("entscheidung", "Entscheidungen"), ("option", "Optionen"), ("kriterium", "Kriterien"),
+                           ("aufgabe", "Aufgaben"), ("offen", "Offene Punkte"), ("risiko", "Risiken")):
             teil = [a for a in liste if a.typ == typ]
             if teil:
                 aus += (["", f"**{titel}**"] if aus else [f"**{titel}**"]) + [zeile(a) for a in teil]

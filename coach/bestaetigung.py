@@ -43,18 +43,13 @@ STAU = {("bild", "recherche"): "Ich bin noch am Bild, die Recherche mache ich da
         ("recherche", "recherche"): "Ich bin noch an der Recherche, die nächste mache ich danach.",
         ("bild", "bild"): "Ich bin noch am Bild, das nächste mache ich danach."}
 ABWEHR = "Ich hab gerade zwei Sachen auf dem Zettel. Fragt mich gleich nochmal."
-NOTIERT = ["Notiert.", "Ist notiert."]
-# Ticket #79: Ergebnis per Zuruf entfernen/ändern – wie NOTIERT bestätigt das System selbst, sofort ausgeführt
-ENTFERNT = ["Entfernt.", "Ist runter von der Liste."]
-GEAENDERT = ["Geändert.", "Ist geändert."]
 # Seh-Inhalt (Folie, Überblick, Liste): kein Inhalt gesprochen, nur der Hinweis, dass die Karte da ist
 HIER = {"folie": "Hier ist die Folie.", "ueberblick": "Hier ist der Überblick.", "festgehalten": "Hier ist die Liste.",
         "karte": "Hier ist sie."}
 JA = "Ja?"
-ABGEBROCHEN = "Okay, lass ich."
-NICHTS_OFFEN = "Da läuft gerade nichts."
-ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + NOTIERT + ENTFERNT + GEAENDERT + list(HIER.values()) + \
-    [JA, ABGEBROCHEN, NICHTS_OFFEN]
+# Was Nestor nach einem Werkzeug sagt (eingetragen, entfernt, abgebrochen …), formuliert das Modell selbst
+# (coach/kern.py) – vorab erzeugt werden nur die Sofort-Bestätigungen und die Sätze der Knöpfe.
+ALLE = KURZ + LANGE + list(STAU.values()) + [ABWEHR] + list(HIER.values()) + [JA]
 
 STIL = ("Sprich locker, freundlich und zügig auf Deutsch, wie ein Kollege, der kurz Bescheid gibt. "
         "Natürliches Tempo, keine langen Pausen.")
@@ -86,27 +81,6 @@ def stille_kuerzen(pcm: bytes, schwelle: int = 500, vorne: float = 0.03, hinten:
     a = max(0, int(laut[0] - vorne * RATE))
     b = min(len(x), int(laut[-1] + hinten * RATE))
     return x[a:b].tobytes()
-
-
-RECHERCHE_AUFTRAG_RE = re.compile(
-    r"\b(?:recherchier\w*|such\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?(?:nach\s+)?|"
-    r"schau\w*\s+(?:bitte\s+|mal\s+|kurz\s+)*(?:im\s+(?:inter)?netz\s+)?nach\b)",
-    re.IGNORECASE,
-)
-# „die Folie, die du recherchiert hast“ meint das vorhandene Ergebnis, keinen neuen Auftrag (Datenspende 12.10.:
-# Nestor startete eine neue Recherche, statt die fertige vorzustellen)
-RECHERCHIERT_RE = re.compile(r"\brecherchiert\s+(?:hast|habt|hattest|hattet|wurde|worden)\b"
-                             r"|\b(?:hast|habt|hattest|hattet)\s+(?:du|ihr)\b.*\brecherchiert\b", re.IGNORECASE)
-
-
-def recherche_auftrag(frage: str) -> bool:
-    """Explizite Suchaufträge vor dem Sprachmodell erkennen (nur Text-Weg; im Gespräch wählt das Modell das Werkzeug).
-
-    Reine Wissensfragen bleiben normale Fragen; nur Verben wie „recherchier“, „such … nach“
-    oder „schau … nach“ starten sicher die Websuche. Ein Rückbezug auf schon Recherchiertes ist eine Frage.
-    """
-    frage = RECHERCHIERT_RE.sub(" ", frage or "")
-    return bool(RECHERCHE_AUFTRAG_RE.search(frage))
 
 
 def bestaetigen(frage: str) -> bool:
@@ -219,32 +193,6 @@ class Floskeln:
 
 # --- Aufträge und Warteschlange -----------------------------------------------------------------------------
 ARTEN = {"recherche": "Recherche", "bild": "Live-Bild", "folie": "Folie", "ueberblick": "Überblick"}
-ART_RE = {
-    "recherche": re.compile(r"recherch|such|nachschau|\bnetz\b", re.IGNORECASE),
-    "folie": re.compile(r"\bfolie", re.IGNORECASE),
-    "bild": re.compile(r"\bbild|zeichn|übersicht|uebersicht|visuell", re.IGNORECASE),
-    "ueberblick": re.compile(r"überblick|ueberblick|übersicht|uebersicht", re.IGNORECASE),
-}
-_ART_WORT = r"(?:recherche|suche|folie|bild|zeichnung|übersicht|uebersicht|überblick|ueberblick)"
-ABBRUCH_RE = re.compile(
-    rf"\b(?:lass|vergiss|stopp|stoppe|stop|streich|cancel)\w*\s+(?:die|das|den|deine|mal die|mal das)?\s*{_ART_WORT}"
-    rf"|{_ART_WORT}\w*\s+(?:abbrechen|stoppen|canceln|vergessen|lassen|brauchen wir nicht|nicht mehr)"
-    rf"|\bbrich\s+(?:die|das|den)?\s*(?:{_ART_WORT}\w*\s+)?ab\b"
-    r"|\b(?:abbrechen|lass das|lass es|vergiss das|vergiss es)\b",
-    re.IGNORECASE)
-
-
-def abbruch_wunsch(text: str) -> bool:
-    """Nur Text-Weg; im Gespräch bricht das Modell per Werkzeug auftrag_abbrechen ab."""
-    return bool(ABBRUCH_RE.search(text or ""))
-
-
-def abbruch_art(text: str) -> str | None:
-    """Welche Art ist gemeint? None = keine genannt (dann der jüngste Auftrag)."""
-    for art in ("folie", "recherche", "bild", "ueberblick"):
-        if ART_RE[art].search(text):
-            return art
-    return None
 
 
 @dataclass
@@ -300,10 +248,6 @@ class Auftraege:
 
     def holen(self, nr: int) -> Auftrag | None:
         return next((a for a in self.liste if a.id == nr), None)
-
-    def ziel(self, text: str) -> Auftrag | None:
-        """Den Auftrag zu einem Abbruchwunsch: die genannte Art (der jüngste davon), sonst der jüngste überhaupt."""
-        return self.ziel_art(abbruch_art(text))
 
     def ziel_art(self, art: str | None) -> Auftrag | None:
         """Der jüngste Auftrag dieser Art, ohne Art der jüngste überhaupt. „Übersicht“ meint in Premium das Bild, in

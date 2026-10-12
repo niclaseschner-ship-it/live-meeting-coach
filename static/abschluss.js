@@ -58,6 +58,10 @@ function dokumentHtml() {
   };
   let h = `<h1>${esc(d.kopf?.titel || "Meeting")}</h1><p>${esc(d.kopf?.datum || "")} · ${Math.round((d.kopf?.dauer_sekunden || 0)/60)} Minuten</p>`;
   h += gruppe("Entscheidungen", "entscheidungen", ["was","status","wer"]);
+  if ((d.optionen ?? []).length || (d.kriterien ?? []).length) {
+    h += gruppe("Optionen", "optionen", ["was"]);
+    h += gruppe("Kriterien", "kriterien", ["was"]);
+  }
   h += gruppe("Aufgaben", "aufgaben", ["was","wer","bis"]);
   h += gruppe("Offene Punkte", "offene_punkte", ["was","wer","bis"]);
   h += gruppe("Risiken", "risiken", ["was","wer","reaktion"]);
